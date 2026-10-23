@@ -21,6 +21,9 @@ const HELP: &str = "Commands:
   look (l)                 describe your surroundings
   go <dir> / n s e w u d   move through an exit
   say <text> / '<text>     speak to the room
+  whisper <player> <text>  speak privately to someone in the room
+  yell <text>              shout to everyone in this zone
+  gossip <text> (gos)      chat with everyone online
   who                      list players online
   help                     show this message
   quit                     leave the game";
@@ -33,7 +36,10 @@ const BUILDER_HELP: &str = "Builder commands:
   rename <name>            rename this room
   desc <text>              set this room's description
   link <dir> <room>        add a one-way exit to an existing room
-  unlink <dir>             remove an exit";
+  unlink <dir>             remove an exit
+  zones                    list all zones
+  zone create <id> <name>  create a new zone, starting with the room <id>:entrance
+  zone rename <name>       rename the zone you're in";
 
 const ADMIN_HELP: &str = "Admin commands:
   role <account> <player|builder|admin>   change an account's role";
@@ -48,6 +54,8 @@ const RESTRICTED_VERBS: &[(&str, Permission)] = &[
     ("desc", Permission::Build),
     ("link", Permission::Build),
     ("unlink", Permission::Build),
+    ("zones", Permission::Build),
+    ("zone", Permission::Build),
     ("role", Permission::ManageRoles),
 ];
 
@@ -198,6 +206,35 @@ fn run_command(
                 text: format!("{name} says, \"{rest}\"\r\n"),
             });
         }
+        "whisper" => whisper(entity, &name, room, rest, players, out),
+        "yell" if rest.is_empty() => out.push(Outgoing::line(entity, "Yell what?")),
+        "yell" => {
+            out.push(Outgoing::line(
+                entity,
+                format!("\x1b[1;31mYou yell, \"{rest}\"\x1b[0m"),
+            ));
+            if let Ok((_, key, _)) = rooms.get(room) {
+                let text = format!("\x1b[1;31m{name} yells, \"{rest}\"\x1b[0m\r\n");
+                for other in players_in_zone(&key.zone, players, rooms) {
+                    if other != entity {
+                        out.push(Outgoing::To(other, text.clone()));
+                    }
+                }
+            }
+        }
+        "gossip" | "gos" if rest.is_empty() => out.push(Outgoing::line(entity, "Gossip what?")),
+        "gossip" | "gos" => {
+            out.push(Outgoing::line(
+                entity,
+                format!("\x1b[35m[Gossip] You: {rest}\x1b[0m"),
+            ));
+            let text = format!("\x1b[35m[Gossip] {name}: {rest}\x1b[0m\r\n");
+            for other in players_online(players) {
+                if other != entity {
+                    out.push(Outgoing::To(other, text.clone()));
+                }
+            }
+        }
         "quit" => {
             out.push(Outgoing::line(entity, "Farewell!"));
             out.push(Outgoing::Room {
@@ -221,6 +258,79 @@ fn run_command(
     }
 
     out.push(Outgoing::prompt(entity));
+}
+
+/// Only the target hears the words; everyone else in the room just sees that a whisper happened.
+fn whisper(
+    entity: Entity,
+    name: &str,
+    room: Entity,
+    args: &str,
+    players: &PlayerQuery,
+    out: &mut Vec<Outgoing>,
+) {
+    let Some((target_name, text)) = args
+        .split_once(' ')
+        .map(|(t, text)| (t, text.trim()))
+        .filter(|(_, text)| !text.is_empty())
+    else {
+        out.push(Outgoing::line(entity, "Usage: whisper <player> <text>"));
+        return;
+    };
+
+    let target = players.iter().find_map(|(other, _, player, in_room)| {
+        let player = player?;
+        let here = in_room.is_some_and(|r| r.0 == room);
+        (here && player.name.eq_ignore_ascii_case(target_name)).then(|| (other, player.name.clone()))
+    });
+    let Some((target, target_name)) = target else {
+        out.push(Outgoing::line(entity, format!("You don't see {target_name} here.")));
+        return;
+    };
+    if target == entity {
+        out.push(Outgoing::line(entity, "You mutter something to yourself."));
+        return;
+    }
+
+    out.push(Outgoing::line(
+        entity,
+        format!("\x1b[2mYou whisper to {target_name}, \"{text}\"\x1b[0m"),
+    ));
+    out.push(Outgoing::line(
+        target,
+        format!("\x1b[2m{name} whispers to you, \"{text}\"\x1b[0m"),
+    ));
+    let seen = format!("{name} whispers something into {target_name}'s ear.\r\n");
+    for (other, _, player, in_room) in players.iter() {
+        if player.is_some()
+            && in_room.is_some_and(|r| r.0 == room)
+            && other != entity
+            && other != target
+        {
+            out.push(Outgoing::To(other, seen.clone()));
+        }
+    }
+}
+
+/// Every logged-in player.
+fn players_online(players: &PlayerQuery) -> Vec<Entity> {
+    players
+        .iter()
+        .filter(|(_, _, player, _)| player.is_some())
+        .map(|(entity, ..)| entity)
+        .collect()
+}
+
+/// Every logged-in player standing in a room of the given zone.
+fn players_in_zone(zone: &str, players: &PlayerQuery, rooms: &RoomQuery) -> Vec<Entity> {
+    players
+        .iter()
+        .filter_map(|(entity, _, player, in_room)| {
+            let room = in_room.filter(|_| player.is_some())?.0;
+            let (_, key, _) = rooms.get(room).ok()?;
+            (key.zone == zone).then_some(entity)
+        })
+        .collect()
 }
 
 fn help_for(role: Role) -> String {

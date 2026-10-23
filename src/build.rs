@@ -12,15 +12,24 @@ use crate::commands::{
     self, BuildCommand, Outgoing, PlayerQuery, RoomQuery, deliver, full_direction, move_player,
 };
 use crate::db::{Database, Role};
-use crate::world::{RoomDef, RoomIndex, RoomKey, ZoneDef};
+use crate::net::Connection;
+use crate::world::{RoomDef, RoomIndex, RoomKey, ZONE_ENTRANCE, ZoneDef};
 
 pub struct BuildPlugin;
 
 impl Plugin for BuildPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, handle_build.after(commands::handle_commands));
+        app.init_resource::<PendingZones>().add_systems(
+            Update,
+            (handle_build.after(commands::handle_commands), announce_new_zones),
+        );
     }
 }
+
+/// Zones created in game whose files haven't been picked up by the file watcher yet, and the
+/// builder to tell when they're ready.
+#[derive(Resource, Default)]
+struct PendingZones(Vec<(String, Entity)>);
 
 /// A message for the player: `Ok` on success, `Err` explaining what went wrong.
 type Reply = Result<String, String>;
@@ -31,6 +40,7 @@ fn handle_build(
     rooms: RoomQuery,
     index: Res<RoomIndex>,
     mut zones: ResMut<Assets<ZoneDef>>,
+    mut pending: ResMut<PendingZones>,
     db: Res<Database>,
 ) {
     let mut out = Vec::new();
@@ -67,6 +77,12 @@ fn handle_build(
             "desc" => describe(&here, args, &mut zones),
             "link" => link(&here, args, &index, &mut zones),
             "unlink" => unlink(&here, args, &mut zones),
+            "zones" => list_zones(&here, &zones),
+            "zone" => match args.split_once(' ').unwrap_or((args, "")) {
+                ("create", rest) => create_zone(entity, rest.trim(), &zones, &mut pending),
+                ("rename", rest) => rename_zone(&here, rest.trim(), &mut zones),
+                _ => Err("Usage: zone create <id> <name>, or zone rename <name>".into()),
+            },
             "role" => set_role(entity, &account, args, &db, &mut players, &mut out),
             _ => Err("Huh?".into()),
         };
@@ -260,6 +276,90 @@ fn unlink(here: &RoomKey, args: &str, zones: &mut Assets<ZoneDef>) -> Reply {
         room.exits.remove(&dir);
         Ok(format!("Removed the exit {dir}. Exits back to this room are unchanged."))
     })
+}
+
+fn list_zones(here: &RoomKey, zones: &Assets<ZoneDef>) -> Reply {
+    let mut list: Vec<_> = zones.iter().map(|(_, zone)| zone).collect();
+    list.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut text = String::from("Zones:");
+    for zone in list {
+        let marker = if zone.id == here.zone { " (you are here)" } else { "" };
+        let count = zone.rooms.len();
+        let plural = if count == 1 { "" } else { "s" };
+        text += &format!(
+            "\r\n  {:<16} {}  [{count} room{plural}]{marker}",
+            zone.id,
+            zone.name,
+        );
+    }
+    Ok(text)
+}
+
+fn create_zone(
+    entity: Entity,
+    args: &str,
+    zones: &Assets<ZoneDef>,
+    pending: &mut PendingZones,
+) -> Reply {
+    let usage = || "Usage: zone create <id> <name>, e.g. zone create caves The Damp Caves".to_string();
+    let (id, name) = args.split_once(' ').ok_or_else(usage)?;
+    let (id, name) = (id.to_ascii_lowercase(), name.trim());
+    if name.is_empty() {
+        return Err(usage());
+    }
+    let valid = (2..=32).contains(&id.len())
+        && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+    if !valid {
+        return Err("Zone ids are 2-32 lowercase letters, digits, or underscores.".into());
+    }
+    if zones.iter().any(|(_, zone)| zone.id == id) || pending.0.iter().any(|(p, _)| *p == id) {
+        return Err(format!("A zone named '{id}' already exists."));
+    }
+
+    let zone = ZoneDef::new(&id, name);
+    if let Err(err) = zone.create() {
+        error!("failed to create zone '{id}': {err}");
+        return Err(format!("Could not create the zone file: {err}"));
+    }
+    info!("created zone '{id}' ({name})");
+    pending.0.push((id.clone(), entity));
+    Ok(format!(
+        "Created zone {name} [{id}]. It will load in a moment, starting with the room [{id}:{ZONE_ENTRANCE}]."
+    ))
+}
+
+fn rename_zone(here: &RoomKey, name: &str, zones: &mut Assets<ZoneDef>) -> Reply {
+    if name.is_empty() {
+        return Err("Usage: zone rename <name>".into());
+    }
+    edit_zone(zones, &here.zone, |zone| {
+        zone.name = name.into();
+        Ok(format!("Zone [{}] renamed to {name}.", zone.id))
+    })
+}
+
+/// Tell builders when a zone they created has been loaded and can be visited.
+fn announce_new_zones(
+    mut pending: ResMut<PendingZones>,
+    index: Res<RoomIndex>,
+    mut connections: Query<&mut Connection>,
+) {
+    pending.0.retain(|(id, builder)| {
+        let entrance = RoomKey {
+            zone: id.clone(),
+            room: ZONE_ENTRANCE.into(),
+        };
+        if !index.0.contains_key(&entrance) {
+            return true;
+        }
+        if let Ok(mut conn) = connections.get_mut(*builder) {
+            conn.send_raw(format!(
+                "\r\nZone [{id}] is ready. Visit it with 'goto {entrance}', or connect it to \
+                 this room with 'link <dir> {entrance}'.\r\n> "
+            ));
+        }
+        false
+    });
 }
 
 fn set_role(

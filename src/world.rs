@@ -66,18 +66,56 @@ const ZONE_FILE_HEADER: &str = "\
 ";
 
 impl ZoneDef {
+    /// A new zone with a single starting room, `entrance`, to be written with `create`.
+    pub fn new(id: &str, name: &str) -> Self {
+        let entrance = RoomDef {
+            name: name.into(),
+            description: "An unfinished room. (Use 'desc' to describe it.)".into(),
+            exits: BTreeMap::new(),
+        };
+        Self {
+            id: id.into(),
+            path: PathBuf::from(ZONES_PATH).join(format!("{id}.ron")),
+            name: name.into(),
+            rooms: BTreeMap::from([(ZONE_ENTRANCE.into(), entrance)]),
+        }
+    }
+
     /// Write this zone back to its file. The file watcher will pick up the change, which is
     /// harmless since the in-memory asset already matches.
     pub fn save(&self) -> Result<(), SaveError> {
-        let pretty = ron::ser::PrettyConfig::new().struct_names(false);
-        let body = ron::ser::to_string_pretty(self, pretty)?;
-        let file = FileAssetReader::get_base_path()
-            .join("assets")
-            .join(&self.path);
-        std::fs::write(file, format!("{ZONE_FILE_HEADER}{body}\n"))?;
+        std::fs::write(self.file_path(), self.file_contents()?)?;
         Ok(())
     }
+
+    /// Write a new zone file, failing if one already exists. The file watcher then loads it like
+    /// any other zone file.
+    pub fn create(&self) -> Result<(), SaveError> {
+        use std::io::Write;
+        let contents = self.file_contents()?;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(self.file_path())?
+            .write_all(contents.as_bytes())?;
+        Ok(())
+    }
+
+    fn file_path(&self) -> PathBuf {
+        FileAssetReader::get_base_path()
+            .join("assets")
+            .join(&self.path)
+    }
+
+    fn file_contents(&self) -> Result<String, SaveError> {
+        let pretty = ron::ser::PrettyConfig::new().struct_names(false);
+        let body = ron::ser::to_string_pretty(self, pretty)?;
+        Ok(format!("{ZONE_FILE_HEADER}{body}\n"))
+    }
 }
+
+/// The room every zone created in game starts with.
+pub const ZONE_ENTRANCE: &str = "entrance";
 
 #[derive(Debug, Error)]
 pub enum SaveError {
