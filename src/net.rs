@@ -1,6 +1,7 @@
 //! Networking: accepts telnet connections and turns lines of input into `PlayerInput` messages.
 //! Each connected client is an entity with a `Connection` component.
 
+use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
@@ -36,6 +37,11 @@ pub struct Connection {
     stream: TcpStream,
     /// Bytes received that don't yet form a complete line.
     pending: Vec<u8>,
+    /// Complete lines waiting to be handled, oldest first. One is handed out per tick, so a
+    /// player's commands always run in the order typed, whichever system handles each one.
+    lines: VecDeque<String>,
+    /// The client stopped sending. It's dropped once its queued lines have been handled.
+    eof: bool,
     /// Bytes queued to be sent at the end of the frame.
     outbox: Vec<u8>,
     /// Set when the client should be dropped at the end of the frame.
@@ -91,6 +97,8 @@ fn accept_connections(mut commands: Commands, listener: Res<Listener>) {
                     Connection {
                         stream,
                         pending: Vec::new(),
+                        lines: VecDeque::new(),
+                        eof: false,
                         outbox: Vec::new(),
                         closing: false,
                     },
@@ -112,7 +120,7 @@ fn read_input(mut connections: Query<(Entity, &mut Connection)>, mut input: Mess
         loop {
             match conn.stream.read(&mut buf) {
                 Ok(0) => {
-                    conn.closing = true;
+                    conn.eof = true;
                     break;
                 }
                 Ok(n) => conn.pending.extend_from_slice(&buf[..n]),
@@ -127,7 +135,12 @@ fn read_input(mut connections: Query<(Entity, &mut Connection)>, mut input: Mess
         while let Some(pos) = conn.pending.iter().position(|&b| b == b'\n') {
             let raw: Vec<u8> = conn.pending.drain(..=pos).collect();
             let line = String::from_utf8_lossy(&strip_telnet(&raw)).trim().to_string();
+            conn.lines.push_back(line);
+        }
+        if let Some(line) = conn.lines.pop_front() {
             input.write(PlayerInput { entity, line });
+        } else if conn.eof {
+            conn.closing = true;
         }
     }
 }
