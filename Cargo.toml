@@ -1,0 +1,24 @@
+[package]
+name = "testing_bevy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+argon2 = "0.6"
+# Headless server: no renderer, window, audio, etc. Just the ECS, app loop, logging, and
+# asset loading with hot reload (`file_watcher`) for the world definition.
+bevy = { version = "0.20.0", default-features = false, features = [
+    "std",
+    "bevy_log",
+    "bevy_asset",
+    "file_watcher",
+] }
+ron = "0.12"
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+# Optimize dependencies even in dev builds: password hashing (argon2) is unusably slow unoptimized,
+# and Bevy recommends this anyway.
+[profile.dev.package."*"]
+opt-level = 3

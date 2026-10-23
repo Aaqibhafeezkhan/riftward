@@ -1,0 +1,22 @@
+// Zone file. Room ids are local to this zone; link to another zone with "zone:room".
+// This file is rewritten by in-game builder commands, so comments other than this header are lost.
+(
+    name: "Town",
+    rooms: {
+        "square": (
+            name: "Town Square",
+            description: "A cobblestone plaza with a dry fountain at its center. Merchants have long since packed up.",
+            exits: { "north": "gate", "east": "tavern" },
+        ),
+        "tavern": (
+            name: "The Rusty Flagon",
+            description: "A low-ceilinged tavern that smells of spilled ale and woodsmoke.",
+            exits: { "west": "square" },
+        ),
+        "gate": (
+            name: "North Gate",
+            description: "Heavy iron gates stand open, framing a dark forest road beyond.",
+            exits: { "south": "square", "north": "forest:road" },
+        ),
+    },
+)

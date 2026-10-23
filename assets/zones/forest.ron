@@ -1,0 +1,38 @@
+// Zone file. Room ids are local to this zone; link to another zone with "zone:room".
+// This file is rewritten by in-game builder commands, so comments other than this header are lost.
+(
+    name: "Darkwood Forest",
+    rooms: {
+        "bend": (
+            name: "bend",
+            description: "The road continues along until it reaches a fork.",
+            exits: {
+                "east": "east_road",
+                "north": "north_road",
+                "south": "road",
+            },
+        ),
+        "east_road": (
+            name: "east road",
+            description: "An unfinished room. (Use \'desc\' to describe it.)",
+            exits: {
+                "west": "bend",
+            },
+        ),
+        "north_road": (
+            name: "north road",
+            description: "An unfinished room. (Use \'desc\' to describe it.)",
+            exits: {
+                "south": "bend",
+            },
+        ),
+        "road": (
+            name: "Forest Road",
+            description: "Twisted trees crowd the path. Something rustles in the undergrowth.",
+            exits: {
+                "north": "bend",
+                "south": "town:gate",
+            },
+        ),
+    },
+)
