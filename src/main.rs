@@ -2,6 +2,7 @@
 //!
 //! Run with `cargo run`, then connect with `nc localhost 4000` (or any telnet/MUD client).
 
+mod aliases;
 mod build;
 mod commands;
 mod db;

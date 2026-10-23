@@ -3,6 +3,7 @@
 //! The world itself lives in zone files under `assets/zones`; the database only holds things
 //! that change during play.
 
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use argon2::Argon2;
@@ -33,6 +34,13 @@ const SCHEMA: &str = "
         -- Full room id (`zone:room`) the character was last in.
         room       TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS character_aliases (
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        name         TEXT NOT NULL COLLATE NOCASE,
+        expansion    TEXT NOT NULL,
+        PRIMARY KEY (character_id, name)
     );
 ";
 
@@ -225,6 +233,32 @@ impl Database {
             name: name.into(),
             room: None,
         })
+    }
+
+    pub fn aliases(&self, character_id: i64) -> DbResult<BTreeMap<String, String>> {
+        let conn = self.conn();
+        let mut stmt =
+            conn.prepare("SELECT name, expansion FROM character_aliases WHERE character_id = ?1")?;
+        let rows = stmt.query_map([character_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Create or replace an alias.
+    pub fn set_alias(&self, character_id: i64, name: &str, expansion: &str) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT INTO character_aliases (character_id, name, expansion) VALUES (?1, ?2, ?3)
+             ON CONFLICT (character_id, name) DO UPDATE SET expansion = excluded.expansion",
+            params![character_id, name, expansion],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_alias(&self, character_id: i64, name: &str) -> DbResult<()> {
+        self.conn().execute(
+            "DELETE FROM character_aliases WHERE character_id = ?1 AND name = ?2",
+            params![character_id, name],
+        )?;
+        Ok(())
     }
 
     pub fn save_location(&self, character_id: i64, room: &str) -> DbResult<()> {

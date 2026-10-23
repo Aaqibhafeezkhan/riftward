@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 
+use crate::aliases::Aliases;
 use crate::commands::{self, Outgoing, PlayerQuery, RoomQuery, deliver, describe_room};
 use crate::db::{Account, CharacterRecord, Database, Permission, Role};
 use crate::net::{Connection, JustConnected, PlayerInput};
@@ -409,8 +410,14 @@ fn enter_game(
         error!("failed to save location for {}: {err}", character.name);
     }
 
+    let aliases = db.aliases(character.id).unwrap_or_else(|err| {
+        error!("failed to load aliases for {}: {err}", character.name);
+        Default::default()
+    });
+
     let name = character.name.clone();
     commands.entity(entity).remove::<LoginState>().insert((
+        Aliases(aliases),
         Player {
             name: name.clone(),
             character_id: character.id,
