@@ -6,6 +6,7 @@
 use bevy::prelude::*;
 
 use crate::aliases::Aliases;
+use crate::attributes::Attributes;
 use crate::commands::{self, Outgoing, PlayerQuery, RoomQuery, deliver, describe_room};
 use crate::db::{Account, CharacterRecord, Database, Permission, Role};
 use crate::net::{Connection, JustConnected, PlayerInput};
@@ -415,9 +416,16 @@ fn enter_game(
         Default::default()
     });
 
+    let attributes = Attributes::from_rows(db.attributes(character.id).unwrap_or_else(|err| {
+        error!("failed to load attributes for {}: {err}", character.name);
+        Vec::new()
+    }));
+    let karma = attributes.karma_unspent();
+
     let name = character.name.clone();
     commands.entity(entity).remove::<LoginState>().insert((
         Aliases(aliases),
+        attributes,
         Player {
             name: name.clone(),
             character_id: character.id,
@@ -432,6 +440,15 @@ fn enter_game(
         entity,
         format!("\r\nWelcome, {name}! Type 'help' for a list of commands.\r\n"),
     ));
+    if karma > 0 {
+        out.push(Outgoing::line(
+            entity,
+            format!(
+                "\x1b[33mYou have {karma} Karma to spend. Type 'score' to see your attributes and \
+                 'raise <attribute>' to improve one.\x1b[0m\r\n"
+            ),
+        ));
+    }
     out.push(Outgoing::To(
         entity,
         describe_room(

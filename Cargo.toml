@@ -13,6 +13,7 @@ bevy = { version = "0.20.0", default-features = false, features = [
     "bevy_asset",
     "file_watcher",
 ] }
+rand = { version = "0.10", default-features = false, features = ["std", "sys_rng"] }
 ron = "0.12"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

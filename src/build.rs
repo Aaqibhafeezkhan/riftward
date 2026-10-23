@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use crate::commands::{
     self, BuildCommand, Outgoing, PlayerQuery, RoomQuery, deliver, full_direction, move_player,
 };
+use crate::attributes::{Attribute, Attributes};
 use crate::db::{Database, Role};
 use crate::net::Connection;
 use crate::world::{RoomDef, RoomIndex, RoomKey, ZONE_ENTRANCE, ZoneDef};
@@ -34,6 +35,7 @@ struct PendingZones(Vec<(String, Entity)>);
 /// A message for the player: `Ok` on success, `Err` explaining what went wrong.
 type Reply = Result<String, String>;
 
+#[allow(clippy::too_many_arguments)]
 fn handle_build(
     mut inputs: MessageReader<BuildCommand>,
     mut players: PlayerQuery,
@@ -41,6 +43,7 @@ fn handle_build(
     index: Res<RoomIndex>,
     mut zones: ResMut<Assets<ZoneDef>>,
     mut pending: ResMut<PendingZones>,
+    mut sheets: Query<&mut Attributes>,
     db: Res<Database>,
 ) {
     let mut out = Vec::new();
@@ -84,6 +87,7 @@ fn handle_build(
                 _ => Err("Usage: zone create <id> <name>, or zone rename <name>".into()),
             },
             "role" => set_role(entity, &account, args, &db, &mut players, &mut out),
+            "setattr" => set_attribute(args, &db, &players, &mut sheets, &mut out),
             _ => Err("Huh?".into()),
         };
 
@@ -403,6 +407,57 @@ fn set_role(
         }
     }
     Ok(format!("Account '{account}' is now a {}.", role.as_str()))
+}
+
+/// `setattr <player> <attribute> <rating>`: set an online character's attribute directly, for
+/// testing. This bypasses Karma, so the character's unspent Karma may drop to zero.
+fn set_attribute(
+    args: &str,
+    db: &Database,
+    players: &PlayerQuery,
+    sheets: &mut Query<&mut Attributes>,
+    out: &mut Vec<Outgoing>,
+) -> Reply {
+    let usage = || "Usage: setattr <player> <attribute> <rating>".to_string();
+    let mut parts = args.split_whitespace();
+    let (Some(target), Some(attribute), Some(rating), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return Err(usage());
+    };
+    let attribute = Attribute::parse(attribute)?;
+    let rating: i32 = rating
+        .parse()
+        .ok()
+        .filter(|r| (0..=1000).contains(r))
+        .ok_or("Ratings are whole numbers from 0 to 1000.")?;
+
+    let (entity, character_id, name) = players
+        .iter()
+        .find_map(|(e, _, player, _)| {
+            let player = player?;
+            player
+                .name
+                .eq_ignore_ascii_case(target)
+                .then(|| (e, player.character_id, player.name.clone()))
+        })
+        .ok_or_else(|| format!("No one named {target} is online."))?;
+    let mut attributes = sheets
+        .get_mut(entity)
+        .map_err(|_| format!("{name} has no attributes loaded."))?;
+
+    if let Err(err) = db.set_attribute(character_id, attribute.name(), rating) {
+        error!("failed to set attribute: {err}");
+        return Err("Database error; the attribute was not changed.".into());
+    }
+    attributes.set(attribute, rating);
+    info!("{name}'s {} set to {rating}", attribute.name());
+    out.push(Outgoing::line(
+        entity,
+        format!("\r\nYour {} is now {rating}.", attribute.name()),
+    ));
+    out.push(Outgoing::prompt(entity));
+    Ok(format!("{name}'s {} is now {rating}.", attribute.name()))
 }
 
 /// Turn a room name into an id: "The Old Mill" -> "the_old_mill".

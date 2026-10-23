@@ -1394,6 +1394,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi",
+ "rand_core",
 ]
 
 [[package]]
@@ -2341,6 +2342,7 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "bevy",
+ "rand",
  "ron",
  "rusqlite",
  "serde",

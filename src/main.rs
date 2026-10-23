@@ -3,9 +3,11 @@
 //! Run with `cargo run`, then connect with `nc localhost 4000` (or any telnet/MUD client).
 
 mod aliases;
+mod attributes;
 mod build;
 mod commands;
 mod db;
+mod dice;
 mod login;
 mod net;
 mod world;
@@ -34,6 +36,7 @@ fn main() {
         ))
         .add_plugins((
             db::DbPlugin,
+            dice::DicePlugin,
             net::NetPlugin,
             world::WorldPlugin,
             login::LoginPlugin,

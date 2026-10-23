@@ -5,6 +5,7 @@
 use bevy::prelude::*;
 
 use crate::aliases::{self, Aliases};
+use crate::attributes::{self, Attributes};
 use crate::db::{Database, Permission, Role};
 use crate::net::{Connection, PlayerInput};
 use crate::world::{Exits, InRoom, Player, Room, RoomKey};
@@ -26,6 +27,8 @@ const HELP: &str = "Commands:
   yell <text>              shout to everyone in this zone
   gossip <text> (gos)      chat with everyone online
   who                      list players online
+  score                    show your attributes and Karma
+  raise <attribute>        spend Karma to raise an attribute
   alias                    list your aliases
   alias <name> <command>   make <name> run <command>
   unalias <name>           remove an alias
@@ -46,7 +49,8 @@ const BUILDER_HELP: &str = "Builder commands:
   zone rename <name>       rename the zone you're in";
 
 const ADMIN_HELP: &str = "Admin commands:
-  role <account> <player|builder|admin>   change an account's role";
+  role <account> <player|builder|admin>   change an account's role
+  setattr <player> <attribute> <rating>   set an online player's attribute (ignores Karma)";
 
 /// Verbs handled by `build.rs`, and the permission each needs.
 const RESTRICTED_VERBS: &[(&str, Permission)] = &[
@@ -61,13 +65,14 @@ const RESTRICTED_VERBS: &[(&str, Permission)] = &[
     ("zones", Permission::Build),
     ("zone", Permission::Build),
     ("role", Permission::ManageRoles),
+    ("setattr", Permission::ManageRoles),
 ];
 
 /// Commands every logged-in player has. Aliases can't use these names.
 const BUILTIN_VERBS: &[&str] = &[
     "look", "l", "help", "?", "who", "say", "whisper", "yell", "gossip", "gos", "quit", "go",
     "n", "s", "e", "w", "u", "d", "north", "south", "east", "west", "up", "down", "alias",
-    "unalias",
+    "unalias", "score", "raise",
 ];
 
 /// Whether `verb` is a command this player can run, so it takes precedence over any alias.
@@ -96,6 +101,10 @@ pub type PlayerQuery<'w, 's> = Query<
         Option<&'static mut InRoom>,
     ),
 >;
+
+/// Per-character data that isn't needed for routing output, kept out of `PlayerQuery`.
+pub type SheetQuery<'w, 's> =
+    Query<'w, 's, (&'static mut Aliases, &'static mut Attributes)>;
 
 pub type RoomQuery<'w, 's> = Query<'w, 's, (&'static Room, &'static RoomKey, &'static Exits)>;
 
@@ -149,7 +158,7 @@ pub fn handle_commands(
     mut inputs: MessageReader<PlayerInput>,
     mut build: MessageWriter<BuildCommand>,
     mut players: PlayerQuery,
-    mut aliases: Query<&mut Aliases>,
+    mut sheets: SheetQuery,
     rooms: RoomQuery,
     db: Res<Database>,
 ) {
@@ -159,7 +168,7 @@ pub fn handle_commands(
             *entity,
             line,
             &mut players,
-            &mut aliases,
+            &mut sheets,
             &rooms,
             &db,
             &mut build,
@@ -174,7 +183,7 @@ fn run_command(
     entity: Entity,
     line: &str,
     players: &mut PlayerQuery,
-    aliases: &mut Query<&mut Aliases>,
+    sheets: &mut SheetQuery,
     rooms: &RoomQuery,
     db: &Database,
     build: &mut MessageWriter<BuildCommand>,
@@ -196,7 +205,10 @@ fn run_command(
     let expanded;
     let (mut verb, mut rest) = split_verb(line);
     if !is_builtin(&verb, role)
-        && let Some(expansion) = aliases.get(entity).ok().and_then(|a| a.expand(&verb, rest))
+        && let Some(expansion) = sheets
+            .get(entity)
+            .ok()
+            .and_then(|(aliases, _)| aliases.expand(&verb, rest))
     {
         expanded = expansion;
         (verb, rest) = split_verb(&expanded);
@@ -221,7 +233,7 @@ fn run_command(
         )),
         "help" | "?" => out.push(Outgoing::line(entity, help_for(role))),
         "alias" => {
-            if let Ok(mut aliases) = aliases.get_mut(entity) {
+            if let Ok((mut aliases, _)) = sheets.get_mut(entity) {
                 let text = aliases::alias_command(
                     character_id,
                     &mut aliases,
@@ -233,8 +245,19 @@ fn run_command(
             }
         }
         "unalias" => {
-            if let Ok(mut aliases) = aliases.get_mut(entity) {
+            if let Ok((mut aliases, _)) = sheets.get_mut(entity) {
                 let text = aliases::unalias_command(character_id, &mut aliases, rest, db);
+                out.push(Outgoing::line(entity, text));
+            }
+        }
+        "score" => {
+            if let Ok((_, attributes)) = sheets.get(entity) {
+                out.push(Outgoing::line(entity, attributes::score_text(&name, attributes)));
+            }
+        }
+        "raise" => {
+            if let Ok((_, mut attributes)) = sheets.get_mut(entity) {
+                let text = attributes::raise_command(character_id, &mut attributes, rest, db);
                 out.push(Outgoing::line(entity, text));
             }
         }

@@ -42,6 +42,13 @@ const SCHEMA: &str = "
         expansion    TEXT NOT NULL,
         PRIMARY KEY (character_id, name)
     );
+
+    CREATE TABLE IF NOT EXISTS character_attributes (
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        attribute    TEXT NOT NULL,
+        rating       INTEGER NOT NULL,
+        PRIMARY KEY (character_id, attribute)
+    );
 ";
 
 pub struct DbPlugin;
@@ -233,6 +240,24 @@ impl Database {
             name: name.into(),
             room: None,
         })
+    }
+
+    /// Attribute ratings that differ from the starting values (only raised ones have rows).
+    pub fn attributes(&self, character_id: i64) -> DbResult<Vec<(String, i32)>> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare("SELECT attribute, rating FROM character_attributes WHERE character_id = ?1")?;
+        let rows = stmt.query_map([character_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn set_attribute(&self, character_id: i64, attribute: &str, rating: i32) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT INTO character_attributes (character_id, attribute, rating) VALUES (?1, ?2, ?3)
+             ON CONFLICT (character_id, attribute) DO UPDATE SET rating = excluded.rating",
+            params![character_id, attribute, rating],
+        )?;
+        Ok(())
     }
 
     pub fn aliases(&self, character_id: i64) -> DbResult<BTreeMap<String, String>> {
