@@ -94,11 +94,47 @@ app.add_command(
 
 Items and NPCs become entities. One location component replaces `InRoom`: in a room, carried by someone, inside a container, or worn. Starting point: `get`, `drop`, `put`, `inventory`, `look <thing>`.
 
+#### Item decay
+
+Items rot away over time, which keeps rooms from filling with clutter and makes food, corpses and torches feel physical. Each item template picks one kind of decay:
+
+| Decay | Clock runs | Examples |
+| --- | --- | --- |
+| Litter (the default) | Only while the item lies in the world; picking it up resets it | A dropped sword eventually crumbles |
+| Perishable | Always, even carried, by real time (including while offline) | Food, herbs, corpses, torches |
+| None | Never | Unique items |
+
+```ron
+"bread": (
+    name: "a loaf of bread",
+    keywords: ["bread", "loaf"],
+    decay: Perishable(hours: 6, message: "The bread has gone mouldy and crumbles away."),
+),
+"longsword": (
+    name: "a longsword",
+    keywords: ["longsword", "sword"],
+    // no `decay`: the default litter decay
+),
+```
+
+- **Timestamp-based.** Each item stores when it decays; a light check every few seconds removes expired items and tells whoever can see them. Saved items keep their decay time in the database, so decay continues across restarts.
+- **Containers spill when they rot.** A rotting corpse drops its contents, which start their own litter timers, giving players a window to loot.
+
 ### Templates and resets
 
-Zone files gain NPC and item templates and say where they appear. Each zone repopulates on a timer, the classic Diku-style reset, so builders don't place everything by hand. Builder commands edit templates and spawn points.
+Zone files gain NPC and item templates and say where they appear. Each spawn resets on its own timer and refills to a fixed count or breeds, and NPCs can wander; see [The living world](world.md). Builder commands edit templates and spawns.
 
-**What survives a restart (decided, for now):** only what players carry is saved. Items on the ground, corpses and NPCs reset when the server restarts, and zone resets repopulate the world. Saved world items and unique items are [planned](#planned-features).
+#### What survives a restart
+
+**An item becomes "real" the moment a player touches it.**
+
+- **Untouched spawns are temporary.** Items a zone reset created that no player has handled live only in memory. A restart clears them, and resets repopulate.
+- **Touching makes an item real.** Getting, dropping, putting, giving or wearing an item gives it a row in an `items` table: its template, where it is (carried by a character, worn, lying in a room, or inside another item), when it was dropped, and when it decays. From then on every move updates that row, and the item survives restarts wherever it ends up. Looking at or examining an item doesn't count.
+- **Startup restores real items** to their saved locations, removing any whose decay time has passed.
+- **Resets only manage their own spawns.** Once a spawned item is picked up, it is real and no longer the reset's; the next reset spawns a fresh one.
+- **NPCs stay temporary** and reset with their zone.
+
+Decay is what keeps this from filling the world and the database: dropped items still rot away, by the drop time saved with them.
 
 ### Game events
 
@@ -116,17 +152,13 @@ The round loop, initiative, damage, death and respawn: infrastructure with no ac
 
 Features that are designed but wait on other work.
 
-### Saved world items
-
-Items left in the world (dropped on the ground, placed in a container in a room) survive a restart, instead of only what players carry. This makes the world persistent: a sword left in the tavern is still there tomorrow.
-
 ### Unique items
 
 Some items exist only once and never respawn: once *Angorim* has been found, the zone's reset never creates another.
 
-- **Templates are marked unique** (`unique: true`); a zone reset checks before spawning one.
-- **Their state is saved even under "only carried items persist",** in a small `unique_items` table, so a restart never spawns a second copy.
-- **Lifecycle, to decide:** waiting to be found, held by a character, lying somewhere, or destroyed. What happens when its holder's character is deleted, or it's left on the ground at a restart, decides whether it can ever return to the world.
+- **Templates are marked unique** (`unique: true`) and have no decay: a unique item stays wherever it is dropped, forever, until someone picks it up.
+- **Before it's found,** a unique item is an ordinary temporary spawn; a restart before anyone touches it just spawns it again.
+- **Once found,** it is a [real item](#what-survives-a-restart) like any other, saved wherever it goes. A zone reset checks the `items` table for a real copy of that template before spawning one, so a second copy never appears.
 
 ### Status prompt
 
@@ -155,4 +187,6 @@ Then teaching, epiphany, trainers and loot follow: trainers are NPCs, loot scrol
 
 ## Open questions
 
-- [ ] **Unique item lifecycle:** if a unique item's holder deletes their character, or it is left on the ground at a restart, does it return to its spawn point, or is it gone for good?
+- [ ] **Unique items and deleted characters:** if a character carrying a unique item is deleted, where does the item go? For example, dropped where the character last stood.
+- [ ] **Default litter decay time:** about 30 minutes on the ground? Should items spawned by a zone reset decay at all, since the next reset replaces them?
+- [ ] **Preserving perishables:** salting, a preserving spell, or cold storage that slows or pauses decay. A good hook for skills; templates only need to allow it.

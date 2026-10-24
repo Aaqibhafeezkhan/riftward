@@ -20,6 +20,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Designed |
 | [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
+| [The living world](world.md) | Spawns and resets, breeding, wandering and crowding, world flags and events | Designed |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds | Outlined |
 
 ## What exists today
@@ -51,8 +52,7 @@ Designed, waiting on other work:
 | Feature | Waits on | Details |
 | --- | --- | --- |
 | Status prompt (`<14/18hp 9/10fat>`), customisable per character | Current health and fatigue, from combat and time | [Architecture](architecture.md#status-prompt) |
-| Saved world items: things left on the ground survive a restart | Items | [Architecture](architecture.md#saved-world-items) |
-| Unique items that never respawn once found, like *Angorim* | Items and resets | [Architecture](architecture.md#unique-items) |
+| Unique items that never respawn once found, like *Angorim*, and never decay | Items and resets | [Architecture](architecture.md#unique-items) |
 
 ## Decisions so far
 
@@ -71,7 +71,10 @@ Designed, waiting on other work:
 | Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |
 | Magic | Latent until the character knows a casting skill; knowing one is being Awakened. Four traditions; masters can teach casting skills; Awakened backgrounds grant one but require Magic 1, bought with starting Karma |
 | Commands | Players can define aliases; aliases can't shadow built-in commands |
-| Persistence | For now, only what players carry survives a restart; the world resets |
+| Persistence | An item becomes real (saved) the moment a player touches it, and then survives restarts wherever it is. Untouched spawns and NPCs reset |
+| Spawns | One model: each spawn resets on its own timer (`every`, or `AfterDeath` for bosses) and either keeps a count or breeds, reseeding a week after being wiped out. NPCs count toward their spawn wherever they wander |
+| World events | Data-driven triggers and actions over world flags, counters, spawn counts and game events |
+| Item decay | Dropped items decay (litter); perishables rot even when carried; unique items never decay |
 
 ## Biggest open questions
 
