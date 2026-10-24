@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::net::Connection;
+use crate::targeting::Keywords;
 
 /// Asset folder holding one `.ron` file per zone.
 pub const ZONES_PATH: &str = "zones";
@@ -33,6 +34,7 @@ impl Plugin for WorldPlugin {
         app.init_asset::<ZoneDef>()
             .register_asset_loader(ZoneDefLoader)
             .init_resource::<RoomIndex>()
+            .init_resource::<DoorIndex>()
             .add_systems(Startup, load_zones)
             .add_systems(Update, sync_world);
     }
@@ -48,6 +50,10 @@ pub struct ZoneDef {
     #[serde(skip)]
     pub path: PathBuf,
     pub name: String,
+    /// Doors on this zone's exits, by id. An exit names its door; both sides of a doorway name
+    /// the same one, so they share its state.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub doors: BTreeMap<String, DoorDef>,
     pub rooms: BTreeMap<String, RoomDef>,
 }
 
@@ -55,9 +61,81 @@ pub struct ZoneDef {
 pub struct RoomDef {
     pub name: String,
     pub description: String,
-    /// Direction name -> destination: a room id in this zone, or `zone:room` for another zone.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub exits: BTreeMap<String, String>,
+    pub exits: BTreeMap<String, ExitDef>,
+}
+
+/// Where an exit leads: a room id in this zone, or `zone:room` for another zone. Plain exits are
+/// written as just the target (`"north": "gate"`); exits with a door name it too.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum ExitDef {
+    To(String),
+    Door { to: String, door: String },
+}
+
+impl ExitDef {
+    pub fn to(&self) -> &str {
+        match self {
+            ExitDef::To(to) | ExitDef::Door { to, .. } => to,
+        }
+    }
+
+    /// The door's id: local to the zone, or `zone:door`.
+    pub fn door(&self) -> Option<&str> {
+        match self {
+            ExitDef::To(_) => None,
+            ExitDef::Door { door, .. } => Some(door),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct DoorDef {
+    pub name: String,
+    /// Words players can call it by. When empty, the words of its name are used.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    /// The state it starts in, and returns to on a reset.
+    #[serde(default)]
+    pub state: DoorState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock: Option<LockDef>,
+}
+
+impl DoorDef {
+    pub fn keywords(&self) -> Keywords {
+        if !self.keywords.is_empty() {
+            return Keywords(self.keywords.iter().map(|k| k.to_lowercase()).collect());
+        }
+        let mut keywords = Keywords::from_name(&self.name);
+        keywords
+            .0
+            .retain(|w| !matches!(w.as_str(), "a" | "an" | "the"));
+        keywords
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DoorState {
+    Open,
+    #[default]
+    Closed,
+    Locked,
+}
+
+/// A lock on a door (and, later, on containers).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct LockDef {
+    /// The key's item template. Keys arrive with items; until then only builders can use the lock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// Lockpicking difficulty; `None` means it can't be picked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pick: Option<u32>,
+    /// Sturdiness against `bash`; `None` means it can't be forced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bash: Option<u32>,
 }
 
 const ZONE_FILE_HEADER: &str = "\
@@ -77,6 +155,7 @@ impl ZoneDef {
             id: id.into(),
             path: PathBuf::from(ZONES_PATH).join(format!("{id}.ron")),
             name: name.into(),
+            doors: BTreeMap::new(),
             rooms: BTreeMap::from([(ZONE_ENTRANCE.into(), entrance)]),
         }
     }
@@ -199,9 +278,84 @@ pub struct Room {
     pub description: String,
 }
 
-/// Direction name -> destination room.
+/// Direction name -> where that exit leads.
 #[derive(Component, Default, PartialEq)]
-pub struct Exits(pub BTreeMap<String, Entity>);
+pub struct Exits(pub BTreeMap<String, Exit>);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Exit {
+    pub to: Entity,
+    pub door: Option<Entity>,
+}
+
+/// A door's full id: its zone and its id there. Written `zone:door`.
+#[derive(Component, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DoorKey {
+    pub zone: String,
+    pub door: String,
+}
+
+impl DoorKey {
+    /// Parse `zone:door`, or a bare `door` relative to `current_zone`.
+    pub fn parse(s: &str, current_zone: &str) -> Self {
+        let RoomKey { zone, room } = RoomKey::parse(s, current_zone);
+        Self { zone, door: room }
+    }
+}
+
+impl fmt::Display for DoorKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.zone, self.door)
+    }
+}
+
+/// A door's live state. Lives on its own entity, shared by the exits on both sides.
+#[derive(Component, Debug)]
+pub struct Door {
+    pub name: String,
+    pub state: DoorState,
+    /// The state it starts in, from the zone file.
+    pub default: DoorState,
+    pub lock: Option<LockDef>,
+}
+
+impl Door {
+    pub fn is_open(&self) -> bool {
+        self.state == DoorState::Open
+    }
+
+    /// "the heavy oak door", for the middle of a sentence.
+    pub fn the(&self) -> String {
+        format!("the {}", without_article(&self.name))
+    }
+
+    /// "The heavy oak door", to start a sentence.
+    pub fn the_capitalized(&self) -> String {
+        let the = self.the();
+        let mut chars = the.chars();
+        chars
+            .next()
+            .map(|c| c.to_uppercase().chain(chars).collect())
+            .unwrap_or_default()
+    }
+}
+
+/// A name without its leading "a", "an" or "the": "a heavy oak door" -> "heavy oak door".
+pub fn without_article(name: &str) -> &str {
+    let name = name.trim();
+    ["a ", "an ", "the "]
+        .iter()
+        .find_map(|article| {
+            name.to_lowercase()
+                .starts_with(article)
+                .then(|| &name[article.len()..])
+        })
+        .unwrap_or(name)
+}
+
+/// Full door id -> door entity, for every door currently spawned.
+#[derive(Resource, Default)]
+pub struct DoorIndex(pub HashMap<DoorKey, Entity>);
 
 /// Full room id -> room entity, for every room currently spawned.
 #[derive(Resource, Default)]
@@ -234,6 +388,75 @@ fn load_zones(mut commands: Commands, assets: Res<AssetServer>) {
     commands.insert_resource(ZonesHandle(assets.load_folder(ZONES_PATH)));
 }
 
+/// Spawn, update and despawn door entities to match the zones. A door that already exists keeps
+/// its current state (open, closed, locked) when its zone file changes, unless its default state
+/// changed, as when a builder adds a lock; new doors start in their default state.
+fn sync_doors(
+    commands: &mut Commands,
+    zones: &Assets<ZoneDef>,
+    door_index: &mut DoorIndex,
+    doors: &mut Query<&mut Door>,
+) {
+    let mut defs: HashMap<DoorKey, &DoorDef> = HashMap::new();
+    for (_, zone) in zones.iter() {
+        for (id, def) in &zone.doors {
+            let key = DoorKey {
+                zone: zone.id.clone(),
+                door: id.clone(),
+            };
+            defs.insert(key, def);
+        }
+    }
+
+    for (key, def) in &defs {
+        // A door can't stay locked once its lock is removed.
+        let fit = |state: DoorState| match (state, &def.lock) {
+            (DoorState::Locked, None) => DoorState::Closed,
+            (state, _) => state,
+        };
+        match door_index
+            .0
+            .get(key)
+            .and_then(|&e| doors.get_mut(e).ok().map(|d| (e, d)))
+        {
+            Some((entity, mut door)) => {
+                door.name = def.name.clone();
+                door.lock = def.lock.clone();
+                let default = fit(def.state);
+                if door.default != default {
+                    door.default = default;
+                    door.state = default;
+                }
+                door.state = fit(door.state);
+                commands.entity(entity).insert(def.keywords());
+            }
+            None => {
+                let entity = commands
+                    .spawn((
+                        Door {
+                            name: def.name.clone(),
+                            state: fit(def.state),
+                            default: fit(def.state),
+                            lock: def.lock.clone(),
+                        },
+                        key.clone(),
+                        def.keywords(),
+                    ))
+                    .id();
+                door_index.0.insert(key.clone(), entity);
+            }
+        }
+    }
+
+    door_index.0.retain(|key, &mut entity| {
+        let keep = defs.contains_key(key);
+        if !keep {
+            commands.entity(entity).despawn();
+        }
+        keep
+    });
+}
+
 /// Apply every loaded zone to the room entities whenever any zone loads, changes, or goes away.
 #[allow(clippy::too_many_arguments)]
 fn sync_world(
@@ -245,7 +468,9 @@ fn sync_world(
     assets: Res<AssetServer>,
     zones: Res<Assets<ZoneDef>>,
     mut index: ResMut<RoomIndex>,
+    mut door_index: ResMut<DoorIndex>,
     mut rooms: Query<(&mut Room, &mut Exits)>,
+    mut doors: Query<&mut Door>,
     mut players: Query<(&mut Connection, &mut InRoom), With<Player>>,
 ) {
     if zone_events.read().count() > 0 || folder_events.read().count() > 0 {
@@ -332,17 +557,28 @@ fn sync_world(
         index.0.remove(&key);
     }
 
-    // Resolve exits now that every room id maps to an entity. Newly spawned rooms don't have
-    // their components yet, so their exits are inserted through commands instead.
+    sync_doors(&mut commands, &zones, &mut door_index, &mut doors);
+
+    // Resolve exits now that every room and door id maps to an entity. Newly spawned rooms don't
+    // have their components yet, so their exits are inserted through commands instead.
     for (key, def) in &defs {
         let mut exits = BTreeMap::new();
-        for (dir, target) in &def.exits {
-            match index.0.get(&RoomKey::parse(target, &key.zone)) {
-                Some(&to) => {
-                    exits.insert(dir.clone(), to);
+        for (dir, exit) in &def.exits {
+            let Some(&to) = index.0.get(&RoomKey::parse(exit.to(), &key.zone)) else {
+                warn!(
+                    "room '{key}' exit '{dir}' leads to unknown room '{}'",
+                    exit.to()
+                );
+                continue;
+            };
+            let door = exit.door().and_then(|door| {
+                let found = door_index.0.get(&DoorKey::parse(door, &key.zone)).copied();
+                if found.is_none() {
+                    warn!("room '{key}' exit '{dir}' names unknown door '{door}'");
                 }
-                None => warn!("room '{key}' exit '{dir}' leads to unknown room '{target}'"),
-            }
+                found
+            });
+            exits.insert(dir.clone(), Exit { to, door });
         }
         let exits = Exits(exits);
         let entity = index.0[key];
@@ -376,5 +612,48 @@ fn sync_world(
             defs.len(),
             zones.len()
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_exits_stay_plain_in_zone_files() {
+        let plain = ExitDef::To("gate".into());
+        assert_eq!(ron::to_string(&plain).unwrap(), "\"gate\"");
+        let door = ExitDef::Door {
+            to: "cellar".into(),
+            door: "cellar_door".into(),
+        };
+        let written = ron::to_string(&door).unwrap();
+        assert_eq!(ron::from_str::<ExitDef>(&written).unwrap(), door);
+        assert_eq!(ron::from_str::<ExitDef>("\"gate\"").unwrap(), plain);
+    }
+
+    #[test]
+    fn door_names_read_naturally() {
+        let door = |name: &str| Door {
+            name: name.into(),
+            state: DoorState::Closed,
+            default: DoorState::Closed,
+            lock: None,
+        };
+        assert_eq!(door("a heavy oak door").the(), "the heavy oak door");
+        assert_eq!(door("An iron gate").the_capitalized(), "The iron gate");
+        assert_eq!(door("trapdoor").the(), "the trapdoor");
+        assert_eq!(without_article("a trapdoor"), "trapdoor");
+    }
+
+    #[test]
+    fn door_keywords_skip_articles() {
+        let def = DoorDef {
+            name: "a heavy oak door".into(),
+            keywords: Vec::new(),
+            state: DoorState::Closed,
+            lock: None,
+        };
+        assert_eq!(def.keywords().0, ["heavy", "oak", "door"]);
     }
 }

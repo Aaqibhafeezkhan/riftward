@@ -20,7 +20,8 @@ Each document below covers one area and can be read on its own. This page is the
 | [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Designed |
 | [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
-| [The living world](world.md) | Spawns and resets, breeding, wandering and crowding, world flags and events | Designed |
+| [Items, containers and locks](items.md) | Item templates and location, what survives a restart, decay, unique items, containers, locks and keys, traps | Designed |
+| [The living world](world.md) | Spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Designed |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds | Outlined |
 
 ## What exists today
@@ -29,6 +30,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Accounts and characters in SQLite, with roles: player, builder, admin.
 - Zone files in `assets/zones`, hot-reloaded, plus in-game building: `dig`, `desc`, `link`, `zone create`, and more.
 - Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
+- Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.
 - Attributes, starting Karma, `raise`, `score`, and the Luck-aware `Dice` service.
@@ -52,7 +54,7 @@ Designed, waiting on other work:
 | Feature | Waits on | Details |
 | --- | --- | --- |
 | Status prompt (`<14/18hp 9/10fat>`), customisable per character | Current health and fatigue, from combat and time | [Architecture](architecture.md#status-prompt) |
-| Unique items that never respawn once found, like *Angorim*, and never decay | Items and resets | [Architecture](architecture.md#unique-items) |
+| Unique items that never respawn once found, like *Angorim*, and never decay | Items and resets | [Architecture](items.md#unique-items) |
 | Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, NPCs and game events | [Architecture](architecture.md#scripting) |
 
 ## Decisions so far
@@ -76,6 +78,7 @@ Designed, waiting on other work:
 | Spawns | One model: each spawn resets on its own timer (`every`, or `AfterDeath` for bosses) and either keeps a count or breeds, reseeding a week after being wiped out. NPCs count toward their spawn wherever they wander |
 | World events | Data-driven triggers and actions over world flags, counters, spawn counts and game events |
 | Item decay | Dropped items decay (litter); perishables rot even when carried; unique items never decay |
+| Locks | Doors and containers share one lock: open, closed or locked, with keys, `pick` and `bash` (which only forces it open). Locks reset with their zone; hidden doors are found per character |
 
 ## Biggest open questions
 

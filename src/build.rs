@@ -18,7 +18,10 @@ use crate::output::{
     Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_online,
 };
 use crate::targeting::{Keywords, Target};
-use crate::world::{RoomDef, RoomIndex, RoomKey, ZONE_ENTRANCE, ZoneDef};
+use crate::world::{
+    Door, DoorDef, DoorKey, DoorState, ExitDef, LockDef, RoomDef, RoomIndex, RoomKey,
+    ZONE_ENTRANCE, ZoneDef, without_article,
+};
 
 pub struct BuildPlugin;
 
@@ -81,6 +84,14 @@ impl Plugin for BuildPlugin {
             .add_command(
                 build("unlink", "unlink <dir>", "remove an exit"),
                 unlink_cmd,
+            )
+            .add_command(
+                build(
+                    "door",
+                    "door <dir> [<name> | lock | nolock | open | closed | remove]",
+                    "show, add, rename or remove a door, give it a lock, or set how it starts",
+                ),
+                door_cmd,
             )
             .add_command(build("zones", "zones", "list all zones"), zones_cmd)
             .add_command(
@@ -150,6 +161,7 @@ fn goto_cmd(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
     rooms: RoomQuery,
+    doors: Query<&Door>,
     index: Res<RoomIndex>,
     db: Res<Database>,
 ) {
@@ -163,6 +175,7 @@ fn goto_cmd(
         &inv,
         &mut players,
         &rooms,
+        &doors,
         &index,
         &db,
         &mut out,
@@ -206,6 +219,19 @@ fn link_cmd(
         return;
     };
     let reply = link(&here, &inv, &index, &mut zones);
+    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+}
+
+fn door_cmd(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    mut zones: ResMut<Assets<ZoneDef>>,
+) {
+    let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
+        return;
+    };
+    let reply = door(&here, &inv, &mut zones);
     deliver(vec![reply_line(inv.entity, reply)], &mut players);
 }
 
@@ -305,7 +331,10 @@ fn list_rooms(here: &RoomKey, zones: &Assets<ZoneDef>) -> Reply {
         let exits: Vec<_> = room
             .exits
             .iter()
-            .map(|(dir, to)| format!("{dir}->{to}"))
+            .map(|(dir, exit)| match exit.door() {
+                Some(door) => format!("{dir}->{} [door {door}]", exit.to()),
+                None => format!("{dir}->{}", exit.to()),
+            })
             .collect();
         text += &format!("\r\n  {id:<16} {}  ({})", room.name, exits.join(", "));
     }
@@ -319,6 +348,7 @@ fn goto(
     inv: &Invocation,
     players: &mut PlayerQuery,
     rooms: &RoomQuery,
+    doors: &Query<&Door>,
     index: &RoomIndex,
     db: &Database,
     out: &mut Vec<Outgoing>,
@@ -338,7 +368,16 @@ fn goto(
         except: entity,
         text: format!("{name} vanishes.\r\n"),
     });
-    move_player(entity, actor.character_id, to, players, rooms, db, out);
+    move_player(
+        entity,
+        actor.character_id,
+        to,
+        players,
+        rooms,
+        doors,
+        db,
+        out,
+    );
     out.push(Outgoing::Room {
         room: to,
         except: entity,
@@ -367,7 +406,7 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
         let mut exits = BTreeMap::new();
         let way_back = opposite_direction(&dir);
         if let Some(back) = way_back {
-            exits.insert(back.to_string(), here.room.clone());
+            exits.insert(back.to_string(), ExitDef::To(here.room.clone()));
         }
         zone.rooms.insert(
             id.clone(),
@@ -377,7 +416,9 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
                 exits,
             },
         );
-        room_mut(zone, here)?.exits.insert(dir.clone(), id.clone());
+        room_mut(zone, here)?
+            .exits
+            .insert(dir.clone(), ExitDef::To(id.clone()));
 
         let mut reply = format!("You dig {dir}, creating {name} [{}:{id}].", here.zone);
         if way_back.is_none() {
@@ -426,10 +467,16 @@ fn link(here: &RoomKey, inv: &Invocation, index: &RoomIndex, zones: &mut Assets<
     };
 
     edit_zone(zones, &here.zone, |zone| {
-        let replaced = room_mut(zone, here)?.exits.insert(dir.clone(), stored);
+        let exits = &mut room_mut(zone, here)?.exits;
+        if exits.get(&dir).and_then(ExitDef::door).is_some() {
+            return Err(format!(
+                "The {dir} exit has a door. Remove it first with 'door {dir} remove'."
+            ));
+        }
+        let replaced = exits.insert(dir.clone(), ExitDef::To(stored));
         let mut reply = format!("Exit {dir} now leads to [{target}] (one-way).");
         if let Some(old) = replaced {
-            reply += &format!(" It used to lead to [{old}].");
+            reply += &format!(" It used to lead to [{}].", old.to());
         }
         Ok(reply)
     })
@@ -442,8 +489,14 @@ fn unlink(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Repl
     let dir = full_direction(&inv.args.to_ascii_lowercase()).to_string();
     edit_zone(zones, &here.zone, |zone| {
         let room = room_mut(zone, here)?;
-        if !room.exits.contains_key(&dir) {
-            return Err(format!("There is no exit {dir}."));
+        match room.exits.get(&dir) {
+            None => return Err(format!("There is no exit {dir}.")),
+            Some(exit) if exit.door().is_some() => {
+                return Err(format!(
+                    "The {dir} exit has a door. Remove it first with 'door {dir} remove'."
+                ));
+            }
+            Some(_) => {}
         }
         room.exits.remove(&dir);
         Ok(format!(
@@ -640,6 +693,253 @@ fn set_attribute(
     Ok(format!("{name}'s {} is now {rating}.", attribute.name()))
 }
 
+fn zone_def<'a>(zones: &'a Assets<ZoneDef>, zone_id: &str) -> Result<&'a ZoneDef, String> {
+    zones
+        .iter()
+        .map(|(_, zone)| zone)
+        .find(|zone| zone.id == zone_id)
+        .ok_or_else(|| format!("Zone '{zone_id}' isn't loaded."))
+}
+
+/// `door <dir> ...`: everything about the door on one of this room's exits.
+fn door(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    let (dir, rest) = inv
+        .args
+        .split_once(' ')
+        .map(|(d, r)| (d, r.trim()))
+        .unwrap_or((&inv.args, ""));
+    if dir.is_empty() {
+        return Err(inv.usage_error());
+    }
+    let dir = full_direction(&dir.to_ascii_lowercase()).to_string();
+    let exit = zone_def(zones, &here.zone)?
+        .rooms
+        .get(&here.room)
+        .and_then(|room| room.exits.get(&dir))
+        .cloned()
+        .ok_or_else(|| format!("There is no exit {dir}."))?;
+    let existing = exit.door().map(|d| DoorKey::parse(d, &here.zone));
+
+    let Some(key) = existing else {
+        return match rest {
+            "" => Ok(format!(
+                "There's no door to the {dir}. Add one with 'door {dir} <name>'."
+            )),
+            "lock" | "nolock" | "open" | "closed" | "remove" => Err(format!(
+                "There's no door to the {dir}. Add one first with 'door {dir} <name>'."
+            )),
+            name => add_door(here, &dir, &exit, name, zones),
+        };
+    };
+
+    let def = zone_def(zones, &key.zone)?
+        .doors
+        .get(&key.door)
+        .cloned()
+        .ok_or_else(|| format!("The {dir} exit names a door [{key}] that doesn't exist."))?;
+    match rest {
+        "" => Ok(describe_door(&dir, &key, &def)),
+        "remove" => remove_door(&key, &def, zones),
+        "lock" | "nolock" | "open" | "closed" => edit_door(&key, zones, |door| {
+            match rest {
+                "lock" => {
+                    door.lock = Some(LockDef {
+                        key: None,
+                        pick: Some(5),
+                        bash: Some(10),
+                    });
+                    door.state = DoorState::Locked;
+                }
+                "nolock" => {
+                    door.lock = None;
+                    if door.state == DoorState::Locked {
+                        door.state = DoorState::Closed;
+                    }
+                }
+                "open" => door.state = DoorState::Open,
+                _ => {
+                    if door.state == DoorState::Open {
+                        door.state = DoorState::Closed;
+                    }
+                }
+            }
+            Ok(describe_door(&dir, &key, door))
+        }),
+        name => edit_door(&key, zones, |door| {
+            door.name = name.into();
+            door.keywords.clear();
+            Ok(format!("The {dir} door is now called {name}."))
+        }),
+    }
+}
+
+fn describe_door(dir: &str, key: &DoorKey, door: &DoorDef) -> String {
+    let starts = match door.state {
+        DoorState::Open => "open",
+        DoorState::Closed => "closed",
+        DoorState::Locked => "locked",
+    };
+    let lock = match &door.lock {
+        None => "no lock".to_string(),
+        Some(lock) => {
+            let or_never = |n: Option<u32>| n.map_or("never".to_string(), |n| n.to_string());
+            format!(
+                "a lock (pick {}, bash {}, key {})",
+                or_never(lock.pick),
+                or_never(lock.bash),
+                lock.key.as_deref().unwrap_or("none")
+            )
+        }
+    };
+    format!(
+        "The {dir} door: {} [{key}], starts {starts}, {lock}.",
+        door.name
+    )
+}
+
+/// Apply an edit to a door's definition, wherever its zone is.
+fn edit_door(
+    key: &DoorKey,
+    zones: &mut Assets<ZoneDef>,
+    edit: impl FnOnce(&mut DoorDef) -> Reply,
+) -> Reply {
+    edit_zone(zones, &key.zone, |zone| {
+        let door = zone
+            .doors
+            .get_mut(&key.door)
+            .ok_or_else(|| format!("Door [{key}] no longer exists."))?;
+        edit(door)
+    })
+}
+
+/// Add a closed, unlocked door to an exit, and to the exit leading back if there is one.
+fn add_door(
+    here: &RoomKey,
+    dir: &str,
+    exit: &ExitDef,
+    name: &str,
+    zones: &mut Assets<ZoneDef>,
+) -> Reply {
+    let id = {
+        let zone = zone_def(zones, &here.zone)?;
+        unique_id(&slugify(without_article(name)), |id| {
+            zone.doors.contains_key(id)
+        })
+    };
+    let dest = RoomKey::parse(exit.to(), &here.zone);
+    // The exit back from the destination, if it leads here and has no door of its own.
+    let back = zone_def(zones, &dest.zone).ok().and_then(|zone| {
+        zone.rooms.get(&dest.room)?.exits.iter().find_map(|(d, e)| {
+            (RoomKey::parse(e.to(), &dest.zone) == *here && e.door().is_none())
+                .then(|| (d.clone(), e.to().to_string()))
+        })
+    });
+    let door_ref = |zone: &str| {
+        if zone == here.zone {
+            id.clone()
+        } else {
+            format!("{}:{id}", here.zone)
+        }
+    };
+
+    edit_zone(zones, &here.zone, |zone| {
+        zone.doors.insert(
+            id.clone(),
+            DoorDef {
+                name: name.into(),
+                keywords: Vec::new(),
+                state: DoorState::Closed,
+                lock: None,
+            },
+        );
+        room_mut(zone, here)?.exits.insert(
+            dir.into(),
+            ExitDef::Door {
+                to: exit.to().into(),
+                door: id.clone(),
+            },
+        );
+        if dest.zone == here.zone
+            && let Some((back_dir, back_to)) = &back
+            && let Some(room) = zone.rooms.get_mut(&dest.room)
+        {
+            room.exits.insert(
+                back_dir.clone(),
+                ExitDef::Door {
+                    to: back_to.clone(),
+                    door: door_ref(&dest.zone),
+                },
+            );
+        }
+        Ok(String::new())
+    })?;
+    if dest.zone != here.zone
+        && let Some((back_dir, back_to)) = &back
+    {
+        edit_zone(zones, &dest.zone, |zone| {
+            let room = zone
+                .rooms
+                .get_mut(&dest.room)
+                .ok_or_else(|| format!("Room [{dest}] no longer exists."))?;
+            room.exits.insert(
+                back_dir.clone(),
+                ExitDef::Door {
+                    to: back_to.clone(),
+                    door: door_ref(&dest.zone),
+                },
+            );
+            Ok(String::new())
+        })?;
+    }
+
+    let mut reply = format!(
+        "Added {name} [{}:{id}] to the {dir} exit. It starts closed, with no lock.",
+        here.zone
+    );
+    match back {
+        Some((back_dir, _)) => reply += &format!(" The {back_dir} exit from [{dest}] shares it."),
+        None => reply += &format!(" There's no exit back from [{dest}], so it has only this side."),
+    }
+    Ok(reply)
+}
+
+/// Remove a door's definition and every exit's reference to it, in any zone.
+fn remove_door(key: &DoorKey, def: &DoorDef, zones: &mut Assets<ZoneDef>) -> Reply {
+    let referencing: Vec<String> = zones
+        .iter()
+        .map(|(_, zone)| zone)
+        .filter(|zone| {
+            zone.rooms.values().any(|room| {
+                room.exits.values().any(|e| {
+                    e.door()
+                        .is_some_and(|d| DoorKey::parse(d, &zone.id) == *key)
+                })
+            })
+        })
+        .map(|zone| zone.id.clone())
+        .collect();
+    for zone_id in &referencing {
+        edit_zone(zones, zone_id, |zone| {
+            let zone_id = zone.id.clone();
+            for room in zone.rooms.values_mut() {
+                for exit in room.exits.values_mut() {
+                    if exit
+                        .door()
+                        .is_some_and(|d| DoorKey::parse(d, &zone_id) == *key)
+                    {
+                        *exit = ExitDef::To(exit.to().into());
+                    }
+                }
+            }
+            Ok(String::new())
+        })?;
+    }
+    edit_zone(zones, &key.zone, |zone| {
+        zone.doors.remove(&key.door);
+        Ok(format!("Removed {} [{key}].", def.name))
+    })
+}
+
 /// Turn a room name into an id: "The Old Mill" -> "the_old_mill".
 fn slugify(name: &str) -> String {
     let mut slug = String::new();
@@ -659,12 +959,17 @@ fn slugify(name: &str) -> String {
 }
 
 fn unique_room_id(base: &str, zone: &ZoneDef) -> String {
-    if !zone.rooms.contains_key(base) {
+    unique_id(base, |id| zone.rooms.contains_key(id))
+}
+
+/// `base`, or `base_2`, `base_3`, ... whichever isn't `taken`.
+fn unique_id(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
         return base.into();
     }
     (2..)
         .map(|n| format!("{base}_{n}"))
-        .find(|id| !zone.rooms.contains_key(id))
+        .find(|id| !taken(id))
         .unwrap()
 }
 

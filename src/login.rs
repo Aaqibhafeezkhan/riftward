@@ -13,7 +13,7 @@ use crate::db::{Account, CharacterRecord, Database, Permission, Role};
 use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::output::{Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::targeting::Keywords;
-use crate::world::{InRoom, Player, RoomIndex, RoomKey};
+use crate::world::{Door, InRoom, Player, RoomIndex, RoomKey};
 
 pub struct LoginPlugin;
 
@@ -104,12 +104,14 @@ fn greet_new_connections(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_login(
     mut commands: Commands,
     mut inputs: MessageReader<PlayerInput>,
     mut states: Query<&mut LoginState>,
     mut players: PlayerQuery,
     rooms: RoomQuery,
+    doors: Query<&Door>,
     index: Res<RoomIndex>,
     db: Res<Database>,
 ) {
@@ -168,6 +170,7 @@ fn handle_login(
                     &mut commands,
                     &players,
                     &rooms,
+                    &doors,
                     &index,
                     &db,
                     &mut out,
@@ -416,6 +419,7 @@ fn enter_game(
     commands: &mut Commands,
     players: &PlayerQuery,
     rooms: &RoomQuery,
+    doors: &Query<&Door>,
     index: &RoomIndex,
     db: &Database,
     out: &mut Vec<Outgoing>,
@@ -499,6 +503,7 @@ fn enter_game(
             entity,
             players,
             rooms,
+            doors,
             account.role.can(Permission::Build),
         ),
     ));

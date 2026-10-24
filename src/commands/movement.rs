@@ -3,29 +3,55 @@
 use bevy::prelude::*;
 
 use crate::command::Invocation;
+use crate::commands::doors::{DoorLookup, find_door};
 use crate::db::{Database, Permission};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::targeting::{Keywords, Target};
+use crate::world::{Door, DoorState};
 
-/// `look` describes the room; `look <target>` looks at someone in it.
+/// `look` describes the room; `look <target>` looks along an exit, at a door, or at someone here.
 pub fn look(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
     rooms: RoomQuery,
+    doors: Query<&Door>,
     keywords: Query<&Keywords>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
-    let text = match Target::parse(&inv.args) {
-        None => describe_room(
+    let lookup = rooms
+        .get(actor.room)
+        .ok()
+        .filter(|_| !inv.args.is_empty())
+        .map(|(_, _, exits)| {
+            let lookup = find_door(&inv.args, exits, |e| keywords.get(e).ok());
+            (lookup, exits)
+        });
+    let text = match (Target::parse(&inv.args), lookup) {
+        (None, _) => describe_room(
             actor.room,
             actor.entity,
             &players,
             &rooms,
+            &doors,
             actor.role.can(Permission::Build),
         ),
-        Some(target) => {
+        (_, Some((DoorLookup::Door { door, dir }, _))) => match doors.get(door) {
+            Ok(door) => {
+                let state = if door.is_open() { "open" } else { "closed" };
+                format!("You see {} to the {dir}. It is {state}.\r\n", door.name)
+            }
+            Err(_) => String::new(),
+        },
+        (_, Some((DoorLookup::NoDoor { dir }, exits))) => {
+            let name = rooms
+                .get(exits.0[&dir].to)
+                .map(|(room, _, _)| room.name.clone())
+                .unwrap_or_default();
+            format!("To the {dir} lies {name}.\r\n")
+        }
+        (Some(target), _) => {
             let candidates = targets_in_room(actor.room, &players, &keywords);
             match target
                 .find_one(actor.entity, candidates)
@@ -43,11 +69,17 @@ pub fn look(
 }
 
 /// `go <direction>`.
-pub fn go(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery, db: Res<Database>) {
+pub fn go(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    doors: Query<&Door>,
+    db: Res<Database>,
+) {
     let out = if inv.args.is_empty() {
         vec![Outgoing::line(inv.entity, "Go where?")]
     } else {
-        travel(inv.entity, &inv.args, &mut players, &rooms, &db)
+        travel(inv.entity, &inv.args, &mut players, &rooms, &doors, &db)
     };
     deliver(out, &mut players);
 }
@@ -57,9 +89,10 @@ pub fn walk(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
     rooms: RoomQuery,
+    doors: Query<&Door>,
     db: Res<Database>,
 ) {
-    let out = travel(inv.entity, inv.command, &mut players, &rooms, &db);
+    let out = travel(inv.entity, inv.command, &mut players, &rooms, &doors, &db);
     deliver(out, &mut players);
 }
 
@@ -68,6 +101,7 @@ fn travel(
     dir: &str,
     players: &mut PlayerQuery,
     rooms: &RoomQuery,
+    doors: &Query<&Door>,
     db: &Database,
 ) -> Vec<Outgoing> {
     let mut out = Vec::new();
@@ -75,7 +109,7 @@ fn travel(
         return out;
     };
     let dir = full_direction(&dir.to_ascii_lowercase()).to_string();
-    let Some(&to) = rooms
+    let Some(&exit) = rooms
         .get(actor.room)
         .ok()
         .and_then(|(_, _, exits)| exits.0.get(&dir))
@@ -83,13 +117,32 @@ fn travel(
         out.push(Outgoing::line(entity, "You can't go that way."));
         return out;
     };
+    if let Some(door) = exit.door.and_then(|d| doors.get(d).ok())
+        && !door.is_open()
+    {
+        out.push(Outgoing::line(
+            entity,
+            format!("{} is closed.", door.the_capitalized()),
+        ));
+        return out;
+    }
+    let to = exit.to;
 
     out.push(Outgoing::Room {
         room: actor.room,
         except: entity,
         text: format!("{} leaves {dir}.\r\n", actor.name),
     });
-    move_player(entity, actor.character_id, to, players, rooms, db, &mut out);
+    move_player(
+        entity,
+        actor.character_id,
+        to,
+        players,
+        rooms,
+        doors,
+        db,
+        &mut out,
+    );
     out.push(Outgoing::Room {
         room: to,
         except: entity,
@@ -112,12 +165,14 @@ pub fn full_direction(dir: &str) -> &str {
 }
 
 /// Put a player in a room, remember it in the database, and show them where they are.
+#[allow(clippy::too_many_arguments)]
 pub fn move_player(
     entity: Entity,
     character_id: i64,
     to: Entity,
     players: &mut PlayerQuery,
     rooms: &RoomQuery,
+    doors: &Query<&Door>,
     db: &Database,
     out: &mut Vec<Outgoing>,
 ) {
@@ -133,7 +188,7 @@ pub fn move_player(
     }
     out.push(Outgoing::To(
         entity,
-        describe_room(to, entity, players, rooms, show_ids),
+        describe_room(to, entity, players, rooms, doors, show_ids),
     ));
 }
 
@@ -143,6 +198,7 @@ pub fn describe_room(
     viewer: Entity,
     players: &PlayerQuery,
     rooms: &RoomQuery,
+    doors: &Query<&Door>,
     show_id: bool,
 ) -> String {
     let Ok((info, key, exits)) = rooms.get(room) else {
@@ -155,7 +211,16 @@ pub fn describe_room(
     }
     text += &format!("\r\n{}\r\n", info.description);
 
-    let exit_list: Vec<_> = exits.0.keys().map(String::as_str).collect();
+    let exit_list: Vec<_> = exits
+        .0
+        .iter()
+        .map(
+            |(dir, exit)| match exit.door.and_then(|d| doors.get(d).ok()).map(|d| d.state) {
+                Some(DoorState::Closed | DoorState::Locked) => format!("{dir} (closed)"),
+                _ => dir.clone(),
+            },
+        )
+        .collect();
     text += &format!(
         "\x1b[33mExits: {}\x1b[0m\r\n",
         if exit_list.is_empty() {

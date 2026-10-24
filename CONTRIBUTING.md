@@ -48,6 +48,7 @@ Builders build from inside the game. Type `help` to see the commands your role a
 | `dig <dir> <name>` | Create a room through a new exit, with a way back |
 | `desc <text>`, `rename <name>` | Edit the room you're standing in |
 | `link <dir> <room>`, `unlink <dir>` | Add or remove a one-way exit |
+| `door <dir> <name>`, `door <dir> lock`, `door <dir> remove` | Add a door to an exit (shared with the way back), give it a lock, or remove it; `door <dir>` shows it |
 | `zone create <id> <name>`, `zone rename <name>` | Create or rename a zone |
 
 Every change is saved straight to the zone's file in `assets/zones/`, and those files are committed to git like code. You can also edit them by hand while the server runs: it reloads them automatically, and players standing in a changed room are told their surroundings shifted.

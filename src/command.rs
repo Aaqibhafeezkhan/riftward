@@ -36,6 +36,7 @@ impl Plugin for CommandPlugin {
 pub enum Category {
     Information,
     Movement,
+    Interaction,
     Communication,
     Character,
     Building,
@@ -47,6 +48,7 @@ impl Category {
         match self {
             Category::Information => "Information",
             Category::Movement => "Movement",
+            Category::Interaction => "Interaction",
             Category::Communication => "Communication",
             Category::Character => "Character",
             Category::Building => "Building",

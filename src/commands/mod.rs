@@ -3,6 +3,7 @@
 
 mod character;
 mod communication;
+pub mod doors;
 pub mod movement;
 
 use bevy::prelude::*;
@@ -41,6 +42,37 @@ impl Plugin for CommandsPlugin {
             .add_command(direction("west", &["w"]), movement::walk)
             .add_command(direction("up", &["u"]), movement::walk)
             .add_command(direction("down", &["d"]), movement::walk)
+            // Interaction
+            .add_command(
+                CommandSpec::new("open", Interaction)
+                    .usage("open <door>")
+                    .summary("open a door, by direction or name"),
+                doors::open,
+            )
+            .add_command(
+                CommandSpec::new("close", Interaction)
+                    .usage("close <door>")
+                    .summary("close a door"),
+                doors::close,
+            )
+            .add_command(
+                CommandSpec::new("lock", Interaction)
+                    .usage("lock <door>")
+                    .summary("lock a closed door, if you have the key"),
+                doors::lock,
+            )
+            .add_command(
+                CommandSpec::new("unlock", Interaction)
+                    .usage("unlock <door>")
+                    .summary("unlock a door, if you have the key"),
+                doors::unlock,
+            )
+            .add_command(
+                CommandSpec::new("bash", Interaction)
+                    .usage("bash <door>")
+                    .summary("try to force a locked door open with your Strength"),
+                doors::bash,
+            )
             // Communication
             .add_command(
                 CommandSpec::new("say", Communication)

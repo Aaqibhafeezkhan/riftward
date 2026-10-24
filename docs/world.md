@@ -60,7 +60,7 @@ Every NPC a spawn creates carries a tag naming its spawn, `SpawnedBy("sewer_rats
 
 ### Items
 
-Item spawns use the same model. A spawned item belongs to its spawn until a player touches it; from then on it is a [real item](architecture.md#what-survives-a-restart) and no longer counts, so the next reset spawns a fresh one. [Unique items](architecture.md#unique-items) are the exception: their spawn checks for a real copy anywhere and never spawns a second.
+Item spawns use the same model. A spawned item belongs to its spawn until a player touches it; from then on it is a [real item](items.md#what-survives-a-restart) and no longer counts, so the next reset spawns a fresh one. [Unique items](items.md#unique-items) are the exception: their spawn checks for a real copy anywhere and never spawns a second. Fixed [containers](items.md#containers) such as chests belong to their spawn, which refills their contents on each reset.
 
 ## Wandering
 
@@ -76,6 +76,54 @@ Each spawn says how far its NPCs may roam and how often they move.
 - **Each NPC moves on its own random interval** from the range, so a room's goblins don't all move in the same tick. Each move picks a random allowed exit, rolled through [`Dice`](attributes.md#the-dice-service).
 - **Rooms can refuse wanderers** with a `no_wander` flag: temples, shops, players' homes.
 - **Wanderers move like players.** Rooms see "A stray dog arrives." and "A city guard leaves north.", and each move fires the same `EnteredRoom` [game event](architecture.md#game-events), so triggers and passive skills see NPC movement too.
+
+## Doors
+
+Status: built, except hidden doors, keys and resets. Doors are open, close, lock, unlock and bash-able today.
+
+Exits keep their short form, `"west": "square"`. A longer form adds a door, defined once in the zone and named by both sides, so opening it from one room opens it from the other:
+
+```ron
+doors: {
+    "cellar_door": (name: "a heavy oak door", state: Locked,
+        lock: Some((key: Some("cellar_key"), pick: Some(4), bash: Some(12)))),
+    "trapdoor": (name: "a trapdoor"),                     // closed, no lock
+    "bookcase": (name: "a bookcase", keywords: ["bookcase", "shelves"], hidden: true),
+},
+rooms: {
+    "tavern": ( ..., exits: { "west": "square", "down": (to: "cellar", door: "cellar_door") } ),
+    "cellar": ( ..., exits: { "up": (to: "tavern", door: "cellar_door") } ),
+},
+```
+
+- **The lock is the shared [lock model](items.md#locks-and-keys):** open, closed or locked; keys, `pick` and `bash`. Doors are targeted by direction first (`open north` → "It's locked.") or by name (`open door`, `open trapdoor`).
+- **Keywords** default to the words of the name without its article, so "a heavy oak door" answers to `heavy`, `oak` and `door`.
+- **A trapdoor is just a door on an `up` or `down` exit.**
+- **Doors between zones** use `zone:door` names on both sides.
+- **A closed door blocks movement** for players and wandering NPCs: `north` gives "The heavy oak door is closed." NPC templates can be allowed to open doors, such as a guard who carries the gate key.
+- **Rooms show door state:** "Exits: west, down (closed)", and `look down` describes the door.
+- **`bash` only forces a door open.** It isn't broken; it can be closed and locked again.
+- **Doors reset with their zone,** back to their default state, so the cellar is locked again after the next reset (once resets exist). Door state isn't saved across restarts.
+
+### Building doors
+
+| Command | Does |
+| --- | --- |
+| `door <dir> <name>` | Add a closed door with no lock to that exit (and to the exit back, if there is one), or rename the door already there |
+| `door <dir> lock` | Give it a lock (pick 5, bash 10, no key yet) that starts locked |
+| `door <dir> nolock` | Remove its lock |
+| `door <dir> open` / `closed` | Set whether it starts open or closed |
+| `door <dir> remove` | Remove the door from both sides |
+| `door <dir>` | Show the door: id, how it starts, its lock |
+
+The door's id comes from its name (`a heavy oak door` → `heavy_oak_door`). Changing how a door starts takes effect at once, and `link` and `unlink` refuse to touch an exit with a door until it's removed.
+
+### Hidden doors
+
+A door with `hidden: true` isn't in a room's exits **for each character until that character finds it**. To someone who hasn't found it, the exit doesn't exist: "You can't go that way."
+
+- **Finding** uses a `search` command, rolled through `Dice` against Intuition and a searching skill, or happens when a condition is met (`reveal_when: WorldFlag("lever_pulled")`).
+- **Found doors are remembered per character,** as a [flag](skills.md#hidden-skills) on the character (`found_door:town:bookcase`), so they stay found across resets and restarts. Other players still have to find it themselves.
 
 ## Crowding
 
@@ -160,7 +208,9 @@ events: {
 | NPCs | Respawned fresh at their spawns, except breeding spawns, which return to their saved count |
 | Spawn timers | Saved (`spawn_state`), so the dragon doesn't return early and the week-long reseed keeps counting |
 | World flags and counters | Saved (`world_state`) |
-| Items | [Real items](architecture.md#what-survives-a-restart) are restored; untouched spawned items are not |
+| Items | [Real items](items.md#what-survives-a-restart) are restored; untouched spawned items are not |
+| Doors and locks | Back to their default state, like a reset |
+| Hidden doors a character has found | Saved per character |
 
 ## Build order
 
