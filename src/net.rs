@@ -135,7 +135,10 @@ fn accept_connections(mut commands: Commands, listener: Res<Listener>) {
     }
 }
 
-fn read_input(mut connections: Query<(Entity, &mut Connection)>, mut input: MessageWriter<PlayerInput>) {
+fn read_input(
+    mut connections: Query<(Entity, &mut Connection)>,
+    mut input: MessageWriter<PlayerInput>,
+) {
     let mut buf = [0u8; 1024];
     for (entity, mut conn) in &mut connections {
         loop {
@@ -155,7 +158,9 @@ fn read_input(mut connections: Query<(Entity, &mut Connection)>, mut input: Mess
 
         while let Some(pos) = conn.pending.iter().position(|&b| b == b'\n') {
             let raw: Vec<u8> = conn.pending.drain(..=pos).collect();
-            let line = String::from_utf8_lossy(&strip_telnet(&raw)).trim().to_string();
+            let line = String::from_utf8_lossy(&strip_telnet(&raw))
+                .trim()
+                .to_string();
             conn.lines.push_back(line);
         }
         if let Some(line) = conn.lines.pop_front() {

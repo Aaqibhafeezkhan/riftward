@@ -9,10 +9,10 @@ use crate::aliases::Aliases;
 use crate::attributes::Attributes;
 use crate::command;
 use crate::commands::movement::describe_room;
-use crate::output::{Outgoing, PlayerQuery, RoomQuery, deliver};
-use crate::targeting::Keywords;
 use crate::db::{Account, CharacterRecord, Database, Permission, Role};
 use crate::net::{Connection, JustConnected, PlayerInput};
+use crate::output::{Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::targeting::Keywords;
 use crate::world::{InRoom, Player, RoomIndex, RoomKey};
 
 pub struct LoginPlugin;
@@ -45,11 +45,24 @@ const MIN_PASSWORD_LEN: usize = 8;
 #[derive(Component)]
 pub enum LoginState {
     Username,
-    Password { account: Account, attempts: u32 },
-    NewPassword { username: String },
-    ConfirmPassword { username: String, password: String },
-    ChooseCharacter { account: Account, characters: Vec<CharacterRecord> },
-    NameCharacter { account: Account },
+    Password {
+        account: Account,
+        attempts: u32,
+    },
+    NewPassword {
+        username: String,
+    },
+    ConfirmPassword {
+        username: String,
+        password: String,
+    },
+    ChooseCharacter {
+        account: Account,
+        characters: Vec<CharacterRecord>,
+    },
+    NameCharacter {
+        account: Account,
+    },
 }
 
 impl LoginState {
@@ -80,7 +93,9 @@ fn greet_new_connections(
 ) {
     for (entity, mut conn) in &mut new {
         conn.send(BANNER);
-        conn.send("Enter your account name. If it doesn't exist yet, you'll be asked to create it.");
+        conn.send(
+            "Enter your account name. If it doesn't exist yet, you'll be asked to create it.",
+        );
         conn.send_raw("Account: ");
         commands
             .entity(entity)
@@ -116,9 +131,10 @@ fn handle_login(
             LoginState::ConfirmPassword { username, password } => {
                 confirm_password(entity, line, username, password, &db, &mut out)
             }
-            LoginState::ChooseCharacter { account, characters } => {
-                choose_character(entity, line, account, characters, &db, &mut out)
-            }
+            LoginState::ChooseCharacter {
+                account,
+                characters,
+            } => choose_character(entity, line, account, characters, &db, &mut out),
             LoginState::NameCharacter { account } => {
                 name_character(entity, line, account, &db, &mut out)
             }
@@ -146,7 +162,14 @@ fn handle_login(
             }
             Step::Enter { account, character } => {
                 match enter_game(
-                    entity, account, character, &mut commands, &players, &rooms, &index, &db,
+                    entity,
+                    account,
+                    character,
+                    &mut commands,
+                    &players,
+                    &rooms,
+                    &index,
+                    &db,
                     &mut out,
                 ) {
                     Some(next) => *state = next,
@@ -252,7 +275,11 @@ fn confirm_password(
     }
     match db.create_account(&username, &password) {
         Ok(account) => {
-            info!("created account '{}' ({})", account.username, account.role.as_str());
+            info!(
+                "created account '{}' ({})",
+                account.username,
+                account.role.as_str()
+            );
             if account.role == Role::Admin {
                 out.push(Outgoing::line(
                     entity,
@@ -266,7 +293,12 @@ fn confirm_password(
 }
 
 /// List the account's characters, or go straight to naming one if there are none.
-fn character_menu(entity: Entity, account: Account, db: &Database, out: &mut Vec<Outgoing>) -> Step {
+fn character_menu(
+    entity: Entity,
+    account: Account,
+    db: &Database,
+    out: &mut Vec<Outgoing>,
+) -> Step {
     let characters = match db.characters(account.id) {
         Ok(characters) => characters,
         Err(err) => return db_failure(entity, err, out),
@@ -306,7 +338,9 @@ fn choose_character(
 
     let chosen = match line.parse::<usize>() {
         Ok(n) => n.checked_sub(1).and_then(|i| characters.get(i)),
-        Err(_) => characters.iter().find(|c| c.name.eq_ignore_ascii_case(line)),
+        Err(_) => characters
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case(line)),
     };
     match chosen {
         Some(character) => Step::Enter {

@@ -39,9 +39,10 @@ pub fn alias(
     registry: Res<CommandRegistry>,
     db: Res<Database>,
 ) {
-    let (Some(actor), Ok(mut aliases)) =
-        (Actor::get(&players, inv.entity), aliases.get_mut(inv.entity))
-    else {
+    let (Some(actor), Ok(mut aliases)) = (
+        Actor::get(&players, inv.entity),
+        aliases.get_mut(inv.entity),
+    ) else {
         return;
     };
     let text = aliases::alias_command(
@@ -60,9 +61,10 @@ pub fn unalias(
     mut aliases: Query<&mut Aliases>,
     db: Res<Database>,
 ) {
-    let (Some(actor), Ok(mut aliases)) =
-        (Actor::get(&players, inv.entity), aliases.get_mut(inv.entity))
-    else {
+    let (Some(actor), Ok(mut aliases)) = (
+        Actor::get(&players, inv.entity),
+        aliases.get_mut(inv.entity),
+    ) else {
         return;
     };
     let text = aliases::unalias_command(actor.character_id, &mut aliases, &inv.args, &db);

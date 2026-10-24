@@ -184,7 +184,9 @@ impl Database {
 
         let conn = self.conn();
         let is_first: bool =
-            conn.query_row("SELECT NOT EXISTS (SELECT 1 FROM accounts)", [], |row| row.get(0))?;
+            conn.query_row("SELECT NOT EXISTS (SELECT 1 FROM accounts)", [], |row| {
+                row.get(0)
+            })?;
         let role = if is_first { Role::Admin } else { Role::Player };
         conn.execute(
             "INSERT INTO accounts (username, password_hash, role) VALUES (?1, ?2, ?3)",
@@ -209,8 +211,8 @@ impl Database {
 
     pub fn characters(&self, account_id: i64) -> DbResult<Vec<CharacterRecord>> {
         let conn = self.conn();
-        let mut stmt =
-            conn.prepare("SELECT id, name, room FROM characters WHERE account_id = ?1 ORDER BY id")?;
+        let mut stmt = conn
+            .prepare("SELECT id, name, room FROM characters WHERE account_id = ?1 ORDER BY id")?;
         let rows = stmt.query_map([account_id], |row| {
             Ok(CharacterRecord {
                 id: row.get(0)?,
@@ -245,8 +247,9 @@ impl Database {
     /// Attribute ratings that differ from the starting values (only raised ones have rows).
     pub fn attributes(&self, character_id: i64) -> DbResult<Vec<(String, i32)>> {
         let conn = self.conn();
-        let mut stmt = conn
-            .prepare("SELECT attribute, rating FROM character_attributes WHERE character_id = ?1")?;
+        let mut stmt = conn.prepare(
+            "SELECT attribute, rating FROM character_attributes WHERE character_id = ?1",
+        )?;
         let rows = stmt.query_map([character_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
         Ok(rows.collect::<Result<_, _>>()?)
     }

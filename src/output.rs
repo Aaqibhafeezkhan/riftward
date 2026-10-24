@@ -62,7 +62,6 @@ impl Outgoing {
     pub fn line(entity: Entity, text: impl Into<String>) -> Self {
         Outgoing::To(entity, text.into() + "\r\n")
     }
-
 }
 
 /// A command's reply: `Ok` for success, `Err` for a problem, shown in red.

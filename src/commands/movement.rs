@@ -53,7 +53,12 @@ pub fn go(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery, d
 }
 
 /// `north`, `south`, ... and their short forms: the command's name is the direction.
-pub fn walk(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery, db: Res<Database>) {
+pub fn walk(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    db: Res<Database>,
+) {
     let out = travel(inv.entity, inv.command, &mut players, &rooms, &db);
     deliver(out, &mut players);
 }

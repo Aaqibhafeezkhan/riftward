@@ -130,10 +130,16 @@ mod tests {
 
     fn world() -> (World, Vec<(Entity, Keywords)>) {
         let mut world = World::new();
-        let things = ["Frodo", "Fredegar", "goblin warrior", "goblin archer", "Gandalf"]
-            .into_iter()
-            .map(|name| (world.spawn_empty().id(), Keywords::from_name(name)))
-            .collect();
+        let things = [
+            "Frodo",
+            "Fredegar",
+            "goblin warrior",
+            "goblin archer",
+            "Gandalf",
+        ]
+        .into_iter()
+        .map(|name| (world.spawn_empty().id(), Keywords::from_name(name)))
+        .collect();
         (world, things)
     }
 
@@ -183,7 +189,11 @@ mod tests {
         assert_eq!(find("archer"), Some(things[3].0));
         assert_eq!(find("2.goblin"), Some(things[3].0));
         assert_eq!(find("me"), Some(viewer));
-        assert_eq!(find("gandalf"), Some(viewer), "the viewer is the last resort");
+        assert_eq!(
+            find("gandalf"),
+            Some(viewer),
+            "the viewer is the last resort"
+        );
         assert_eq!(find("troll"), None);
     }
 

@@ -38,23 +38,50 @@ impl Plugin for BuildPlugin {
         };
         app.init_resource::<PendingZones>()
             .add_systems(Update, announce_new_zones)
-            .add_command(build("where", "where", "show the current room's id"), where_cmd)
-            .add_command(build("rooms", "rooms", "list the rooms in this zone"), rooms_cmd)
             .add_command(
-                build("goto", "goto <room>", "teleport to a room (`room` or `zone:room`)"),
+                build("where", "where", "show the current room's id"),
+                where_cmd,
+            )
+            .add_command(
+                build("rooms", "rooms", "list the rooms in this zone"),
+                rooms_cmd,
+            )
+            .add_command(
+                build(
+                    "goto",
+                    "goto <room>",
+                    "teleport to a room (`room` or `zone:room`)",
+                ),
                 goto_cmd,
             )
             .add_command(
-                build("dig", "dig <dir> <name>", "create a room through a new exit, with a way back"),
+                build(
+                    "dig",
+                    "dig <dir> <name>",
+                    "create a room through a new exit, with a way back",
+                ),
                 dig_cmd,
             )
-            .add_command(build("rename", "rename <name>", "rename this room"), rename_cmd)
-            .add_command(build("desc", "desc <text>", "set this room's description"), desc_cmd)
             .add_command(
-                build("link", "link <dir> <room>", "add a one-way exit to an existing room"),
+                build("rename", "rename <name>", "rename this room"),
+                rename_cmd,
+            )
+            .add_command(
+                build("desc", "desc <text>", "set this room's description"),
+                desc_cmd,
+            )
+            .add_command(
+                build(
+                    "link",
+                    "link <dir> <room>",
+                    "add a one-way exit to an existing room",
+                ),
                 link_cmd,
             )
-            .add_command(build("unlink", "unlink <dir>", "remove an exit"), unlink_cmd)
+            .add_command(
+                build("unlink", "unlink <dir>", "remove an exit"),
+                unlink_cmd,
+            )
             .add_command(build("zones", "zones", "list all zones"), zones_cmd)
             .add_command(
                 build(
@@ -100,7 +127,10 @@ fn where_cmd(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery
     let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
         return;
     };
-    deliver(vec![Outgoing::line(inv.entity, format!("You are in [{here}]."))], &mut players);
+    deliver(
+        vec![Outgoing::line(inv.entity, format!("You are in [{here}]."))],
+        &mut players,
+    );
 }
 
 fn rooms_cmd(
@@ -127,7 +157,16 @@ fn goto_cmd(
         return;
     };
     let mut out = Vec::new();
-    if let Err(err) = goto(&actor, &here, &inv, &mut players, &rooms, &index, &db, &mut out) {
+    if let Err(err) = goto(
+        &actor,
+        &here,
+        &inv,
+        &mut players,
+        &rooms,
+        &index,
+        &db,
+        &mut out,
+    ) {
         out.push(reply_line(inv.entity, Err(err)));
     }
     deliver(out, &mut players);
@@ -235,11 +274,15 @@ fn edit_zone(
         .find(|(_, zone)| zone.id == zone_id)
         .map(|(id, _)| id)
         .ok_or_else(|| format!("Zone '{zone_id}' isn't loaded."))?;
-    let mut zone = zones.get_mut(asset_id).expect("zone asset id was just looked up");
+    let mut zone = zones
+        .get_mut(asset_id)
+        .expect("zone asset id was just looked up");
     let reply = edit(&mut zone)?;
     if let Err(err) = zone.save() {
         error!("failed to save zone '{zone_id}': {err}");
-        return Err(format!("{reply}\r\nWarning: the change is live but could not be saved: {err}"));
+        return Err(format!(
+            "{reply}\r\nWarning: the change is live but could not be saved: {err}"
+        ));
     }
     Ok(reply)
 }
@@ -315,7 +358,9 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
 
     edit_zone(zones, &here.zone, |zone| {
         if room_mut(zone, here)?.exits.contains_key(&dir) {
-            return Err(format!("There is already an exit {dir}. Use 'unlink {dir}' first."));
+            return Err(format!(
+                "There is already an exit {dir}. Use 'unlink {dir}' first."
+            ));
         }
 
         let id = unique_room_id(&slugify(name), zone);
@@ -401,7 +446,9 @@ fn unlink(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Repl
             return Err(format!("There is no exit {dir}."));
         }
         room.exits.remove(&dir);
-        Ok(format!("Removed the exit {dir}. Exits back to this room are unchanged."))
+        Ok(format!(
+            "Removed the exit {dir}. Exits back to this room are unchanged."
+        ))
     })
 }
 
@@ -410,13 +457,16 @@ fn list_zones(here: &RoomKey, zones: &Assets<ZoneDef>) -> Reply {
     list.sort_by(|a, b| a.id.cmp(&b.id));
     let mut text = String::from("Zones:");
     for zone in list {
-        let marker = if zone.id == here.zone { " (you are here)" } else { "" };
+        let marker = if zone.id == here.zone {
+            " (you are here)"
+        } else {
+            ""
+        };
         let count = zone.rooms.len();
         let plural = if count == 1 { "" } else { "s" };
         text += &format!(
             "\r\n  {:<16} {}  [{count} room{plural}]{marker}",
-            zone.id,
-            zone.name,
+            zone.id, zone.name,
         );
     }
     Ok(text)
@@ -428,14 +478,17 @@ fn create_zone(
     zones: &Assets<ZoneDef>,
     pending: &mut PendingZones,
 ) -> Reply {
-    let usage = || "Usage: zone create <id> <name>, e.g. zone create caves The Damp Caves".to_string();
+    let usage =
+        || "Usage: zone create <id> <name>, e.g. zone create caves The Damp Caves".to_string();
     let (id, name) = args.split_once(' ').ok_or_else(usage)?;
     let (id, name) = (id.to_ascii_lowercase(), name.trim());
     if name.is_empty() {
         return Err(usage());
     }
     let valid = (2..=32).contains(&id.len())
-        && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
     if !valid {
         return Err("Zone ids are 2-32 lowercase letters, digits, or underscores.".into());
     }
@@ -523,7 +576,10 @@ fn set_role(
             if other != entity {
                 out.push(Outgoing::line(
                     other,
-                    format!("Your account is now a {}. Type 'help' to see your commands.", role.as_str()),
+                    format!(
+                        "Your account is now a {}. Type 'help' to see your commands.",
+                        role.as_str()
+                    ),
                 ));
             }
         }
@@ -595,7 +651,11 @@ fn slugify(name: &str) -> String {
         }
     }
     let slug = slug.trim_end_matches('_');
-    if slug.is_empty() { "room".into() } else { slug.into() }
+    if slug.is_empty() {
+        "room".into()
+    } else {
+        slug.into()
+    }
 }
 
 fn unique_room_id(base: &str, zone: &ZoneDef) -> String {

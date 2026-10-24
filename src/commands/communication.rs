@@ -43,7 +43,10 @@ pub fn whisper(In(inv): In<Invocation>, mut players: PlayerQuery, keywords: Quer
             let candidates = targets_in_room(actor.room, &players, &keywords);
             match target.find_one(actor.entity, candidates) {
                 Some(e) if e == actor.entity => {
-                    out.push(Outgoing::line(actor.entity, "You mutter something to yourself."));
+                    out.push(Outgoing::line(
+                        actor.entity,
+                        "You mutter something to yourself.",
+                    ));
                 }
                 Some(e) => {
                     let target_name = Actor::get(&players, e).map(|a| a.name).unwrap_or_default();

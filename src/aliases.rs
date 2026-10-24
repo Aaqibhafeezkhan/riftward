@@ -78,7 +78,9 @@ pub fn alias_command(
     }
     let replacing = aliases.0.contains_key(&name);
     if !replacing && aliases.0.len() >= MAX_ALIASES {
-        return format!("You already have {MAX_ALIASES} aliases. Remove one with 'unalias <name>'.");
+        return format!(
+            "You already have {MAX_ALIASES} aliases. Remove one with 'unalias <name>'."
+        );
     }
 
     if let Err(err) = db.set_alias(character_id, &name, expansion) {

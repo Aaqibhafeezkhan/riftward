@@ -282,7 +282,11 @@ fn sync_world(
 
     // Spawn new rooms and update existing ones. Exits are filled in once every room has an entity.
     for (key, def) in &defs {
-        match index.0.get(key).and_then(|&e| rooms.get_mut(e).ok().map(|r| (e, r))) {
+        match index
+            .0
+            .get(key)
+            .and_then(|&e| rooms.get_mut(e).ok().map(|r| (e, r)))
+        {
             Some((entity, (mut room, _))) => {
                 if room.name != def.name || room.description != def.description {
                     room.name = def.name.clone();
@@ -367,6 +371,10 @@ fn sync_world(
     if first_load {
         info!("loaded {} rooms from {} zones", defs.len(), zones.len());
     } else if !touched.is_empty() || index.0.len() != room_count {
-        info!("world updated: {} rooms in {} zones", defs.len(), zones.len());
+        info!(
+            "world updated: {} rooms in {} zones",
+            defs.len(),
+            zones.len()
+        );
     }
 }

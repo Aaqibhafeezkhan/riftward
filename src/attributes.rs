@@ -79,7 +79,10 @@ impl Attribute {
             [] => Err(format!("There is no attribute '{s}'.")),
             many => Err(format!(
                 "'{s}' could mean {}.",
-                many.iter().map(|a| a.name()).collect::<Vec<_>>().join(" or ")
+                many.iter()
+                    .map(|a| a.name())
+                    .collect::<Vec<_>>()
+                    .join(" or ")
             )),
         }
     }
