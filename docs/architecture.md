@@ -56,6 +56,7 @@ flowchart LR
 
 - **One line per player per tick** keeps each player's commands in the order typed, even when different systems handle them, and limits anyone to 30 commands a second.
 - **Output is queued** on each `Connection` during the frame and written once at the end.
+- **The connection owns the prompt.** In game, each batch of output ends with exactly one `> `, text arriving while the prompt is showing starts on a fresh line, and an empty Enter gets a new prompt. Commands and notifications never write prompts themselves.
 
 ### Data
 

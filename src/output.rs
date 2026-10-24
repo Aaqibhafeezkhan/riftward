@@ -63,10 +63,6 @@ impl Outgoing {
         Outgoing::To(entity, text.into() + "\r\n")
     }
 
-    /// A prompt, for players who receive text outside of their own commands.
-    pub fn prompt(entity: Entity) -> Self {
-        Outgoing::To(entity, "> ".into())
-    }
 }
 
 /// A command's reply: `Ok` for success, `Err` for a problem, shown in red.

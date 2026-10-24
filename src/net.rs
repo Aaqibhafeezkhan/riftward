@@ -46,6 +46,13 @@ pub struct Connection {
     outbox: Vec<u8>,
     /// Set when the client should be dropped at the end of the frame.
     pub closing: bool,
+    /// In game, the connection shows a `> ` prompt after each batch of output. Off during login,
+    /// which writes its own prompts ("Password: ").
+    prompt: bool,
+    /// The prompt is the last thing written, so the cursor sits after it.
+    at_prompt: bool,
+    /// The player sent a line this tick, so they get a prompt even if nothing else was written.
+    wants_prompt: bool,
 }
 
 impl Connection {
@@ -55,9 +62,20 @@ impl Connection {
         self.outbox.extend_from_slice(b"\r\n");
     }
 
-    /// Queue text without a trailing newline (used for prompts).
+    /// Queue text without a trailing newline.
     pub fn send_raw(&mut self, text: impl AsRef<str>) {
+        // Text arriving while the prompt is showing starts on a fresh line, not after the `> `.
+        if self.at_prompt {
+            self.outbox.extend_from_slice(b"\r\n");
+            self.at_prompt = false;
+        }
         self.outbox.extend_from_slice(text.as_ref().as_bytes());
+    }
+
+    /// Start showing the in-game prompt, once the player has entered the game.
+    pub fn enable_prompt(&mut self) {
+        self.prompt = true;
+        self.wants_prompt = true;
     }
 
     /// Ask the client to stop (or resume) echoing what the user types, for password entry.
@@ -101,6 +119,9 @@ fn accept_connections(mut commands: Commands, listener: Res<Listener>) {
                         eof: false,
                         outbox: Vec::new(),
                         closing: false,
+                        prompt: false,
+                        at_prompt: false,
+                        wants_prompt: false,
                     },
                     JustConnected,
                 ));
@@ -138,6 +159,9 @@ fn read_input(mut connections: Query<(Entity, &mut Connection)>, mut input: Mess
             conn.lines.push_back(line);
         }
         if let Some(line) = conn.lines.pop_front() {
+            // The player pressed Enter, so their cursor is already on a fresh line.
+            conn.at_prompt = false;
+            conn.wants_prompt = true;
             input.write(PlayerInput { entity, line });
         } else if conn.eof {
             conn.closing = true;
@@ -161,8 +185,14 @@ fn strip_telnet(raw: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Write each connection's queued output, ending every batch with exactly one prompt.
 pub fn flush_output(mut connections: Query<&mut Connection>) {
     for mut conn in &mut connections {
+        let wants_prompt = std::mem::take(&mut conn.wants_prompt);
+        if conn.prompt && !conn.closing && (wants_prompt || !conn.outbox.is_empty()) {
+            conn.send_raw("> ");
+            conn.at_prompt = true;
+        }
         if conn.outbox.is_empty() {
             continue;
         }

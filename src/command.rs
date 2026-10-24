@@ -4,14 +4,14 @@
 //!
 //! The dispatcher turns each line of input into an invocation: it expands aliases, hides commands
 //! the player isn't allowed to use, and queues the command's system to run. `help` is generated
-//! from the registry, and the prompt is sent once the command has run.
+//! from the registry. Prompts are the connection's job (`net.rs`), not the commands'.
 
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
 
 use crate::aliases::Aliases;
 use crate::db::{Permission, Role};
-use crate::net::{self, Connection, PlayerInput};
+use crate::net::{Connection, PlayerInput};
 use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
 use crate::world::Player;
 
@@ -20,9 +20,7 @@ pub struct CommandPlugin;
 impl Plugin for CommandPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CommandRegistry>()
-            .init_resource::<PendingPrompts>()
             .add_systems(Update, dispatch)
-            .add_systems(PostUpdate, send_prompts.before(net::flush_output))
             .add_command(
                 CommandSpec::new("help", Category::Information)
                     .shortcuts(&["?"])
@@ -228,10 +226,6 @@ impl AddCommand for App {
     }
 }
 
-/// Players who ran a command this tick and should get a prompt once its output is queued.
-#[derive(Resource, Default)]
-pub struct PendingPrompts(Vec<Entity>);
-
 /// Split input into a lowercase verb and the rest. `'hello` is shorthand for `say hello`.
 pub fn split_verb(line: &str) -> (String, &str) {
     if let Some(text) = line.strip_prefix('\'') {
@@ -248,7 +242,6 @@ pub fn dispatch(
     mut inputs: MessageReader<PlayerInput>,
     mut players: Query<(&mut Connection, &Player, Option<&Aliases>)>,
     registry: Res<CommandRegistry>,
-    mut prompts: ResMut<PendingPrompts>,
 ) {
     for PlayerInput { entity, line } in inputs.read() {
         let entity = *entity;
@@ -268,7 +261,6 @@ pub fn dispatch(
             (verb, args) = split_verb(&expanded);
         }
 
-        prompts.0.push(entity);
         if verb.is_empty() {
             continue;
         }
@@ -283,16 +275,6 @@ pub fn dispatch(
                 },
             ),
             None => conn.send("Huh? Type 'help' for a list of commands."),
-        }
-    }
-}
-
-fn send_prompts(mut prompts: ResMut<PendingPrompts>, mut connections: Query<&mut Connection>) {
-    for entity in prompts.0.drain(..) {
-        if let Ok(mut conn) = connections.get_mut(entity)
-            && !conn.closing
-        {
-            conn.send_raw("> ");
         }
     }
 }

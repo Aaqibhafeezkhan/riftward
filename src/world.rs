@@ -320,7 +320,7 @@ fn sync_world(
             if in_room.0 == entity {
                 in_room.0 = start;
                 conn.send_raw(
-                    "\r\nThe world dissolves around you, and you find yourself somewhere familiar.\r\n> ",
+                    "The world dissolves around you, and you find yourself somewhere familiar.\r\n",
                 );
             }
         }
@@ -358,7 +358,7 @@ fn sync_world(
     // Let players know when the room they're standing in changed.
     for (mut conn, in_room) in &mut players {
         if touched.contains(&in_room.0) {
-            conn.send_raw("\r\nYour surroundings shift. (type 'look')\r\n> ");
+            conn.send("Your surroundings shift. (type 'look')");
         }
     }
 

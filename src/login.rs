@@ -145,11 +145,16 @@ fn handle_login(
                 }
             }
             Step::Enter { account, character } => {
-                if let Some(next) = enter_game(
+                match enter_game(
                     entity, account, character, &mut commands, &players, &rooms, &index, &db,
                     &mut out,
                 ) {
-                    *state = next;
+                    Some(next) => *state = next,
+                    None => {
+                        if let Ok((_, mut conn, _, _)) = players.get_mut(entity) {
+                            conn.enable_prompt();
+                        }
+                    }
                 }
             }
         }
@@ -468,6 +473,5 @@ fn enter_game(
         except: entity,
         text: format!("{name} has entered the game.\r\n"),
     });
-    out.push(Outgoing::prompt(entity));
     None
 }

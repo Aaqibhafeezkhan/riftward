@@ -481,8 +481,8 @@ fn announce_new_zones(
         }
         if let Ok(mut conn) = connections.get_mut(*builder) {
             conn.send_raw(format!(
-                "\r\nZone [{id}] is ready. Visit it with 'goto {entrance}', or connect it to \
-                 this room with 'link <dir> {entrance}'.\r\n> "
+                "Zone [{id}] is ready. Visit it with 'goto {entrance}', or connect it to \
+                 this room with 'link <dir> {entrance}'.\r\n"
             ));
         }
         false
@@ -523,9 +523,8 @@ fn set_role(
             if other != entity {
                 out.push(Outgoing::line(
                     other,
-                    format!("\r\nYour account is now a {}. Type 'help' to see your commands.", role.as_str()),
+                    format!("Your account is now a {}. Type 'help' to see your commands.", role.as_str()),
                 ));
-                out.push(Outgoing::prompt(other));
             }
         }
     }
@@ -579,9 +578,8 @@ fn set_attribute(
     if entity != inv.entity {
         out.push(Outgoing::line(
             entity,
-            format!("\r\nYour {} is now {rating}.", attribute.name()),
+            format!("Your {} is now {rating}.", attribute.name()),
         ));
-        out.push(Outgoing::prompt(entity));
     }
     Ok(format!("{name}'s {} is now {rating}.", attribute.name()))
 }
