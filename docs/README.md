@@ -44,6 +44,14 @@ flowchart LR
     S --> T[Teaching, epiphany,<br/>trainers, loot]
 ```
 
+## Planned features
+
+Designed, waiting on other work:
+
+| Feature | Waits on | Details |
+| --- | --- | --- |
+| Status prompt (`<14/18hp 9/10fat>`), customisable per character | Current health and fatigue, from combat and time | [Architecture](architecture.md#status-prompt) |
+
 ## Decisions so far
 
 | Area | Decision |

@@ -110,6 +110,26 @@ A game clock with day and night, a regular tick for regeneration, and actions th
 
 The round loop, initiative, damage, death and respawn: infrastructure with no actions of its own. Every action in combat is a skill, starting with the basic attack every character has (see [Skill kinds](skills.md#skill-kinds)), so combat is built together with the skill core. Every roll goes through `Dice`, and every contest follows the [ratio rule](attributes.md#the-ratio-rule).
 
+## Planned features
+
+Features that are designed but wait on other work.
+
+### Status prompt
+
+The in-game prompt shows the character's state, such as `<14/18hp 9/10fat>`, instead of a bare `> `.
+
+- **Always current.** The connection writes the prompt once at the end of each tick (see [One tick](#one-tick)), so it is built fresh from the character's state every time, including damage taken between the player's own commands.
+- **Built by the game, shown by the connection.** A system just before output is flushed computes each player's prompt text and hands it to their `Connection`. `net.rs` only knows how to show "the current prompt", never game rules.
+- **Customisable per character,** saved like aliases, with placeholder codes and a default for new characters:
+
+  ```
+  prompt <%h/%Hhp %f/%Ffat>      ->   <14/18hp 9/10fat>
+  prompt                          ->   back to the default
+  ```
+
+- **Recognisable by MUD clients.** Marking the prompt with telnet IAC GA lets clients like Mudlet and TinTin++ draw gauges or pin the prompt. Raw `nc` would show stray characters, so it is sent only to clients that ask for it.
+- **Waits on current health and fatigue.** Only the maximums exist today (from Body and Willpower); current values arrive with combat and the time system (damage and regeneration).
+
 ## Proposed build order
 
 1. ~~**Command system and targeting.**~~ Built.
