@@ -8,7 +8,7 @@ use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
 use crate::command::Invocation;
-use crate::commands::movement::full_direction;
+use crate::commands::movement::{full_direction, is_direction, toward};
 use crate::db::Permission;
 use crate::dice::Dice;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
@@ -100,7 +100,11 @@ fn doorway(
             actor,
             door,
         }),
-        DoorLookup::NoDoor { dir } => Err(format!("There's no door to the {dir}.")),
+        DoorLookup::NoDoor { dir } => Err(format!("There's no door {}.", toward(&dir))),
+        DoorLookup::NotHere if is_direction(&inv.args.to_lowercase()) => Err(format!(
+            "There's no way out {}.",
+            toward(full_direction(&inv.args.to_lowercase()))
+        )),
         DoorLookup::NotHere => Err(format!("You don't see a door called '{}' here.", inv.args)),
     }
 }

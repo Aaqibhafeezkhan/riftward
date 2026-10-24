@@ -1,6 +1,6 @@
-# MUD design
+# Riftward design
 
-A classless telnet MUD built on a headless Bevy server. Characters are defined by the skills they learn and use, and by attributes they raise with Karma. The world is built from zone files, mostly from inside the game.
+Riftward is a classless telnet MUD built on a headless Bevy server. Characters are defined by the skills they learn and use, and by attributes they raise with Karma. The world is built from zone files, mostly from inside the game.
 
 Each document below covers one area and can be read on its own. This page is the summary and the index.
 
@@ -22,6 +22,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
 | [Items, containers and locks](items.md) | Item templates and location, what survives a restart, decay, unique items, containers, locks and keys, traps | Designed |
 | [The living world](world.md) | Spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Designed |
+| [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds | Outlined |
 
 ## What exists today
@@ -30,6 +31,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Accounts and characters in SQLite, with roles: player, builder, admin.
 - Zone files in `assets/zones`, hot-reloaded, plus in-game building: `dig`, `desc`, `link`, `zone create`, and more.
 - Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
+- Riftwatch, the starting town, and the sewers beneath it ([map](riftwatch.md#map)).
 - Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.

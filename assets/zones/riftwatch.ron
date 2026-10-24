@@ -1,0 +1,288 @@
+// Zone file. Room ids are local to this zone; link to another zone with "zone:room".
+// This file is rewritten by in-game builder commands, so comments other than this header are lost.
+(
+    name: "Riftwatch",
+    doors: {
+        "guild_doors": (
+            name: "a pair of iron-banded doors",
+            keywords: ["doors", "door", "iron", "guild"],
+            state: Open,
+        ),
+        "armory_door": (
+            name: "a reinforced armory door",
+            keywords: ["door", "armory", "reinforced"],
+            state: Locked,
+            lock: Some((pick: Some(8), bash: Some(20))),
+        ),
+        "keep_gates": (
+            name: "an iron-studded gate",
+            keywords: ["gate", "gates", "keep", "iron"],
+            state: Open,
+            lock: Some((bash: Some(40))),
+        ),
+        "solar_door": (
+            name: "a carved oak door",
+            keywords: ["door", "oak", "carved"],
+            state: Locked,
+            lock: Some((pick: Some(10), bash: Some(25))),
+        ),
+        "sewer_grate": (
+            name: "a rusted sewer grate",
+            keywords: ["grate", "sewer", "rusted"],
+            state: Closed,
+        ),
+        "gate_grate": (
+            name: "an iron storm grate",
+            keywords: ["grate", "storm", "iron"],
+            state: Closed,
+        ),
+        "market_grate": (
+            name: "a storm grate",
+            keywords: ["grate", "storm"],
+            state: Closed,
+        ),
+        "guild_grate": (
+            name: "a drain grate",
+            keywords: ["grate", "drain"],
+            state: Closed,
+        ),
+        "high_street_grate": (
+            name: "a broad iron grate",
+            keywords: ["grate", "iron", "broad"],
+            state: Closed,
+        ),
+        "stalls_grate": (
+            name: "a gutter grate",
+            keywords: ["grate", "gutter"],
+            state: Closed,
+        ),
+        "guild_hatch": (
+            name: "an iron hatch",
+            keywords: ["hatch", "iron"],
+            state: Locked,
+            lock: Some((pick: Some(6), bash: Some(15))),
+        ),
+        "garrison_grate": (
+            name: "a barred drain grate",
+            keywords: ["grate", "drain", "barred"],
+            state: Locked,
+            lock: Some((pick: Some(6), bash: Some(20))),
+        ),
+        "dungeon_door": (
+            name: "a rusted iron door",
+            keywords: ["door", "iron", "rusted"],
+            state: Locked,
+            lock: Some((pick: Some(12), bash: Some(40))),
+        ),
+    },
+    rooms: {
+        "north_gate": (
+            name: "North Gate",
+            description: "The town wall breaks here around a squat stone gatehouse, its gates propped open for the day's traffic. Watchmen lean on their spears and study every traveller who comes in off the forest road.",
+            exits: {
+                "north": "forest:road",
+                "south": "market",
+                "east": "archery_butts",
+                "down": (to: "sewers:north_trunk", door: "gate_grate"),
+            },
+        ),
+        "archery_butts": (
+            name: "Archery Butts",
+            description: "A long strip of trampled grass runs along the inside of the wall, ending at straw targets stuffed into wooden frames. The targets bristle with broken shafts, and a rack of practice bows waits beneath a lean-to.",
+            exits: {
+                "west": "north_gate",
+            },
+        ),
+        "market": (
+            name: "Market Square",
+            description: "Riftwatch's open-air market fills the square with awnings, carts and shouting. Hawkers call out prices over the clatter of wheels, and the smells of bread, tar and livestock mix in the air. Streets lead off in every direction.",
+            exits: {
+                "north": "north_gate",
+                "south": "high_street",
+                "east": "stalls",
+                "west": "guild_row",
+                "down": (to: "sewers:market_drain", door: "market_grate"),
+            },
+        ),
+        "stalls": (
+            name: "Vendor Stalls",
+            description: "Rows of canvas-roofed stalls crowd the east side of the square, selling everything from boot leather to bolts of dyed wool. Merchants watch their goods with one eye and the crowd with the other.",
+            exits: {
+                "west": "market",
+                "east": "tinkers_corner",
+                "north": "herbalist",
+                "south": "back_alley",
+                "down": (to: "sewers:stalls_culvert", door: "stalls_grate"),
+            },
+        ),
+        "herbalist": (
+            name: "Herbalist's Stall",
+            description: "Bundles of drying herbs hang thick from the poles of this cramped stall, and shelves of stoppered jars line its back wall. The air is green and bitter with crushed leaves.",
+            exits: {
+                "south": "stalls",
+            },
+        ),
+        "tinkers_corner": (
+            name: "Tinkers' Corner",
+            description: "Tinkers and menders have claimed this corner of the market, their benches cluttered with pots, locks, lanterns and half-mended tools. Something is always being hammered back into shape.",
+            exits: {
+                "west": "stalls",
+            },
+        ),
+        "back_alley": (
+            name: "Back Alley",
+            description: "A narrow alley behind the stalls, cluttered with broken crates and the market's refuse. A rusted grate in the cobbles drains into the dark below, and the place smells like it.",
+            exits: {
+                "north": "stalls",
+                "down": (to: "sewers:outfall", door: "sewer_grate"),
+            },
+        ),
+        "guild_row": (
+            name: "Guild Row",
+            description: "A broad street of timber-framed halls runs west from the market. The largest bears a painted sign of a sword crossed over a lantern: the Adventurers' Guild.",
+            exits: {
+                "east": "market",
+                "north": (to: "guildhall", door: "guild_doors"),
+                "down": (to: "sewers:guild_tunnel", door: "guild_grate"),
+            },
+        ),
+        "guildhall": (
+            name: "Adventurers' Guildhall",
+            description: "A long common hall with a roaring hearth, scarred tables and a crowd of adventurers trading stories and lies. Trophies from beyond the walls hang from the rafters, some of them still unsettling to look at.",
+            exits: {
+                "south": (to: "guild_row", door: "guild_doors"),
+                "west": "contract_hall",
+                "east": "guild_archive",
+                "up": "guild_quarters",
+                "down": "guild_cellar",
+            },
+        ),
+        "guild_cellar": (
+            name: "Guild Cellar",
+            description: "A low stone cellar crowded with barrels, sacks and crates of the guild's stores. In the far corner an iron hatch is set into the floor, padlocked and smelling faintly of the sewers.",
+            exits: {
+                "up": "guildhall",
+                "down": (to: "sewers:guild_drain", door: "guild_hatch"),
+            },
+        ),
+        "contract_hall": (
+            name: "Contract Hall",
+            description: "A quieter room where the guild's work is posted. A great board is layered with contracts, bounties and warnings, the older ones curling at the edges beneath the newer.",
+            exits: {
+                "east": "guildhall",
+            },
+        ),
+        "guild_archive": (
+            name: "Guild Archive",
+            description: "Shelves of ledgers, maps and battered books fill this cramped room, the guild's long memory of what lies beyond the walls. A reading desk sits beneath the only window, and a locked case holds the volumes the guild guards most closely.",
+            exits: {
+                "west": "guildhall",
+            },
+        ),
+        "guild_quarters": (
+            name: "Guild Quarters",
+            description: "A narrow upstairs corridor lined with plain sleeping rooms, rented by the night to members between contracts.",
+            exits: {
+                "down": "guildhall",
+            },
+        ),
+        "high_street": (
+            name: "High Street",
+            description: "The town's main street climbs gently south from the market toward the walls of the keep. Wealthier houses stand here, and the garrison's banners hang over a gateway to the east.",
+            exits: {
+                "north": "market",
+                "south": "keep_gate",
+                "east": "garrison_yard",
+                "west": "shrine",
+                "down": (to: "sewers:great_drain", door: "high_street_grate"),
+            },
+        ),
+        "shrine": (
+            name: "Wayside Shrine",
+            description: "A small stone shrine set back from the street, lit by guttering candles and heaped with offerings. Travellers stop here to give thanks for safe roads, or to ask for them.",
+            exits: {
+                "east": "high_street",
+            },
+        ),
+        "garrison_yard": (
+            name: "Garrison Yard",
+            description: "A packed-earth yard enclosed by the garrison's barracks and storehouses. Soldiers drill in ranks while a sergeant bellows the count.",
+            exits: {
+                "west": "high_street",
+                "north": "barracks",
+                "south": "training_yard",
+                "east": (to: "armory", door: "armory_door"),
+                "down": (to: "sewers:garrison_drain", door: "garrison_grate"),
+            },
+        ),
+        "training_yard": (
+            name: "Training Yard",
+            description: "Battered wooden posts and straw-stuffed dummies stand in rows across this practice ground, hacked nearly to splinters. Racks of blunted weapons line the walls, and the sand of the sparring circle is churned with footprints.",
+            exits: {
+                "north": "garrison_yard",
+            },
+        ),
+        "barracks": (
+            name: "Barracks",
+            description: "Rows of narrow bunks and footlockers, smelling of sweat, oil and woodsmoke. Off-duty soldiers dice and doze between watches.",
+            exits: {
+                "south": "garrison_yard",
+            },
+        ),
+        "armory": (
+            name: "Armory",
+            description: "Racks of spears, crossbows and shields stand in careful order, each one tallied in the quartermaster's ledger.",
+            exits: {
+                "west": (to: "garrison_yard", door: "armory_door"),
+            },
+        ),
+        "keep_gate": (
+            name: "Keep Gatehouse",
+            description: "A thick-walled gatehouse guards the way into the lord's keep, its gates studded with iron. Guards in the lord's colours stand watch beneath the arch.",
+            exits: {
+                "north": "high_street",
+                "south": (to: "keep_courtyard", door: "keep_gates"),
+            },
+        ),
+        "keep_courtyard": (
+            name: "Keep Courtyard",
+            description: "A cobbled courtyard inside the keep's walls, busy with servants, horses and messengers. Steps climb to the battlements and the watchtower above.",
+            exits: {
+                "north": (to: "keep_gate", door: "keep_gates"),
+                "south": "great_hall",
+                "up": "watchtower",
+                "down": "keep_dungeon",
+            },
+        ),
+        "keep_dungeon": (
+            name: "Keep Dungeon",
+            description: "A row of damp cells beneath the keep, most of them empty, their doors hanging open. Water seeps down the walls, and a stout iron door at the end of the passage leads deeper still.",
+            exits: {
+                "up": "keep_courtyard",
+                "down": (to: "sewers:sluice", door: "dungeon_door"),
+            },
+        ),
+        "watchtower": (
+            name: "Watchtower",
+            description: "From the top of the keep's tallest tower the whole of Riftwatch spreads out below, and beyond the walls the land runs on to the horizon, where the faint shimmer of the barrier hangs in the air.",
+            exits: {
+                "down": "keep_courtyard",
+            },
+        ),
+        "great_hall": (
+            name: "Great Hall",
+            description: "The lord's great hall, hung with faded tapestries and lit by high windows. A long table runs beneath a raised dais where the lord holds court and hears petitions.",
+            exits: {
+                "north": "keep_courtyard",
+                "up": (to: "lords_solar", door: "solar_door"),
+            },
+        ),
+        "lords_solar": (
+            name: "Lord's Solar",
+            description: "The lord's private chamber: a warm, book-lined room with a wide desk covered in maps, letters and reports from the border.",
+            exits: {
+                "down": (to: "great_hall", door: "solar_door"),
+            },
+        ),
+    },
+)

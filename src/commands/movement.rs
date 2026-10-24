@@ -37,19 +37,27 @@ pub fn look(
             &doors,
             actor.role.can(Permission::Build),
         ),
-        (_, Some((DoorLookup::Door { door, dir }, _))) => match doors.get(door) {
-            Ok(door) => {
-                let state = if door.is_open() { "open" } else { "closed" };
-                format!("You see {} to the {dir}. It is {state}.\r\n", door.name)
-            }
+        (_, Some((DoorLookup::Door { door, dir }, exits))) => match doors.get(door) {
+            Ok(door) if door.is_open() => format!(
+                "Through the open {} {} you see {}",
+                door.the().trim_start_matches("the "),
+                toward(&dir),
+                glimpse(exits.0[&dir].to, actor.entity, &players, &rooms)
+            ),
+            Ok(door) => format!("You see {} {}. It is closed.\r\n", door.name, toward(&dir)),
             Err(_) => String::new(),
         },
         (_, Some((DoorLookup::NoDoor { dir }, exits))) => {
-            let name = rooms
-                .get(exits.0[&dir].to)
-                .map(|(room, _, _)| room.name.clone())
-                .unwrap_or_default();
-            format!("To the {dir} lies {name}.\r\n")
+            let mut there = toward(&dir);
+            there[..1].make_ascii_uppercase();
+            format!(
+                "{there} you see {}",
+                glimpse(exits.0[&dir].to, actor.entity, &players, &rooms)
+            )
+        }
+        (_, Some((DoorLookup::NotHere, _))) if is_direction(&inv.args.to_lowercase()) => {
+            let dir = full_direction(&inv.args.to_lowercase()).to_string();
+            format!("You see nothing special {}.\r\n", toward(&dir))
         }
         (Some(target), _) => {
             let candidates = targets_in_room(actor.room, &players, &keywords);
@@ -151,6 +159,32 @@ fn travel(
     out
 }
 
+/// Where a direction is, for the middle of a sentence: "to the north", "above", "below".
+pub fn toward(dir: &str) -> String {
+    match dir {
+        "up" => "above".into(),
+        "down" => "below".into(),
+        other => format!("to the {other}"),
+    }
+}
+
+/// Whether a word names a compass or vertical direction, in full or short form.
+pub fn is_direction(word: &str) -> bool {
+    matches!(
+        full_direction(word),
+        "north"
+            | "south"
+            | "east"
+            | "west"
+            | "up"
+            | "down"
+            | "northeast"
+            | "northwest"
+            | "southeast"
+            | "southwest"
+    )
+}
+
 /// Expand direction shorthands (`n` -> `north`).
 pub fn full_direction(dir: &str) -> &str {
     match dir {
@@ -190,6 +224,24 @@ pub fn move_player(
         entity,
         describe_room(to, entity, players, rooms, doors, show_ids),
     ));
+}
+
+/// What you see looking into a neighbouring room: its name and who's there.
+fn glimpse(room: Entity, viewer: Entity, players: &PlayerQuery, rooms: &RoomQuery) -> String {
+    let name = rooms
+        .get(room)
+        .map(|(room, _, _)| room.name.clone())
+        .unwrap_or_default();
+    let mut text = format!("{name}.\r\n");
+    for (other, _, player, in_room) in players.iter() {
+        if let (Some(player), Some(in_room)) = (player, in_room)
+            && other != viewer
+            && in_room.0 == room
+        {
+            text += &format!("  {} is there.\r\n", player.name);
+        }
+    }
+    text
 }
 
 /// The text shown by `look`. Builders also see the room's id.

@@ -25,7 +25,7 @@ use crate::targeting::Keywords;
 pub const ZONES_PATH: &str = "zones";
 
 /// Where new characters (and anyone whose room disappears) end up.
-pub const START_ROOM: &str = "town:square";
+pub const START_ROOM: &str = "riftwatch:market";
 
 pub struct WorldPlugin;
 
@@ -644,6 +644,59 @@ mod tests {
         assert_eq!(door("An iron gate").the_capitalized(), "The iron gate");
         assert_eq!(door("trapdoor").the(), "the trapdoor");
         assert_eq!(without_article("a trapdoor"), "trapdoor");
+    }
+
+    /// Every zone file in `assets/zones` parses, every exit leads to a real room, every door an
+    /// exit names exists, and the start room exists.
+    #[test]
+    fn zone_files_are_consistent() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/zones");
+        let mut zones = Vec::new();
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_some_and(|e| e == "ron") {
+                let text = std::fs::read_to_string(&path).unwrap();
+                let mut zone: ZoneDef = ron::from_str(&text)
+                    .unwrap_or_else(|err| panic!("{} doesn't parse: {err}", path.display()));
+                zone.id = path.file_stem().unwrap().to_string_lossy().into_owned();
+                zones.push(zone);
+            }
+        }
+        let room_exists = |key: &RoomKey| {
+            zones
+                .iter()
+                .any(|z| z.id == key.zone && z.rooms.contains_key(&key.room))
+        };
+        let door_exists = |key: &DoorKey| {
+            zones
+                .iter()
+                .any(|z| z.id == key.zone && z.doors.contains_key(&key.door))
+        };
+
+        let mut problems = Vec::new();
+        for zone in &zones {
+            for (room_id, room) in &zone.rooms {
+                for (dir, exit) in &room.exits {
+                    let here = format!("{}:{room_id} {dir}", zone.id);
+                    if !room_exists(&RoomKey::parse(exit.to(), &zone.id)) {
+                        problems.push(format!("{here}: no room '{}'", exit.to()));
+                    }
+                    if let Some(door) = exit.door()
+                        && !door_exists(&DoorKey::parse(door, &zone.id))
+                    {
+                        problems.push(format!("{here}: no door '{door}'"));
+                    }
+                }
+            }
+        }
+        if !room_exists(&RoomKey::parse(START_ROOM, "")) {
+            problems.push(format!("start room '{START_ROOM}' doesn't exist"));
+        }
+        assert!(
+            problems.is_empty(),
+            "zone problems:\n{}",
+            problems.join("\n")
+        );
     }
 
     #[test]

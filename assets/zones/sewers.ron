@@ -1,0 +1,200 @@
+// Zone file. Room ids are local to this zone; link to another zone with "zone:room".
+// This file is rewritten by in-game builder commands, so comments other than this header are lost.
+(
+    name: "Riftwatch Sewers",
+    rooms: {
+        "outflow_arch": (
+            name: "Outflow Arch",
+            description: "The main sewer ends at a great stone arch in the town wall, where the filth of Riftwatch pours out between thick iron bars into a ditch beyond. Daylight and fresh air slip through the bars, along with the sound of the world outside.",
+            exits: {
+                "south": "north_trunk",
+            },
+        ),
+        "north_trunk": (
+            name: "North Trunk",
+            description: "The broadest tunnel in the sewers runs north beneath the gate road, its channel deep and fast. Cartwheels rumble overhead, shaking grit from the vaulted ceiling.",
+            exits: {
+                "north": "outflow_arch",
+                "south": "market_drain",
+                "east": "smugglers_nook",
+                "up": (to: "riftwatch:north_gate", door: "riftwatch:gate_grate"),
+            },
+        ),
+        "smugglers_nook": (
+            name: "Smugglers' Nook",
+            description: "A dry alcove has been bricked off from the tunnel and fitted with shelves. Someone has been using it: there are crate marks in the dust, a stub of candle, and a ledger page torn to pieces.",
+            exits: {
+                "west": "north_trunk",
+            },
+        ),
+        "market_drain": (
+            name: "Market Drain",
+            description: "Beneath the market square, storm grates let in slivers of daylight and every scrap the stalls throw away. Rotten vegetables and worse pile against the walls, and footsteps pass back and forth overhead.",
+            exits: {
+                "north": "north_trunk",
+                "south": "great_drain",
+                "east": "stalls_culvert",
+                "west": "guild_tunnel",
+                "up": (to: "riftwatch:market", door: "riftwatch:market_grate"),
+            },
+        ),
+        "stalls_culvert": (
+            name: "Stalls Culvert",
+            description: "A low culvert runs east under the vendor stalls. Spilled dyes stain the water in sickly streaks of blue and red.",
+            exits: {
+                "west": "market_drain",
+                "east": "tunnel_east",
+                "south": "outfall",
+                "up": (to: "riftwatch:stalls", door: "riftwatch:stalls_grate"),
+            },
+        ),
+        "outfall": (
+            name: "Sewer Outfall",
+            description: "Thin light falls through a rusted grate above onto a slick stone landing. Filthy water from the market drains collects here before running on into the dark.",
+            exits: {
+                "up": (to: "riftwatch:back_alley", door: "riftwatch:sewer_grate"),
+                "north": "stalls_culvert",
+                "west": "great_drain",
+                "south": "garrison_drain",
+            },
+        ),
+        "guild_tunnel": (
+            name: "Guild Tunnel",
+            description: "A well-built tunnel beneath Guild Row, its brickwork newer and its walkway wider. Somebody once paid to keep this stretch in good repair.",
+            exits: {
+                "east": "market_drain",
+                "north": "guild_drain",
+                "west": "tunnel_west",
+                "up": (to: "riftwatch:guild_row", door: "riftwatch:guild_grate"),
+            },
+        ),
+        "guild_drain": (
+            name: "Guild Drain",
+            description: "A short spur ends beneath the guildhall at an iron ladder, which climbs to a heavy hatch in the ceiling. Muffled voices and the scrape of chairs come through from above.",
+            exits: {
+                "south": "guild_tunnel",
+                "up": (to: "riftwatch:guild_cellar", door: "riftwatch:guild_hatch"),
+            },
+        ),
+        "tunnel_west": (
+            name: "Western Tunnel",
+            description: "A low brick tunnel, its ceiling furred with moss and dripping steadily. The walkway beside the channel is narrow and treacherous.",
+            exits: {
+                "east": "guild_tunnel",
+                "west": "cistern",
+                "south": "ossuary",
+            },
+        ),
+        "cistern": (
+            name: "Old Cistern",
+            description: "The tunnel opens into a vaulted cistern, far older than the sewers around it. Black water stands still and deep beneath crumbling pillars, and the echoes come back wrong.",
+            exits: {
+                "east": "tunnel_west",
+                "down": "drowned_stair",
+            },
+        ),
+        "drowned_stair": (
+            name: "Drowned Stair",
+            description: "Worn steps descend from the cistern's edge into black water and vanish beneath it. Something was down there once, before the water came: the carvings on the walls are in no script you know.",
+            exits: {
+                "up": "cistern",
+            },
+        ),
+        "ossuary": (
+            name: "Ossuary",
+            description: "Beneath the shrine, an old burial passage has been cut through by the sewers. Skulls and long bones are stacked in neat niches along the walls, and nothing down here has disturbed them.",
+            exits: {
+                "north": "tunnel_west",
+                "east": "great_drain",
+            },
+        ),
+        "great_drain": (
+            name: "Great Drain",
+            description: "The sewers' spine runs south beneath High Street, a tall arched tunnel where several channels meet and churn together. The roar of water fills the space.",
+            exits: {
+                "north": "market_drain",
+                "east": "outfall",
+                "west": "ossuary",
+                "south": "keep_drain",
+                "up": (to: "riftwatch:high_street", door: "riftwatch:high_street_grate"),
+            },
+        ),
+        "keep_drain": (
+            name: "Keep Drain",
+            description: "The tunnel grows deeper and colder beneath the keep's foundations. The stone here is massive and dressed with care, built to hold up walls rather than to carry filth.",
+            exits: {
+                "north": "great_drain",
+                "east": "garrison_drain",
+                "south": "sluice",
+            },
+        ),
+        "sluice": (
+            name: "Sluice",
+            description: "A rusted sluice gate holds back a pool of stagnant water at the end of the keep's drain. Set into the wall above it, a stout iron door leads up toward the keep's lowest levels.",
+            exits: {
+                "north": "keep_drain",
+                "up": (to: "riftwatch:keep_dungeon", door: "riftwatch:dungeon_door"),
+            },
+        ),
+        "garrison_drain": (
+            name: "Garrison Drain",
+            description: "A barred grate overhead lets in the tramp of marching boots and the barked orders of the garrison yard. The drain beneath is choked with mud and spent straw from the stables.",
+            exits: {
+                "up": (to: "riftwatch:garrison_yard", door: "riftwatch:garrison_grate"),
+                "north": "outfall",
+                "west": "keep_drain",
+                "east": "flooded_tunnel",
+            },
+        ),
+        "flooded_tunnel": (
+            name: "Flooded Tunnel",
+            description: "A collapsed section has dammed the channel, and the tunnel here stands waist-deep in cold, filthy water. Things bump against your legs in the murk.",
+            exits: {
+                "west": "garrison_drain",
+                "north": "tunnel_east",
+            },
+        ),
+        "tunnel_east": (
+            name: "Eastern Tunnel",
+            description: "The tunnel narrows and the stink thickens. Scratching echoes from somewhere ahead, and small tracks crisscross the muck on the walkway.",
+            exits: {
+                "west": "stalls_culvert",
+                "south": "flooded_tunnel",
+                "east": "rat_runs",
+            },
+        ),
+        "rat_runs": (
+            name: "Rat Runs",
+            description: "The brickwork here is honeycombed with burrows, gnawed through mortar and earth alike. The walls squeak and rustle, and dozens of small passages branch off too narrow for anything larger than a rat.",
+            exits: {
+                "west": "tunnel_east",
+                "east": "collapsed_gallery",
+                "south": "overflow_chamber",
+            },
+        ),
+        "collapsed_gallery": (
+            name: "Collapsed Gallery",
+            description: "Half of the ceiling has fallen in, leaving a slope of rubble to climb over. Rats scatter across the debris at every step.",
+            exits: {
+                "west": "rat_runs",
+                "south": "nest",
+            },
+        ),
+        "overflow_chamber": (
+            name: "Overflow Chamber",
+            description: "A wide chamber built to hold floodwater, now a shallow, reeking lake. Its edges are crowded with rats, and the overflow channels lead off into the rest of the sewers.",
+            exits: {
+                "north": "rat_runs",
+                "east": "nest",
+            },
+        ),
+        "nest": (
+            name: "The Warren",
+            description: "A collapsed section of tunnel heaped with rubbish, gnawed bones and shredded cloth. The heaps shift and rustle, and countless small eyes catch what little light there is.",
+            exits: {
+                "north": "collapsed_gallery",
+                "west": "overflow_chamber",
+            },
+        ),
+    },
+)

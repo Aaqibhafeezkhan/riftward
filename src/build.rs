@@ -11,7 +11,7 @@ use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
-use crate::commands::movement::{full_direction, move_player};
+use crate::commands::movement::{full_direction, move_player, toward};
 use crate::db::{Database, Permission, Role};
 use crate::net::Connection;
 use crate::output::{
@@ -723,10 +723,12 @@ fn door(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply 
     let Some(key) = existing else {
         return match rest {
             "" => Ok(format!(
-                "There's no door to the {dir}. Add one with 'door {dir} <name>'."
+                "There's no door {}. Add one with 'door {dir} <name>'.",
+                toward(&dir)
             )),
             "lock" | "nolock" | "open" | "closed" | "remove" => Err(format!(
-                "There's no door to the {dir}. Add one first with 'door {dir} <name>'."
+                "There's no door {}. Add one first with 'door {dir} <name>'.",
+                toward(&dir)
             )),
             name => add_door(here, &dir, &exit, name, zones),
         };

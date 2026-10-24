@@ -31,7 +31,7 @@
             description: "Twisted trees crowd the path. Something rustles in the undergrowth.",
             exits: {
                 "north": "bend",
-                "south": "town:gate",
+                "south": "riftwatch:north_gate",
             },
         ),
     },

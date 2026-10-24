@@ -1,0 +1,168 @@
+# Riftwatch
+
+[Design summary](README.md) · Status: rooms and doors built (zones `riftwatch` and `sewers`); trainers, NPCs and the rats wait on NPCs and spawns
+
+Riftwatch is the starting town. Every new character begins in its market square, and it's the hub players return to between ventures. It holds the Adventurers' Guild, an open-air market, the garrison, the lord's keep, and beneath it all a sewer system as large as the town itself: 25 rooms above, 22 below, joined by nine grates, hatches and doors. Room descriptions only lightly touch the setting (the barrier's shimmer from the watchtower, adventurers drawn by the rifts); change anything that doesn't fit *The Agryn's Legacy*.
+
+## Map
+
+```mermaid
+flowchart TB
+    road[forest:road] --- gate[North Gate]
+    gate --- butts[Archery Butts]
+    gate --- market[Market Square]
+    market --- row[Guild Row]
+    row == guild doors ==> guild[Adventurers' Guildhall]
+    guild --- contracts[Contract Hall]
+    guild --- archive[Guild Archive]
+    guild -- up --- quarters[Guild Quarters]
+    guild -- down --- cellar[Guild Cellar]
+    market --- stalls[Vendor Stalls]
+    stalls --- herbs[Herbalist's Stall]
+    stalls --- tinkers[Tinkers' Corner]
+    stalls --- alley[Back Alley]
+    alley == sewer grate, down ==> outfall[sewers]
+    cellar == iron hatch, down ==> guilddrain[sewers]
+    market --- high[High Street]
+    high --- shrine[Wayside Shrine]
+    high --- garrison[Garrison Yard]
+    garrison --- barracks[Barracks]
+    garrison --- training[Training Yard]
+    garrison == locked ==> armory[Armory]
+    garrison == drain grate, down ==> garrisondrain[sewers]
+    high --- keepgate[Keep Gatehouse]
+    keepgate == keep gate ==> courtyard[Keep Courtyard]
+    courtyard -- up --- tower[Watchtower]
+    courtyard -- down --- dungeon[Keep Dungeon]
+    dungeon == iron door, down ==> sluice[sewers]
+    courtyard --- hall[Great Hall]
+    hall == locked, up ==> solar[Lord's Solar]
+```
+
+North is up: the North Gate opens onto the forest road, the market is the centre, the guild lies west, the stalls east, and High Street runs south to the garrison and the keep.
+
+## The sewers
+
+The sewers mirror the town above, a tunnel beneath each district, and loop rather than dead-end, so the rats have room to spread.
+
+```mermaid
+flowchart TB
+    arch[Outflow Arch<br/>barred, beyond the walls] --- trunk[North Trunk]
+    trunk --- nook[Smugglers' Nook]
+    trunk == grate, up ==> tgate[town: North Gate]
+    mdrain == grate, up ==> tmarket[town: Market Square]
+    gtunnel == grate, up ==> trow[town: Guild Row]
+    great == grate, up ==> thigh[town: High Street]
+    culvert == grate, up ==> tstalls[town: Vendor Stalls]
+    trunk --- mdrain[Market Drain]
+    mdrain --- gtunnel[Guild Tunnel]
+    gtunnel --- gdrain[Guild Drain]
+    gdrain == iron hatch, up ==> gcellar[town: Guild Cellar]
+    gtunnel --- west[Western Tunnel]
+    west --- cistern[Old Cistern]
+    cistern -- down --- stair[Drowned Stair]
+    west --- ossuary[Ossuary]
+    mdrain --- culvert[Stalls Culvert]
+    culvert --- outfall[Sewer Outfall]
+    outfall == grate, up ==> alley[town: Back Alley]
+    mdrain --- great[Great Drain]
+    ossuary --- great
+    great --- outfall
+    great --- keepdrain[Keep Drain]
+    keepdrain --- sluice[Sluice]
+    sluice == iron door, up ==> dungeon[town: Keep Dungeon]
+    keepdrain --- gardrain[Garrison Drain]
+    outfall --- gardrain
+    gardrain == drain grate, up ==> yard[town: Garrison Yard]
+    gardrain --- flooded[Flooded Tunnel]
+    culvert --- east[Eastern Tunnel]
+    flooded --- east
+    east --- runs[Rat Runs]
+    runs --- gallery[Collapsed Gallery]
+    runs --- overflow[Overflow Chamber]
+    gallery --- nest[The Warren]
+    overflow --- nest
+```
+
+| Under | Sewer rooms |
+| --- | --- |
+| North Gate | Outflow Arch, North Trunk, Smugglers' Nook |
+| Market | Market Drain, Stalls Culvert, Sewer Outfall |
+| Guild | Guild Tunnel, Guild Drain, Western Tunnel, Old Cistern, Drowned Stair |
+| High Street and shrine | Great Drain, Ossuary |
+| Keep | Keep Drain, Sluice |
+| Garrison | Garrison Drain, Flooded Tunnel |
+| East, the rats' territory | Eastern Tunnel, Rat Runs, Collapsed Gallery, Overflow Chamber, The Warren |
+
+Nine ways connect the sewers and the town. The street grates are closed but unlocked, so anyone can climb down, and rats can come up once one is left open:
+
+| From town | Down to | Starts |
+| --- | --- | --- |
+| North Gate | North Trunk | Closed |
+| Market Square | Market Drain | Closed |
+| Guild Row | Guild Tunnel | Closed |
+| High Street | Great Drain | Closed |
+| Vendor Stalls | Stalls Culvert | Closed |
+| Back Alley | Sewer Outfall | Closed |
+| Garrison Yard | Garrison Drain | Locked |
+| Guild Cellar | Guild Drain | Locked |
+| Keep Dungeon | Sluice | Locked, very hard to force |
+
+From any room, `look <direction>` shows what lies that way and who's there, including through an open grate.
+
+## Districts
+
+| District | Rooms |
+| --- | --- |
+| Gate | North Gate, Archery Butts |
+| Market | Market Square (start room), Vendor Stalls, Herbalist's Stall, Tinkers' Corner, Back Alley |
+| Guild | Guild Row, Adventurers' Guildhall, Contract Hall, Guild Archive, Guild Quarters, Guild Cellar |
+| High Street | High Street, Wayside Shrine |
+| Garrison | Garrison Yard, Training Yard, Barracks, Armory |
+| Keep | Keep Gatehouse, Keep Courtyard, Watchtower, Great Hall, Lord's Solar, Keep Dungeon |
+| Sewers | 22 rooms; see [The sewers](#the-sewers) |
+
+## Doors
+
+| Door | Between | Starts | Lock |
+| --- | --- | --- | --- |
+| A pair of iron-banded doors | Guild Row, Guildhall | Open | None |
+| Five street grates | See [The sewers](#the-sewers) | Closed | None |
+| A rusted sewer grate | Back Alley, Sewer Outfall | Closed | None |
+| A reinforced armory door | Garrison Yard, Armory | Locked | Pick 8, bash 20 |
+| An iron-studded gate | Keep Gatehouse, Keep Courtyard | Open | Bash 40, can't be picked |
+| A carved oak door | Great Hall, Lord's Solar | Locked | Pick 10, bash 25 |
+| An iron hatch | Guild Cellar, sewers' Guild Drain | Locked | Pick 6, bash 15 |
+| A barred drain grate | Garrison Yard, sewers' Garrison Drain | Locked | Pick 6, bash 20 |
+| A rusted iron door | Keep Dungeon, sewers' Sluice | Locked | Pick 12, bash 40 |
+
+None of the locks have keys yet; keys arrive with items.
+
+## Where trainers go
+
+Each basic skill has a home in town, so trainers can be placed once NPCs exist. Trainers teach Common and Uncommon skills (see [Acquiring skills](skills.md#acquiring-skills)).
+
+| Room | Trainers (planned) |
+| --- | --- |
+| Training Yard | Basic combat: swordplay, brawling, shields |
+| Archery Butts | Archery |
+| Guild Archive | Lore, and the public Hermetic **Study** path to Awakening (the grimoire library in [Magic](magic.md#which-paths-are-known)) |
+| Herbalist's Stall | Herbalism, foraging |
+| Wayside Shrine | Healing, and the Divine **Devotion** path |
+| Back Alley | Stealth and lockpicking, from someone who'd rather not be found |
+| Tinkers' Corner | Crafting and repair |
+| Contract Hall | Not a trainer: the guild's contract board, a home for quests and bounties |
+
+## The rat problem
+
+The sewers are built for the breeding spawn described in [The living world](world.md#spawns-and-resets):
+
+- **The Warren** (`sewers:nest`) is the nest. Rats breed there and spread by crowding, first through the Rat Runs, Collapsed Gallery and Overflow Chamber, then into the rest of the sewers.
+- **Six street grates lead up,** all closed at the start. Left alone, rats crowd toward them; an open grate lets them into the street above. The locked ways up (guild, garrison, keep) hold them back unless someone opens them.
+- **Hooks for later:** the barred Outflow Arch (a way beyond the walls), the Smugglers' Nook (someone's been using it), the Ossuary under the shrine, and the Drowned Stair beneath the Old Cistern, which is far older than the sewers and carved in an unknown script.
+
+## Open questions
+
+- [ ] **The lord:** name, title and household, for the Great Hall and the Lord's Solar.
+- [ ] **How Riftwatch fits the setting:** its place relative to the barrier and the rifts, and what the watchtower actually watches.
+- [ ] **Shops:** which stalls sell what, once items and money exist.
