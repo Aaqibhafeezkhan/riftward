@@ -98,6 +98,8 @@ Items and NPCs become entities. One location component replaces `InRoom`: in a r
 
 Zone files gain NPC and item templates and say where they appear. Each zone repopulates on a timer, the classic Diku-style reset, so builders don't place everything by hand. Builder commands edit templates and spawn points.
 
+**What survives a restart (decided, for now):** only what players carry is saved. Items on the ground, corpses and NPCs reset when the server restarts, and zone resets repopulate the world. Saved world items and unique items are [planned](#planned-features).
+
 ### Game events
 
 One vocabulary of game events (`Attacked`, `DodgeSucceeded`, `ManaSpent`, `DamageTaken`, `EnteredRoom`, `ItemPickedUp`, ...) published as Bevy messages by every system. Passive-skill triggers, hidden-skill triggers and easter-egg flags all listen to the same events, so new content adds events, not special cases.
@@ -113,6 +115,18 @@ The round loop, initiative, damage, death and respawn: infrastructure with no ac
 ## Planned features
 
 Features that are designed but wait on other work.
+
+### Saved world items
+
+Items left in the world (dropped on the ground, placed in a container in a room) survive a restart, instead of only what players carry. This makes the world persistent: a sword left in the tavern is still there tomorrow.
+
+### Unique items
+
+Some items exist only once and never respawn: once *Angorim* has been found, the zone's reset never creates another.
+
+- **Templates are marked unique** (`unique: true`); a zone reset checks before spawning one.
+- **Their state is saved even under "only carried items persist",** in a small `unique_items` table, so a restart never spawns a second copy.
+- **Lifecycle, to decide:** waiting to be found, held by a character, lying somewhere, or destroyed. What happens when its holder's character is deleted, or it's left on the ground at a restart, decides whether it can ever return to the world.
 
 ### Status prompt
 
@@ -141,4 +155,4 @@ Then teaching, epiphany, trainers and loot follow: trainers are NPCs, loot scrol
 
 ## Open questions
 
-- [ ] **What survives a restart?** Proposed: only what players carry is saved; items on the ground, corpses and NPCs reset when the server restarts. Saving everything makes a persistent world but is much more work.
+- [ ] **Unique item lifecycle:** if a unique item's holder deletes their character, or it is left on the ground at a restart, does it return to its spawn point, or is it gone for good?

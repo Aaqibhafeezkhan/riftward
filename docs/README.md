@@ -51,6 +51,8 @@ Designed, waiting on other work:
 | Feature | Waits on | Details |
 | --- | --- | --- |
 | Status prompt (`<14/18hp 9/10fat>`), customisable per character | Current health and fatigue, from combat and time | [Architecture](architecture.md#status-prompt) |
+| Saved world items: things left on the ground survive a restart | Items | [Architecture](architecture.md#saved-world-items) |
+| Unique items that never respawn once found, like *Angorim* | Items and resets | [Architecture](architecture.md#unique-items) |
 
 ## Decisions so far
 
@@ -69,12 +71,12 @@ Designed, waiting on other work:
 | Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |
 | Magic | Latent until the character knows a casting skill; knowing one is being Awakened. Four traditions; masters can teach casting skills; Awakened backgrounds grant one but require Magic 1, bought with starting Karma |
 | Commands | Players can define aliases; aliases can't shadow built-in commands |
+| Persistence | For now, only what players carry survives a restart; the world resets |
 
 ## Biggest open questions
 
 Each document lists its own open questions. These are the ones that shape the most:
 
 1. **What stops one character learning every tree?** A total cap on skill levels, skill slots, or rising costs. See [Skills](skills.md#open-questions).
-2. **What survives a server restart?** Only what players carry, or the whole world. See [Architecture](architecture.md#open-questions).
-3. **Which backgrounds, do races adjust attributes,** and are Awakened backgrounds balanced? See [Races and backgrounds](characters.md#open-questions).
-4. **Auto-attack or explicit attacks in combat?** See [Skills](skills.md#open-questions).
+2. **Which backgrounds, do races adjust attributes,** and are Awakened backgrounds balanced? See [Races and backgrounds](characters.md#open-questions).
+3. **Auto-attack or explicit attacks in combat?** See [Skills](skills.md#open-questions).
