@@ -24,8 +24,11 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `main.rs` | Builds the app: a 30 Hz loop, logging, asset loading with file watching, and the plugins below |
 | `net.rs` | TCP listener; one entity per connection with a `Connection` component; queues each client's lines and hands out one per tick as a `PlayerInput` message; flushes output at the end of the frame |
 | `login.rs` | Login state machine: account, password (hidden with telnet echo control), new accounts, character choice and creation |
-| `commands.rs` | Player commands, alias expansion, permission checks, and the shared output plumbing (`Outgoing`, `deliver`) |
-| `build.rs` | Builder and admin commands, received as `BuildCommand` messages after the permission check |
+| `command.rs` | The command system: `CommandSpec` registry, the dispatcher (alias expansion, permission hiding, unknown commands), generated `help`, and prompts |
+| `commands/` | Player commands, one system each: `movement` (look, go, directions), `communication` (say, whisper, yell, gossip, who), `character` (score, raise, alias, unalias, quit) |
+| `build.rs` | Builder and admin commands, registered with a permission |
+| `targeting.rs` | `Keywords` and `Target`: resolving `goblin`, `2.goblin`, `all.coin`, `me` |
+| `output.rs` | Shared output plumbing: `Outgoing`, `deliver`, `Actor`, the common queries, target candidate lists |
 | `world.rs` | Zone assets, room entities, the `RoomIndex`, and `sync_world`, which applies zone changes live |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes |
 | `aliases.rs` | Per-character aliases |
@@ -40,15 +43,15 @@ flowchart LR
         accept[Accept connections] --> read[Read input<br/>queue lines, emit one per player]
     end
     subgraph Update
-        greet[Greet and log in] --> cmds[Player commands]
-        cmds --> build[Builder and admin commands]
+        dispatch[Dispatch commands<br/>aliases, permissions] --> run[Run each command's system]
+        run --> greet[Greet and log in]
         sync[Sync world from zone assets]
     end
     subgraph PostUpdate
         flush[Flush output] --> cleanup[Drop closed connections]
     end
-    read --> cmds
-    build --> flush
+    read --> dispatch
+    run --> flush
 ```
 
 - **One line per player per tick** keeps each player's commands in the order typed, even when different systems handle them, and limits anyone to 30 commands a second.
@@ -69,9 +72,22 @@ Tables are created with `CREATE TABLE IF NOT EXISTS`. The next change to an exis
 
 The skill design depends on things the server doesn't have: targets, items, events and time. These pieces come first.
 
-### Command system and targeting
+### Command system and targeting (built)
 
-Replace the large `match` in `commands.rs` with a registry where each command declares its name, permission, help text and arguments. `help`, alias checks and permission checks then all read from one place. Target resolution handles `goblin`, `2.goblin` and `all.coin`, in the room, in inventory, or in a container. Skills need it for `use <skill> <target>` and teaching needs it for `teach <player> <skill>`.
+Each command is registered with a `CommandSpec` (name, short forms, category, permission, usage, summary) and its own Bevy system, which receives an `Invocation` and asks for exactly the resources it needs:
+
+```rust
+app.add_command(
+    CommandSpec::new("whisper", Category::Communication)
+        .usage("whisper <player> <text>")
+        .summary("speak privately to someone in the room"),
+    communication::whisper,
+);
+```
+
+- **One dispatcher** expands aliases, hides commands a player lacks permission for (they get the same "Huh?" as a typo), and queues the command's system. The prompt is sent after the command's output, so handlers never send it.
+- **`help`** is generated from the registry, grouped by category and filtered by role; `help <command>` shows usage.
+- **Targets** are resolved by `Target::parse` and `find_one` / `find_all` over candidates with `Keywords`: a word matches the start of any keyword, `2.x` picks the second match, `all.x` every match, and `me` the player. Others are preferred; the player is the fallback when only they match. Today the candidates are players; items and NPCs join when they exist.
 
 ### Things in the world
 
@@ -95,7 +111,7 @@ The round loop, initiative, damage, death and respawn: infrastructure with no ac
 
 ## Proposed build order
 
-1. **Command system and targeting.** Everything after this adds commands, so it saves rewriting each one later.
+1. ~~**Command system and targeting.**~~ Built.
 2. **Things in the world, templates and resets.** Items first, then NPCs that stand in rooms and can be looked at.
 3. **Game events and time.** Both small, but everything after this uses them.
 4. **The [skill core](skills.md#build-plan), with combat as its first use.** The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.

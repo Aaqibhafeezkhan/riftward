@@ -2,28 +2,84 @@
 //! back to their files; `world::sync_world` then applies the change to the room entities, exactly
 //! as if the file had been edited by hand.
 //!
-//! Permissions are checked in `commands.rs` before a `BuildCommand` is sent.
+//! Each command is registered with the command system, which hides it from players without the
+//! permission its `CommandSpec` names.
 
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;
 
-use crate::commands::{
-    self, BuildCommand, Outgoing, PlayerQuery, RoomQuery, deliver, full_direction, move_player,
-};
 use crate::attributes::{Attribute, Attributes};
-use crate::db::{Database, Role};
+use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::commands::movement::{full_direction, move_player};
+use crate::db::{Database, Permission, Role};
 use crate::net::Connection;
+use crate::output::{
+    Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_online,
+};
+use crate::targeting::{Keywords, Target};
 use crate::world::{RoomDef, RoomIndex, RoomKey, ZONE_ENTRANCE, ZoneDef};
 
 pub struct BuildPlugin;
 
 impl Plugin for BuildPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<PendingZones>().add_systems(
-            Update,
-            (handle_build.after(commands::handle_commands), announce_new_zones),
-        );
+        let build = |name, usage, summary| {
+            CommandSpec::new(name, Category::Building)
+                .usage(usage)
+                .summary(summary)
+                .permission(Permission::Build)
+        };
+        let admin = |name, usage, summary| {
+            CommandSpec::new(name, Category::Admin)
+                .usage(usage)
+                .summary(summary)
+                .permission(Permission::ManageRoles)
+        };
+        app.init_resource::<PendingZones>()
+            .add_systems(Update, announce_new_zones)
+            .add_command(build("where", "where", "show the current room's id"), where_cmd)
+            .add_command(build("rooms", "rooms", "list the rooms in this zone"), rooms_cmd)
+            .add_command(
+                build("goto", "goto <room>", "teleport to a room (`room` or `zone:room`)"),
+                goto_cmd,
+            )
+            .add_command(
+                build("dig", "dig <dir> <name>", "create a room through a new exit, with a way back"),
+                dig_cmd,
+            )
+            .add_command(build("rename", "rename <name>", "rename this room"), rename_cmd)
+            .add_command(build("desc", "desc <text>", "set this room's description"), desc_cmd)
+            .add_command(
+                build("link", "link <dir> <room>", "add a one-way exit to an existing room"),
+                link_cmd,
+            )
+            .add_command(build("unlink", "unlink <dir>", "remove an exit"), unlink_cmd)
+            .add_command(build("zones", "zones", "list all zones"), zones_cmd)
+            .add_command(
+                build(
+                    "zone",
+                    "zone create <id> <name> | zone rename <name>",
+                    "create a zone, or rename the one you're in",
+                ),
+                zone_cmd,
+            )
+            .add_command(
+                admin(
+                    "role",
+                    "role <account> <player|builder|admin>",
+                    "change an account's role",
+                ),
+                role_cmd,
+            )
+            .add_command(
+                admin(
+                    "setattr",
+                    "setattr <player> <attribute> <rating>",
+                    "set an online player's attribute (ignores Karma)",
+                ),
+                setattr_cmd,
+            );
     }
 }
 
@@ -32,72 +88,139 @@ impl Plugin for BuildPlugin {
 #[derive(Resource, Default)]
 struct PendingZones(Vec<(String, Entity)>);
 
-/// A message for the player: `Ok` on success, `Err` explaining what went wrong.
-type Reply = Result<String, String>;
+/// The builder running a command and the room they're standing in.
+fn locate(players: &PlayerQuery, rooms: &RoomQuery, entity: Entity) -> Option<(Actor, RoomKey)> {
+    let actor = Actor::get(players, entity)?;
+    let (_, here, _) = rooms.get(actor.room).ok()?;
+    let here = here.clone();
+    Some((actor, here))
+}
 
-#[allow(clippy::too_many_arguments)]
-fn handle_build(
-    mut inputs: MessageReader<BuildCommand>,
+fn where_cmd(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery) {
+    let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
+        return;
+    };
+    deliver(vec![Outgoing::line(inv.entity, format!("You are in [{here}]."))], &mut players);
+}
+
+fn rooms_cmd(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    zones: Res<Assets<ZoneDef>>,
+) {
+    let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
+        return;
+    };
+    let reply = list_rooms(&here, &zones);
+    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+}
+
+fn goto_cmd(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    index: Res<RoomIndex>,
+    db: Res<Database>,
+) {
+    let Some((actor, here)) = locate(&players, &rooms, inv.entity) else {
+        return;
+    };
+    let mut out = Vec::new();
+    if let Err(err) = goto(&actor, &here, &inv, &mut players, &rooms, &index, &db, &mut out) {
+        out.push(reply_line(inv.entity, Err(err)));
+    }
+    deliver(out, &mut players);
+}
+
+/// A builder command that edits the zone they're standing in, by calling `$edit`.
+macro_rules! zone_edit_command {
+    ($name:ident, $edit:ident) => {
+        fn $name(
+            In(inv): In<Invocation>,
+            mut players: PlayerQuery,
+            rooms: RoomQuery,
+            mut zones: ResMut<Assets<ZoneDef>>,
+        ) {
+            let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
+                return;
+            };
+            let reply = $edit(&here, &inv, &mut zones);
+            deliver(vec![reply_line(inv.entity, reply)], &mut players);
+        }
+    };
+}
+
+zone_edit_command!(dig_cmd, dig);
+zone_edit_command!(rename_cmd, rename);
+zone_edit_command!(desc_cmd, describe);
+zone_edit_command!(unlink_cmd, unlink);
+
+fn link_cmd(
+    In(inv): In<Invocation>,
     mut players: PlayerQuery,
     rooms: RoomQuery,
     index: Res<RoomIndex>,
     mut zones: ResMut<Assets<ZoneDef>>,
+) {
+    let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
+        return;
+    };
+    let reply = link(&here, &inv, &index, &mut zones);
+    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+}
+
+fn zones_cmd(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    zones: Res<Assets<ZoneDef>>,
+) {
+    let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
+        return;
+    };
+    let reply = list_zones(&here, &zones);
+    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+}
+
+fn zone_cmd(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    mut zones: ResMut<Assets<ZoneDef>>,
     mut pending: ResMut<PendingZones>,
+) {
+    let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
+        return;
+    };
+    let reply = match inv.args.split_once(' ').unwrap_or((&inv.args, "")) {
+        ("create", rest) => create_zone(inv.entity, rest.trim(), &zones, &mut pending),
+        ("rename", rest) => rename_zone(&here, rest.trim(), &mut zones),
+        _ => Err(inv.usage_error()),
+    };
+    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+}
+
+fn role_cmd(In(inv): In<Invocation>, mut players: PlayerQuery, db: Res<Database>) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let mut out = Vec::new();
+    let reply = set_role(&actor, &inv, &db, &mut players, &mut out);
+    out.insert(0, reply_line(inv.entity, reply));
+    deliver(out, &mut players);
+}
+
+fn setattr_cmd(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    keywords: Query<&Keywords>,
     mut sheets: Query<&mut Attributes>,
     db: Res<Database>,
 ) {
     let mut out = Vec::new();
-    for BuildCommand { entity, verb, args } in inputs.read() {
-        let entity = *entity;
-        let Ok((_, _, Some(player), Some(in_room))) = players.get(entity) else {
-            continue;
-        };
-        let (name, account, character_id) = (
-            player.name.clone(),
-            player.account.clone(),
-            player.character_id,
-        );
-        let room = in_room.0;
-        let Ok((_, here, _)) = rooms.get(room) else {
-            continue;
-        };
-        let here = here.clone();
-
-        let reply = match verb.as_str() {
-            "where" => Ok(format!("You are in [{here}].")),
-            "rooms" => list_rooms(&here, &zones),
-            "goto" => {
-                match goto(entity, &name, character_id, room, &here, args, &mut players, &rooms, &index, &db, &mut out) {
-                    Ok(()) => {
-                        out.push(Outgoing::prompt(entity));
-                        continue;
-                    }
-                    Err(err) => Err(err),
-                }
-            }
-            "dig" => dig(&here, args, &mut zones),
-            "rename" => rename(&here, args, &mut zones),
-            "desc" => describe(&here, args, &mut zones),
-            "link" => link(&here, args, &index, &mut zones),
-            "unlink" => unlink(&here, args, &mut zones),
-            "zones" => list_zones(&here, &zones),
-            "zone" => match args.split_once(' ').unwrap_or((args, "")) {
-                ("create", rest) => create_zone(entity, rest.trim(), &zones, &mut pending),
-                ("rename", rest) => rename_zone(&here, rest.trim(), &mut zones),
-                _ => Err("Usage: zone create <id> <name>, or zone rename <name>".into()),
-            },
-            "role" => set_role(entity, &account, args, &db, &mut players, &mut out),
-            "setattr" => set_attribute(args, &db, &players, &mut sheets, &mut out),
-            _ => Err("Huh?".into()),
-        };
-
-        let text = match reply {
-            Ok(text) => text,
-            Err(text) => format!("\x1b[31m{text}\x1b[0m"),
-        };
-        out.push(Outgoing::line(entity, text));
-        out.push(Outgoing::prompt(entity));
-    }
+    let reply = set_attribute(&inv, &db, &players, &keywords, &mut sheets, &mut out);
+    out.insert(0, reply_line(inv.entity, reply));
     deliver(out, &mut players);
 }
 
@@ -148,22 +271,20 @@ fn list_rooms(here: &RoomKey, zones: &Assets<ZoneDef>) -> Reply {
 
 #[allow(clippy::too_many_arguments)]
 fn goto(
-    entity: Entity,
-    name: &str,
-    character_id: i64,
-    from: Entity,
+    actor: &Actor,
     here: &RoomKey,
-    args: &str,
+    inv: &Invocation,
     players: &mut PlayerQuery,
     rooms: &RoomQuery,
     index: &RoomIndex,
     db: &Database,
     out: &mut Vec<Outgoing>,
 ) -> Result<(), String> {
-    if args.is_empty() {
-        return Err("Usage: goto <room> or goto <zone:room>".into());
+    if inv.args.is_empty() {
+        return Err(inv.usage_error());
     }
-    let target = RoomKey::parse(args, &here.zone);
+    let (entity, name, from) = (actor.entity, &actor.name, actor.room);
+    let target = RoomKey::parse(&inv.args, &here.zone);
     let &to = index
         .0
         .get(&target)
@@ -174,7 +295,7 @@ fn goto(
         except: entity,
         text: format!("{name} vanishes.\r\n"),
     });
-    move_player(entity, character_id, to, players, rooms, db, out);
+    move_player(entity, actor.character_id, to, players, rooms, db, out);
     out.push(Outgoing::Room {
         room: to,
         except: entity,
@@ -183,12 +304,12 @@ fn goto(
     Ok(())
 }
 
-fn dig(here: &RoomKey, args: &str, zones: &mut Assets<ZoneDef>) -> Reply {
-    let Some((dir, name)) = args.split_once(' ').map(|(d, n)| (d, n.trim())) else {
-        return Err("Usage: dig <direction> <room name>".into());
+fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    let Some((dir, name)) = inv.args.split_once(' ').map(|(d, n)| (d, n.trim())) else {
+        return Err(inv.usage_error());
     };
     if name.is_empty() {
-        return Err("Usage: dig <direction> <room name>".into());
+        return Err(inv.usage_error());
     }
     let dir = full_direction(&dir.to_ascii_lowercase()).to_string();
 
@@ -221,9 +342,10 @@ fn dig(here: &RoomKey, args: &str, zones: &mut Assets<ZoneDef>) -> Reply {
     })
 }
 
-fn rename(here: &RoomKey, args: &str, zones: &mut Assets<ZoneDef>) -> Reply {
+fn rename(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    let args = inv.args.as_str();
     if args.is_empty() {
-        return Err("Usage: rename <new room name>".into());
+        return Err(inv.usage_error());
     }
     edit_zone(zones, &here.zone, |zone| {
         room_mut(zone, here)?.name = args.into();
@@ -231,9 +353,10 @@ fn rename(here: &RoomKey, args: &str, zones: &mut Assets<ZoneDef>) -> Reply {
     })
 }
 
-fn describe(here: &RoomKey, args: &str, zones: &mut Assets<ZoneDef>) -> Reply {
+fn describe(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    let args = inv.args.as_str();
     if args.is_empty() {
-        return Err("Usage: desc <description>".into());
+        return Err(inv.usage_error());
     }
     edit_zone(zones, &here.zone, |zone| {
         room_mut(zone, here)?.description = args.into();
@@ -241,9 +364,9 @@ fn describe(here: &RoomKey, args: &str, zones: &mut Assets<ZoneDef>) -> Reply {
     })
 }
 
-fn link(here: &RoomKey, args: &str, index: &RoomIndex, zones: &mut Assets<ZoneDef>) -> Reply {
-    let Some((dir, target)) = args.split_once(' ').map(|(d, t)| (d, t.trim())) else {
-        return Err("Usage: link <direction> <room> (or <zone:room>)".into());
+fn link(here: &RoomKey, inv: &Invocation, index: &RoomIndex, zones: &mut Assets<ZoneDef>) -> Reply {
+    let Some((dir, target)) = inv.args.split_once(' ').map(|(d, t)| (d, t.trim())) else {
+        return Err(inv.usage_error());
     };
     let dir = full_direction(&dir.to_ascii_lowercase()).to_string();
     let target = RoomKey::parse(target, &here.zone);
@@ -267,11 +390,11 @@ fn link(here: &RoomKey, args: &str, index: &RoomIndex, zones: &mut Assets<ZoneDe
     })
 }
 
-fn unlink(here: &RoomKey, args: &str, zones: &mut Assets<ZoneDef>) -> Reply {
-    if args.is_empty() {
-        return Err("Usage: unlink <direction>".into());
+fn unlink(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    if inv.args.is_empty() {
+        return Err(inv.usage_error());
     }
-    let dir = full_direction(&args.to_ascii_lowercase()).to_string();
+    let dir = full_direction(&inv.args.to_ascii_lowercase()).to_string();
     edit_zone(zones, &here.zone, |zone| {
         let room = room_mut(zone, here)?;
         if !room.exits.contains_key(&dir) {
@@ -367,17 +490,17 @@ fn announce_new_zones(
 }
 
 fn set_role(
-    entity: Entity,
-    own_account: &str,
-    args: &str,
+    actor: &Actor,
+    inv: &Invocation,
     db: &Database,
     players: &mut PlayerQuery,
     out: &mut Vec<Outgoing>,
 ) -> Reply {
-    let usage = || "Usage: role <account> <player|builder|admin>".to_string();
-    let (account, role) = args.split_once(' ').ok_or_else(usage)?;
+    let usage = || inv.usage_error();
+    let (account, role) = inv.args.split_once(' ').ok_or_else(usage)?;
     let role = Role::parse(role.trim()).ok_or_else(usage)?;
-    if account.eq_ignore_ascii_case(own_account) {
+    let entity = actor.entity;
+    if account.eq_ignore_ascii_case(&actor.account) {
         return Err("You can't change your own role.".into());
     }
 
@@ -412,14 +535,15 @@ fn set_role(
 /// `setattr <player> <attribute> <rating>`: set an online character's attribute directly, for
 /// testing. This bypasses Karma, so the character's unspent Karma may drop to zero.
 fn set_attribute(
-    args: &str,
+    inv: &Invocation,
     db: &Database,
     players: &PlayerQuery,
+    keywords: &Query<&Keywords>,
     sheets: &mut Query<&mut Attributes>,
     out: &mut Vec<Outgoing>,
 ) -> Reply {
-    let usage = || "Usage: setattr <player> <attribute> <rating>".to_string();
-    let mut parts = args.split_whitespace();
+    let usage = || inv.usage_error();
+    let mut parts = inv.args.split_whitespace();
     let (Some(target), Some(attribute), Some(rating), None) =
         (parts.next(), parts.next(), parts.next(), parts.next())
     else {
@@ -432,16 +556,16 @@ fn set_attribute(
         .filter(|r| (0..=1000).contains(r))
         .ok_or("Ratings are whole numbers from 0 to 1000.")?;
 
-    let (entity, character_id, name) = players
-        .iter()
-        .find_map(|(e, _, player, _)| {
-            let player = player?;
-            player
-                .name
-                .eq_ignore_ascii_case(target)
-                .then(|| (e, player.character_id, player.name.clone()))
-        })
-        .ok_or_else(|| format!("No one named {target} is online."))?;
+    let target = Target::parse(target).ok_or_else(usage)?;
+    let Actor {
+        entity,
+        character_id,
+        name,
+        ..
+    } = target
+        .find_one(inv.entity, targets_online(players, keywords))
+        .and_then(|e| Actor::get(players, e))
+        .ok_or_else(|| format!("No one matching {} is online.", target.describe()))?;
     let mut attributes = sheets
         .get_mut(entity)
         .map_err(|_| format!("{name} has no attributes loaded."))?;
@@ -452,11 +576,13 @@ fn set_attribute(
     }
     attributes.set(attribute, rating);
     info!("{name}'s {} set to {rating}", attribute.name());
-    out.push(Outgoing::line(
-        entity,
-        format!("\r\nYour {} is now {rating}.", attribute.name()),
-    ));
-    out.push(Outgoing::prompt(entity));
+    if entity != inv.entity {
+        out.push(Outgoing::line(
+            entity,
+            format!("\r\nYour {} is now {rating}.", attribute.name()),
+        ));
+        out.push(Outgoing::prompt(entity));
+    }
     Ok(format!("{name}'s {} is now {rating}.", attribute.name()))
 }
 

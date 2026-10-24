@@ -7,7 +7,10 @@ use bevy::prelude::*;
 
 use crate::aliases::Aliases;
 use crate::attributes::Attributes;
-use crate::commands::{self, Outgoing, PlayerQuery, RoomQuery, deliver, describe_room};
+use crate::command;
+use crate::commands::movement::describe_room;
+use crate::output::{Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::targeting::Keywords;
 use crate::db::{Account, CharacterRecord, Database, Permission, Role};
 use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::world::{InRoom, Player, RoomIndex, RoomKey};
@@ -22,7 +25,7 @@ impl Plugin for LoginPlugin {
             Update,
             (greet_new_connections, handle_login)
                 .chain()
-                .after(commands::handle_commands),
+                .after(command::dispatch),
         );
     }
 }
@@ -426,6 +429,7 @@ fn enter_game(
     commands.entity(entity).remove::<LoginState>().insert((
         Aliases(aliases),
         attributes,
+        Keywords::from_name(&character.name),
         Player {
             name: name.clone(),
             character_id: character.id,

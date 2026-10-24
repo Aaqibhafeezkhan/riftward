@@ -161,7 +161,7 @@ fn strip_telnet(raw: &[u8]) -> Vec<u8> {
     out
 }
 
-fn flush_output(mut connections: Query<&mut Connection>) {
+pub fn flush_output(mut connections: Query<&mut Connection>) {
     for mut conn in &mut connections {
         if conn.outbox.is_empty() {
             continue;

@@ -5,11 +5,14 @@
 mod aliases;
 mod attributes;
 mod build;
+mod command;
 mod commands;
 mod db;
 mod dice;
 mod login;
 mod net;
+mod output;
+mod targeting;
 mod world;
 
 use std::time::Duration;
@@ -40,6 +43,7 @@ fn main() {
             net::NetPlugin,
             world::WorldPlugin,
             login::LoginPlugin,
+            command::CommandPlugin,
             commands::CommandsPlugin,
             build::BuildPlugin,
         ))

@@ -28,6 +28,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Accounts and characters in SQLite, with roles: player, builder, admin.
 - Zone files in `assets/zones`, hot-reloaded, plus in-game building: `dig`, `desc`, `link`, `zone create`, and more.
 - Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
+- A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.
 - Attributes, starting Karma, `raise`, `score`, and the Luck-aware `Dice` service.
 
