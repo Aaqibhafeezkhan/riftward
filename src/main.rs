@@ -1,4 +1,4 @@
-//! A tiny telnet MUD built on a headless Bevy app.
+//! Riftward: a classless telnet MUD built on a headless Bevy app.
 //!
 //! Run with `cargo run`, then connect with `nc localhost 4000` (or any telnet/MUD client).
 

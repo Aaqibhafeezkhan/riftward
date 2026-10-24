@@ -1,6 +1,6 @@
-# Contributing
+# Contributing to Riftward
 
-Thanks for helping build this MUD. It's a classless telnet MUD on a headless [Bevy](https://bevyengine.org) server: characters are defined by the skills they learn and use, and the world is built mostly from inside the game.
+Thanks for helping build Riftward, a classless telnet MUD on a headless [Bevy](https://bevyengine.org) server: characters are defined by the skills they learn and use, and the world is built mostly from inside the game.
 
 There are three main ways to contribute, and you don't need to write Rust for the first two:
 

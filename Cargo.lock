@@ -2088,6 +2088,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
+name = "riftward"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "bevy",
+ "rand",
+ "ron",
+ "rusqlite",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "ron"
 version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2334,19 +2347,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "testing_bevy"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "bevy",
- "rand",
- "ron",
- "rusqlite",
- "serde",
- "thiserror 2.0.21",
 ]
 
 [[package]]
