@@ -92,49 +92,7 @@ app.add_command(
 
 ### Things in the world
 
-Items and NPCs become entities. One location component replaces `InRoom`: in a room, carried by someone, inside a container, or worn. Starting point: `get`, `drop`, `put`, `inventory`, `look <thing>`.
-
-#### Item decay
-
-Items rot away over time, which keeps rooms from filling with clutter and makes food, corpses and torches feel physical. Each item template picks one kind of decay:
-
-| Decay | Clock runs | Examples |
-| --- | --- | --- |
-| Litter (the default) | Only while the item lies in the world; picking it up resets it | A dropped sword eventually crumbles |
-| Perishable | Always, even carried, by real time (including while offline) | Food, herbs, corpses, torches |
-| None | Never | Unique items |
-
-```ron
-"bread": (
-    name: "a loaf of bread",
-    keywords: ["bread", "loaf"],
-    decay: Perishable(hours: 6, message: "The bread has gone mouldy and crumbles away."),
-),
-"longsword": (
-    name: "a longsword",
-    keywords: ["longsword", "sword"],
-    // no `decay`: the default litter decay
-),
-```
-
-- **Timestamp-based.** Each item stores when it decays; a light check every few seconds removes expired items and tells whoever can see them. Saved items keep their decay time in the database, so decay continues across restarts.
-- **Containers spill when they rot.** A rotting corpse drops its contents, which start their own litter timers, giving players a window to loot.
-
-### Templates and resets
-
-Zone files gain NPC and item templates and say where they appear. Each spawn resets on its own timer and refills to a fixed count or breeds, and NPCs can wander; see [The living world](world.md). Builder commands edit templates and spawns.
-
-#### What survives a restart
-
-**An item becomes "real" the moment a player touches it.**
-
-- **Untouched spawns are temporary.** Items a zone reset created that no player has handled live only in memory. A restart clears them, and resets repopulate.
-- **Touching makes an item real.** Getting, dropping, putting, giving or wearing an item gives it a row in an `items` table: its template, where it is (carried by a character, worn, lying in a room, or inside another item), when it was dropped, and when it decays. From then on every move updates that row, and the item survives restarts wherever it ends up. Looking at or examining an item doesn't count.
-- **Startup restores real items** to their saved locations, removing any whose decay time has passed.
-- **Resets only manage their own spawns.** Once a spawned item is picked up, it is real and no longer the reset's; the next reset spawns a fresh one.
-- **NPCs stay temporary** and reset with their zone.
-
-Decay is what keeps this from filling the world and the database: dropped items still rot away, by the drop time saved with them.
+Items and NPCs become entities, with one location component replacing `InRoom`. Items, containers, locks, persistence and decay are designed in [Items, containers and locks](items.md); spawns, resets, wandering and doors in [The living world](world.md). Builder commands will edit templates and spawns.
 
 ### Game events
 
@@ -151,14 +109,6 @@ The round loop, initiative, damage, death and respawn: infrastructure with no ac
 ## Planned features
 
 Features that are designed but wait on other work.
-
-### Unique items
-
-Some items exist only once and never respawn: once *Angorim* has been found, the zone's reset never creates another.
-
-- **Templates are marked unique** (`unique: true`) and have no decay: a unique item stays wherever it is dropped, forever, until someone picks it up.
-- **Before it's found,** a unique item is an ordinary temporary spawn; a restart before anyone touches it just spawns it again.
-- **Once found,** it is a [real item](#what-survives-a-restart) like any other, saved wherever it goes. A zone reset checks the `items` table for a real copy of that template before spawning one, so a second copy never appears.
 
 ### Scripting
 
@@ -197,14 +147,8 @@ The in-game prompt shows the character's state, such as `<14/18hp 9/10fat>`, ins
 ## Proposed build order
 
 1. ~~**Command system and targeting.**~~ Built.
-2. **Things in the world, templates and resets.** Items first, then NPCs that stand in rooms and can be looked at.
+2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then NPCs that stand in rooms and can be looked at.
 3. **Game events and time.** Both small, but everything after this uses them.
 4. **The [skill core](skills.md#build-plan), with combat as its first use.** The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
 
 Then teaching, epiphany, trainers and loot follow: trainers are NPCs, loot scrolls are items, and passive skills have events to trigger on.
-
-## Open questions
-
-- [ ] **Unique items and deleted characters:** if a character carrying a unique item is deleted, where does the item go? For example, dropped where the character last stood.
-- [ ] **Default litter decay time:** about 30 minutes on the ground? Should items spawned by a zone reset decay at all, since the next reset replaces them?
-- [ ] **Preserving perishables:** salting, a preserving spell, or cold storage that slows or pauses decay. A good hook for skills; templates only need to allow it.
