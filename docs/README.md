@@ -53,6 +53,7 @@ Designed, waiting on other work:
 | --- | --- | --- |
 | Status prompt (`<14/18hp 9/10fat>`), customisable per character | Current health and fatigue, from combat and time | [Architecture](architecture.md#status-prompt) |
 | Unique items that never respawn once found, like *Angorim*, and never decay | Items and resets | [Architecture](architecture.md#unique-items) |
+| Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, NPCs and game events | [Architecture](architecture.md#scripting) |
 
 ## Decisions so far
 

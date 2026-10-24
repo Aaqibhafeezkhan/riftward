@@ -160,6 +160,24 @@ Some items exist only once and never respawn: once *Angorim* has been found, the
 - **Before it's found,** a unique item is an ordinary temporary spawn; a restart before anyone touches it just spawns it again.
 - **Once found,** it is a [real item](#what-survives-a-restart) like any other, saved wherever it goes. A zone reset checks the `items` table for a real copy of that template before spawning one, so a second copy never appears.
 
+### Scripting
+
+An escape hatch for behaviour that data can't express: bespoke unique items (Angorim glowing when orcs are near), unusual skill effects, quest logic, complex NPC behaviour, odd easter eggs. Most content stays data; an item, skill, NPC or world event can name a script instead of, or alongside, its data.
+
+- **Waits on what scripts would talk to:** the effect system, NPCs, and game events. Embedding a language before those exist would mean designing its interface in a vacuum.
+- **Language: to decide when it's built.** Candidates:
+
+  | | [Steel](https://github.com/mattwparas/steel) (Scheme) | [Rhai](https://rhai.rs) | Lua ([mlua](https://github.com/mlua-rs/mlua)) |
+  | --- | --- | --- | --- |
+  | Written in | Rust | Rust | C, wrapped for Rust |
+  | Syntax | Lisp; macros could make a custom content language | Close to Rust and JavaScript | The traditional MUD scripting language |
+  | Stopping runaway scripts | Only an interrupt flag the host sets, e.g. from a watchdog | Built-in limits on operations, call depth, sizes | Instruction-count hooks |
+  | Threads | Single-threaded engine (a non-send Bevy resource); a `sync` build option exists | Optional thread-safe build | One thread per VM |
+  | Maturity | Pre-1.0 (0.8.3), API may change | Stable | Very mature |
+
+- **Measured for Steel (0.8.3):** about 90 ns per call from Rust into a script function (100,000 calls in 9.3 ms), with the engine running in sandboxed mode.
+- **Requirements whichever language wins:** scripts can't hang the server (an operation limit or watchdog), can't reach the file system or network, only call the game through functions the server registers, and reload live like zone files.
+
 ### Status prompt
 
 The in-game prompt shows the character's state, such as `<14/18hp 9/10fat>`, instead of a bare `> `.
