@@ -1,7 +1,8 @@
 //! Character attributes and the Karma spent to raise them.
 //!
-//! Attributes are uncapped. Every character starts at 1 (Magic at 0, until they Awaken) with
-//! `STARTING_KARMA` to spend. Karma spent is not stored: it is worked out from the current
+//! Attributes are uncapped. Every character starts at 1, except Magic at 0, with `STARTING_KARMA`
+//! to spend. Magic can be raised like anything else, but it stays latent (it does nothing) until
+//! the character knows a casting skill. Karma spent is not stored: it is worked out from the current
 //! ratings, so it can never drift out of sync with them.
 
 use bevy::prelude::*;
@@ -124,14 +125,14 @@ impl Attributes {
         self.0[attribute.index()] = rating;
     }
 
-    /// Total Karma spent to reach the current ratings. Magic counts from 1, since Awakening grants
-    /// the first point.
+    /// Total Karma spent to reach the current ratings from the starting ones.
     pub fn karma_spent(&self) -> i32 {
         Attribute::ALL
             .into_iter()
             .map(|attribute| {
-                let from = attribute.starting_rating().max(1);
-                (from..self.get(attribute)).map(raise_cost).sum::<i32>()
+                (attribute.starting_rating()..self.get(attribute))
+                    .map(raise_cost)
+                    .sum::<i32>()
             })
             .sum()
     }
@@ -164,10 +165,11 @@ pub fn score_text(name: &str, attributes: &Attributes) -> String {
         format!("  {label:<10}{}", cells.join("    "))
     };
     use Attribute::*;
+    // Casting skills don't exist yet, so any Magic is still latent.
     let magic = if attributes.get(Magic) > 0 {
-        String::new()
+        "  (latent: no casting skill)"
     } else {
-        "  (not Awakened)".into()
+        ""
     };
     let karma = attributes.karma_unspent();
     let mut text = format!(
@@ -200,9 +202,6 @@ pub fn raise_command(
         Err(err) => return err,
     };
     let current = attributes.get(attribute);
-    if attribute == Attribute::Magic && current == 0 {
-        return "You have not Awakened. Magic cannot be raised until you do.".into();
-    }
 
     let cost = raise_cost(current);
     let unspent = attributes.karma_unspent();
@@ -219,12 +218,16 @@ pub fn raise_command(
         return "Something went wrong saving that. Please try again.".into();
     }
     attributes.set(attribute, current + 1);
-    format!(
+    let mut reply = format!(
         "{} raised to {} for {cost} Karma. {} Karma left.",
         attribute.name(),
         current + 1,
         attributes.karma_unspent()
-    )
+    );
+    if attribute == Attribute::Magic {
+        reply += " Your magic stays latent until you learn to cast.";
+    }
+    reply
 }
 
 #[cfg(test)]
@@ -250,10 +253,8 @@ mod tests {
         attributes.set(Attribute::Agility, 7); // 5 -> 7: two more at 2 each
         assert_eq!(attributes.karma_spent(), 8);
 
-        attributes.set(Attribute::Magic, 1); // Awakening's free point costs nothing
-        assert_eq!(attributes.karma_spent(), 8);
-        attributes.set(Attribute::Magic, 2);
-        assert_eq!(attributes.karma_spent(), 9);
+        attributes.set(Attribute::Magic, 2); // Magic starts at 0: two raises at 1 each
+        assert_eq!(attributes.karma_spent(), 10);
     }
 
     #[test]
