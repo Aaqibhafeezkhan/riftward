@@ -8,12 +8,12 @@ use bevy::prelude::*;
 use crate::aliases::Aliases;
 use crate::attributes::Attributes;
 use crate::command;
-use crate::commands::movement::describe_room;
+use crate::commands::movement::{View, describe_room};
 use crate::db::{Account, CharacterRecord, Database, Permission, Role};
 use crate::net::{Connection, JustConnected, PlayerInput};
-use crate::output::{Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::targeting::Keywords;
-use crate::world::{Door, InRoom, Player, RoomIndex, RoomKey};
+use crate::world::{InRoom, Player, RoomIndex, RoomKey};
 
 pub struct LoginPlugin;
 
@@ -109,8 +109,7 @@ fn handle_login(
     mut inputs: MessageReader<PlayerInput>,
     mut states: Query<&mut LoginState>,
     mut players: PlayerQuery,
-    rooms: RoomQuery,
-    doors: Query<&Door>,
+    view: View,
     index: Res<RoomIndex>,
     db: Res<Database>,
 ) {
@@ -168,8 +167,7 @@ fn handle_login(
                     character,
                     &mut commands,
                     &players,
-                    &rooms,
-                    &doors,
+                    &view,
                     &index,
                     &db,
                     &mut out,
@@ -417,8 +415,7 @@ fn enter_game(
     character: CharacterRecord,
     commands: &mut Commands,
     players: &PlayerQuery,
-    rooms: &RoomQuery,
-    doors: &Query<&Door>,
+    view: &View,
     index: &RoomIndex,
     db: &Database,
     out: &mut Vec<Outgoing>,
@@ -450,7 +447,7 @@ fn enter_game(
         return back_to_menu(out, "The world is still loading. Try again in a moment.");
     };
     if saved_room.is_none()
-        && let Ok((_, key, _)) = rooms.get(room)
+        && let Ok((_, key, _)) = view.rooms.get(room)
         && let Err(err) = db.save_location(character.id, &key.to_string())
     {
         error!("failed to save location for {}: {err}", character.name);
@@ -501,8 +498,7 @@ fn enter_game(
             room,
             entity,
             players,
-            rooms,
-            doors,
+            view,
             account.role.can(Permission::Build),
         ),
     ));

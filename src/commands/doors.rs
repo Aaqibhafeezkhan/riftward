@@ -1,8 +1,8 @@
 //! Doors: opening, closing, locking and forcing them. A door is targeted by the direction of its
 //! exit (`open north`) or by name (`open trapdoor`); directions are checked first.
 //!
-//! Keys are items, which don't exist yet: until they do, players get "You don't have the key."
-//! and builders can lock and unlock any door for testing.
+//! Locking and unlocking needs a copy of the lock's key item in your pack. Builders can lock and
+//! unlock any door without one, for testing.
 
 use bevy::prelude::*;
 
@@ -11,9 +11,10 @@ use crate::command::Invocation;
 use crate::commands::movement::{full_direction, is_direction, toward};
 use crate::db::Permission;
 use crate::dice::Dice;
+use crate::items::{ItemLocation, ItemQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::targeting::{Keywords, Target};
-use crate::world::{Door, DoorState, Exits};
+use crate::world::{Door, DoorKey, DoorState, Exits, ItemKey};
 
 pub type DoorQuery<'w, 's> = Query<'w, 's, (&'static mut Door, &'static Keywords)>;
 
@@ -193,14 +194,33 @@ pub fn close(
     });
 }
 
-/// Whether the player can work this lock with a key. Builders can always, for testing.
-fn has_key(way: &Doorway, door: &Door) -> Result<(), String> {
+/// Whether the player can work this lock: they carry a copy of its key item. A key named without
+/// a zone is in the door's zone. Builders can always, for testing.
+fn has_key(
+    way: &Doorway,
+    door: &Door,
+    door_keys: &Query<&DoorKey>,
+    items: &ItemQuery,
+) -> Result<(), String> {
     if way.actor.role.can(Permission::Build) {
         return Ok(());
     }
-    match door.lock.as_ref().and_then(|lock| lock.key.as_ref()) {
-        Some(_) => Err("You don't have the key.".into()),
-        None => Err("It has no keyhole.".into()),
+    let Some(key) = door.lock.as_ref().and_then(|lock| lock.key.as_ref()) else {
+        return Err("It has no keyhole.".into());
+    };
+    let zone = door_keys
+        .get(way.door)
+        .map(|k| k.zone.as_str())
+        .unwrap_or("");
+    let key = ItemKey::parse(key, zone);
+    let pack = ItemLocation::Carried(way.actor.entity);
+    let held = items
+        .iter()
+        .any(|(_, item, location)| *location == pack && item.key == key);
+    if held {
+        Ok(())
+    } else {
+        Err("You don't have the key.".into())
     }
 }
 
@@ -209,6 +229,8 @@ pub fn lock(
     mut players: PlayerQuery,
     rooms: RoomQuery,
     mut doors: DoorQuery,
+    door_keys: Query<&DoorKey>,
+    items: ItemQuery,
 ) {
     with_door(&inv, &mut players, &rooms, &mut doors, |way, door| {
         if door.lock.is_none() {
@@ -219,7 +241,7 @@ pub fn lock(
             DoorState::Open => return Err("You'll have to close it first.".into()),
             DoorState::Closed => {}
         }
-        has_key(way, door)?;
+        has_key(way, door, &door_keys, &items)?;
         door.state = DoorState::Locked;
         Ok(announce(
             way,
@@ -235,6 +257,8 @@ pub fn unlock(
     mut players: PlayerQuery,
     rooms: RoomQuery,
     mut doors: DoorQuery,
+    door_keys: Query<&DoorKey>,
+    items: ItemQuery,
 ) {
     with_door(&inv, &mut players, &rooms, &mut doors, |way, door| {
         if door.lock.is_none() {
@@ -243,7 +267,7 @@ pub fn unlock(
         if door.state != DoorState::Locked {
             return Err("It isn't locked.".into());
         }
-        has_key(way, door)?;
+        has_key(way, door, &door_keys, &items)?;
         door.state = DoorState::Closed;
         Ok(announce(
             way,

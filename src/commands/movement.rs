@@ -1,26 +1,41 @@
 //! Looking around and moving between rooms.
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::command::Invocation;
 use crate::commands::doors::{DoorLookup, find_door};
 use crate::db::{Database, Permission};
+use crate::items::{
+    ItemLocation, ItemQuery, ItemTemplates, capitalized, describe_item, find_item, item_list,
+};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::targeting::{Keywords, Target};
 use crate::world::{Door, DoorState};
 
-/// `look` describes the room; `look <target>` looks along an exit, at a door, or at someone here.
+/// Everything a room shows a player besides other players: the room itself, its doors, and the
+/// items lying in it.
+#[derive(SystemParam)]
+pub struct View<'w, 's> {
+    pub rooms: RoomQuery<'w, 's>,
+    pub doors: Query<'w, 's, &'static Door>,
+    pub items: ItemQuery<'w, 's>,
+}
+
+/// `look` describes the room; `look <target>` looks along an exit, at a door, at someone here, or
+/// at an item here or in your pack.
 pub fn look(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
-    rooms: RoomQuery,
-    doors: Query<&Door>,
+    view: View,
     keywords: Query<&Keywords>,
+    templates: Res<ItemTemplates>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
-    let lookup = rooms
+    let lookup = view
+        .rooms
         .get(actor.room)
         .ok()
         .filter(|_| !inv.args.is_empty())
@@ -33,16 +48,15 @@ pub fn look(
             actor.room,
             actor.entity,
             &players,
-            &rooms,
-            &doors,
+            &view,
             actor.role.can(Permission::Build),
         ),
-        (_, Some((DoorLookup::Door { door, dir }, exits))) => match doors.get(door) {
+        (_, Some((DoorLookup::Door { door, dir }, exits))) => match view.doors.get(door) {
             Ok(door) if door.is_open() => format!(
                 "Through the open {} {} you see {}",
                 door.the().trim_start_matches("the "),
                 toward(&dir),
-                glimpse(exits.0[&dir].to, actor.entity, &players, &rooms)
+                glimpse(exits.0[&dir].to, actor.entity, &players, &view.rooms)
             ),
             Ok(door) => format!("You see {} {}. It is closed.\r\n", door.name, toward(&dir)),
             Err(_) => String::new(),
@@ -52,7 +66,7 @@ pub fn look(
             there[..1].make_ascii_uppercase();
             format!(
                 "{there} you see {}",
-                glimpse(exits.0[&dir].to, actor.entity, &players, &rooms)
+                glimpse(exits.0[&dir].to, actor.entity, &players, &view.rooms)
             )
         }
         (_, Some((DoorLookup::NotHere, _))) if is_direction(&inv.args.to_lowercase()) => {
@@ -69,7 +83,10 @@ pub fn look(
                     "You look yourself over. You look ready for anything.\r\n".into()
                 }
                 Some(other) => format!("You see {}, standing here.\r\n", other.name),
-                None => format!("You don't see {} here.\r\n", target.describe()),
+                None => match find_item(&inv.args, &actor, &view.items, &keywords) {
+                    Ok(item) => describe_item(item, &view.items, &templates) + "\r\n",
+                    Err(err) => err + "\r\n",
+                },
             }
         }
     };
@@ -77,30 +94,18 @@ pub fn look(
 }
 
 /// `go <direction>`.
-pub fn go(
-    In(inv): In<Invocation>,
-    mut players: PlayerQuery,
-    rooms: RoomQuery,
-    doors: Query<&Door>,
-    db: Res<Database>,
-) {
+pub fn go(In(inv): In<Invocation>, mut players: PlayerQuery, view: View, db: Res<Database>) {
     let out = if inv.args.is_empty() {
         vec![Outgoing::line(inv.entity, "Go where?")]
     } else {
-        travel(inv.entity, &inv.args, &mut players, &rooms, &doors, &db)
+        travel(inv.entity, &inv.args, &mut players, &view, &db)
     };
     deliver(out, &mut players);
 }
 
 /// `north`, `south`, ... and their short forms: the command's name is the direction.
-pub fn walk(
-    In(inv): In<Invocation>,
-    mut players: PlayerQuery,
-    rooms: RoomQuery,
-    doors: Query<&Door>,
-    db: Res<Database>,
-) {
-    let out = travel(inv.entity, inv.command, &mut players, &rooms, &doors, &db);
+pub fn walk(In(inv): In<Invocation>, mut players: PlayerQuery, view: View, db: Res<Database>) {
+    let out = travel(inv.entity, inv.command, &mut players, &view, &db);
     deliver(out, &mut players);
 }
 
@@ -108,8 +113,7 @@ fn travel(
     entity: Entity,
     dir: &str,
     players: &mut PlayerQuery,
-    rooms: &RoomQuery,
-    doors: &Query<&Door>,
+    view: &View,
     db: &Database,
 ) -> Vec<Outgoing> {
     let mut out = Vec::new();
@@ -117,7 +121,8 @@ fn travel(
         return out;
     };
     let dir = full_direction(&dir.to_ascii_lowercase()).to_string();
-    let Some(&exit) = rooms
+    let Some(&exit) = view
+        .rooms
         .get(actor.room)
         .ok()
         .and_then(|(_, _, exits)| exits.0.get(&dir))
@@ -125,7 +130,7 @@ fn travel(
         out.push(Outgoing::line(entity, "You can't go that way."));
         return out;
     };
-    if let Some(door) = exit.door.and_then(|d| doors.get(d).ok())
+    if let Some(door) = exit.door.and_then(|d| view.doors.get(d).ok())
         && !door.is_open()
     {
         out.push(Outgoing::line(
@@ -141,16 +146,7 @@ fn travel(
         except: entity,
         text: format!("{} leaves {dir}.\r\n", actor.name),
     });
-    move_player(
-        entity,
-        actor.character_id,
-        to,
-        players,
-        rooms,
-        doors,
-        db,
-        &mut out,
-    );
+    move_player(entity, actor.character_id, to, players, view, db, &mut out);
     out.push(Outgoing::Room {
         room: to,
         except: entity,
@@ -199,14 +195,12 @@ pub fn full_direction(dir: &str) -> &str {
 }
 
 /// Put a player in a room, remember it in the database, and show them where they are.
-#[allow(clippy::too_many_arguments)]
 pub fn move_player(
     entity: Entity,
     character_id: i64,
     to: Entity,
     players: &mut PlayerQuery,
-    rooms: &RoomQuery,
-    doors: &Query<&Door>,
+    view: &View,
     db: &Database,
     out: &mut Vec<Outgoing>,
 ) {
@@ -215,14 +209,14 @@ pub fn move_player(
         in_room.0 = to;
         show_ids = player.is_some_and(|p| p.role.can(Permission::Build));
     }
-    if let Ok((_, key, _)) = rooms.get(to)
+    if let Ok((_, key, _)) = view.rooms.get(to)
         && let Err(err) = db.save_location(character_id, &key.to_string())
     {
         error!("failed to save location for character {character_id}: {err}");
     }
     out.push(Outgoing::To(
         entity,
-        describe_room(to, entity, players, rooms, doors, show_ids),
+        describe_room(to, entity, players, view, show_ids),
     ));
 }
 
@@ -249,11 +243,10 @@ pub fn describe_room(
     room: Entity,
     viewer: Entity,
     players: &PlayerQuery,
-    rooms: &RoomQuery,
-    doors: &Query<&Door>,
+    view: &View,
     show_id: bool,
 ) -> String {
-    let Ok((info, key, exits)) = rooms.get(room) else {
+    let Ok((info, key, exits)) = view.rooms.get(room) else {
         return "You are nowhere.\r\n".into();
     };
 
@@ -266,12 +259,16 @@ pub fn describe_room(
     let exit_list: Vec<_> = exits
         .0
         .iter()
-        .map(
-            |(dir, exit)| match exit.door.and_then(|d| doors.get(d).ok()).map(|d| d.state) {
+        .map(|(dir, exit)| {
+            let state = exit
+                .door
+                .and_then(|d| view.doors.get(d).ok())
+                .map(|d| d.state);
+            match state {
                 Some(DoorState::Closed | DoorState::Locked) => format!("{dir} (closed)"),
                 _ => dir.clone(),
-            },
-        )
+            }
+        })
         .collect();
     text += &format!(
         "\x1b[33mExits: {}\x1b[0m\r\n",
@@ -281,6 +278,10 @@ pub fn describe_room(
             exit_list.join(", ")
         }
     );
+
+    for name in item_list(ItemLocation::Room(room), &view.items) {
+        text += &format!("{} lies here.\r\n", capitalized(&name));
+    }
 
     for (other, _, player, in_room) in players.iter() {
         if let (Some(player), Some(in_room)) = (player, in_room)

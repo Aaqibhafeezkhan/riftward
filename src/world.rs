@@ -54,6 +54,9 @@ pub struct ZoneDef {
     /// the same one, so they share its state.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub doors: BTreeMap<String, DoorDef>,
+    /// Item templates, by id. Items elsewhere refer to them as `zone:item`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub items: BTreeMap<String, ItemDef>,
     pub rooms: BTreeMap<String, RoomDef>,
 }
 
@@ -116,6 +119,53 @@ impl DoorDef {
     }
 }
 
+/// An item template.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ItemDef {
+    pub name: String,
+    /// Words players can call it by. When empty, the words of its name are used.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    #[serde(default = "default_weight")]
+    pub weight: u32,
+}
+
+fn default_weight() -> u32 {
+    1
+}
+
+impl ItemDef {
+    pub fn keywords(&self) -> Keywords {
+        if !self.keywords.is_empty() {
+            return Keywords(self.keywords.iter().map(|k| k.to_lowercase()).collect());
+        }
+        Keywords::from_name(without_article(&self.name))
+    }
+}
+
+/// An item template's full id: its zone and its id there. Written `zone:item`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ItemKey {
+    pub zone: String,
+    pub item: String,
+}
+
+impl ItemKey {
+    /// Parse `zone:item`, or a bare `item` relative to `current_zone`.
+    pub fn parse(s: &str, current_zone: &str) -> Self {
+        let RoomKey { zone, room } = RoomKey::parse(s, current_zone);
+        Self { zone, item: room }
+    }
+}
+
+impl fmt::Display for ItemKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.zone, self.item)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DoorState {
     Open,
@@ -156,6 +206,7 @@ impl ZoneDef {
             path: PathBuf::from(ZONES_PATH).join(format!("{id}.ron")),
             name: name.into(),
             doors: BTreeMap::new(),
+            items: BTreeMap::new(),
             rooms: BTreeMap::from([(ZONE_ENTRANCE.into(), entrance)]),
         }
     }
@@ -647,7 +698,7 @@ mod tests {
     }
 
     /// Every zone file in `assets/zones` parses, every exit leads to a real room, every door an
-    /// exit names exists, and the start room exists.
+    /// exit names exists, every lock's key is a real item, and the start room exists.
     #[test]
     fn zone_files_are_consistent() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/zones");
@@ -667,6 +718,11 @@ mod tests {
                 .iter()
                 .any(|z| z.id == key.zone && z.rooms.contains_key(&key.room))
         };
+        let item_exists = |key: &ItemKey| {
+            zones
+                .iter()
+                .any(|z| z.id == key.zone && z.items.contains_key(&key.item))
+        };
         let door_exists = |key: &DoorKey| {
             zones
                 .iter()
@@ -675,6 +731,13 @@ mod tests {
 
         let mut problems = Vec::new();
         for zone in &zones {
+            for (door_id, door) in &zone.doors {
+                if let Some(key) = door.lock.as_ref().and_then(|lock| lock.key.as_ref())
+                    && !item_exists(&ItemKey::parse(key, &zone.id))
+                {
+                    problems.push(format!("door {}:{door_id}: no key item '{key}'", zone.id));
+                }
+            }
             for (room_id, room) in &zone.rooms {
                 for (dir, exit) in &room.exits {
                     let here = format!("{}:{room_id} {dir}", zone.id);

@@ -49,6 +49,15 @@ const SCHEMA: &str = "
         rating       INTEGER NOT NULL,
         PRIMARY KEY (character_id, attribute)
     );
+
+    -- Real items: ones a player has touched. Exactly one of `room` and `character_id` is set.
+    CREATE TABLE IF NOT EXISTS items (
+        id           INTEGER PRIMARY KEY,
+        template     TEXT NOT NULL,        -- zone:item
+        room         TEXT,                 -- zone:room, when lying in a room
+        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE, -- when carried
+        dropped_at   INTEGER               -- unix seconds, when it was last put down
+    );
 ";
 
 pub struct DbPlugin;
@@ -71,6 +80,36 @@ pub enum DbError {
 }
 
 pub type DbResult<T> = Result<T, DbError>;
+
+/// Where a real item is, as stored in the `items` table.
+pub enum ItemPlace {
+    /// Lying in a room (`zone:room`).
+    Room(String),
+    /// Carried by a character.
+    Carried(i64),
+}
+
+impl ItemPlace {
+    fn columns(&self) -> (Option<&str>, Option<i64>) {
+        match self {
+            ItemPlace::Room(room) => (Some(room), None),
+            ItemPlace::Carried(character) => (None, Some(*character)),
+        }
+    }
+
+    /// Items on the ground remember when they were put down, for decay later.
+    fn dropped_at(&self) -> Option<i64> {
+        match self {
+            ItemPlace::Room(_) => Some(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or_default(),
+            ),
+            ItemPlace::Carried(_) => None,
+        }
+    }
+}
 
 /// What an account is allowed to do. Each role includes everything below it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -287,6 +326,50 @@ impl Database {
             params![character_id, name],
         )?;
         Ok(())
+    }
+
+    /// Save a new real item at `location` and return its id.
+    pub fn create_item(&self, template: &str, location: &ItemPlace) -> DbResult<i64> {
+        let conn = self.conn();
+        let (room, character) = location.columns();
+        conn.execute(
+            "INSERT INTO items (template, room, character_id, dropped_at) VALUES (?1, ?2, ?3, ?4)",
+            params![template, room, character, location.dropped_at()],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn move_item(&self, id: i64, location: &ItemPlace) -> DbResult<()> {
+        let (room, character) = location.columns();
+        self.conn().execute(
+            "UPDATE items SET room = ?1, character_id = ?2, dropped_at = ?3 WHERE id = ?4",
+            params![room, character, location.dropped_at(), id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_item(&self, id: i64) -> DbResult<()> {
+        self.conn()
+            .execute("DELETE FROM items WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Every real item lying in a room: (id, template, room).
+    pub fn items_in_rooms(&self) -> DbResult<Vec<(i64, String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare("SELECT id, template, room FROM items WHERE room IS NOT NULL ORDER BY id")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Every item a character carries: (id, template).
+    pub fn items_carried(&self, character_id: i64) -> DbResult<Vec<(i64, String)>> {
+        let conn = self.conn();
+        let mut stmt =
+            conn.prepare("SELECT id, template FROM items WHERE character_id = ?1 ORDER BY id")?;
+        let rows = stmt.query_map([character_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     pub fn save_location(&self, character_id: i64, room: &str) -> DbResult<()> {

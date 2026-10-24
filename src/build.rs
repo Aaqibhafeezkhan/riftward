@@ -11,7 +11,7 @@ use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
-use crate::commands::movement::{full_direction, move_player, toward};
+use crate::commands::movement::{View, full_direction, move_player, toward};
 use crate::db::{Database, Permission, Role};
 use crate::net::Connection;
 use crate::output::{
@@ -19,7 +19,7 @@ use crate::output::{
 };
 use crate::targeting::{Keywords, Target};
 use crate::world::{
-    Door, DoorDef, DoorKey, DoorState, ExitDef, LockDef, RoomDef, RoomIndex, RoomKey,
+    DoorDef, DoorKey, DoorState, ExitDef, ItemDef, ItemKey, LockDef, RoomDef, RoomIndex, RoomKey,
     ZONE_ENTRANCE, ZoneDef, without_article,
 };
 
@@ -88,10 +88,18 @@ impl Plugin for BuildPlugin {
             .add_command(
                 build(
                     "door",
-                    "door <dir> [<name> | lock | nolock | open | closed | remove]",
-                    "show, add, rename or remove a door, give it a lock, or set how it starts",
+                    "door <dir> [<name> | lock | nolock | key <item> | open | closed | remove]",
+                    "show, add, rename or remove a door, give it a lock and key, or set how it starts",
                 ),
                 door_cmd,
+            )
+            .add_command(
+                build(
+                    "item",
+                    "item [<id> | new <id> <name> | name|desc|keywords|weight <id> <value>]",
+                    "list, show, create or edit this zone's item templates",
+                ),
+                item_cmd,
             )
             .add_command(build("zones", "zones", "list all zones"), zones_cmd)
             .add_command(
@@ -160,12 +168,11 @@ fn rooms_cmd(
 fn goto_cmd(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
-    rooms: RoomQuery,
-    doors: Query<&Door>,
+    view: View,
     index: Res<RoomIndex>,
     db: Res<Database>,
 ) {
-    let Some((actor, here)) = locate(&players, &rooms, inv.entity) else {
+    let Some((actor, here)) = locate(&players, &view.rooms, inv.entity) else {
         return;
     };
     let mut out = Vec::new();
@@ -174,8 +181,7 @@ fn goto_cmd(
         &here,
         &inv,
         &mut players,
-        &rooms,
-        &doors,
+        &view,
         &index,
         &db,
         &mut out,
@@ -232,6 +238,19 @@ fn door_cmd(
         return;
     };
     let reply = door(&here, &inv, &mut zones);
+    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+}
+
+fn item_cmd(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    mut zones: ResMut<Assets<ZoneDef>>,
+) {
+    let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
+        return;
+    };
+    let reply = item_template(&here, &inv, &mut zones);
     deliver(vec![reply_line(inv.entity, reply)], &mut players);
 }
 
@@ -347,8 +366,7 @@ fn goto(
     here: &RoomKey,
     inv: &Invocation,
     players: &mut PlayerQuery,
-    rooms: &RoomQuery,
-    doors: &Query<&Door>,
+    view: &View,
     index: &RoomIndex,
     db: &Database,
     out: &mut Vec<Outgoing>,
@@ -368,16 +386,7 @@ fn goto(
         except: entity,
         text: format!("{name} vanishes.\r\n"),
     });
-    move_player(
-        entity,
-        actor.character_id,
-        to,
-        players,
-        rooms,
-        doors,
-        db,
-        out,
-    );
+    move_player(entity, actor.character_id, to, players, view, db, out);
     out.push(Outgoing::Room {
         room: to,
         except: entity,
@@ -726,7 +735,7 @@ fn door(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply 
                 "There's no door {}. Add one with 'door {dir} <name>'.",
                 toward(&dir)
             )),
-            "lock" | "nolock" | "open" | "closed" | "remove" => Err(format!(
+            "lock" | "nolock" | "open" | "closed" | "remove" | "key" => Err(format!(
                 "There's no door {}. Add one first with 'door {dir} <name>'.",
                 toward(&dir)
             )),
@@ -742,6 +751,36 @@ fn door(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply 
     match rest {
         "" => Ok(describe_door(&dir, &key, &def)),
         "remove" => remove_door(&key, &def, zones),
+        _ if rest == "key" || rest.starts_with("key ") => {
+            let item = rest["key".len()..].trim();
+            if item.is_empty() {
+                return Err(format!("Usage: door {dir} key <item>"));
+            }
+            if def.lock.is_none() {
+                return Err(format!(
+                    "The {dir} door has no lock. Add one first with 'door {dir} lock'."
+                ));
+            }
+            let item_key = ItemKey::parse(item, &key.zone);
+            if !zone_def(zones, &item_key.zone)?
+                .items
+                .contains_key(&item_key.item)
+            {
+                return Err(format!("There's no item template [{item_key}]."));
+            }
+            // Keys in the door's own zone are stored without the zone, like exits.
+            let stored = if item_key.zone == key.zone {
+                item_key.item.clone()
+            } else {
+                item_key.to_string()
+            };
+            edit_door(&key, zones, |door| {
+                if let Some(lock) = door.lock.as_mut() {
+                    lock.key = Some(stored);
+                }
+                Ok(describe_door(&dir, &key, door))
+            })
+        }
         "lock" | "nolock" | "open" | "closed" => edit_door(&key, zones, |door| {
             match rest {
                 "lock" => {
@@ -940,6 +979,113 @@ fn remove_door(key: &DoorKey, def: &DoorDef, zones: &mut Assets<ZoneDef>) -> Rep
         zone.doors.remove(&key.door);
         Ok(format!("Removed {} [{key}].", def.name))
     })
+}
+
+/// `item ...`: list, show, create and edit the current zone's item templates.
+fn item_template(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    let mut words = inv.args.splitn(3, ' ');
+    let first = words.next().unwrap_or("");
+    let id = words.next().unwrap_or("").to_ascii_lowercase();
+    let value = words.next().unwrap_or("").trim();
+    let zone = zone_def(zones, &here.zone)?;
+
+    match first {
+        "" => {
+            if zone.items.is_empty() {
+                return Ok(format!(
+                    "Zone [{}] has no item templates. Make one with 'item new <id> <name>'.",
+                    zone.id
+                ));
+            }
+            let mut text = format!("Item templates in {} [{}]:", zone.name, zone.id);
+            for (id, def) in &zone.items {
+                text += &format!("\r\n  {id:<20} {}", def.name);
+            }
+            Ok(text)
+        }
+        "new" => {
+            let valid = (2..=32).contains(&id.len())
+                && id
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+            if !valid || value.is_empty() {
+                return Err(
+                    "Usage: item new <id> <name>, with an id of 2-32 lowercase letters, digits or underscores.".into(),
+                );
+            }
+            if zone.items.contains_key(&id) {
+                return Err(format!("[{}:{id}] already exists.", here.zone));
+            }
+            edit_zone(zones, &here.zone, |zone| {
+                zone.items.insert(
+                    id.clone(),
+                    ItemDef {
+                        name: value.into(),
+                        keywords: Vec::new(),
+                        description: String::new(),
+                        weight: 1,
+                    },
+                );
+                Ok(format!(
+                    "Created item template {value} [{}:{id}]. Make one with 'create {id}'.",
+                    here.zone
+                ))
+            })
+        }
+        "name" | "desc" | "keywords" | "weight" => {
+            if !zone.items.contains_key(&id) || value.is_empty() {
+                return Err(format!(
+                    "Usage: item {first} <id> <value>, for a template in [{}].",
+                    here.zone
+                ));
+            }
+            let weight = if first == "weight" {
+                Some(
+                    value
+                        .parse::<u32>()
+                        .map_err(|_| "Weights are whole numbers.".to_string())?,
+                )
+            } else {
+                None
+            };
+            edit_zone(zones, &here.zone, |zone| {
+                let def = zone
+                    .items
+                    .get_mut(&id)
+                    .ok_or_else(|| "That template no longer exists.".to_string())?;
+                match first {
+                    "name" => def.name = value.into(),
+                    "desc" => def.description = value.into(),
+                    "keywords" => {
+                        def.keywords = value.split_whitespace().map(str::to_lowercase).collect()
+                    }
+                    _ => def.weight = weight.unwrap_or(def.weight),
+                }
+                Ok(describe_item_template(&here.zone, &id, def))
+            })
+        }
+        id => {
+            let def = zone
+                .items
+                .get(id)
+                .ok_or_else(|| format!("There's no item template [{}:{id}].", here.zone))?;
+            Ok(describe_item_template(&here.zone, id, def))
+        }
+    }
+}
+
+fn describe_item_template(zone: &str, id: &str, def: &ItemDef) -> String {
+    format!(
+        "{} [{zone}:{id}]\r\n  keywords: {}\r\n  weight: {}\r\n  description: {}",
+        def.name,
+        def.keywords().0.join(", "),
+        def.weight,
+        if def.description.is_empty() {
+            "(none)"
+        } else {
+            &def.description
+        }
+    )
 }
 
 /// Turn a room name into an id: "The Old Mill" -> "the_old_mill".

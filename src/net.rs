@@ -208,7 +208,7 @@ pub fn flush_output(mut connections: Query<&mut Connection>) {
     }
 }
 
-fn cleanup_disconnected(mut commands: Commands, connections: Query<(Entity, &Connection)>) {
+pub fn cleanup_disconnected(mut commands: Commands, connections: Query<(Entity, &Connection)>) {
     for (entity, conn) in &connections {
         if conn.closing {
             info!("client {entity} disconnected");

@@ -9,6 +9,7 @@ mod command;
 mod commands;
 mod db;
 mod dice;
+mod items;
 mod login;
 mod net;
 mod output;
@@ -46,6 +47,7 @@ fn main() {
             command::CommandPlugin,
             commands::CommandsPlugin,
             build::BuildPlugin,
+            items::ItemsPlugin,
         ))
         .run();
 }
