@@ -17,9 +17,9 @@ Characters have ten uncapped attributes, raised with Karma. Skills say what a ch
 | Mental | Intuition | Instinct: perception, tracking, reading people |
 | Mental | Charisma | Presence: persuasion, leadership, teaching |
 | Special | Luck | Every random roll; see [Luck](#luck) |
-| Special | Magic | Starts at 0; requires [Awakening](magic.md) |
+| Special | Magic | Starts at 0; latent until the character knows a casting skill (see [Magic](magic.md)) |
 
-- **Starting values:** every attribute starts at 1, except Magic at 0, and every character starts with 10 Karma to spend.
+- **Starting values:** every attribute starts at 1, except Magic at 0, and every character starts with 10 Karma to spend. Karma can go on Magic too, as latent talent.
 - **Derived values:** health 8 + Body / 2, fatigue 8 + Willpower / 2, initiative Reaction + Intuition, carrying capacity from Strength + Body.
 - **Attributes never go down** and Karma is never refunded, except through rare in-world events.
 
@@ -30,7 +30,7 @@ Players see their attributes with `score` and spend Karma with `raise <attribute
 - **Earning:** character level is total skill levels divided by 5, rounded down, and each character level grants 1 Karma. Karma is therefore scarce and every point is a small event. Until skills exist, the 10 starting Karma is the only source.
 - **Cost:** raising an attribute from r to r + 1 costs 1 + floor(r / 5): 1 Karma up to 5, then 2, 3, 4 per point for each further band of five. Concentrating is possible; spreading goes further.
 - **Estimates, to be checked by simulation:** about 10 Karma after a first week, 60 after a few months, 200 or more for long-term veterans.
-- **Karma spent is not stored.** It is worked out from current ratings, so it can never drift out of sync with them. Magic counts from 1, since Awakening grants the first point free.
+- **Karma spent is not stored.** It is worked out from current ratings and starting ratings, so it can never drift out of sync. If races end up adjusting starting attributes, each character's starting ratings will be stored so those points are not counted as spent.
 
 ## The ratio rule
 

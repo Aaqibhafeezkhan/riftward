@@ -91,18 +91,17 @@ A game clock with day and night, a regular tick for regeneration, and actions th
 
 ### Combat
 
-Rounds, initiative, attacks, damage, death and respawn. Every roll goes through `Dice`, and every contest follows the [ratio rule](attributes.md#the-ratio-rule).
+The round loop, initiative, damage, death and respawn: infrastructure with no actions of its own. Every action in combat is a skill, starting with the basic attack every character has (see [Skill kinds](skills.md#skill-kinds)), so combat is built together with the skill core. Every roll goes through `Dice`, and every contest follows the [ratio rule](attributes.md#the-ratio-rule).
 
 ## Proposed build order
 
 1. **Command system and targeting.** Everything after this adds commands, so it saves rewriting each one later.
 2. **Things in the world, templates and resets.** Items first, then NPCs that stand in rooms and can be looked at.
 3. **Game events and time.** Both small, but everything after this uses them.
-4. **Combat.** A basic version using attributes and `Dice`.
+4. **The [skill core](skills.md#build-plan), with combat as its first use.** The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
 
-After that the [skill core](skills.md#build-plan) has everything it needs: foraging produces items, Dodge has attacks to dodge, trainers are NPCs, and loot scrolls are items.
+Then teaching, epiphany, trainers and loot follow: trainers are NPCs, loot scrolls are items, and passive skills have events to trigger on.
 
 ## Open questions
 
-- [ ] **Does combat come before the skill core,** or does the skill core go between steps 3 and 4?
 - [ ] **What survives a restart?** Proposed: only what players carry is saved; items on the ground, corpses and NPCs reset when the server restarts. Saving everything makes a persistent world but is much more work.

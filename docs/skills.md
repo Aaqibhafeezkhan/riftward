@@ -9,7 +9,7 @@ Characters have no class. What a character can do is the set of skills they have
 A tree is a themed set of skills, and a character has "opened" a tree once they know any skill in it. There is no separate unlock step.
 
 - **Levels.** Each skill has a level from 0 up to its `max_level`. Reaching `max_level` is **mastery**. Levels are permanent and never decay.
-- **Requirements.** A skill lists the conditions a learner must meet, usually `Skill(id, level)`. They can point into other trees, which is how hybrid skills work. Requirements use the same [condition language](#hidden-skills) as hidden skills, so a skill can also require an attribute, such as Magic 1 for every magic skill.
+- **Requirements.** A skill lists the conditions a learner must meet, usually `Skill(id, level)`. They can point into other trees, which is how hybrid skills work. Requirements use the same [condition language](#hidden-skills) as hidden skills, so a skill can also require an attribute, such as Magic 1 for a tradition's foundation casting skill.
 - **Requirements make a skill eligible, not learned.** Meeting them only means the character may acquire the skill, through teaching, loot or epiphany.
 - **Skill ids** follow the zone convention: `basics` inside its own tree, `fire:basics` from another tree.
 - **Each skill links to an attribute.** A skill's effectiveness is its level plus that attribute (see [Attributes](attributes.md)). Trees set a default `attribute`, and a skill can override it.
@@ -89,6 +89,8 @@ Skills are either active, triggered by the player, or passive, applying automati
 - **Two separate cooldowns.** An active skill's use cooldown (Riposte every 8 seconds) is combat balance. The gain cooldown limits how often any skill can level, active or passive.
 - **Spells are active skills** whose cost is Drain, resisted by Willpower plus the tradition attribute (see [Magic](magic.md)).
 - **What a skill does** (damage, bonuses, applied conditions) needs an effect system, designed together with combat.
+- **Combat is made of skills.** There is no attack outside the skill system: everyone starts with a basic attack skill, and weapon trees begin with their own. NPCs fight with skills from their templates, by the same rules as players.
+- **Racial abilities are skills too,** usually passive, requiring the race (see [Races](characters.md#races)).
 - **Triggers use the shared game events.** Passive triggers, hidden-skill triggers and easter-egg flags all draw on one event vocabulary (see [Architecture](architecture.md#game-events)).
 
 ### Invoking active skills
@@ -141,6 +143,7 @@ Every skill can be taught, and every route checks the same thing: the learner mu
 | Player teacher | All skills | A player at the skill's `teach_level`, or at mastery for `Loot` skills | `teach <player> <skill>`, then the student types `accept`; both in the same room |
 | Loot | Mostly `source: Loot` | A scroll or tome item; using it teaches the skill and consumes it | Tradeable, so it feeds an economy |
 | Epiphany | Hidden skills | The character meets the unlock conditions, and the trigger if one is set | See [Hidden skills](#hidden-skills) |
+| Starting | Universal, racial and background skills | Granted at character creation | See [Races and backgrounds](characters.md) |
 
 **Loot skills spread through masters.** A `Loot` skill enters the world only as a drop. The first owner must reach mastery, through the longest gain cooldowns, before anyone can learn it from them. New loot skills therefore stay scarce for a long time, and their first masters become well known.
 
@@ -156,6 +159,7 @@ Unlock conditions are data, built from a small set of terms that other systems s
 | `Stat(name, min)` | An attribute is at least `min` |
 | `Title(id)` | The character holds the title |
 | `Flag(id)` | A named flag is set on the character |
+| `Race(id)` | The character is of that race |
 | `All([...])`, `Any([...])`, `Not(...)` | Combinations of the above |
 
 ```ron
@@ -188,7 +192,7 @@ Skill content lives in hot-reloaded RON files and each character's progress in S
 | --- | --- |
 | `assets/skills/<tree>.ron` | One tree and its skills, loaded as a `SkillTreeDef` asset; the tree id is the file name |
 | `assets/config/rarity.ron` | Drop rates and colours per tier |
-| `character_skills` table | `character_id`, `skill` (`tree:skill`), `level`, `practice`, `last_used`, `next_gain_at`, `learned_via`, `learned_at`. Written on every gain and learn, not on every use |
+| `character_skills` table | `character_id`, `skill` (`tree:skill`), `level`, `practice`, `last_used`, `next_gain_at`, `learned_via` (`Starting`, `Taught`, `Loot`, `Epiphany`, `Admin`), `learned_at`. Written on every gain and learn, not on every use |
 | `character_flags` table | `character_id`, `flag`, `set_at`. The easter egg hook |
 
 - A `Skills` component on each player entity, loaded at login, holds their rows in memory.
@@ -202,7 +206,8 @@ The skill system needs parts of the engine foundation first; see [Architecture](
 flowchart LR
     core[Skill core<br/>trees, levels, gains,<br/>skills command] --> teach[Player teaching<br/>teach and accept]
     core --> epiphany[Epiphany<br/>flags, hidden skills]
-    core --> uses[First skill uses<br/>foraging or combat]
+    core --> combat[Combat<br/>round loop, basic attack]
+    core --> start[Starting skills<br/>race, background]
     npcs[NPCs] --> trainers[NPC trainers<br/>reuse the teach flow]
     teach --> trainers
     titles[Titles<br/>not designed yet] --> conditions[Full conditions<br/>Title terms]
@@ -210,7 +215,7 @@ flowchart LR
     items[Items and inventory] --> scrolls[Loot scrolls<br/>skill drops, trading]
 ```
 
-**Skill core scope:** tree files and their hot reload, the `character_skills` table with numbered migrations, the `Skills` component, `roll_skill_gain` with tests and a tuning simulation, a `skills` command, and an admin command to grant skills for testing.
+**Skill core scope:** the combat round loop with the basic attack as its first skill, starting skills at character creation, tree files and their hot reload, the `character_skills` table with numbered migrations, the `Skills` component, `roll_skill_gain` with tests and a tuning simulation, a `skills` command, and an admin command to grant skills for testing.
 
 ## Open questions
 
@@ -220,6 +225,7 @@ flowchart LR
 - [ ] **Tier names:** the five working tiers, or names that fit the setting.
 - [ ] **Do NPC trainers teach only the lower tiers?** The rarity table proposes Common and Uncommon only.
 - [ ] **What does teaching cost and reward?** Lesson time, gold paid by the student, and something for the teacher (reputation, or Charisma-linked teaching).
+- [ ] **Auto-attack or explicit attacks?** Proposed: once fighting, the basic attack is used automatically each round (practising as it goes), and other skills are used by command.
 - [ ] **Sustained skills?** Stances and auras that are switched on and cost a little over time. Now or later.
 - [ ] **Worldwide cap on legendary skills?** Optional, later.
 - [ ] **Titles:** needed by `Title` conditions and not designed yet.
