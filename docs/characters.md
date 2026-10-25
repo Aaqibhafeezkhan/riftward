@@ -107,6 +107,6 @@ Players read them as "Magic 1 and Willpower 4", or "T'skrang".
 
 - [ ] **Racial skill details:** are the proposed racial skills right for each race?
 - [ ] **Exact skill grants** for each background, once skill trees exist.
-- [x] **The Adept's weapon:** settled by **Killing Hands**, unarmed strikes for 2–4, taught by the ascetic once Awakened (see [Skill trees](trees.md#step-1-as-built)).
+- [x] **The Adept's weapon:** settled by **Killing Hands**, unarmed strikes for 2–4, discovered by Adepts through their tradition once Awakened (see [Skill trees](trees.md#step-1-as-built)).
 - [ ] **Universal starting skills:** basic attack only, or also a survival skill such as Foraging?
 - [x] **Starting equipment by background:** built; see [Backgrounds](#backgrounds).

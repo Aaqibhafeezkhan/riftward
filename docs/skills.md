@@ -91,6 +91,7 @@ Skills are either active, triggered by the player, or passive, applying automati
 - **What a skill does** (damage, bonuses, applied conditions) needs an effect system, designed together with combat.
 - **Combat is made of skills.** There is no attack outside the skill system: everyone starts with a basic attack skill, and weapon trees begin with their own. Mobs fight with skills from their templates, by the same rules as players.
 - **Racial abilities are skills too,** usually passive, requiring the race (see [Races](characters.md#races)).
+- **Some passives grow with other skills:** `UsedSkill(id)` counts one use whenever that skill is used, and `UsedTree` whenever any other skill in the passive's own tree is. The Adept's Inner Discipline has both (see [Magic](magic.md)).
 - **Triggers use the shared game events.** Passive triggers, hidden-skill triggers and easter-egg flags all draw on one event vocabulary (see [Architecture](architecture.md#game-events)).
 
 ### Invoking active skills
@@ -139,11 +140,22 @@ Every skill can be taught, and every route checks the same thing: the learner mu
 
 | Route | Available for | Who or what | Notes |
 | --- | --- | --- | --- |
-| Mob trainer | `source: Trainer` | Trainers placed in rooms, each with a fixed list (`teaches` on the mob template) | Reliable; a reason to travel. *Built:* `learn` lists a trainer's lessons and `learn <skill>` takes one, checking the skill's `requires`. Free until there's money. The drill sergeant teaches every weapon's basics; each magic tradition's teacher Awakens students with Magic 1 |
+| Mob trainer | Entry skills | Trainers placed in rooms, each with a fixed list (`teaches` on the mob template) | **Trainers teach only each tree's entry skill,** the skill with no requirement inside its tree. *Built:* `learn` lists a trainer's lessons and `learn <skill>` takes one, checking the skill's `requires`. Free until there's money. The drill sergeant teaches every weapon's basics and Toughness; each magic tradition's teacher Awakens students with Magic 1 |
+| Discovery | Skills above the entry tier | Using any skill in the same tree | Very rare, and the only route that needs no one else. See [Discovery](#discovery). *Built* |
+| Remote trainer | Higher tiers | A trainer out in the world who teaches only as a quest reward | Planned, with [quests](quests.md): finding the old axeman is easy, earning his lesson is not |
 | Player teacher | All skills | A player at the skill's `teach_level`, or at mastery for `Loot` skills | `teach <player> <skill>`, then the student types `accept`; both in the same room |
 | Loot | Mostly `source: Loot` | A scroll or tome item; using it teaches the skill and consumes it | Tradeable, so it feeds an economy |
 | Epiphany | Hidden skills | The character meets the unlock conditions, and the trigger if one is set | See [Hidden skills](#hidden-skills) |
 | Starting | Universal, racial and background skills | Granted at character creation | Backgrounds give everyday skills only, never fighting or magic; see [Races and backgrounds](characters.md) |
+
+### Discovery
+
+Every use of a skill has a very small chance, **0.1% before Luck**, of revealing another skill in the same tree: one the character doesn't know and whose requirements they already meet. Reaching Axe Fighting 15 makes Cleave and Hew discoverable, and any use of an axe skill might reveal one (*"Something clicks into place. You have discovered Cleave."*). The skill is learned at level 0, marked `Discovered`.
+
+- **Entry skills are never discovered.** They're how a tree is opened, and trainers teach them.
+- **Requirements still apply,** including race, so discovery never grants anything teaching couldn't.
+- **A [tough fight](progression.md#tough-fights) raises the chance,** up to double, like it does for levels.
+- **Hidden skills are separate.** They're found only by epiphany, under their own conditions (below).
 
 **Loot skills spread through masters.** A `Loot` skill enters the world only as a drop. The first owner must reach mastery, through the longest gain cooldowns, before anyone can learn it from them. New loot skills therefore stay scarce for a long time, and their first masters become well known.
 
@@ -178,6 +190,8 @@ Unlock conditions are data, built from a small set of terms that other systems s
 )
 ```
 
+- **Some skills can only be found this way,** behind deliberately stringent conditions: two specific skills at high levels, a title earned, or being in a particular place at a particular moment, like standing in the hidden glade when the full moon rises and the fairy queen appears. These are the world's secrets; no trainer, scroll or discovery leads to them.
+- **Circumstance conditions** describe that moment, and are planned alongside the terms above: being in a room or zone (`InRoom`, `InZone`), the time and the sky (`PartOfDay`, and `MoonPhase` once there's a calendar), a mob being present (`MobHere("forest:fairy_queen")`), and world flags (`WorldFlag`, see [World events](world.md)). They are checked when the trigger fires, so a moment can't be prepared in advance and kept.
 - **Flags carry the easter eggs.** Any system (a room event, a phrase spoken at an altar, a creature killed, a quest step) sets a named flag, and hidden skills just test for it. New easter eggs need new flags, not changes to the skill system.
 - **Triggers are optional.** Without one, the epiphany fires as soon as the conditions are met. With one, it waits for a specific action, which gives players rumours to chase.
 - **Teaching never bypasses the conditions.** Hidden skills can be taught like any other, but only to a student who meets the unlock conditions. That makes a master a shortcut past the trigger, not past the conditions.
@@ -192,7 +206,7 @@ Skill content lives in hot-reloaded RON files and each character's progress in S
 | --- | --- |
 | `assets/skills/<tree>.ron` | One tree and its skills, loaded as a `SkillTreeDef` asset; the tree id is the file name |
 | `assets/config/rarity.ron` | Drop rates and colours per tier |
-| `character_skills` table | `character_id`, `skill` (`tree:skill`), `level`, `practice`, `last_used`, `next_gain_at`, `learned_via` (`Starting`, `Taught`, `Loot`, `Epiphany`, `Admin`), `learned_at`. Written on every gain and learn, not on every use |
+| `character_skills` table | `character_id`, `skill` (`tree:skill`), `level`, `practice`, `last_used`, `next_gain_at`, `learned_via` (`Starting`, `Taught`, `Discovered`, `Loot`, `Epiphany`, `Admin`), `learned_at`. Written on every gain and learn, not on every use |
 | `character_flags` table | `character_id`, `flag`, `set_at`. The easter egg hook |
 
 - A `Skills` component on each player entity, loaded at login, holds their rows in memory.
@@ -263,7 +277,7 @@ The skill core, without combat, proved on non-combat skills first:
 - [ ] **Does rarity affect power or leveling speed,** or only how a skill is obtained? Leaning: power yes, leveling speed no.
 - [ ] **Do rarer skills use more of the cap?** Only relevant if there is a total cap.
 - [ ] **Tier names:** the five working tiers, or names that fit the setting.
-- [ ] **Do mob trainers teach only the lower tiers?** The rarity table proposes Common and Uncommon only.
+- [x] **Do mob trainers teach only the lower tiers?** Only the entry tier. Everything above it is discovered through use, taught by players, found as loot, or taught by remote trainers as a quest reward.
 - [ ] **What does teaching cost and reward?** Lesson time, gold paid by the student, and something for the teacher (reputation, or Charisma-linked teaching).
 - [x] **Auto-attack or explicit attacks?** Auto-attack: once fighting, the character's chosen attack is used automatically each round, practising as it goes, and other skills are used by command. The auto-attack starts as the most basic attack they know, and the player can set it to another attack skill.
 - [ ] **Sustained skills?** Stances and auras that are switched on and cost a little over time. Now or later.

@@ -6,10 +6,18 @@
     rarity: Uncommon,
     attribute: Body,
     skills: {
-        // Magic turned inward, through breath and body: the root of all Adept powers.
+        // Magic turned inward, through breath and body: the root of all Adept powers. It's the
+        // Adept's school: fighting unarmed and every power used practise it, and it makes the
+        // powers stronger.
         "foundation": (
             name: "Inner Discipline",
-            kind: Passive(triggers: []),
+            kind: Passive(
+                triggers: [UsedTree, UsedSkill("brawling:basics")],
+                bonuses: [
+                    (stat: Attack, per: 5, with: "adept:killing_hands"),
+                    (stat: Damage, per: 10, with: "adept:killing_hands"),
+                ],
+            ),
             requires: Stat(Magic, 1),
         ),
         // The Adept's weapon: unarmed strikes that land like a blade.

@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after giving mobs the same vitals as players and letting them use technique skills
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -13,7 +13,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Items:** templates, Bulk and encumbrance, hands and wear slots, containers and automatic placement, weapons, corpses that rot, real items that survive restarts, item spawns, unique items.
 - **Mobs:** templates and spawns (keeping a count, breeding, after-death and reseed timers, gated by world flags), wandering and crowding, pack limits, aggression, auras.
 - **Characters:** creation (race with Earthdawn-style shifts, starting Karma, a background as a past life, a description), vitals that recover (faster resting, offline too, never in a fight), `score`, `describe`, aliases, a custom prompt.
-- **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, character levels that earn Karma, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`), Awakening to the four magic traditions.
+- **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, character levels that earn Karma, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`, entry skills only), discovery of a tree's other skills through use, a tough-fight boost to learning, Awakening to the four magic traditions.
 - **Combat:** rounds in initiative order, auto-attacks, weapons (trained and untrained), techniques for every weapon tree's journeyman tier, conditions (staggered, down, bleeding, held, guarding, exposed), stamina costs, fleeing, death and respawn at the shrine, corpses that keep a player's gear, and death for anyone who quits or disconnects mid-fight.
 - **World events:** saved world flags and data-driven events. A rat breakout into the city raises the Rat King, whose aura toughens the rats until he dies.
 
@@ -34,6 +34,7 @@ After that, in order ([Proposed order](trees.md#proposed-order)): healing and co
 ## Small things noticed and not yet done
 
 - No mob template gives a technique skill (Cleave, Guard…) yet, so no mob uses one.
+- Discovery chance (0.1% a use) and the tough-fight cap (2×) are first guesses, untested in play.
 - Room descriptions don't show who's fighting whom.
 - A pack attacking repeats "The sewer rat attacks you!" once per rat.
 - `pick` doesn't require lockpicks, though urchins carry them.
@@ -46,7 +47,7 @@ After that, in order ([Proposed order](trees.md#proposed-order)): healing and co
 
 The design docs keep their own open questions; these are the ones that shape the most:
 
-- **What stops one character learning every tree?** More pressing now that trainers teach for free ([Skills](skills.md#open-questions)).
+- **What stops one character learning every tree?** Trainers now teach only entry skills, but those are still free ([Skills](skills.md#open-questions)).
 - **What lessons cost,** once there's money.
 - **How many spells a caster can hold,** and whether spells cost Karma ([Magic](magic.md#open-questions)).
 - **The tier gates** (15, 30, 45) and how many skills per tree ([Skill trees](trees.md#open-questions)).

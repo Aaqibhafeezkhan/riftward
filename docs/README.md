@@ -45,7 +45,7 @@ Each document below covers one area and can be read on its own. This page is the
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.
 - Character creation: race, starting Karma, background (11 past lives, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
-- Trainers: `learn` from mobs who teach. The drill sergeant teaches every weapon; a teacher for each magic tradition Awakens those with latent talent.
+- Trainers: `learn` from mobs who teach, entry skills only. The drill sergeant teaches every weapon's basics; a teacher for each magic tradition Awakens those with latent talent. Higher skills are discovered, very rarely, by using their tree, and a tough fight makes gains and discoveries likelier.
 - Attributes, starting Karma, `raise`, `score`, `describe`, and the Luck-aware `Dice` service.
 - Skills: trees as data, use-based progression with practice and cooldowns, active skills (`use`, `pick` for Lockpicking) and passive ones (Endurance), starting skills, character levels that earn Karma, `skills`.
 - World events: saved world flags, and events in zone files that react to mobs entering zones and dying. A rat breakout raises the Rat King, whose aura toughens every sewer rat until he dies.
@@ -82,14 +82,15 @@ Designed, waiting on other work:
 | Area | Decision |
 | --- | --- |
 | Classes | None. Skill trees, with hybrid skills across trees |
-| Learning | Every skill can be taught. Students need the skill's requirements, not its tree. Loot-only skills are taught only by masters |
+| Learning | Every skill can be taught. Students need the skill's requirements, not its tree. Trainers teach only entry skills; the rest is discovered through use (very rarely), taught by players, found as loot, or taught by remote trainers as quest rewards. Loot-only skills are taught only by masters |
+| Tough fights | Being outmatched (by the ratio rule) multiplies the chance of skill gains and discoveries, up to double |
 | Progression | Use-based gains; practice builds with use and fades with time; a level-scaled cooldown per gain |
 | Skill kinds | Active (invoked with `use <skill> <target>`) and passive (progress on trigger events, usually outcomes) |
 | Death | A player's corpse keeps everything they carried, where they fell, for 30 minutes (surviving restarts); they wake at the Wayside Shrine, hurt. No PvP yet |
 | Combat | Made entirely of skills. Everyone starts with a basic attack skill; mobs fight with skills too. Each round a fighter's auto-attack fires on its own: the most basic attack they know, unless they've chosen another. Other skills are used by command |
 | Starting skills | Granted by race and background, plus universal skills (Brawling, Dodge, Endurance). Racial abilities are skills that require the race. Backgrounds are past lives: everyday skills and tools, never fighting or magic, which everyone learns from trainers. Backgrounds can require attributes or a race |
 | Races | The eight Earthdawn races: Dwarf, Elf, Human, Obsidiman, Ork, Troll, T'skrang, Windling. Earthdawn-style attribute shifts that total +3 for every race; humans get +3 Karma instead |
-| Hidden skills | Learned by epiphany when conditions are met, with an optional trigger |
+| Hidden skills | Learned only by epiphany when stringent conditions are met (skills, titles, the right place at the right moment), with an optional trigger |
 | Attributes | Ten, uncapped, Shadowrun and Earthdawn flavoured. Base 3 (Luck 1, Magic 0), shifted by race, with 10 Karma to spend, which can go on Magic as latent talent |
 | Formulas | Contests compare ratios, never differences, because attributes are uncapped |
 | Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |

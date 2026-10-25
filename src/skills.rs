@@ -10,6 +10,10 @@
 //! An active skill names the command that performs it, like `pick` for Lockpicking: that command
 //! does the work and calls [`Practice`] to check, charge for and count the use, and `use <skill>`
 //! just runs it.
+//!
+//! Trainers teach only each tree's entry skills. The rest of a tree can be discovered, very
+//! rarely, by using its skills: every use has a small chance to reveal another skill in the same
+//! tree whose requirements the character meets.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -21,8 +25,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::attributes::{Attribute, Attributes};
+use crate::combat::{Fighting, Outmatched};
 use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
-use crate::conditions::Condition;
+use crate::conditions::{Condition, Facts};
 use crate::db::{Database, Permission};
 use crate::dice::Dice;
 use crate::events::GameEvent;
@@ -43,6 +48,10 @@ const BASE_GAIN_CHANCE: f64 = 0.25;
 /// The cooldown after a gain at level 0, in seconds; each level multiplies it by `COOLDOWN_GROWTH`.
 const BASE_COOLDOWN: f64 = 5.0 * 60.0;
 const COOLDOWN_GROWTH: f64 = 1.1;
+/// The chance, per use of a skill, of discovering another in its tree, before Luck.
+const DISCOVERY_CHANCE: f64 = 0.001;
+/// The most a tough fight multiplies the chances of a gain or a discovery.
+const TOUGH_FIGHT_MAX_BOOST: f64 = 2.0;
 /// Skill levels per character level.
 pub const LEVELS_PER_CHARACTER_LEVEL: u32 = 5;
 /// Skills every character starts with, whatever their race and background: a basic attack, and
@@ -359,7 +368,7 @@ pub enum Cost {
 }
 
 /// A game event that practises a passive skill.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Trigger {
     /// One use for every `per` stamina spent.
     StaminaSpent { per: u32 },
@@ -367,6 +376,11 @@ pub enum Trigger {
     Dodged,
     /// One use for every `per` damage taken.
     Damaged { per: u32 },
+    /// One use for every use of another skill in its tree: a discipline that grows with the
+    /// powers built on it, like the Adept's Inner Discipline.
+    UsedTree,
+    /// One use for every use of this skill (`tree:skill`): Inner Discipline grows with Brawling.
+    UsedSkill(String),
 }
 
 impl Trigger {
@@ -441,7 +455,7 @@ pub struct SkillState {
     pub last_used: Option<i64>,
     /// When it can next gain a level, in unix seconds.
     pub next_gain_at: i64,
-    /// How it was learned: `Starting`, `Taught`, `Loot`, `Epiphany` or `Admin`.
+    /// How it was learned: `Starting`, `Taught`, `Discovered`, `Loot`, `Epiphany` or `Admin`.
     pub learned_via: String,
     /// When an active skill can next be used, in seconds since the server started. Not saved.
     pub ready_at: f64,
@@ -600,9 +614,9 @@ impl Practice<'_, '_> {
         self.dice.chance(luck, p)
     }
 
-    /// Count one use of `key` by `who` (character `character_id`): practice, and maybe a level.
-    /// Returns what to tell them.
-    pub fn exercise(&mut self, who: Entity, character_id: i64, key: &str) -> Vec<String> {
+    /// Count one use of `key` by `who`: practice, maybe a level, maybe a discovery. Returns what
+    /// to tell them.
+    pub fn exercise(&mut self, who: Entity, learner: Learner, key: &str) -> Vec<String> {
         let Ok((mut skills, _, mut attributes)) = self.sheets.get_mut(who) else {
             return Vec::new();
         };
@@ -612,64 +626,167 @@ impl Practice<'_, '_> {
             &mut attributes,
             &mut self.dice,
             &self.db,
-            character_id,
+            learner,
             key,
         )
     }
 }
 
+/// The character practising a skill: who to save it for, their race for requirements, and how
+/// much a tough fight multiplies their chances of a gain or a discovery (1 for none).
+#[derive(Clone, Copy)]
+pub struct Learner<'a> {
+    pub character_id: i64,
+    pub race: &'a str,
+    pub boost: f64,
+}
+
+/// What a fight against odds of `outmatched` (see `combat::Outmatched`) does for learning: the
+/// more the foe outclasses them, the likelier a gain or discovery, up to double. An even or easy
+/// fight, or none, gives nothing extra.
+pub fn tough_fight_boost(outmatched: Option<f64>) -> f64 {
+    outmatched.map_or(1.0, |odds| odds.clamp(1.0, TOUGH_FIGHT_MAX_BOOST))
+}
+
 /// One use of a skill a character knows: practice, maybe a level, and maybe a character level
-/// and its Karma. Saves the skill, and returns what to tell them.
+/// and its Karma, or a discovery. Saves the skill, and returns what to tell them.
 pub fn count_use(
     defs: &SkillDefs,
     skills: &mut Skills,
     attributes: &mut Attributes,
     dice: &mut Dice,
     db: &Database,
-    character_id: i64,
+    learner: Learner,
     key: &str,
 ) -> Vec<String> {
-    let Some(skill) = defs.skills.get(key) else {
+    let character_id = learner.character_id;
+    if !skills.0.contains_key(key) {
         return Vec::new();
-    };
+    }
     let level_before = skills.character_level();
     let luck = attributes.get(Attribute::Luck);
-    let Some(state) = skills.0.get_mut(key) else {
-        return Vec::new();
-    };
-    let gained = roll_skill_gain(
-        state,
-        skill.def.max_level,
-        skill.def.difficulty,
-        unix_now(),
-        |chance| dice.chance(luck, chance),
-    );
-    if let Err(err) = db.save_skill(character_id, key, state) {
-        error!("failed to save {key} for character {character_id}: {err}");
-    }
     let mut lines = Vec::new();
-    if gained {
-        let level = state.level;
-        let mastered = if level >= skill.def.max_level {
-            " You have mastered it."
-        } else {
-            ""
+    // Skills that grow with this one or its tree, like the Adept's Inner Discipline, are practised
+    // by this use too.
+    let mut practised = vec![key.to_string()];
+    practised.extend(grows_with(defs, skills, key));
+    for key in &practised {
+        let (Some(skill), Some(state)) = (defs.skills.get(key), skills.0.get_mut(key)) else {
+            continue;
         };
-        lines.push(format!(
-            "\x1b[1;32mYour {} improves to {level}.{mastered}\x1b[0m",
-            skill.def.name
-        ));
-        let level_after = skills.character_level();
-        if level_after > level_before {
-            attributes.set_earned(level_after as i32);
+        let gained = roll_skill_gain(
+            state,
+            skill.def.max_level,
+            skill.def.difficulty,
+            unix_now(),
+            |chance| dice.chance(luck, chance * learner.boost),
+        );
+        if let Err(err) = db.save_skill(character_id, key, state) {
+            error!("failed to save {key} for character {character_id}: {err}");
+        }
+        if gained {
+            let level = state.level;
+            let mastered = if level >= skill.def.max_level {
+                " You have mastered it."
+            } else {
+                ""
+            };
             lines.push(format!(
-                "\x1b[1;33mYou feel more experienced. You have earned a point of Karma \
-                 ({} to spend).\x1b[0m",
-                attributes.karma_unspent()
+                "\x1b[1;32mYour {} improves to {level}.{mastered}\x1b[0m",
+                skill.def.name
             ));
         }
     }
+    let level_after = skills.character_level();
+    if level_after > level_before {
+        attributes.set_earned(level_after as i32);
+        lines.push(format!(
+            "\x1b[1;33mYou feel more experienced. You have earned a point of Karma \
+             ({} to spend).\x1b[0m",
+            attributes.karma_unspent()
+        ));
+    }
+    let facts = Facts {
+        attributes,
+        race: learner.race,
+        skills: Some(skills),
+    };
+    let chance = DISCOVERY_CHANCE * learner.boost;
+    if let Some(found) = discover(defs, &practised, &facts, dice, chance) {
+        let (found, name) = (found.key.clone(), found.def.name.clone());
+        learn(skills, &found, "Discovered", character_id, db);
+        lines.push(format!(
+            "\x1b[1;35mSomething clicks into place. You have discovered {name}.\x1b[0m"
+        ));
+    }
     lines
+}
+
+/// The skills a character knows that are practised whenever `used` is: passives triggered by
+/// using it, or by using anything in their own tree, like a tradition's discipline growing with
+/// its powers.
+fn grows_with(defs: &SkillDefs, skills: &Skills, used: &str) -> Vec<String> {
+    let Some(tree) = defs.skills.get(used).map(|s| &s.tree) else {
+        return Vec::new();
+    };
+    skills
+        .0
+        .keys()
+        .filter(|key| key.as_str() != used)
+        .filter(|key| {
+            let Some(skill) = defs.skills.get(*key) else {
+                return false;
+            };
+            let SkillKind::Passive { triggers, .. } = &skill.def.kind else {
+                return false;
+            };
+            triggers.iter().any(|trigger| match trigger {
+                Trigger::UsedTree => &skill.tree == tree,
+                Trigger::UsedSkill(skill) => skill == used,
+                _ => false,
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+/// The skills a character could discover by practising `used`: the others in their trees that
+/// they don't know and whose requirements they meet. Entry skills, which require nothing, are
+/// taught, not discovered.
+fn discoverable<'a>(defs: &'a SkillDefs, used: &[String], facts: &Facts) -> Vec<&'a Skill> {
+    let trees: Vec<&String> = used
+        .iter()
+        .filter_map(|key| defs.skills.get(key).map(|s| &s.tree))
+        .collect();
+    let mut found: Vec<&Skill> = defs
+        .skills
+        .values()
+        .filter(|skill| trees.contains(&&skill.tree))
+        .filter(|skill| {
+            facts
+                .skills
+                .is_none_or(|known| !known.0.contains_key(&skill.key))
+        })
+        .filter(|skill| skill.def.requires.as_ref().is_some_and(|c| c.met(facts)))
+        .collect();
+    found.sort_by(|a, b| a.key.cmp(&b.key));
+    found
+}
+
+/// With `chance` (and the character's Luck), one of the skills practising `used` could reveal.
+fn discover<'a>(
+    defs: &'a SkillDefs,
+    used: &[String],
+    facts: &Facts,
+    dice: &mut Dice,
+    chance: f64,
+) -> Option<&'a Skill> {
+    let found = discoverable(defs, used, facts);
+    if found.is_empty() || !dice.chance(facts.attributes.get(Attribute::Luck), chance) {
+        return None;
+    }
+    let pick = dice.range(0, 0..=found.len() as i64 - 1) as usize;
+    found.get(pick).copied()
 }
 
 /// Learn a skill at level 0, if it isn't known already. Returns whether it was new.
@@ -690,6 +807,7 @@ fn practise_passives(
     mut events: MessageReader<GameEvent>,
     defs: Res<SkillDefs>,
     mut sheets: Query<(&mut Skills, &mut Attributes)>,
+    fights: Query<&Outmatched, With<Fighting>>,
     mut dice: ResMut<Dice>,
     db: Res<Database>,
     mut players: PlayerQuery,
@@ -727,13 +845,18 @@ fn practise_passives(
             let uses = (state.pending / per).floor();
             state.pending -= uses * per;
             for _ in 0..uses as u32 {
+                let learner = Learner {
+                    character_id: actor.character_id,
+                    race: &actor.race,
+                    boost: tough_fight_boost(fights.get(who).ok().map(|o| o.0)),
+                };
                 let lines = count_use(
                     &defs,
                     &mut skills,
                     &mut attributes,
                     &mut dice,
                     &db,
-                    actor.character_id,
+                    learner,
                     &key,
                 );
                 out.extend(lines.into_iter().map(|line| Outgoing::line(who, line)));
@@ -1184,6 +1307,131 @@ mod tests {
         assert_eq!(boosts.max_health, 4);
         assert_eq!(boosts.attack_with("swordplay:basics"), 3);
         assert_eq!(boosts.attack_with("axes:basics"), 0);
+    }
+
+    /// A skill in `tree` requiring `requires`.
+    fn tree_skill(key: &str, requires: Option<Condition>) -> (String, Skill) {
+        let skill = Skill {
+            key: key.into(),
+            tree: key.split_once(':').unwrap().0.into(),
+            attribute: Attribute::Strength,
+            def: SkillDef {
+                name: key.into(),
+                kind: SkillKind::Passive {
+                    triggers: Vec::new(),
+                    counter: None,
+                    bonuses: Vec::new(),
+                },
+                max_level: 50,
+                attribute: None,
+                rarity: None,
+                difficulty: 1.0,
+                requires,
+            },
+        };
+        (key.into(), skill)
+    }
+
+    #[test]
+    fn using_a_skill_can_reveal_others_in_its_tree_whose_requirements_are_met() {
+        let at = |level| Some(Condition::Skill("axes:basics".into(), level));
+        let defs = SkillDefs {
+            skills: HashMap::from([
+                tree_skill("axes:basics", None),
+                tree_skill("axes:cleave", at(15)),
+                tree_skill("axes:hew", at(15)),
+                tree_skill("axes:whirlwind", at(45)),
+                tree_skill("axes:dwarf_axe", Some(Condition::Race("dwarf".into()))),
+                tree_skill("swordplay:lunge", None),
+            ]),
+            trees: HashMap::new(),
+        };
+        let attributes = Attributes::default();
+        let mut skills = Skills::default();
+        let mut basics = SkillState::new("Taught");
+        basics.level = 15;
+        skills.0.insert("axes:basics".into(), basics);
+        skills
+            .0
+            .insert("axes:hew".into(), SkillState::new("Taught"));
+        let facts = Facts {
+            attributes: &attributes,
+            race: "human",
+            skills: Some(&skills),
+        };
+        // Not what they know, nor the entry, nor what they don't qualify for, nor other trees.
+        let used = |key: &str| vec![key.to_string()];
+        let found: Vec<&str> = discoverable(&defs, &used("axes:basics"), &facts)
+            .iter()
+            .map(|s| s.key.as_str())
+            .collect();
+        assert_eq!(found, ["axes:cleave"]);
+        // Using any skill in the tree can reveal it, given luck enough.
+        let mut dice = Dice::seeded(1);
+        let found = discover(&defs, &used("axes:hew"), &facts, &mut dice, 1.0);
+        assert_eq!(found.map(|s| s.key.as_str()), Some("axes:cleave"));
+        assert!(discover(&defs, &used("axes:hew"), &facts, &mut dice, 0.0).is_none());
+        assert!(discover(&defs, &used("swordplay:lunge"), &facts, &mut dice, 1.0).is_none());
+    }
+
+    #[test]
+    fn a_discipline_is_practised_by_every_power_in_its_tree() {
+        let (key, mut discipline) = tree_skill("adept:foundation", None);
+        discipline.def.kind = SkillKind::Passive {
+            triggers: vec![
+                Trigger::UsedTree,
+                Trigger::UsedSkill("brawling:basics".into()),
+            ],
+            counter: None,
+            bonuses: Vec::new(),
+        };
+        let defs = SkillDefs {
+            skills: HashMap::from([
+                (key, discipline),
+                tree_skill("adept:killing_hands", None),
+                tree_skill("brawling:basics", None),
+                tree_skill("axes:basics", None),
+            ]),
+            trees: HashMap::new(),
+        };
+        let mut skills = Skills::default();
+        for key in [
+            "adept:foundation",
+            "adept:killing_hands",
+            "brawling:basics",
+            "axes:basics",
+        ] {
+            skills.0.insert(key.into(), SkillState::new("Taught"));
+        }
+        let (mut attributes, mut dice) = (Attributes::default(), Dice::seeded(3));
+        let db = Database::open(":memory:").unwrap();
+        let learner = Learner {
+            character_id: 1,
+            race: "human",
+            boost: 1.0,
+        };
+        let practice = |skills: &Skills, key: &str| skills.0[key].practice;
+        let mut use_skill = |skills: &mut Skills, key: &str| {
+            count_use(&defs, skills, &mut attributes, &mut dice, &db, learner, key);
+        };
+        // A power practises the discipline too.
+        use_skill(&mut skills, "adept:killing_hands");
+        assert!(practice(&skills, "adept:killing_hands") > 0.0);
+        let after_power = practice(&skills, "adept:foundation");
+        assert!(after_power > 0.0);
+        // So does the skill it names, but not other trees' skills.
+        use_skill(&mut skills, "brawling:basics");
+        let after_brawl = practice(&skills, "adept:foundation");
+        assert!(after_brawl > after_power);
+        use_skill(&mut skills, "axes:basics");
+        assert_eq!(practice(&skills, "adept:foundation"), after_brawl);
+        // Nor does the discipline count itself twice.
+        let mut alone = Skills::default();
+        alone
+            .0
+            .insert("adept:foundation".into(), SkillState::new("Taught"));
+        use_skill(&mut alone, "adept:foundation");
+        assert!((practice(&alone, "adept:foundation") - 0.1).abs() < 1e-9);
     }
 
     #[test]

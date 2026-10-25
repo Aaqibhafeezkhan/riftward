@@ -11,8 +11,8 @@ Every tree follows the same shape, so players can read any tree at a glance and 
 | Tier | Requires | Rarity | Learned from | What it is |
 | --- | --- | --- | --- | --- |
 | **Entry** | Nothing (or the tree's own gate, like Magic 1) | Common | Town trainers | The tree's core: an attack, a craft, a sense. Everything else hangs off it |
-| **Journeyman** | Entry 15 | Common or Uncommon | Town trainers, a few out in the world | The first techniques: things to *do* with the core |
-| **Expert** | Entry 30 | Uncommon or Rare | Remote trainers, player teachers, loot | Stronger techniques and passive masteries |
+| **Journeyman** | Entry 15 | Common or Uncommon | Discovery through use, player teachers, loot, remote trainers as quest rewards | The first techniques: things to *do* with the core |
+| **Expert** | Entry 30 | Uncommon or Rare | Discovery, player teachers, loot, remote trainers as quest rewards | Stronger techniques and passive masteries |
 | **Master** | Entry 45, sometimes a second tree | Rare or Epic | Player masters, loot | One capstone per tree; hybrids live here |
 
 - **Spells aren't in trees.** A casting tradition's tree holds its schools; spells are a separate category (see [Magic](#magic)). Everything else, weapon techniques included, is a skill.
@@ -137,7 +137,7 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions.
 7. **Money and shops,** then Trade and the crafts.
 
-Each step adds its trees' skills to the trainers in Riftwatch: the drill sergeant teaches weapon techniques up to journeyman, and new trainers appear for the rest (the herbalist for Herbalism and First Aid, someone in the Back Alley for Stealth and Thievery).
+Each step adds its trees' entry skills to the trainers in Riftwatch: the drill sergeant teaches each weapon's basics, and new trainers appear for the rest (the herbalist for Herbalism and First Aid, someone in the Back Alley for Stealth and Thievery). Trainers teach only entry skills; the rest of each tree is [discovered](skills.md#discovery) or learned another way.
 
 ## Step 1, as built
 
@@ -151,7 +151,7 @@ Each step adds its trees' skills to the trainers in Riftwatch: the drill sergean
   ```
 
 - **Counters:** a passive can answer a dodge with an immediate strike for a stamina, if the defender is fighting with the attack it counters with: Riposte.
-- **Built skills,** all taught by the drill sergeant once the tree's basics reach 15, or the ascetic for the Adept:
+- **Built skills,** all [discovered](skills.md#discovery) by using the tree's skills once its basics reach 15 (for the Adept, while practising Inner Discipline, the Adept's school: see [Magic](magic.md)):
 
   | Tree | Built |
   | --- | --- |
@@ -179,7 +179,7 @@ Planned as the next step. Armour is **damage reduction**: every hit loses its ar
 
 - [ ] **Is the four-tier shape right,** and are the level gates (15, 30, 45) the right spacing for a 0–50 skill?
 - [ ] **How many skills per tree** to start: the five or so above, or fewer?
-- [ ] **What stops one character learning every tree?** Still the biggest open question in [Skills](skills.md#open-questions). Trainers make it pressing: with free lessons, anyone can open every tree.
+- [ ] **What stops one character learning every tree?** Still the biggest open question in [Skills](skills.md#open-questions). Trainers make it pressing: with free lessons, anyone can open every tree, though now only at its entry.
 - [ ] **Do lessons cost money, time, or both,** once there's money?
 - [ ] **Shields and Archery:** in from the start, or later?
 - [ ] **Crafting:** one tree, or one per craft?

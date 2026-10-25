@@ -40,6 +40,12 @@ Being Awakened shows in `score` ("Magic 1 (Awakened: Divine)"). The foundation s
 
 The tradition decides which magic opens: hermetics, shamans and clerics get schools and spells with different flavours, while adepts turn magic inward and have **powers** instead of spells, which are ordinary skills in their tree (Killing Hands, Quickened Reflexes). Self-taught paths can also test latent Magic, for example Study requiring Magic 2, so early investment makes Awakening easier.
 
+**Inner Discipline is the Adept's school.** A caster's foundation grows by casting and powers their spells; the Adept's foundation does the same for powers. *Built:*
+
+- **It grows with the body's work:** every use of an Adept power practises it (the `UsedTree` trigger), and so does fighting unarmed with Brawling (`UsedSkill("brawling:basics")`), which is how a newly Awakened Adept, who knows no powers yet, starts on the path.
+- **It strengthens the powers:** +1 attack with Killing Hands per 5 levels, and +1 damage per 10.
+- **It opens the tree:** Killing Hands (Inner Discipline 0) and Quickened Reflexes (5) are [discovered](skills.md#discovery) while practising it, like any tree's higher skills. The ascetic teaches only Inner Discipline.
+
 ## Which paths are known
 
 **Teachers are the open door; self-taught paths are rumours.** Anyone with talent who finds a teacher can Awaken, so no one who wants to play a magic user is locked out; the hedge-shaman takes a walk into the Darkwood to find. Study at the Guild Archive is the best known self-taught path; the others are hidden epiphanies that players piece together.

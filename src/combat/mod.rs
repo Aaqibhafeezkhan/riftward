@@ -122,6 +122,11 @@ pub struct AutoAttack(pub Option<String>);
 #[derive(Component, Debug)]
 pub struct Aggressive;
 
+/// How far a player is outmatched by the foe they're fighting (see [`strike::outmatched`]),
+/// updated each round. A tough fight makes their skills quicker to improve and reveal.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Outmatched(pub f64);
+
 /// The chance, in percent, that a mob makes one of its techniques on its turn instead of its
 /// auto-attack.
 #[derive(Component, Debug, Clone, Copy)]
@@ -304,6 +309,14 @@ fn combat_round(
         .collect();
     order.sort_by(|a, b| b.cmp(a));
 
+    let outmatched = strike::outmatched(&fighters, &targets, &auras, &items, &templates, &defs);
+    for (who, _) in &alive_players {
+        match outmatched.get(who) {
+            Some(odds) => commands.entity(*who).insert(Outmatched(*odds)),
+            None => commands.entity(*who).remove::<Outmatched>(),
+        };
+    }
+
     let mut fallen: HashSet<Entity> = HashSet::new();
     let mut round = Round {
         fighters: &mut fighters,
@@ -319,6 +332,7 @@ fn combat_round(
         targets: &targets,
         auras: &auras,
         resting: &resting,
+        outmatched: &outmatched,
     };
     for (_, attacker) in order {
         let Some(&target) = targets.get(&attacker) else {
@@ -1093,6 +1107,43 @@ mod tests {
             world.run_system_once(combat_round).unwrap();
             assert_eq!(said(&world, foe, "cleaves"), cleaves, "tactics {tactics}");
         }
+    }
+
+    #[test]
+    fn players_know_when_they_are_outmatched() {
+        let (mut world, room) = world();
+        let player = fighter(&mut world, room, 2, 2, &[BASIC_ATTACK]);
+        let giant = fighter(&mut world, room, 8, 8, &[BASIC_ATTACK]);
+        let equal = fighter(&mut world, room, 2, 2, &[BASIC_ATTACK]);
+        let challenger = fighter(&mut world, room, 2, 2, &[BASIC_ATTACK]);
+        for who in [player, challenger] {
+            world.entity_mut(who).insert(Player {
+                name: "Grok".into(),
+                character_id: 1,
+                account: "grok".into(),
+                role: crate::db::Role::Player,
+                race: "human".into(),
+                background: String::new(),
+                description: String::new(),
+            });
+        }
+        world.entity_mut(player).insert(Fighting(giant));
+        world.entity_mut(challenger).insert(Fighting(equal));
+        world.run_system_once(combat_round).unwrap();
+        // Attack and defence 2 against the giant's 8: four times outmatched. An equal foe is
+        // even.
+        let odds = |who| world.get::<Outmatched>(who).map(|o| o.0);
+        assert!(
+            odds(player).is_some_and(|o| (o - 4.0).abs() < 1e-9),
+            "{:?}",
+            odds(player)
+        );
+        assert!(odds(challenger).is_some_and(|o| (o - 1.0).abs() < 1e-9));
+        // Mobs don't learn, so they aren't counted.
+        assert!(odds(giant).is_none());
+        assert_eq!(crate::skills::tough_fight_boost(odds(player)), 2.0);
+        assert_eq!(crate::skills::tough_fight_boost(odds(challenger)), 1.0);
+        assert_eq!(crate::skills::tough_fight_boost(Some(0.5)), 1.0);
     }
 
     #[test]

@@ -18,7 +18,8 @@ use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
 use crate::mobs::Mob;
 use crate::output::Outgoing;
 use crate::skills::{
-    Bonus, Cost, Effect, SkillDefs, SkillKind, Skills, StrikeKind, Technique, boosts, count_use,
+    Bonus, Boosts, Cost, Effect, Learner, Skill, SkillDefs, SkillKind, Skills, StrikeKind,
+    Technique, boosts, count_use, tough_fight_boost,
 };
 use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{InRoom, Player};
@@ -90,6 +91,69 @@ pub fn third_person(verb: &str) -> String {
     } else {
         format!("{first} {rest}")
     }
+}
+
+/// An attack's rating with `skill`: its level and attribute, plus auras and passive bonuses.
+fn attack_rating(
+    attributes: &Attributes,
+    skills: &Skills,
+    skill: &Skill,
+    aura: Bonus,
+    boosts: &Boosts,
+) -> i32 {
+    let level = skills.0.get(&skill.key).map_or(0, |s| s.level as i32);
+    level + attributes.get(skill.attribute) + aura.attack + boosts.attack_with(&skill.key)
+}
+
+/// Defence before conditions: Reaction and Dodge, plus auras and passive bonuses.
+fn defence_rating(attributes: &Attributes, skills: &Skills, aura: Bonus, boosts: &Boosts) -> i32 {
+    let dodge = skills.0.get(DODGE).map_or(0, |s| s.level as i32);
+    attributes.get(Attribute::Reaction) + dodge + aura.defence + boosts.defence
+}
+
+/// How far each player is outmatched by the foe they fight, by the ratio rule: the foe's attack
+/// against their defence, and the foe's defence against their attack, averaged (a geometric
+/// mean). 1 is an even fight; above it, the foe is stronger. Mobs don't learn, so only players
+/// are counted.
+pub fn outmatched(
+    fighters: &Fighters,
+    targets: &HashMap<Entity, Entity>,
+    auras: &HashMap<Entity, Bonus>,
+    items: &ItemQuery,
+    templates: &ItemTemplates,
+    defs: &SkillDefs,
+) -> HashMap<Entity, f64> {
+    let ratings = |entity: Entity| {
+        let f = fighters.get(entity).ok()?;
+        let aura = auras.get(&entity).copied().unwrap_or_default();
+        let boosts = boosts(f.skills, defs);
+        let strike = choose_attack(
+            entity,
+            f.auto.and_then(|auto| auto.0.as_deref()),
+            f.player.is_some(),
+            f.vitals.stamina,
+            f.skills,
+            items,
+            templates,
+            defs,
+        )?;
+        let skill = defs.skills.get(&strike.skill)?;
+        let attack = attack_rating(f.attributes, f.skills, skill, aura, &boosts);
+        let defence = defence_rating(f.attributes, f.skills, aura, &boosts);
+        Some((f64::from(attack.max(1)), f64::from(defence.max(1))))
+    };
+    targets
+        .iter()
+        .filter(|(who, _)| fighters.get(**who).is_ok_and(|f| f.player.is_some()))
+        .filter_map(|(who, foe)| {
+            let ((attack, defence), (their_attack, their_defence)) =
+                (ratings(*who)?, ratings(*foe)?);
+            Some((
+                *who,
+                (their_attack / defence * their_defence / attack).sqrt(),
+            ))
+        })
+        .collect()
 }
 
 /// The chance an attack hits: the attacker's skill against the defender's evasion, as a ratio.
@@ -213,6 +277,8 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub auras: &'a HashMap<Entity, Bonus>,
     /// Who was resting as the round began.
     pub resting: &'a HashSet<Entity>,
+    /// How far each player is outmatched, for the boost a tough fight gives their learning.
+    pub outmatched: &'a HashMap<Entity, f64>,
 }
 
 /// Messages for a strike: the attacker, the target, and everyone else there.
@@ -263,8 +329,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let Ok(mut fighter) = self.fighters.get_mut(who) else {
             return;
         };
-        let Some(character_id) = fighter.player.map(|p| p.character_id) else {
+        let Some(player) = fighter.player else {
             return;
+        };
+        let learner = Learner {
+            character_id: player.character_id,
+            race: &player.race,
+            boost: tough_fight_boost(self.outmatched.get(&who).copied()),
         };
         let lines = count_use(
             self.defs,
@@ -272,7 +343,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             &mut fighter.attributes,
             self.dice,
             self.db,
-            character_id,
+            learner,
             key,
         );
         for line in lines {
@@ -534,12 +605,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             .map_or((0, 0), |m| (m.technique.accuracy, m.technique.damage));
         let a_aura = self.auras.get(&attacker).copied().unwrap_or_default();
         let a_boosts = boosts(&a_skills, self.defs);
-        let level = a_skills.0.get(&key).map_or(0, |s| s.level as i32);
-        let attack_rating = level
-            + a_attributes.get(skill.attribute)
-            + a_aura.attack
-            + a_boosts.attack_with(&key)
-            + accuracy;
+        let attack_rating =
+            attack_rating(&a_attributes, &a_skills, skill, a_aura, &a_boosts) + accuracy;
 
         let Ok(d) = self.fighters.get(target) else {
             return died;
@@ -547,12 +614,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let d_attributes = d.attributes.clone();
         let d_skills = d.skills.clone();
         let d_mob = d.mob.map(|m| m.key.clone());
-        let dodge = d_skills.0.get(DODGE).map_or(0, |s| s.level as i32);
         let d_aura = self.auras.get(&target).copied().unwrap_or_default();
         let d_boosts = boosts(&d_skills, self.defs);
-        let mut defence = d.conditions.defence(
-            d_attributes.get(Attribute::Reaction) + dodge + d_aura.defence + d_boosts.defence,
-        );
+        let mut defence =
+            d.conditions
+                .defence(defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts));
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let opener = technique.as_ref().is_some_and(|m| m.technique.opener);
         if self.resting.contains(&target) || opener {

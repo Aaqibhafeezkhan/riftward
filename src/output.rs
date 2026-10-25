@@ -28,6 +28,8 @@ pub struct Actor {
     pub character_id: i64,
     pub account: String,
     pub role: Role,
+    /// Their race id, for requirements.
+    pub race: String,
     pub room: Entity,
 }
 
@@ -42,6 +44,7 @@ impl Actor {
             character_id: player.character_id,
             account: player.account.clone(),
             role: player.role,
+            race: player.race.clone(),
             room: in_room.0,
         })
     }

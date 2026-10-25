@@ -17,7 +17,7 @@ use crate::items::{
     Item, ItemLocation, ItemTemplates, Snapshot, capitalized, carries, with_keywords,
 };
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
-use crate::skills::Practice;
+use crate::skills::{Learner, Practice};
 use crate::targeting::{Keywords, Target};
 use crate::world::{Door, DoorKey, DoorState, Exits, ItemKey, LockDef, without_article};
 
@@ -407,7 +407,12 @@ pub fn pick(
         let skill = f64::from(ready.effectiveness.max(1));
         let chance = skill / (skill + f64::from(difficulty.max(1)));
         let picked = practice.chance(ready.luck, chance);
-        gains = practice.exercise(it.actor.entity, it.actor.character_id, LOCKPICKING);
+        let learner = Learner {
+            character_id: it.actor.character_id,
+            race: &it.actor.race,
+            boost: 1.0,
+        };
+        gains = practice.exercise(it.actor.entity, learner, LOCKPICKING);
         let the = it.the();
         let (name, lock) = (&it.actor.name, format!("the lock of {the}"));
         Ok(if picked {

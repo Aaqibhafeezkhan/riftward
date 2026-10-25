@@ -117,6 +117,8 @@ The Guildhall rents rooms in the Guild Quarters to members, at decent rates, pai
 - **Resting there** will matter once health and stamina regenerate over time: a bunk is a safe place to recover, and to log out.
 - **Non-members have the inn,** once Riftwatch has one: dearer, and with no chest.
 
+**Remote trainers teach as a reward.** Beyond the entry skills town trainers teach, a trainer out in the world (an old axeman in the Darkwood) teaches a higher skill only to someone who has done what they ask: a quest whose reward is the lesson.
+
 **Common trainers stay open to everyone.** The training yard, the herbalist and the shrine teach anyone; guild rank gates the better-than-common instruction, alongside rarity and the mastery rules for player teaching (see [Acquiring skills](skills.md#acquiring-skills)).
 
 ### Saved per character

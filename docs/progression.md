@@ -50,6 +50,15 @@ After a gain, that skill cannot gain again until its cooldown ends. A starting c
 - **Spamming and botting can't outpace it.** No amount of repetition gains faster than the cooldown allows.
 - **Mastery takes real time,** which is what keeps rare skills rare (see [Rarity](skills.md#rarity)).
 
+## Tough fights
+
+A fight against the odds teaches more. Each combat round works out how far each player is **outmatched** by the foe they're fighting, by the [ratio rule](attributes.md#the-ratio-rule): the foe's attack against the player's defence, and the foe's defence against the player's attack, combined as a geometric mean. 1 is an even fight; 4 means the foe is four times their match.
+
+- **Chances multiply by the odds,** from no change at even odds or better up to **double** at 2 or more, for every gain roll and every [discovery](skills.md#discovery) made during the fight, passive skills like Dodge included. Luck applies on top, as on every roll.
+- **Cooldowns still hold,** so a hard fight speeds learning toward the cooldown, never past it.
+- **Mobs aren't counted;** they don't learn.
+- **Groups, once they exist,** should compare sides rather than pairs: five players against one ogre isn't a tough fight even if the ogre outclasses each of them. Likely the combined strength of each side, by the same ratio rule. To design with grouping.
+
 ## Implementation notes
 
 - The fade and the cooldown are computed from stored timestamps when the skill is next used. Nothing ticks on a timer, and offline characters cost nothing.

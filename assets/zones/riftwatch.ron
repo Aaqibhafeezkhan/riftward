@@ -319,9 +319,6 @@
             teaches: [
                 "swordplay:basics", "knives:basics", "axes:basics", "hammers:basics", "staves:basics",
                 "athletics:toughness",
-                "brawling:kick", "brawling:grapple", "swordplay:lunge", "swordplay:riposte",
-                "knives:backstab", "knives:open_vein", "axes:cleave", "axes:hew",
-                "hammers:stagger", "hammers:crush", "staves:sweep", "staves:guard",
             ],
         ),
         "shrine_keeper": (
@@ -343,7 +340,7 @@
             keywords: ["old", "ascetic", "monk"],
             here: "An old ascetic sits cross-legged at the parapet, breathing slowly, utterly still.",
             description: "Thin as a rake and brown as a nut, wearing little more than a loincloth despite the wind. The guards say he has sat here since before the barrier rose. His stillness has a weight to it, like a drawn bow.",
-            teaches: ["adept:foundation", "adept:killing_hands", "adept:quickened_reflexes"],
+            teaches: ["adept:foundation"],
         ),
     },
     spawns: {
