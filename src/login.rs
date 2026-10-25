@@ -11,16 +11,19 @@ use bevy::prelude::*;
 
 use crate::aliases::Aliases;
 use crate::attributes::{Attribute, Attributes};
-use crate::characters::{self, Backgrounds, RaceDef, Races};
-use crate::command;
+use crate::characters::{self, Backgrounds, RaceDef, Races, STARTING_ITEMS};
+use crate::combat::AutoAttack;
+use crate::command::{self, ActionQueue};
 use crate::commands::movement::{View, describe_room};
-use crate::db::{Account, CharacterRecord, Database, Permission, Role};
+use crate::db::{Account, CharacterRecord, Database, ItemPlace, Permission, Role};
+use crate::items::{HANDS, ItemTemplates};
 use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::skills::{SkillDefs, Skills, UNIVERSAL_SKILLS, learn};
 use crate::targeting::Keywords;
 use crate::vitals::{DEFAULT_PROMPT, PromptFormat, Vitals};
 use crate::world::{InRoom, Player, RoomIndex, RoomKey};
+use crate::world::{ItemKey, Slot};
 
 pub struct LoginPlugin;
 
@@ -84,16 +87,20 @@ pub struct Draft {
     background: String,
     /// A description they already have, which they can keep.
     description: String,
+    /// Being made for the first time, so they get a starting kit at the end; not when choosing
+    /// again after a race or background was removed.
+    fresh: bool,
 }
 
 /// The most a character description can hold.
 const MAX_DESCRIPTION_LEN: usize = 600;
 
-/// The races and backgrounds creation offers, and the skills they grant.
+/// The races and backgrounds creation offers, and the skills and items they grant.
 struct Choices<'a> {
     races: &'a Races,
     backgrounds: &'a Backgrounds,
     skills: &'a SkillDefs,
+    items: &'a ItemTemplates,
 }
 
 impl LoginState {
@@ -147,11 +154,13 @@ fn handle_login(
     races: Res<Races>,
     backgrounds: Res<Backgrounds>,
     skill_defs: Res<SkillDefs>,
+    item_templates: Res<ItemTemplates>,
 ) {
     let choices = Choices {
         races: &races,
         backgrounds: &backgrounds,
         skills: &skill_defs,
+        items: &item_templates,
     };
     let mut out = Vec::new();
     for PlayerInput { entity, line } in inputs.read() {
@@ -436,6 +445,7 @@ fn choose_character(
             ));
             Step::Next(LoginState::ChooseBackground(Draft {
                 description: character.description.clone(),
+                fresh: false,
                 account,
                 character: character.clone(),
                 race,
@@ -510,6 +520,7 @@ fn start_creation(
     out.push(Outgoing::To(entity, characters::race_menu(choices.races)));
     Step::Next(LoginState::ChooseRace(Draft {
         description: character.description.clone(),
+        fresh: character.race.is_none(),
         account,
         character,
         race: String::new(),
@@ -684,12 +695,67 @@ fn describe(
         "{} finished creation: {} {}",
         draft.character.name, draft.race, draft.background
     );
+    if draft.fresh {
+        let kit = choices
+            .backgrounds
+            .get(&draft.background)
+            .map(|b| b.items.clone())
+            .unwrap_or_default();
+        give_kit(id, &kit, choices.items, db);
+    }
     draft.character.race = Some(draft.race);
     draft.character.background = Some(draft.background);
     draft.character.description = description;
     Step::Enter {
         account: draft.account,
         character: draft.character,
+    }
+}
+
+/// Give a new character everyone's starting items and their background's kit: worn if it's worn
+/// and the slot is free, otherwise in hand while hands are free, otherwise in the first container
+/// they're wearing. Their items load from the database as they enter the game.
+fn give_kit(character_id: i64, kit: &[String], templates: &ItemTemplates, db: &Database) {
+    let mut worn: Vec<Slot> = Vec::new();
+    let mut held = 0;
+    let mut pouch: Option<i64> = None;
+    let all = STARTING_ITEMS
+        .iter()
+        .map(|s| s.to_string())
+        .chain(kit.iter().cloned());
+    for template in all {
+        let Some(def) = templates.0.get(&ItemKey::parse(&template, "")) else {
+            warn!("starting item [{template}] doesn't exist");
+            continue;
+        };
+        let place = match def.wear {
+            Some(slot) if worn.iter().filter(|s| **s == slot).count() < slot.capacity() => {
+                worn.push(slot);
+                ItemPlace::Worn(character_id, slot.name())
+            }
+            _ if held < HANDS => {
+                held += 1;
+                ItemPlace::Held(character_id)
+            }
+            _ => match pouch {
+                Some(container) => ItemPlace::Inside(container),
+                None => {
+                    warn!("no room for starting item [{template}]");
+                    continue;
+                }
+            },
+        };
+        match db.create_item(&template, &place) {
+            Ok(id) => {
+                if pouch.is_none()
+                    && def.container.is_some()
+                    && matches!(place, ItemPlace::Worn(..))
+                {
+                    pouch = Some(id);
+                }
+            }
+            Err(err) => error!("failed to give starting item [{template}]: {err}"),
+        }
     }
 }
 
@@ -822,6 +888,8 @@ fn enter_game(
         vitals,
         prompt,
         skills,
+        ActionQueue::default(),
+        AutoAttack(character.autoattack.clone()),
         Keywords::from_name(&character.name),
         Player {
             name: name.clone(),

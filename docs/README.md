@@ -44,6 +44,8 @@ Each document below covers one area and can be read on its own. This page is the
 - Character creation: race, starting Karma, background (15, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
 - Attributes, starting Karma, `raise`, `score`, `describe`, and the Luck-aware `Dice` service.
 - Skills: trees as data, use-based progression with practice and cooldowns, active skills (`use`, `pick` for Lockpicking) and passive ones (Endurance), starting skills, character levels that earn Karma, `skills`.
+- World events: saved world flags, and events in zone files that react to mobs entering zones and dying. A rat breakout raises the Rat King, whose aura toughens every sewer rat until he dies.
+- Combat: 3-second rounds in initiative order, auto-attacks chosen by the player, attack skills (Brawling, Swordplay with a blade, beasts' bites), Dodge, aggressive mobs with pack limits, auras, resting (faster recovery, but dangerous), corpses, death and respawn at the shrine, `kill` and `flee`. Action commands queue, one per round.
 - Vitals: current health and stamina that recover over time (offline too), and a customisable status prompt, `<7/10hp 9/9st>`.
 
 ## Roadmap
@@ -78,7 +80,8 @@ Designed, waiting on other work:
 | Learning | Every skill can be taught. Students need the skill's requirements, not its tree. Loot-only skills are taught only by masters |
 | Progression | Use-based gains; practice builds with use and fades with time; a level-scaled cooldown per gain |
 | Skill kinds | Active (invoked with `use <skill> <target>`) and passive (progress on trigger events, usually outcomes) |
-| Combat | Made entirely of skills. Everyone starts with a basic attack skill; mobs fight with skills too. Built with the skill core |
+| Death | A player's corpse keeps everything they carried, where they fell, for 30 minutes (surviving restarts); they wake at the Wayside Shrine, hurt. No PvP yet |
+| Combat | Made entirely of skills. Everyone starts with a basic attack skill; mobs fight with skills too. Each round a fighter's auto-attack fires on its own: the most basic attack they know, unless they've chosen another. Other skills are used by command |
 | Starting skills | Granted by race and background, plus universal skills. Racial abilities are skills that require the race. Backgrounds can require attributes or a race |
 | Races | The eight Earthdawn races: Dwarf, Elf, Human, Obsidiman, Ork, Troll, T'skrang, Windling. Earthdawn-style attribute shifts that total +3 for every race; humans get +3 Karma instead |
 | Hidden skills | Learned by epiphany when conditions are met, with an optional trigger |
@@ -102,4 +105,3 @@ Each document lists its own open questions. These are the ones that shape the mo
 
 1. **What stops one character learning every tree?** A total cap on skill levels, skill slots, or rising costs. See [Skills](skills.md#open-questions).
 2. **Are Awakened backgrounds balanced,** and what exactly does each background grant? See [Races and backgrounds](characters.md#open-questions).
-3. **Auto-attack or explicit attacks in combat?** See [Skills](skills.md#open-questions).

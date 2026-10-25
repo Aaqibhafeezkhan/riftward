@@ -6,6 +6,7 @@ mod aliases;
 mod attributes;
 mod build;
 mod characters;
+mod combat;
 mod command;
 mod commands;
 mod conditions;
@@ -23,6 +24,7 @@ mod targeting;
 mod time;
 mod vitals;
 mod world;
+mod world_events;
 
 use std::time::Duration;
 
@@ -67,6 +69,8 @@ fn main() {
             characters::CharactersPlugin,
             vitals::VitalsPlugin,
             skills::SkillsPlugin,
+            combat::CombatPlugin,
+            world_events::WorldEventsPlugin,
         ))
         .run();
 }

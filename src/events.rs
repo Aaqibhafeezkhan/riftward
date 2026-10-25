@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use crate::net;
 use crate::output::{Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::time::Phase;
+use crate::world::MobKey;
 
 pub struct EventsPlugin;
 
@@ -38,6 +39,17 @@ pub enum GameEvent {
     PhaseChanged(Phase),
     /// A character spent stamina, as on an active skill.
     StaminaSpent { who: Entity, amount: u32 },
+    /// A player or mob dodged an attack.
+    Dodged { who: Entity },
+    /// A player or mob was killed; `mob` is the template of a mob. World events listen; quests
+    /// and loot will.
+    #[allow(dead_code)]
+    Died {
+        who: Entity,
+        name: String,
+        room: Entity,
+        mob: Option<MobKey>,
+    },
 }
 
 /// How someone moved.
@@ -83,7 +95,9 @@ fn text(event: &GameEvent) -> Option<String> {
             Way::Teleported => format!("{name} appears out of thin air."),
         },
         GameEvent::PhaseChanged(phase) => phase.arrives().into(),
-        GameEvent::StaminaSpent { .. } => return None,
+        GameEvent::StaminaSpent { .. } | GameEvent::Dodged { .. } | GameEvent::Died { .. } => {
+            return None;
+        }
     };
     Some(line + "\r\n")
 }
@@ -103,7 +117,7 @@ fn announce(mut events: MessageReader<GameEvent>, rooms: RoomQuery, mut players:
                     text,
                 });
             }
-            GameEvent::StaminaSpent { .. } => {}
+            GameEvent::StaminaSpent { .. } | GameEvent::Dodged { .. } | GameEvent::Died { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, player, in_room) in &players {
                     let outdoors = in_room

@@ -14,12 +14,13 @@ use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
-use crate::db::{Database, ItemPlace, Permission};
+use crate::db::{Database, ItemPlace, Permission, RoomItemRow};
 use crate::net::{self, Connection};
 use crate::output::{
     Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_in_room,
 };
 use crate::targeting::{Keywords, Target};
+use crate::time::heartbeat;
 use crate::world::{
     Capacity, DoorState, ItemDef, ItemKey, Player, RoomIndex, RoomKey, START_ROOM, Slot, ZoneDef,
     format_bulk, without_article,
@@ -34,7 +35,10 @@ impl Plugin for ItemsPlugin {
             .init_resource::<Restored>()
             .add_systems(
                 Update,
-                (sync_templates, restore_room_items, load_carried_items).chain(),
+                (
+                    (sync_templates, restore_room_items, load_carried_items).chain(),
+                    rot.run_if(heartbeat()),
+                ),
             )
             .add_systems(
                 PostUpdate,
@@ -135,6 +139,7 @@ pub const HANDS: usize = 2;
 #[derive(Component, Debug)]
 pub struct Item {
     pub key: ItemKey,
+    /// Its template's name, unless it has its own, like a corpse.
     pub name: String,
     /// Its row in the `items` table, once it's real.
     pub id: Option<i64>,
@@ -182,6 +187,83 @@ impl ItemTemplates {
 /// Whether real items have been put back in their rooms since the server started.
 #[derive(Resource, Default)]
 pub struct Restored(pub bool);
+
+/// An item named for itself rather than its template, like "the corpse of Grok".
+#[derive(Component, Debug)]
+pub struct OwnName;
+
+/// When an item rots away, in unix seconds. A container spills what it holds as it goes.
+#[derive(Component, Debug)]
+pub struct Decays {
+    pub at: i64,
+}
+
+/// The built-in corpse template, `core:corpse`, which every zone can use.
+pub fn corpse_key() -> ItemKey {
+    ItemKey {
+        zone: "core".into(),
+        item: "corpse".into(),
+    }
+}
+
+/// How long a mob's corpse lasts, and a player's, which holds everything they had.
+pub const MOB_CORPSE_SECS: i64 = 5 * 60;
+pub const PLAYER_CORPSE_SECS: i64 = 30 * 60;
+
+fn corpse_template() -> ItemDef {
+    ItemDef {
+        keywords: vec!["corpse".into(), "body".into()],
+        description: "A lifeless body, already beginning to stiffen.".into(),
+        bulk: crate::world::Bulk::Bulk(20),
+        fixed: true,
+        container: Some(crate::world::ContainerDef {
+            capacity: Capacity::Count(100),
+            accepts: Vec::new(),
+            max_item: None,
+            state: DoorState::Open,
+            lock: None,
+        }),
+        ..ItemDef::named("a corpse")
+    }
+}
+
+/// Lay a corpse in `room`, named for who it was. `id` makes it real, for a player's corpse.
+pub fn spawn_corpse(
+    commands: &mut Commands,
+    templates: &ItemTemplates,
+    of: &str,
+    id: Option<i64>,
+    room: Entity,
+    rots_at: i64,
+) -> Option<Entity> {
+    let entity = spawn_item(
+        commands,
+        templates,
+        corpse_key(),
+        id,
+        ItemLocation::Room(room),
+    )?;
+    let name = format!("the corpse of {of}");
+    let keywords = Keywords(
+        ["corpse", "body"]
+            .into_iter()
+            .map(String::from)
+            .chain(Keywords::from_name(without_article(of)).0)
+            .collect(),
+    );
+    commands.entity(entity).insert((
+        Item {
+            key: corpse_key(),
+            name,
+            id,
+            state: DoorState::Open,
+        },
+        OwnName,
+        keywords,
+        Decays { at: rots_at },
+    ));
+    Some(entity)
+}
 
 /// "A torch", to start a sentence.
 pub fn capitalized(name: &str) -> String {
@@ -594,7 +676,7 @@ pub fn spawn_item(
     Some(commands.spawn((item, def.keywords(), location)).id())
 }
 
-/// Spawn a saved item and, recursively, everything saved inside it.
+/// Spawn a saved item and, recursively, everything saved inside it. Returns the item.
 fn spawn_saved(
     commands: &mut Commands,
     templates: &ItemTemplates,
@@ -602,11 +684,9 @@ fn spawn_saved(
     id: i64,
     template: &str,
     location: ItemLocation,
-) {
+) -> Option<Entity> {
     let key = ItemKey::parse(template, "");
-    let Some(entity) = spawn_item(commands, templates, key, Some(id), location) else {
-        return;
-    };
+    let entity = spawn_item(commands, templates, key, Some(id), location)?;
     match db.items_inside(id) {
         Ok(contents) => {
             for (child, template) in contents {
@@ -616,6 +696,7 @@ fn spawn_saved(
         }
         Err(err) => error!("failed to load the contents of item {id}: {err}"),
     }
+    Some(entity)
 }
 
 /// Rebuild the template table when zones change, and refresh existing items' names.
@@ -624,7 +705,7 @@ fn sync_templates(
     mut events: MessageReader<AssetEvent<ZoneDef>>,
     zones: Res<Assets<ZoneDef>>,
     mut templates: ResMut<ItemTemplates>,
-    mut items: Query<(Entity, &mut Item)>,
+    mut items: Query<(Entity, &mut Item, Has<OwnName>)>,
 ) {
     if events.read().count() == 0 {
         return;
@@ -639,7 +720,11 @@ fn sync_templates(
             templates.0.insert(key, def.clone());
         }
     }
-    for (entity, mut item) in &mut items {
+    templates.0.insert(corpse_key(), corpse_template());
+    for (entity, mut item, own_name) in &mut items {
+        if own_name {
+            continue;
+        }
         if let Some(def) = templates.0.get(&item.key) {
             if item.name != def.name {
                 item.name = def.name.clone();
@@ -647,6 +732,70 @@ fn sync_templates(
             commands.entity(entity).insert(def.keywords());
         }
     }
+}
+
+/// Rot away whatever has decayed, spilling a container's contents where it lay.
+fn rot(
+    mut commands: Commands,
+    decaying: Query<(Entity, &Decays)>,
+    mut items: ItemMutQuery,
+    rooms: RoomQuery,
+    db: Res<Database>,
+    mut players: PlayerQuery,
+) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_default();
+    let mut out = Vec::new();
+    for (entity, decays) in &decaying {
+        if decays.at > now {
+            continue;
+        }
+        let Ok((_, item, location)) = items.get(entity) else {
+            continue;
+        };
+        let (name, id, location) = (item.name.clone(), item.id, *location);
+        let room = match location {
+            ItemLocation::Room(room) => Some(room),
+            _ => None,
+        };
+        let room_key = room
+            .and_then(|r| rooms.get(r).ok())
+            .map(|(_, key, _)| key.to_string());
+        let mut spilled = false;
+        for (_, inside, mut at) in &mut items {
+            if *at != ItemLocation::Inside(entity) {
+                continue;
+            }
+            *at = location;
+            spilled = true;
+            if let (Some(id), Some(room_key)) = (inside.id, &room_key)
+                && let Err(err) = db.move_item(id, &ItemPlace::Room(room_key.clone()))
+            {
+                error!("failed to spill item {id}: {err}");
+            }
+        }
+        if let Some(id) = id
+            && let Err(err) = db.delete_item(id)
+        {
+            error!("failed to delete rotted item {id}: {err}");
+        }
+        commands.entity(entity).despawn();
+        if let Some(room) = room {
+            let leaving = if spilled {
+                ", leaving what it held on the ground"
+            } else {
+                ""
+            };
+            out.push(Outgoing::Room {
+                room,
+                except: Entity::PLACEHOLDER,
+                text: format!("{} rots away{leaving}.\r\n", capitalized(&name)),
+            });
+        }
+    }
+    deliver(out, &mut players);
 }
 
 /// Once the world has loaded, put real items back in the rooms they were left in, with their
@@ -674,7 +823,14 @@ pub fn restore_room_items(
         }
     };
     let count = rows.len();
-    for (id, template, room) in rows {
+    for row in rows {
+        let RoomItemRow {
+            id,
+            template,
+            room,
+            name,
+            dropped_at,
+        } = row;
         let room = match index.0.get(&RoomKey::parse(&room, "")) {
             Some(&room) => room,
             None => {
@@ -686,7 +842,27 @@ pub fn restore_room_items(
             }
         };
         let location = ItemLocation::Room(room);
-        spawn_saved(&mut commands, &templates, &db, id, &template, location);
+        let Some(entity) = spawn_saved(&mut commands, &templates, &db, id, &template, location)
+        else {
+            continue;
+        };
+        if let Some(name) = name {
+            let key = ItemKey::parse(&template, "");
+            commands.entity(entity).insert((
+                Item {
+                    key,
+                    name,
+                    id: Some(id),
+                    state: DoorState::Open,
+                },
+                OwnName,
+            ));
+        }
+        // A player's corpse goes on rotting from when it fell.
+        if ItemKey::parse(&template, "") == corpse_key() {
+            let at = dropped_at.unwrap_or_default() + PLAYER_CORPSE_SECS;
+            commands.entity(entity).insert(Decays { at });
+        }
     }
     info!("restored {count} items lying in rooms");
 }
@@ -1107,10 +1283,22 @@ pub fn describe_item(entity: Entity, items: &ItemQuery, templates: &ItemTemplate
     let Ok((_, item, _)) = items.get(entity) else {
         return String::new();
     };
-    match templates.0.get(&item.key) {
+    let def = templates.0.get(&item.key);
+    let mut text = match def {
         Some(def) if !def.description.is_empty() => def.description.clone(),
         _ => format!("You see nothing special about {}.", item.name),
+    };
+    if let Some(weapon) = def.and_then(|d| d.weapon.as_ref()) {
+        let skill = weapon
+            .skill
+            .split_once(':')
+            .map_or(weapon.skill.as_str(), |(tree, _)| tree);
+        text += &format!(
+            "\r\nA weapon: {}-{} damage, used with {skill}.",
+            weapon.damage.0, weapon.damage.1
+        );
     }
+    text
 }
 
 /// Split `get`/`put` arguments: the item, and an optional container.

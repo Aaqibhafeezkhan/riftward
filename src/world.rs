@@ -18,8 +18,10 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::attributes::Attribute;
 use crate::net::Connection;
 use crate::targeting::Keywords;
+use crate::world_events::{When, WorldEventDef};
 
 /// Asset folder holding one `.ron` file per zone.
 pub const ZONES_PATH: &str = "zones";
@@ -63,6 +65,9 @@ pub struct ZoneDef {
     /// What this zone keeps populated, by id.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub spawns: BTreeMap<String, SpawnDef>,
+    /// How the world reacts to what happens, by id (see `world_events.rs`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub events: BTreeMap<String, WorldEventDef>,
     pub rooms: BTreeMap<String, RoomDef>,
 }
 
@@ -156,6 +161,22 @@ pub struct ItemDef {
     /// Only one can ever exist: once a player has found it, its spawn never makes another.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub unique: bool,
+    /// What it does as a weapon, if it is one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weapon: Option<WeaponDef>,
+}
+
+/// A weapon: the damage it does, and the skill it's used with. It does its damage in anyone's
+/// hands; training in its skill makes it hit more often and harder.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct WeaponDef {
+    /// The attack skill, `tree:skill`, like `swordplay:basics`.
+    pub skill: String,
+    /// Damage before the Strength bonus, low to high.
+    pub damage: (u32, u32),
+    /// What it does, if not the skill's verb: a knife might "stab".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verb: Option<String>,
 }
 
 /// Size and awkwardness, as in Pathfinder 2e: 10 Light make 1 Bulk.
@@ -294,6 +315,7 @@ impl ItemDef {
             container: None,
             fixed: false,
             unique: false,
+            weapon: None,
         }
     }
 
@@ -318,6 +340,22 @@ pub struct MobDef {
     pub here: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
+    /// Attribute ratings; any not listed are at the base (3, Luck 1, Magic 0).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub attributes: BTreeMap<Attribute, i32>,
+    /// Skills it knows, `tree:skill` to level. Mobs fight with skills by the same rules as players,
+    /// but don't improve.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub skills: BTreeMap<String, u32>,
+    /// The attack it makes each round; without one, the basic attack.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attack: Option<String>,
+    /// Its health, instead of the usual 8 + Body / 2: a rat is small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health: Option<i32>,
+    /// Attacks players who come near, instead of only fighting back.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub aggressive: bool,
 }
 
 impl MobDef {
@@ -328,6 +366,11 @@ impl MobDef {
             keywords: Vec::new(),
             here: String::new(),
             description: String::new(),
+            attributes: BTreeMap::new(),
+            skills: BTreeMap::new(),
+            attack: None,
+            health: None,
+            aggressive: false,
         }
     }
 
@@ -377,6 +420,12 @@ pub struct SpawnDef {
     /// holds more than this, then the extras move on toward the least crowded room they may enter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crowd: Option<u32>,
+    /// The most of its mobs that will fight one player at once; the rest wait their turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pack: Option<u32>,
+    /// Only fills while this is true, like `WorldFlag("rats_broke_out")`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<When>,
 }
 
 /// What a spawn makes.
@@ -655,6 +704,7 @@ impl ZoneDef {
             items: BTreeMap::new(),
             mobs: BTreeMap::new(),
             spawns: BTreeMap::new(),
+            events: BTreeMap::new(),
             rooms: BTreeMap::from([(ZONE_ENTRANCE.into(), entrance)]),
         }
     }

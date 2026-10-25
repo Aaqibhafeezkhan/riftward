@@ -5,6 +5,13 @@
 //! The dispatcher turns each line of input into an invocation: it expands aliases, hides commands
 //! the player isn't allowed to use, and queues the command's system to run. `help` is generated
 //! from the registry. Prompts are the connection's job (`net.rs`), not the commands'.
+//!
+//! Commands marked as actions (attacking, fleeing, using skills) take a round: a player gets at
+//! most one per round, and any typed sooner wait their turn in an `ActionQueue`. In a fight, the
+//! combat round takes the next one from the queue in place of the auto-attack. Everything else
+//! (looking, talking, moving) happens at once.
+
+use std::collections::VecDeque;
 
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
@@ -20,7 +27,7 @@ pub struct CommandPlugin;
 impl Plugin for CommandPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CommandRegistry>()
-            .add_systems(Update, dispatch)
+            .add_systems(Update, (dispatch, run_queued_actions).chain())
             .add_command(
                 CommandSpec::new("help", Category::Information)
                     .shortcuts(&["?"])
@@ -69,6 +76,8 @@ pub struct CommandSpec {
     pub summary: &'static str,
     /// Whether `help` lists it. Unlisted commands still work and still have `help <name>`.
     pub listed: bool,
+    /// Takes a round: at most one per round, queued if typed sooner.
+    pub action: bool,
 }
 
 impl CommandSpec {
@@ -81,7 +90,13 @@ impl CommandSpec {
             usage: name,
             summary: "",
             listed: true,
+            action: false,
         }
+    }
+
+    pub fn action(mut self) -> Self {
+        self.action = true;
+        self
     }
 
     pub fn shortcuts(mut self, shortcuts: &'static [&'static str]) -> Self {
@@ -135,6 +150,32 @@ impl Invocation {
 }
 
 pub type CommandId = SystemId<In<Invocation>>;
+
+/// The most actions a player can have waiting.
+const MAX_QUEUED_ACTIONS: usize = 10;
+
+/// A player's actions waiting for their turn, and when they can next act, in seconds since the
+/// server started. Lives on the player entity.
+#[derive(Component, Default)]
+pub struct ActionQueue {
+    queue: VecDeque<(CommandId, Invocation)>,
+    pub next_at: f64,
+}
+
+impl ActionQueue {
+    /// The next action waiting, if any.
+    pub fn pop(&mut self) -> Option<(CommandId, Invocation)> {
+        self.queue.pop_front()
+    }
+
+    pub fn len(&self) -> usize {
+        self.queue.len()
+    }
+
+    pub fn clear(&mut self) {
+        self.queue.clear();
+    }
+}
 
 /// Width of the usage column in `help`.
 const USAGE_WIDTH: usize = 34;
@@ -242,12 +283,17 @@ pub fn split_verb(line: &str) -> (String, &str) {
 pub fn dispatch(
     mut commands: Commands,
     mut inputs: MessageReader<PlayerInput>,
-    mut players: Query<(&mut Connection, &Player, Option<&Aliases>)>,
+    mut players: Query<(
+        &mut Connection,
+        &Player,
+        Option<&Aliases>,
+        Option<&mut ActionQueue>,
+    )>,
     registry: Res<CommandRegistry>,
 ) {
     for PlayerInput { entity, line } in inputs.read() {
         let entity = *entity;
-        let Ok((mut conn, player, aliases)) = players.get_mut(entity) else {
+        let Ok((mut conn, player, aliases, queue)) = players.get_mut(entity) else {
             continue;
         };
         if conn.closing {
@@ -266,17 +312,44 @@ pub fn dispatch(
         if verb.is_empty() {
             continue;
         }
-        match registry.find(&verb, player.role) {
-            Some((spec, id)) => commands.run_system_with(
-                *id,
-                Invocation {
-                    entity,
-                    command: spec.name,
-                    usage: spec.usage,
-                    args: args.into(),
-                },
-            ),
-            None => conn.send("Huh? Type 'help' for a list of commands."),
+        let Some((spec, id)) = registry.find(&verb, player.role) else {
+            conn.send("Huh? Type 'help' for a list of commands.");
+            continue;
+        };
+        let invocation = Invocation {
+            entity,
+            command: spec.name,
+            usage: spec.usage,
+            args: args.into(),
+        };
+        match queue {
+            Some(mut queue) if spec.action => {
+                if queue.len() >= MAX_QUEUED_ACTIONS {
+                    conn.send("You can't plan that far ahead. (Type 'stop' to clear your plans.)");
+                } else {
+                    queue.queue.push_back((*id, invocation));
+                }
+            }
+            _ => commands.run_system_with(*id, invocation),
+        }
+    }
+}
+
+/// Run each player's next queued action once they're free to act, outside a fight. In a fight,
+/// combat rounds take actions from the queue instead.
+fn run_queued_actions(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut queues: Query<&mut ActionQueue, Without<crate::combat::Fighting>>,
+) {
+    let now = time.elapsed_secs_f64();
+    for mut queue in &mut queues {
+        if queue.next_at > now {
+            continue;
+        }
+        if let Some((id, invocation)) = queue.pop() {
+            queue.next_at = now + crate::combat::ROUND_SECS;
+            commands.run_system_with(id, invocation);
         }
     }
 }

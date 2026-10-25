@@ -4,6 +4,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::characters::{Races, article};
+use crate::combat::Fighting;
 use crate::command::Invocation;
 use crate::commands::doors::{DoorLookup, find_door};
 use crate::db::{Database, Permission};
@@ -14,6 +15,7 @@ use crate::items::{
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::targeting::{Keywords, Target};
+use crate::vitals::Resting;
 use crate::world::{Door, DoorState, Player};
 
 /// Everything a room shows a player besides other players: the room itself, its doors, and the
@@ -111,9 +113,14 @@ pub fn go(
     view: View,
     db: Res<Database>,
     mut events: MessageWriter<GameEvent>,
+    fighting: Query<(), With<Fighting>>,
+    mut commands: Commands,
 ) {
+    commands.entity(inv.entity).remove::<Resting>();
     let out = if inv.args.is_empty() {
         vec![Outgoing::line(inv.entity, "Go where?")]
+    } else if fighting.get(inv.entity).is_ok() {
+        vec![Outgoing::line(inv.entity, IN_A_FIGHT)]
     } else {
         travel(inv.entity, &inv.args, &mut players, &view, &db, &mut events)
     };
@@ -127,7 +134,14 @@ pub fn walk(
     view: View,
     db: Res<Database>,
     mut events: MessageWriter<GameEvent>,
+    fighting: Query<(), With<Fighting>>,
+    mut commands: Commands,
 ) {
+    commands.entity(inv.entity).remove::<Resting>();
+    if fighting.get(inv.entity).is_ok() {
+        deliver(vec![Outgoing::line(inv.entity, IN_A_FIGHT)], &mut players);
+        return;
+    }
     let out = travel(
         inv.entity,
         inv.command,
@@ -139,7 +153,11 @@ pub fn walk(
     deliver(out, &mut players);
 }
 
-fn travel(
+/// What someone in a fight is told when they try to walk away.
+const IN_A_FIGHT: &str = "You're fighting for your life! Type 'flee' to try to escape.";
+
+/// Move someone through the exit in direction `dir`, telling both rooms.
+pub fn travel(
     entity: Entity,
     dir: &str,
     players: &mut PlayerQuery,
@@ -341,10 +359,18 @@ pub fn describe_room(
         .map(|(entity, _, _)| entity)
         .collect();
     here.sort();
-    for entity in here.iter().filter(|e| fixed(**e)) {
-        if let Ok((_, item, _)) = view.items.get(*entity) {
-            text += &format!("{} is here.\r\n", capitalized(&item.name));
-        }
+    let fixed_names: Vec<_> = here
+        .iter()
+        .filter(|e| fixed(**e))
+        .filter_map(|e| {
+            view.items
+                .get(*e)
+                .ok()
+                .map(|(_, item, _)| item.name.as_str())
+        })
+        .collect();
+    for name in counted(fixed_names) {
+        text += &format!("{} is here.\r\n", capitalized(&name));
     }
     let loose: Vec<_> = here
         .iter()

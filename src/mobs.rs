@@ -8,6 +8,8 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
+use crate::attributes::Attributes;
+use crate::combat::{Aggressive, AutoAttack, Fighting, MaxHealth};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Permission;
 use crate::dice::Dice;
@@ -15,9 +17,11 @@ use crate::events::{GameEvent, Way, way_back};
 use crate::items::{capitalized, counted};
 use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::skills::{SkillState, Skills};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
+use crate::vitals::Vitals;
 use crate::world::{Door, InRoom, MobDef, MobKey, RoomKey, SpawnKey, Spawned, Wander, ZoneDef};
 
 pub struct MobsPlugin;
@@ -68,6 +72,9 @@ pub type MobQuery<'w, 's> =
 
 /// Mobs, and never players, who also have an `InRoom`.
 pub type OnlyMobs = (With<Mob>, Without<Connection>);
+
+/// Mobs that aren't in a fight, so they're free to wander.
+type Idle = (Without<Connection>, Without<Fighting>);
 
 /// Every mob template from every loaded zone.
 #[derive(Resource, Default)]
@@ -147,7 +154,45 @@ pub fn spawn_mob(
         here: def.here_line(),
         description: def.description.clone(),
     };
-    Some(commands.spawn((mob, def.keywords(), InRoom(room))).id())
+    // Mobs fight by the same rules as players, with what their template gives them.
+    let attributes = Attributes::starting(
+        |attribute| {
+            def.attributes
+                .get(&attribute)
+                .copied()
+                .unwrap_or(attribute.base_rating())
+        },
+        0,
+    );
+    let health = def.health.unwrap_or(attributes.health());
+    let vitals = Vitals {
+        health: health as f32,
+        stamina: attributes.stamina() as f32,
+    };
+    let skills = Skills(
+        def.skills
+            .iter()
+            .map(|(key, level)| {
+                let mut state = SkillState::new("Template");
+                state.level = *level;
+                (key.clone(), state)
+            })
+            .collect(),
+    );
+    let mut entity = commands.spawn((
+        mob,
+        def.keywords(),
+        InRoom(room),
+        attributes,
+        vitals,
+        skills,
+        AutoAttack(def.attack.clone()),
+        MaxHealth(health),
+    ));
+    if def.aggressive {
+        entity.insert(Aggressive);
+    }
+    Some(entity.id())
 }
 
 /// A random wait in the range `secs`, inclusive.
@@ -180,7 +225,7 @@ pub fn wander(
     rooms: RoomQuery,
     doors: Query<&Door>,
     mut dice: ResMut<Dice>,
-    mut mobs: Query<(Entity, &Mob, &SpawnedBy, &mut InRoom, &mut Wanderer), Without<Connection>>,
+    mut mobs: Query<(Entity, &Mob, &SpawnedBy, &mut InRoom, &mut Wanderer), Idle>,
     mut events: MessageWriter<GameEvent>,
 ) {
     let elapsed = time.elapsed_secs_f64();

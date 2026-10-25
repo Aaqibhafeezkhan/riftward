@@ -1,0 +1,13 @@
+// A skill tree. Its id is the file name: skills here are `swordplay:<id>`.
+(
+    name: "Swordplay",
+    rarity: Common,
+    attribute: Agility,
+    skills: {
+        // A weapon skill: no damage of its own, it needs a sword in hand.
+        "basics": (
+            name: "Swordplay",
+            kind: Attack(verb: "slash"),
+        ),
+    },
+)

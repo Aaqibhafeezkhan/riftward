@@ -4,6 +4,11 @@
     rarity: Common,
     attribute: Body,
     skills: {
+        "dodge": (
+            name: "Dodge",
+            attribute: Reaction,
+            kind: Passive(triggers: [Dodged]),
+        ),
         "endurance": (
             name: "Endurance",
             attribute: Willpower,

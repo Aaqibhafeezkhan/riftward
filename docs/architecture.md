@@ -35,6 +35,8 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
 | `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
+| `combat.rs` | Combat rounds, attacks, death and respawn, `kill`, `flee`, `autoattack` and `stop` |
+| `world_events.rs` | World flags, world events from zone files, and the admin `worldflag` |
 | `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
 | `vitals.rs` | Current health and stamina, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
@@ -127,7 +129,21 @@ Started.
 
 ### Combat
 
-The round loop, initiative, damage, death and respawn: infrastructure with no actions of its own. Every action in combat is a skill, starting with the basic attack every character has (see [Skill kinds](skills.md#skill-kinds)), so combat is built together with the skill core. Every roll goes through `Dice`, and every contest follows the [ratio rule](attributes.md#the-ratio-rule).
+Built (`src/combat.rs`). The round loop, initiative, damage, death and respawn: infrastructure with no actions of its own. Every action in combat is a skill, starting with the basic attack every character has (see [Skill kinds](skills.md#skill-kinds)). Every roll goes through `Dice`, and every contest follows the [ratio rule](attributes.md#the-ratio-rule).
+
+- **Rounds** every 3 seconds. Everyone fighting acts once, in order of initiative (Reaction + Intuition, plus a d6 with Luck).
+- **Actions and the queue.** Commands marked as actions (`kill`, `flee`, `use`, `pick`, `bash`, future skills) take a round: at most one per round, and any typed sooner wait in the player's `ActionQueue` (up to 10; `stop` clears it). In a fight, a queued action takes the player's turn instead of their auto-attack. Everything else (looking, talking, inventory) happens at once.
+- **Auto-attack.** With nothing queued, a fighter makes their auto-attack: an attack chosen with `autoattack <skill>` if they can make it, otherwise the weapon in their hand, otherwise Brawling, everyone's basic attack (`autoattack default` goes back to that).
+- **Weapons** carry their damage (a short sword 2–5) and name their skill (Swordplay). Trained, a fighter attacks with that skill and does 1 more damage per 10 levels of it; untrained, they swing it with only their Brawling to guide them, still doing the weapon's damage, and learn nothing of the weapon by it. Weapon skills (Swordplay, Knife Fighting, Axe Fighting, Hammer Fighting, Staff Fighting) have no damage of their own; Brawling's fists do 1–3.
+- **Resting** (`rest`) recovers three times as fast, and nothing recovers in a fight. A resting character is caught off guard: attacks against them use half their defence, and their first turn goes on getting up.
+- **Auras:** a mob with an aura skill makes certain mobs in its zone fight better while it lives (attack, defence and armour, which takes points off each hit). The Rat King's makes the sewer rats tougher.
+- **Packs:** a spawn's `pack` caps how many of its aggressive mobs gang up on one player.
+- **An attack** pits the skill's effectiveness (level + its attribute) against the defender's Reaction + Dodge, as a ratio, with both sides' Luck. A hit does the weapon's (or attack's) damage plus Strength / 2 plus any training bonus, and the attacker is told how hurt the target looks. Every attack a player makes practises it; every dodge practises Dodge.
+- **Starting and ending fights:** `kill <mob>` (players can't fight each other yet). The target fights back. A fight ends when either side dies, leaves (`flee`: a random open exit, 60% before Luck, 2 stamina), or logs out. Walking away isn't possible mid-fight.
+- **Mobs fight by the same rules,** with attributes, skills, an attack and optionally a fixed health from their templates. `aggressive: true` mobs attack players in their room; the rest only fight back. Mobs in a fight don't wander.
+- **A mob's death** leaves a corpse that rots in 5 minutes, and counts for its spawn like any death, so `AfterDeath` timers and breeding reseeds now matter.
+- **A player's death** leaves a real corpse where they fell, holding everything they carried and wore; it survives restarts and rots in 30 minutes, spilling what's left on the ground. They wake at the Wayside Shrine with a quarter of their health and stamina.
+- **Not yet:** armour and weapon stats, more combat skills (riposte, disarm), mob tactics, a death penalty beyond the walk back, PvP, and grouping. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
 
 ## Planned features
 
@@ -194,7 +210,7 @@ Built, except the IAC GA marker. The in-game prompt shows the character's state,
 1. ~~**Command system and targeting.**~~ Built.
 2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then mobs that stand in rooms and can be looked at. *Built.*
 3. **Game events and time.** Both small, but everything after this uses them. *Started: the clock, the heartbeat, and movement and day events.*
-4. **The [skill core](skills.md#build-plan), with combat as its first use.** *Core built without combat; combat next.* The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
+4. **The [skill core](skills.md#build-plan), with combat as its first use.** *Built.* The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
 
 Then teaching, epiphany, trainers and loot follow: trainers are mobs, loot scrolls are items, and passive skills have events to trigger on.
 

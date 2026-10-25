@@ -1444,6 +1444,8 @@ fn spawn(
                     refill: Refill::Keep(count),
                     wander: Wander::Never,
                     crowd: None,
+                    pack: None,
+                    when: None,
                 };
                 let text = describe_spawn(&key(&id), &def, 0);
                 zone.spawns.insert(id.clone(), def);

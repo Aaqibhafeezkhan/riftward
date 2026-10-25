@@ -70,13 +70,15 @@ impl Plugin for CommandsPlugin {
             .add_command(
                 CommandSpec::new("pick", Interaction)
                     .usage("pick <door|container>")
-                    .summary("pick a lock, if you know Lockpicking"),
+                    .summary("pick a lock, if you know Lockpicking")
+                    .action(),
                 doors::pick,
             )
             .add_command(
                 CommandSpec::new("bash", Interaction)
                     .usage("bash <door>")
-                    .summary("try to force a locked door open with your Strength"),
+                    .summary("try to force a locked door open with your Strength")
+                    .action(),
                 doors::bash,
             )
             // Communication

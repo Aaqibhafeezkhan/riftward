@@ -24,6 +24,7 @@ use crate::world::{
     Every, InRoom, ItemKey, MobKey, Refill, RoomIndex, RoomKey, SpawnDef, SpawnKey, Spawned,
     ZoneDef,
 };
+use crate::world_events::WorldFlags;
 
 pub struct SpawnsPlugin;
 
@@ -311,6 +312,7 @@ fn run_spawns(
     mobs: Query<(Entity, &InRoom, Option<&SpawnedBy>), mobs::OnlyMobs>,
     items: Query<(Entity, &Item, &ItemLocation, Option<&SpawnedBy>)>,
     restored: Res<items::Restored>,
+    flags: Res<WorldFlags>,
 ) {
     let elapsed = time.elapsed_secs_f64();
     // Wait for real items to be back in their rooms, so a real chest isn't spawned twice.
@@ -369,6 +371,14 @@ fn run_spawns(
         ) else {
             continue;
         };
+        // A gated spawn waits, untouched, until its trigger is met.
+        if def
+            .when
+            .as_ref()
+            .is_some_and(|when| !when.met(&key.zone, &flags, None))
+        {
+            continue;
+        }
         let first = timers.seen.insert(key.clone());
         let force = timers.force.remove(key);
         let here = census.remove(key).unwrap_or_default();

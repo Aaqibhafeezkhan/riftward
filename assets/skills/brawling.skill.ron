@@ -1,0 +1,12 @@
+// A skill tree. Its id is the file name: skills here are `brawling:<id>`.
+(
+    name: "Brawling",
+    rarity: Common,
+    attribute: Strength,
+    skills: {
+        "basics": (
+            name: "Brawling",
+            kind: Attack(verb: "punch", damage: (1, 3)),
+        ),
+    },
+)

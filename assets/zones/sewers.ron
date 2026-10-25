@@ -8,6 +8,22 @@
             keywords: ["sewer", "rat"],
             here: "A sewer rat scurries along the edge of the channel.",
             description: "A fat, filthy rat as long as your forearm, not counting the tail. It watches you with bright black eyes and doesn't seem nearly as afraid as it should be.",
+            attributes: {Body: 1, Strength: 1, Agility: 3, Reaction: 3},
+            skills: {"beast:rat_bite": 2},
+            attack: "beast:rat_bite",
+            health: 3,
+            aggressive: true,
+        ),
+        "rat_king": (
+            name: "the Rat King",
+            keywords: ["rat", "king"],
+            here: "The Rat King squats on a mound of gnawed bones, a dozen tails knotted together beneath it.",
+            description: "Not one rat but a seething knot of them, their tails fused into a single tangled mass, moving with one mind. Dozens of black eyes turn to follow you. It is the size of a dog, and it is hungry.",
+            attributes: {Body: 6, Strength: 4, Agility: 5, Reaction: 5},
+            skills: {"beast:bite": 8, "beast:claw": 8, "beast:rat_kings_command": 1},
+            attack: "beast:claw",
+            health: 30,
+            aggressive: true,
         ),
     },
     spawns: {
@@ -18,6 +34,34 @@
             refill: Breed(doubles_every: Hours(4), max: 200, reseed: Days(7), start: 8),
             wander: Anywhere(secs: (30, 120)),
             crowd: 6,
+            pack: 3,
+        ),
+        "rat_king": (
+            mob: "rat_king",
+            room: "nest",
+            every: Minutes(1),
+            refill: Keep(1),
+            when: WorldFlag("rats_broke_out"),
+        ),
+    },
+    events: {
+        "rats_break_out": (
+            when: All([
+                Event(Entered(mob: "sewer_rat", zone: "riftwatch")),
+                Not(WorldFlag("rats_broke_out")),
+            ]),
+            then: [
+                SetWorldFlag("rats_broke_out"),
+                Announce(Zone("riftwatch"), "Shrieks go up in the streets: rats are pouring out of the drains!"),
+                Announce(Zone("sewers"), "Somewhere deep in the sewers, something huge squeals in triumph. The rats around you grow bold."),
+            ],
+        ),
+        "rat_king_slain": (
+            when: Event(Died("rat_king")),
+            then: [
+                ClearWorldFlag("rats_broke_out"),
+                Announce(Everyone, "The Rat King is dead! The sewers fall quiet, and the rats lose their nerve, for now."),
+            ],
         ),
     },
     rooms: {

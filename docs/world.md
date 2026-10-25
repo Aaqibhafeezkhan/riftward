@@ -1,6 +1,6 @@
 # The living world: spawns, wandering and world events
 
-[Design summary](README.md) · Status: spawns for mobs and items (`Keep` and `Breed`, timed and `AfterDeath` resets, counting by origin, reseeding, container contents, unique items), wandering and crowding are built; time-of-day spawns and world events are not. World events need combat.
+[Design summary](README.md) · Status: spawns for mobs and items (`Keep` and `Breed`, timed and `AfterDeath` resets, counting by origin, reseeding, container contents, unique items, pack limits, gated spawns), wandering, crowding, world flags and a first slice of world events are built; time-of-day spawns and the rest of the world-event triggers and actions are not.
 
 The world populates itself and changes on its own. Every mob comes from a **spawn** in a zone file, which decides how often it resets and how many it wants. Mobs can **wander**, crowded rooms push them outward, and **world events** fire when the state of the world meets their conditions. There is one spawn model for everything, from a single dragon to a sewer full of breeding rats.
 
@@ -108,7 +108,20 @@ mobs: {
 },
 ```
 
-Rooms show each mob's `here` line, with repeats counted (`(x8)`), and `look <direction>` shows who's there. What a mob can *do* (attributes, skills, behaviour) arrives with combat.
+Rooms show each mob's `here` line, with repeats counted (`(x8)`), and `look <direction>` shows who's there.
+
+Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), with what their template gives them:
+
+```ron
+"sewer_rat": (
+    name: "a sewer rat",
+    attributes: {Body: 1, Strength: 1, Agility: 4, Reaction: 4},   // the rest at the base, 3
+    skills: {"beast:bite": 2},       // levels; mobs don't improve
+    attack: "beast:bite",            // without one, Brawling
+    health: 3,                        // instead of 8 + Body / 2
+    aggressive: true,                 // attacks players in its room
+),
+```
 
 ## Building mobs and spawns
 
@@ -201,6 +214,14 @@ flowchart LR
     reseed --> breed
 ```
 
+## Packs
+
+A spawn can set `pack: n`: the most of its mobs that will fight one player at once. The rest wait their turn, and the next steps in when one dies. Sewer rats have `pack: 3`, so a crowded Warren is a stream of fights rather than a swarm; wolves might hunt with `pack: 3`.
+
+## Gated spawns
+
+A spawn with `when` only fills while its condition is true, in the world-event condition language below: `when: WorldFlag("rats_broke_out")`. While it's false the spawn is left alone entirely. This is how the Rat King appears only after a breakout.
+
 ## World state
 
 The world keeps its own **flags** (`goblin_king_alive`, `city_quarantined`) and **counters** (`goblins_slain_this_week`), saved in a `world_state` table. Flags and counters are set by events, and read by triggers and by other systems' conditions.
@@ -208,6 +229,8 @@ The world keeps its own **flags** (`goblin_king_alive`, `city_quarantined`) and 
 World flags join the shared [condition language](skills.md#hidden-skills), so the world and the rest of the design build on each other: a hidden skill can require `WorldFlag("goblin_king_slain")`, and a trainer can appear only once `WorldFlag("city_cleared")` is set.
 
 ## World events
+
+Status: a first slice is built (`src/world_events.rs`): triggers `Event(Entered(mob, zone))`, `Event(Died(mob))`, `WorldFlag`, `All`, `Any` and `Not`; actions `SetWorldFlag`, `ClearWorldFlag` and `Announce`. Flags are saved in `world_state`, and admins can list, set and clear them with `worldflag`. Events are checked as game events happen; the rest of the design below waits.
 
 An event has a trigger and a list of actions. Triggers use the condition language, with new terms for the world:
 
@@ -258,6 +281,32 @@ events: {
 - **Events are data.** New stories are new events in zone files, not new code.
 - **Re-checked only on change.** A trigger is evaluated when something it depends on changes (a spawn's count, a flag, a counter, a game event), never on a timer.
 - **The goblin king is just a spawned mob** with a buff on its kin. Killing it is an ordinary death that another event reacts to.
+
+### The Rat King (built)
+
+The sewers' events, as they stand:
+
+```ron
+events: {
+    "rats_break_out": (
+        when: All([
+            Event(Entered(mob: "sewer_rat", zone: "riftwatch")),
+            Not(WorldFlag("rats_broke_out")),
+        ]),
+        then: [
+            SetWorldFlag("rats_broke_out"),
+            Announce(Zone("riftwatch"), "Shrieks go up in the streets: rats are pouring out of the drains!"),
+            Announce(Zone("sewers"), "Somewhere deep in the sewers, something huge squeals in triumph. ..."),
+        ],
+    ),
+    "rat_king_slain": (
+        when: Event(Died("rat_king")),
+        then: [ClearWorldFlag("rats_broke_out"), Announce(Everyone, "The Rat King is dead! ...")],
+    ),
+},
+```
+
+The first rat to reach the city (through a grate someone left open) sets `rats_broke_out`; the `rat_king` spawn, gated on that flag, puts the Rat King in the Warren within a minute. His **Rat King's Command** aura makes every sewer rat in the sewers tougher (+2 attack, +2 defence, 1 armour) while he lives. Killing him clears the flag, so he's gone until the next breakout. The flag is saved, so a restart changes nothing.
 
 ## What survives a restart
 

@@ -96,10 +96,16 @@ pub struct BackgroundDef {
     /// Who can choose it.
     #[serde(default)]
     pub requires: Option<Condition>,
-    /// Starting skills, granted once skills exist.
+    /// Starting skills.
     #[serde(default)]
     pub skills: Vec<String>,
+    /// Starting kit, as item templates (`zone:item`), on top of [`STARTING_ITEMS`].
+    #[serde(default)]
+    pub items: Vec<String>,
 }
+
+/// What every new character starts with, whatever their background.
+pub const STARTING_ITEMS: &[&str] = &["riftwatch:plain_clothes", "riftwatch:belt_pouch"];
 
 /// Every race, in menu order.
 #[derive(Resource, Default)]
@@ -346,6 +352,50 @@ mod tests {
                     "{}: no starting character can take it",
                     background.id
                 ));
+            }
+        }
+        assert!(problems.is_empty(), "problems:\n{}", problems.join("\n"));
+    }
+
+    /// Every starting item is a real item template, and a background's weapon comes with the
+    /// skill to use it.
+    #[test]
+    fn starting_kits_are_real_and_usable() {
+        use crate::world::{ItemDef, ItemKey, ZoneDef};
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/zones");
+        let mut items: std::collections::HashMap<ItemKey, ItemDef> = Default::default();
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let zone: ZoneDef = ron_options()
+                .from_str(&std::fs::read_to_string(&path).unwrap())
+                .unwrap();
+            let id = path.file_stem().unwrap().to_string_lossy().into_owned();
+            for (item, def) in zone.items {
+                items.insert(ItemKey::parse(&item, &id), def);
+            }
+        }
+        let backgrounds = read::<BackgroundDef>("backgrounds.ron");
+        let mut problems = Vec::new();
+        for template in STARTING_ITEMS {
+            if !items.contains_key(&ItemKey::parse(template, "")) {
+                problems.push(format!("starting item {template} doesn't exist"));
+            }
+        }
+        for background in &backgrounds {
+            for template in &background.items {
+                match items.get(&ItemKey::parse(template, "")) {
+                    None => problems.push(format!("{}: no item {template}", background.id)),
+                    Some(def) => {
+                        if let Some(weapon) = &def.weapon
+                            && !background.skills.contains(&weapon.skill)
+                        {
+                            problems.push(format!(
+                                "{}: {template} needs {}, which it doesn't grant",
+                                background.id, weapon.skill
+                            ));
+                        }
+                    }
+                }
             }
         }
         assert!(problems.is_empty(), "problems:\n{}", problems.join("\n"));

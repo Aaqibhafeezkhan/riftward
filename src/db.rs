@@ -46,7 +46,9 @@ const SCHEMA: &str = "
         stamina     REAL,
         vitals_at   INTEGER,
         -- Their prompt format; NULL means the default.
-        prompt      TEXT
+        prompt      TEXT,
+        -- The attack skill they make each round of a fight; NULL means the basic attack.
+        autoattack  TEXT
     );
 
     CREATE TABLE IF NOT EXISTS character_aliases (
@@ -73,7 +75,9 @@ const SCHEMA: &str = "
         character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
         dropped_at   INTEGER,              -- unix seconds, when it was last put down
         slot         TEXT,
-        container_id INTEGER REFERENCES items(id) ON DELETE CASCADE
+        container_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
+        -- Its own name, when it isn't its template's: 'the corpse of Grok'.
+        name         TEXT
     );
 
     -- What each character has learned, and how far they've got.
@@ -94,6 +98,12 @@ const SCHEMA: &str = "
     CREATE TABLE IF NOT EXISTS spawn_state (
         spawn      TEXT PRIMARY KEY,       -- zone:spawn
         next_reset INTEGER NOT NULL        -- unix seconds
+    );
+
+    -- The world's flags, like 'rats_broke_out', set and cleared by world events.
+    CREATE TABLE IF NOT EXISTS world_state (
+        flag   TEXT PRIMARY KEY,
+        set_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
     -- How many mobs each breeding spawn has, so a restart brings back the same number.
@@ -159,6 +169,18 @@ impl ItemPlace {
             _ => None,
         }
     }
+}
+
+/// A real item lying in a room, as saved.
+pub struct RoomItemRow {
+    pub id: i64,
+    pub template: String,
+    /// `zone:room`.
+    pub room: String,
+    /// Its own name, if it has one.
+    pub name: Option<String>,
+    /// When it was put down, in unix seconds.
+    pub dropped_at: Option<i64>,
 }
 
 /// What an account is allowed to do. Each role includes everything below it.
@@ -236,6 +258,8 @@ pub struct CharacterRecord {
     pub vitals_at: Option<i64>,
     /// Their own prompt format, if they've set one.
     pub prompt: Option<String>,
+    /// The attack they've chosen to make each round, if any.
+    pub autoattack: Option<String>,
 }
 
 /// SQLite connection. Queries run synchronously on the main thread; they're small and local,
@@ -251,6 +275,7 @@ impl Database {
         for (table, column, ty) in [
             ("items", "slot", "TEXT"),
             ("items", "container_id", "INTEGER REFERENCES items(id)"),
+            ("items", "name", "TEXT"),
             ("characters", "race", "TEXT"),
             ("characters", "background", "TEXT"),
             ("characters", "description", "TEXT NOT NULL DEFAULT ''"),
@@ -258,6 +283,7 @@ impl Database {
             ("characters", "stamina", "REAL"),
             ("characters", "vitals_at", "INTEGER"),
             ("characters", "prompt", "TEXT"),
+            ("characters", "autoattack", "TEXT"),
         ] {
             let exists: bool = conn.query_row(
                 &format!(
@@ -334,7 +360,7 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, name, room, race, background, description, health, stamina, vitals_at,
-                 prompt FROM characters WHERE account_id = ?1 ORDER BY id",
+                 prompt, autoattack FROM characters WHERE account_id = ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([account_id], |row| {
             Ok(CharacterRecord {
@@ -350,6 +376,7 @@ impl Database {
                 },
                 vitals_at: row.get(8)?,
                 prompt: row.get(9)?,
+                autoattack: row.get(10)?,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -379,7 +406,17 @@ impl Database {
             vitals: None,
             vitals_at: None,
             prompt: None,
+            autoattack: None,
         })
+    }
+
+    /// Save a chosen auto-attack, or `None` for fighting with what they hold.
+    pub fn set_autoattack(&self, character_id: i64, skill: Option<&str>) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE characters SET autoattack = ?1 WHERE id = ?2",
+            params![skill, character_id],
+        )?;
+        Ok(())
     }
 
     pub fn save_vitals(
@@ -523,13 +560,32 @@ impl Database {
         Ok(())
     }
 
-    /// Every real item lying in a room: (id, template, room).
-    pub fn items_in_rooms(&self) -> DbResult<Vec<(i64, String, String)>> {
+    /// Every real item lying in a room.
+    pub fn items_in_rooms(&self) -> DbResult<Vec<RoomItemRow>> {
         let conn = self.conn();
-        let mut stmt = conn
-            .prepare("SELECT id, template, room FROM items WHERE room IS NOT NULL ORDER BY id")?;
-        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        let mut stmt = conn.prepare(
+            "SELECT id, template, room, name, dropped_at FROM items WHERE room IS NOT NULL
+             ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(RoomItemRow {
+                id: row.get(0)?,
+                template: row.get(1)?,
+                room: row.get(2)?,
+                name: row.get(3)?,
+                dropped_at: row.get(4)?,
+            })
+        })?;
         Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Give a real item its own name, instead of its template's.
+    pub fn set_item_name(&self, id: i64, name: &str) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE items SET name = ?1 WHERE id = ?2",
+            params![name, id],
+        )?;
+        Ok(())
     }
 
     /// Every item a character holds or wears: (id, template, slot). The slot is `held` for
@@ -583,6 +639,26 @@ impl Database {
             [template],
             |row| row.get(0),
         )?)
+    }
+
+    pub fn world_flags(&self) -> DbResult<Vec<String>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT flag FROM world_state")?;
+        let rows = stmt.query_map([], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn set_world_flag(&self, flag: &str, set: bool) -> DbResult<()> {
+        let conn = self.conn();
+        if set {
+            conn.execute(
+                "INSERT INTO world_state (flag) VALUES (?1) ON CONFLICT (flag) DO NOTHING",
+                [flag],
+            )?;
+        } else {
+            conn.execute("DELETE FROM world_state WHERE flag = ?1", [flag])?;
+        }
+        Ok(())
     }
 
     pub fn spawn_counts(&self) -> DbResult<Vec<(String, u32)>> {

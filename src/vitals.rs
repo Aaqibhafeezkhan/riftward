@@ -2,13 +2,14 @@
 //! shows them.
 //!
 //! The maximums come from attributes (health 8 + Body / 2, stamina 8 + Willpower / 2). Current
-//! values recover on the heartbeat, worked out from elapsed time, and keep recovering while the
-//! character is offline: their vitals are saved with the time they were saved, and caught up at
-//! the next login.
+//! values recover on the heartbeat, worked out from elapsed time: three times as fast while
+//! resting, and not at all in a fight. They keep recovering while the character is offline: their
+//! vitals are saved with the time they were saved, and caught up at the next login.
 
 use bevy::prelude::*;
 
 use crate::attributes::Attributes;
+use crate::combat::Fighting;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
 use crate::net::{self, Connection};
@@ -21,6 +22,8 @@ use crate::world::Player;
 const HEALTH_RECOVERY_SECS: f32 = 600.0;
 /// Seconds for stamina to recover from nothing to full, at rest.
 const STAMINA_RECOVERY_SECS: f32 = 120.0;
+/// How much faster vitals recover while resting.
+const REST_SPEEDUP: f32 = 3.0;
 /// How often everyone's vitals are saved, in seconds, besides at logout.
 const SAVE_EVERY_SECS: f64 = 60.0;
 
@@ -45,6 +48,18 @@ impl Plugin for VitalsPlugin {
                     .usage("prompt [<format>]")
                     .summary("set your prompt: %h/%H health, %s/%S stamina, %% a percent sign"),
                 prompt_cmd,
+            )
+            .add_command(
+                CommandSpec::new("rest", Category::Character)
+                    .shortcuts(&["sit"])
+                    .summary("sit down and rest, recovering three times as fast"),
+                rest,
+            )
+            .add_command(
+                CommandSpec::new("stand", Category::Character)
+                    .shortcuts(&["wake"])
+                    .summary("get up from resting"),
+                stand,
             )
             .add_command(
                 CommandSpec::new("setvitals", Category::Admin)
@@ -131,6 +146,23 @@ pub fn render_prompt(format: &str, vitals: &Vitals, attributes: &Attributes) -> 
     text
 }
 
+/// Players' vitals and whether they're resting or fighting. Mobs don't recover yet.
+type Recovering<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Vitals,
+        &'static Attributes,
+        Has<Resting>,
+        Has<Fighting>,
+    ),
+    With<Player>,
+>;
+
+/// Sitting down to rest. Walking, attacking or being attacked gets them up.
+#[derive(Component, Debug)]
+pub struct Resting;
+
 /// A character's prompt format. Lives on the player entity.
 #[derive(Component, Clone, Debug)]
 pub struct PromptFormat(pub String);
@@ -143,19 +175,20 @@ fn unix_now() -> i64 {
 }
 
 /// Recover everyone's vitals by the time since the last heartbeat.
-fn recover(
-    time: Res<Time>,
-    mut last: Local<Option<f64>>,
-    mut players: Query<(&mut Vitals, &Attributes)>,
-) {
+fn recover(time: Res<Time>, mut last: Local<Option<f64>>, mut players: Recovering) {
     let now = time.elapsed_secs_f64();
     let secs = last.map_or(0.0, |last| now - last) as f32;
     *last = Some(now);
-    for (mut vitals, attributes) in &mut players {
+    for (mut vitals, attributes, resting, fighting) in &mut players {
         let before = vitals.clone();
         let mut after = before.clone();
         after.clamp(attributes);
-        after.recover(attributes, secs);
+        let pace = match (fighting, resting) {
+            (true, _) => 0.0,
+            (false, true) => REST_SPEEDUP,
+            (false, false) => 1.0,
+        };
+        after.recover(attributes, secs * pace);
         if after != before {
             *vitals = after;
         }
@@ -241,6 +274,49 @@ fn prompt_cmd(
         }
     };
     deliver(vec![reply_line(inv.entity, reply)], &mut players);
+}
+
+/// `rest`: sit down to recover faster.
+fn rest(
+    In(inv): In<Invocation>,
+    mut commands: Commands,
+    mut players: PlayerQuery,
+    state: Query<(Has<Resting>, Has<Fighting>)>,
+) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let mut out = Vec::new();
+    match state.get(inv.entity) {
+        Ok((_, true)) => out.push(Outgoing::line(inv.entity, "You can't rest in a fight!")),
+        Ok((true, _)) => out.push(Outgoing::line(inv.entity, "You're already resting.")),
+        _ => {
+            commands.entity(inv.entity).insert(Resting);
+            out.push(Outgoing::line(inv.entity, "You sit down and rest."));
+            out.push(Outgoing::Room {
+                room: actor.room,
+                except: inv.entity,
+                text: format!("{} sits down to rest.\r\n", actor.name),
+            });
+        }
+    }
+    deliver(out, &mut players);
+}
+
+/// `stand`: get up from resting.
+fn stand(
+    In(inv): In<Invocation>,
+    mut commands: Commands,
+    mut players: PlayerQuery,
+    resting: Query<(), With<Resting>>,
+) {
+    let text = if resting.get(inv.entity).is_ok() {
+        commands.entity(inv.entity).remove::<Resting>();
+        "You stand up."
+    } else {
+        "You're already on your feet."
+    };
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
 }
 
 /// `setvitals <player> <health> [<stamina>]`: an admin sets someone's current vitals.

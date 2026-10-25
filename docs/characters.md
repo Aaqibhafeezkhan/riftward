@@ -88,6 +88,7 @@ A background is a life before play: a few starting skills and, for some, a magic
 
 - **Gates follow what a background implies,** and must be affordable from starting Karma. A test checks that every background is open to at least one race spending its starting Karma on the gate.
 - **Two backgrounds have no gate,** Street Urchin and Farmhand, so every build has somewhere to start.
+- **Every background has a starting kit** (`items`), on top of everyone's plain clothes and belt pouch: a Soldier's short sword, an Urchin's knife and lockpicks, a Farmhand's hatchet, a Smith's hammer, a Scholar's or Awakened caster's quarterstaff, a knife for most others, and nothing for the Adept, who fights with their body. A background's weapon comes with its skill (a test checks this), since an untrained weapon fights no better than its holder's Brawling. The kit is given once, when a character is first made: worn if it's worn, in hand while hands are free, otherwise in the belt pouch.
 - **Race gates allow cultural backgrounds,** such as the t'skrang River Pilot.
 - **Awakened backgrounds** require Magic 1 and grant the tradition's foundation casting skill, which is what Awakens the character. They grant no Magic themselves: a would-be caster pays for their talent with starting Karma, and starts with their faith or craft rather than a sword.
 
@@ -109,4 +110,4 @@ Players read them as "Magic 1 and Willpower 4", or "T'skrang".
 - [ ] **Exact skill grants** for each background, once skill trees exist.
 - [ ] **Are Awakened backgrounds balanced?** They cost at least 1 starting Karma (for Magic 1) and grant fewer practical skills.
 - [ ] **Universal starting skills:** basic attack only, or also a survival skill such as Foraging?
-- [ ] **Starting equipment by background:** an urchin's lockpicks, a soldier's sword (see [Items](items.md#open-questions)).
+- [x] **Starting equipment by background:** built; see [Backgrounds](#backgrounds).

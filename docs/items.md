@@ -28,6 +28,19 @@ items: {
 | `container` | none | It holds things; see [Containers](#containers) |
 | `fixed` | `false` | Can't be picked up, like a chest bolted to the floor |
 
+## Weapons
+
+A template can be a weapon:
+
+```ron
+"short_sword": (name: "a short sword", bulk: Bulk(1), tags: ["blade"],
+    weapon: (skill: "swordplay:basics", damage: (2, 5))),
+"knife": (name: "a knife", tags: ["blade"],
+    weapon: (skill: "knives:basics", damage: (1, 4))),   // `verb: "stab"` would override the skill's
+```
+
+Held in hand, it's what its holder fights with (see [Combat](architecture.md#combat)): its damage in anyone's hands, and better aim and more damage for those trained in its skill. `examine` shows a weapon's damage and skill. Armour comes later.
+
 ## Bulk
 
 Bulk works as in Pathfinder 2e. It measures size and awkwardness together, not weight alone.
@@ -95,6 +108,8 @@ At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there'
 - **Mobs stay temporary** and reset with their zone.
 
 ## Decay
+
+Status: built for corpses only. A mob's corpse rots in 5 minutes; a player's, holding everything they had, in 30, timed from when they fell so it survives restarts. A rotting container spills its contents where it lay. Litter, perishables and torches wait.
 
 Items rot away over time, which keeps rooms from filling with clutter and makes food, corpses and torches feel physical. It's also what keeps saved items from filling the world and the database. Each template picks one kind of decay:
 

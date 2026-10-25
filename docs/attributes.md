@@ -73,7 +73,7 @@ dice.contest(luck_a, luck_b, p)      // both sides' Luck
 
 Each character has **current** health and stamina, below or at the maximums above (`src/vitals.rs`).
 
-- **Recovery** happens on the one-second heartbeat, worked out from elapsed time: health refills from empty in 10 minutes, stamina in 2. Both are tuning values, and will later depend on resting, food and skills.
+- **Recovery** happens on the one-second heartbeat, worked out from elapsed time: health refills from empty in 10 minutes, stamina in 2. **`rest`** makes it three times as fast (walking, attacking or being attacked gets you up, and being caught resting is dangerous; see [Combat](architecture.md#combat)), and nothing recovers in a fight. Food and skills may change it later.
 - **It continues offline.** Vitals are saved with the time they were saved (at logout, and every minute), and caught up at the next login, so a player who logs out hurt comes back rested.
 - **Fractions count.** Current values are kept as fractions and shown rounded down, so slow recovery still adds up.
 - **A maximum that goes down** (should one ever) clamps the current value to it.

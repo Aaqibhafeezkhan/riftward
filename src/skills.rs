@@ -45,8 +45,10 @@ const BASE_COOLDOWN: f64 = 5.0 * 60.0;
 const COOLDOWN_GROWTH: f64 = 1.1;
 /// Skill levels per character level.
 pub const LEVELS_PER_CHARACTER_LEVEL: u32 = 5;
-/// Skills every character starts with, whatever their race and background.
-pub const UNIVERSAL_SKILLS: &[&str] = &["athletics:endurance"];
+/// Skills every character starts with, whatever their race and background: a basic attack, and
+/// the passives everyone practises by living.
+pub const UNIVERSAL_SKILLS: &[&str] =
+    &["brawling:basics", "athletics:endurance", "athletics:dodge"];
 
 pub struct SkillsPlugin;
 
@@ -65,7 +67,8 @@ impl Plugin for SkillsPlugin {
             .add_command(
                 CommandSpec::new("use", Category::Interaction)
                     .usage("use <skill> [<target>]")
-                    .summary("use an active skill, like 'use lockpicking north'"),
+                    .summary("use an active skill, like 'use lockpicking north'")
+                    .action(),
                 use_cmd,
             )
             .add_command(
@@ -144,6 +147,45 @@ pub enum SkillKind {
     },
     /// Practised whenever one of its triggers happens.
     Passive { triggers: Vec<Trigger> },
+    /// An attack, made every round of a fight. A weapon skill (Swordplay) has no damage of its
+    /// own and needs a weapon that uses it in hand; an unarmed or natural attack (Brawling, a
+    /// rat's Bite) has its own.
+    Attack {
+        /// What it does, as the attacker says it: "punch" ("Grok punches the rat").
+        verb: String,
+        /// Damage before the Strength bonus, low to high, for attacks made without a weapon.
+        #[serde(default)]
+        damage: Option<(u32, u32)>,
+    },
+    /// While its holder is alive, mobs made from the `affects` template in the same zone fight
+    /// better: the Rat King's command over his rats.
+    Aura {
+        /// A mob template, `zone:mob`.
+        affects: String,
+        bonus: Bonus,
+    },
+}
+
+/// What an aura adds to the mobs it affects.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq)]
+pub struct Bonus {
+    /// Added to their attack rating.
+    #[serde(default)]
+    pub attack: i32,
+    /// Added to their defence rating.
+    #[serde(default)]
+    pub defence: i32,
+    /// Taken off each hit they take (every hit still does at least 1).
+    #[serde(default)]
+    pub armour: i32,
+}
+
+impl std::ops::AddAssign for Bonus {
+    fn add_assign(&mut self, other: Self) {
+        self.attack += other.attack;
+        self.defence += other.defence;
+        self.armour += other.armour;
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq)]
@@ -158,6 +200,23 @@ pub enum Cost {
 pub enum Trigger {
     /// One use for every `per` stamina spent.
     StaminaSpent { per: u32 },
+    /// One use for every attack dodged.
+    Dodged,
+}
+
+impl Trigger {
+    /// How much of this trigger makes one use, if `event` is one of it, and how much happened.
+    fn counts(&self, event: &GameEvent, who: Entity) -> Option<(f64, f64)> {
+        match (self, event) {
+            (Trigger::StaminaSpent { per }, GameEvent::StaminaSpent { who: w, amount })
+                if *w == who =>
+            {
+                Some((f64::from((*per).max(1)), f64::from(*amount)))
+            }
+            (Trigger::Dodged, GameEvent::Dodged { who: w }) if *w == who => Some((1.0, 1.0)),
+            _ => None,
+        }
+    }
 }
 
 /// A skill with what it inherits from its tree.
@@ -391,7 +450,7 @@ impl Practice<'_, '_> {
 
 /// One use of a skill a character knows: practice, maybe a level, and maybe a character level
 /// and its Karma. Saves the skill, and returns what to tell them.
-fn count_use(
+pub fn count_use(
     defs: &SkillDefs,
     skills: &mut Skills,
     attributes: &mut Attributes,
@@ -457,7 +516,6 @@ pub fn learn(skills: &mut Skills, key: &str, via: &str, character_id: i64, db: &
 }
 
 /// Practise passive skills when their triggers happen.
-#[allow(clippy::too_many_arguments)]
 fn practise_passives(
     mut events: MessageReader<GameEvent>,
     defs: Res<SkillDefs>,
@@ -466,39 +524,36 @@ fn practise_passives(
     db: Res<Database>,
     mut players: PlayerQuery,
 ) {
-    let spent: Vec<(Entity, u32)> = events
-        .read()
-        .filter_map(|event| match event {
-            GameEvent::StaminaSpent { who, amount } => Some((*who, *amount)),
-            _ => None,
-        })
-        .collect();
     let mut out = Vec::new();
-    for (who, amount) in spent {
+    for event in events.read() {
+        let who = match event {
+            GameEvent::StaminaSpent { who, .. } | GameEvent::Dodged { who } => *who,
+            _ => continue,
+        };
+        // Only players practise; mobs fight at the levels their templates give them.
         let (Some(actor), Ok((mut skills, mut attributes))) =
             (Actor::get(&players, who), sheets.get_mut(who))
         else {
             continue;
         };
-        let passives: Vec<(String, u32)> = skills
+        let passives: Vec<(String, f64, f64)> = skills
             .0
             .keys()
             .filter_map(|key| match &defs.skills.get(key)?.def.kind {
-                // Stamina spent is the only trigger so far.
                 SkillKind::Passive { triggers } => triggers
                     .iter()
-                    .map(|Trigger::StaminaSpent { per }| (key.clone(), (*per).max(1)))
-                    .next(),
-                SkillKind::Active { .. } => None,
+                    .find_map(|trigger| trigger.counts(event, who))
+                    .map(|(per, amount)| (key.clone(), per, amount)),
+                _ => None,
             })
             .collect();
-        for (key, per) in passives {
+        for (key, per, amount) in passives {
             let Some(state) = skills.0.get_mut(&key) else {
                 continue;
             };
-            state.pending += f64::from(amount);
-            let uses = (state.pending / f64::from(per)).floor();
-            state.pending -= uses * f64::from(per);
+            state.pending += amount;
+            let uses = (state.pending / per).floor();
+            state.pending -= uses * per;
             for _ in 0..uses as u32 {
                 let lines = count_use(
                     &defs,
@@ -597,6 +652,8 @@ fn skills_text(
             let kind = match skill.def.kind {
                 SkillKind::Active { .. } => "",
                 SkillKind::Passive { .. } => " (passive)",
+                SkillKind::Attack { .. } => " (attack)",
+                SkillKind::Aura { .. } => " (aura)",
             };
             text += &format!(
                 "\r\n    {:<22}{:>3}/{:<3} {} +{} {}{resting}{kind}",
@@ -636,7 +693,15 @@ fn use_cmd(
         Ok(skills) => match defs.find_known(skills, name) {
             None => Err(format!("You don't know a skill called '{name}'.")),
             Some(skill) => match &skill.def.kind {
-                SkillKind::Passive { .. } => Err(format!(
+                SkillKind::Attack { .. } => Err(format!(
+                    "{} is an attack: make it your auto-attack with 'autoattack {}', then fight.",
+                    skill.def.name,
+                    skill
+                        .key
+                        .split_once(':')
+                        .map_or(skill.key.as_str(), |(_, id)| id)
+                )),
+                SkillKind::Passive { .. } | SkillKind::Aura { .. } => Err(format!(
                     "{} isn't something you use; it improves as you go.",
                     skill.def.name
                 )),

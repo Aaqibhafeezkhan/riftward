@@ -1,0 +1,25 @@
+// Natural attacks for animals and monsters. Players can't learn these, since nothing teaches
+// them; mobs are given them in their templates.
+(
+    name: "Beast",
+    rarity: Common,
+    attribute: Agility,
+    skills: {
+        "bite": (
+            name: "Bite",
+            kind: Attack(verb: "bite", damage: (1, 2)),
+        ),
+        "rat_bite": (
+            name: "Rat Bite",
+            kind: Attack(verb: "bite", damage: (1, 1)),
+        ),
+        "claw": (
+            name: "Claw",
+            kind: Attack(verb: "claw", damage: (1, 3)),
+        ),
+        "rat_kings_command": (
+            name: "Rat King's Command",
+            kind: Aura(affects: "sewers:sewer_rat", bonus: (attack: 2, defence: 2, armour: 1)),
+        ),
+    },
+)

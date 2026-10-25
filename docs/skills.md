@@ -1,6 +1,6 @@
 # Skills
 
-[Design summary](README.md) · Status: the skill core is built (trees as data, levels, progression, active and passive skills, starting skills, `skills`, `use`); teaching, loot, epiphany, rarity rules and combat are not
+[Design summary](README.md) · Status: the skill core and combat are built (trees as data, levels, progression, active, passive and attack skills, starting skills, `skills`, `use`, `autoattack`); teaching, loot, epiphany and rarity rules are not
 
 Characters have no class. What a character can do is the set of skills they have learned, organized into skill trees. Every skill improves only by being used; how that works is in [Progression](progression.md).
 
@@ -231,11 +231,26 @@ The skill core, without combat, proved on non-combat skills first:
 
   An **active** skill names the command that performs it; `use lockpicking north` runs `pick north`, so `use` stays generic and each skill's work lives with the system it acts on. The command checks the skill is known, off its use cooldown and affordable, pays the stamina, does its work, and counts the use. An active skill whose command doesn't exist yet ("You can't put Pickpocketing to use yet") can still be known and taught.
 
-  A **passive** skill lists [game event](architecture.md#game-events) triggers; `StaminaSpent(per: 3)` counts one use for every 3 stamina spent, so Endurance improves as a character exerts themselves.
+  A **passive** skill lists [game event](architecture.md#game-events) triggers; `StaminaSpent(per: 3)` counts one use for every 3 stamina spent, so Endurance improves as a character exerts themselves, and `Dodged` practises Dodge.
+
+  An **attack** skill is made every round of a fight once chosen with `autoattack` (see [Combat](architecture.md#combat)):
+
+  ```ron
+  "basics": (name: "Swordplay", kind: Attack(verb: "slash", damage: (2, 5), weapon: "blade")),
+  ```
+
+  An **aura** skill, held by a mob, makes certain other mobs in its zone fight better while the holder lives:
+
+  ```ron
+  "rat_kings_command": (name: "Rat King's Command",
+      kind: Aura(affects: "sewers:sewer_rat", bonus: (attack: 2, defence: 2, armour: 1))),
+  ```
+
+  Trees so far: `brawling` (everyone's basic attack, a punch), `swordplay` (needs a blade in hand), `beast` (bites and claws, for mobs), `athletics` (Dodge, Endurance) and `thievery`.
 - **Effectiveness** is level + the skill's attribute, used in contests by the [ratio rule](attributes.md#the-ratio-rule). Lockpicking 0 with Agility 3 against a difficulty-6 lock is a 33% chance.
 - **Progression** exactly as in [Progression](progression.md), with Luck on the gain roll.
 - **Character level and Karma:** each gain that takes total skill levels past a multiple of 5 earns a point of Karma, at once.
-- **Starting skills** from race, background, and the universal list (`athletics:endurance` for now; the basic attack joins it with combat) are granted at login if the character lacks them, so skills added to the data later reach existing characters. Starting skills that don't exist as data yet are skipped.
+- **Starting skills** from race, background, and the universal list (Brawling, Dodge and Endurance) are granted at login if the character lacks them, so skills added to the data later reach existing characters. Starting skills that don't exist as data yet are skipped.
 - **`skills`** lists what a character knows by tree: level, how warmed up it is (cold, warming, warm, hot), its attribute, and how long until it can improve again. Skills whose tree file is gone are listed as forgotten for now, and come back with it.
 - **Admins:** `grantskill <player> <tree:skill> [<level>]`.
 - **Saved** in `character_skills` on every use and learn.
@@ -248,7 +263,7 @@ The skill core, without combat, proved on non-combat skills first:
 - [ ] **Tier names:** the five working tiers, or names that fit the setting.
 - [ ] **Do mob trainers teach only the lower tiers?** The rarity table proposes Common and Uncommon only.
 - [ ] **What does teaching cost and reward?** Lesson time, gold paid by the student, and something for the teacher (reputation, or Charisma-linked teaching).
-- [ ] **Auto-attack or explicit attacks?** Proposed: once fighting, the basic attack is used automatically each round (practising as it goes), and other skills are used by command.
+- [x] **Auto-attack or explicit attacks?** Auto-attack: once fighting, the character's chosen attack is used automatically each round, practising as it goes, and other skills are used by command. The auto-attack starts as the most basic attack they know, and the player can set it to another attack skill.
 - [ ] **Sustained skills?** Stances and auras that are switched on and cost a little over time. Now or later.
 - [ ] **Worldwide cap on legendary skills?** Optional, later.
 - [ ] **Titles:** needed by `Title` conditions and not designed yet.
