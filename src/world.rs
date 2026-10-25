@@ -360,6 +360,10 @@ pub struct SpawnDef {
     pub refill: Refill,
     #[serde(default, skip_serializing_if = "Wander::is_never")]
     pub wander: Wander,
+    /// How many of its mobs one room holds comfortably. When set, its mobs stay put until a room
+    /// holds more than this, then the extras move on toward the least crowded room they may enter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crowd: Option<u32>,
 }
 
 /// When a spawn resets, in real time.
@@ -401,25 +405,31 @@ impl Every {
     }
 }
 
+impl Every {
+    /// The length of time on its own: "4 hours", "an hour", "a day".
+    pub fn period(&self) -> String {
+        let (n, unit) = match self {
+            Every::Minutes(n) => (*n, "minute"),
+            Every::Hours(n) => (*n, "hour"),
+            Every::Days(n) => (*n, "day"),
+            Every::AfterDeath(every) => return every.period(),
+        };
+        match (n, unit) {
+            (1, "hour") => "an hour".into(),
+            (1, unit) => format!("a {unit}"),
+            (n, unit) => format!("{n} {unit}s"),
+        }
+    }
+}
+
 impl fmt::Display for Every {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (n, unit) = match self {
-            Every::Minutes(n) => (n, "minute"),
-            Every::Hours(n) => (n, "hour"),
-            Every::Days(n) => (n, "day"),
-            Every::AfterDeath(every) => {
-                return match every.to_string().strip_prefix("every ") {
-                    Some(period) if period.starts_with(|c: char| c.is_ascii_digit()) => {
-                        write!(f, "{period} after the last one dies")
-                    }
-                    Some(unit) => write!(f, "a {unit} after the last one dies"),
-                    None => write!(f, "{every}"),
-                };
-            }
-        };
-        match n {
-            1 => write!(f, "every {unit}"),
-            n => write!(f, "every {n} {unit}s"),
+        match self {
+            Every::AfterDeath(_) => write!(f, "{} after the last one dies", self.period()),
+            _ => match self.period().split_once(' ') {
+                Some(("a" | "an", unit)) => write!(f, "every {unit}"),
+                _ => write!(f, "every {}", self.period()),
+            },
         }
     }
 }
@@ -429,12 +439,34 @@ impl fmt::Display for Every {
 pub enum Refill {
     /// This many: a reset replaces whatever died.
     Keep(u32),
+    /// A population that grows on each reset, doubling every `doubles_every` while it's small
+    /// and slowing as it nears `max`. Once wiped out it stays gone, or for `reseed` if set, after
+    /// which a single new mob appears and breeding starts again. It starts with `start` mobs the
+    /// first time the world runs, and with its saved count after a restart.
+    Breed {
+        doubles_every: Every,
+        max: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reseed: Option<Every>,
+        #[serde(default = "one", skip_serializing_if = "is_one")]
+        start: u32,
+    },
+}
+
+fn one() -> u32 {
+    1
+}
+
+fn is_one(n: &u32) -> bool {
+    *n == 1
 }
 
 impl Refill {
+    /// The most it ever wants.
     pub fn wanted(&self) -> u32 {
         match self {
             Refill::Keep(n) => *n,
+            Refill::Breed { max, .. } => *max,
         }
     }
 }
@@ -1168,6 +1200,18 @@ mod tests {
                         problems.push(format!("{here}: no room '{room}'"));
                     }
                 }
+                if let Refill::Breed {
+                    doubles_every,
+                    reseed,
+                    ..
+                } = &spawn.refill
+                    && [Some(doubles_every), reseed.as_ref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|every| matches!(every, Every::AfterDeath(_)))
+                {
+                    problems.push(format!("{here}: breeding periods can't be AfterDeath"));
+                }
                 if let Some((min, max)) = spawn.wander.secs()
                     && (min == 0 || min > max)
                 {
@@ -1209,6 +1253,8 @@ mod tests {
         assert_eq!(dragon.secs(), 30 * 86400);
         assert_eq!(dragon.to_string(), "30 days after the last one dies");
         assert_eq!(Every::Hours(1).to_string(), "every hour");
+        assert_eq!(Every::Days(1).period(), "a day");
+        assert_eq!(Every::Hours(4).period(), "4 hours");
         assert_eq!(Every::Minutes(20).to_string(), "every 20 minutes");
         let quick = Every::AfterDeath(Box::new(Every::Minutes(1)));
         assert_eq!(quick.to_string(), "a minute after the last one dies");
@@ -1224,6 +1270,23 @@ mod tests {
             .unwrap();
         assert_eq!(spawn.every, Every::AfterDeath(Box::new(Every::Days(7))));
         assert_eq!(spawn.wander.secs(), Some((30, 90)));
+
+        let rats: SpawnDef = ron_options()
+            .from_str(
+                "(mob: \"rat\", room: \"nest\", every: Minutes(20), crowd: 6, \
+                 refill: Breed(doubles_every: Hours(4), max: 200, reseed: Days(7)))",
+            )
+            .unwrap();
+        assert_eq!(
+            rats.refill,
+            Refill::Breed {
+                doubles_every: Every::Hours(4),
+                max: 200,
+                reseed: Some(Every::Days(7)),
+                start: 1,
+            }
+        );
+        assert_eq!(rats.crowd, Some(6));
     }
 
     #[test]

@@ -1,10 +1,12 @@
 //! Mobs: monsters, animals and townsfolk, made from templates in zone files.
 //!
 //! Every mob in play comes from a spawn, which keeps a room stocked: on each reset it counts the
-//! mobs it made, wherever they've wandered, and makes up the difference. Builders can also
-//! `summon` a mob that belongs to no spawn. Mobs aren't saved: a restart brings them back fresh
-//! at their spawns, except that a spawn waiting to return after its last mob died (`AfterDeath`)
-//! remembers when, so the dragon doesn't return early.
+//! mobs it made, wherever they've wandered, and makes up the difference, or, for a breeding
+//! spawn, grows the population. Builders can also `summon` a mob that belongs to no spawn.
+//!
+//! Mobs aren't saved: a restart brings them back fresh at their spawns. Two things are saved so a
+//! restart changes nothing important: when a spawn waiting on its dead returns (the dragon's
+//! month, the rats' week), and how many mobs each breeding spawn has.
 
 use std::collections::{HashMap, HashSet};
 
@@ -20,7 +22,8 @@ use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::world::{
-    Door, Every, InRoom, MobDef, MobKey, RoomIndex, RoomKey, SpawnDef, SpawnKey, Wander, ZoneDef,
+    Door, Every, InRoom, MobDef, MobKey, Refill, RoomIndex, RoomKey, SpawnDef, SpawnKey, Wander,
+    ZoneDef,
 };
 
 pub struct MobsPlugin;
@@ -87,12 +90,29 @@ pub struct MobTemplates(pub HashMap<MobKey, MobDef>);
 #[derive(Resource, Default)]
 pub struct Spawns(pub HashMap<SpawnKey, SpawnDef>);
 
-/// When each spawn next resets, in unix seconds, and which spawns have had their first check
-/// since the server started.
+/// Each spawn's timers and counts. Times are unix seconds.
 #[derive(Resource, Default)]
-struct SpawnTimers {
+pub struct SpawnTimers {
+    /// When a timed spawn next resets.
     next: HashMap<SpawnKey, i64>,
+    /// When a spawn waiting on its dead returns: `AfterDeath`, or a breeding spawn's reseed.
+    /// Saved.
+    waiting: HashMap<SpawnKey, i64>,
+    /// How many mobs each breeding spawn had at its last check. Saved.
+    counts: HashMap<SpawnKey, u32>,
+    /// When each spawn last reset, for how much a breeding spawn has grown since.
+    last: HashMap<SpawnKey, i64>,
+    /// Spawns that have had their first check since the server started.
     seen: HashSet<SpawnKey>,
+    /// Spawns a builder has asked to reset now.
+    force: HashSet<SpawnKey>,
+}
+
+impl SpawnTimers {
+    /// Reset a spawn at its next check, whatever its timers say.
+    pub fn force(&mut self, key: SpawnKey) {
+        self.force.insert(key);
+    }
 }
 
 fn unix_now() -> i64 {
@@ -134,14 +154,109 @@ fn plan(
     }
 }
 
+/// How big a breeding population should be after `elapsed` seconds: logistic growth that doubles
+/// every `doubling` seconds while small and levels off at `max`. It always grows by at least one
+/// while any survive and there's room, so small populations don't stall.
+fn grow(alive: u32, elapsed: i64, doubling: i64, max: u32) -> u32 {
+    if alive == 0 || alive >= max {
+        return alive;
+    }
+    let (n, k) = (f64::from(alive), f64::from(max));
+    let shrink = 2f64.powf(-(elapsed.max(0) as f64) / doubling.max(1) as f64);
+    let target = k / (1.0 + (k / n - 1.0) * shrink);
+    (target.floor() as u32).clamp(alive + 1, max)
+}
+
+/// A breeding spawn's settings.
+struct Breeding<'a> {
+    every: &'a Every,
+    doubles_every: &'a Every,
+    max: u32,
+    reseed: Option<&'a Every>,
+    start: u32,
+}
+
+/// What a breeding spawn does at one check.
+#[derive(Debug, PartialEq)]
+struct BreedStep {
+    make: u32,
+    next: Option<i64>,
+    waiting: Option<i64>,
+}
+
+/// What a breeding spawn does at one check, given its timers (see [`SpawnTimers`]).
+///
+/// On its first check after a restart it brings back its saved count, or `start` the first time
+/// the world runs. After that it grows on its schedule. When the last of its mobs is gone it stops,
+/// and waits for its reseed, if it has one, to bring back a single mob.
+#[allow(clippy::too_many_arguments)]
+fn plan_breed(
+    breeding: &Breeding,
+    alive: u32,
+    saved: Option<u32>,
+    next: Option<i64>,
+    waiting: Option<i64>,
+    last: Option<i64>,
+    first: bool,
+    now: i64,
+) -> BreedStep {
+    let every = breeding.every.secs();
+    let reset = |make| BreedStep {
+        make,
+        next: Some(now + every),
+        waiting: None,
+    };
+    if first {
+        let target = saved.unwrap_or(breeding.start).min(breeding.max);
+        if target > alive {
+            return reset(target - alive);
+        }
+    }
+    if alive == 0 {
+        return match waiting {
+            Some(at) if now >= at => reset(1),
+            Some(at) => BreedStep {
+                make: 0,
+                next: None,
+                waiting: Some(at),
+            },
+            None => BreedStep {
+                make: 0,
+                next: None,
+                waiting: breeding.reseed.map(|reseed| now + reseed.secs()),
+            },
+        };
+    }
+    match next {
+        Some(at) if now < at => BreedStep {
+            make: 0,
+            next: Some(at),
+            waiting: None,
+        },
+        _ => {
+            let elapsed = last.map_or(every, |last| now - last);
+            let doubling = breeding.doubles_every.secs();
+            reset(grow(alive, elapsed, doubling, breeding.max) - alive)
+        }
+    }
+}
+
 fn load_spawn_timers(db: Res<Database>, mut timers: ResMut<SpawnTimers>) {
     match db.spawn_timers() {
         Ok(rows) => {
             for (spawn, at) in rows {
-                timers.next.insert(SpawnKey::parse(&spawn, ""), at);
+                timers.waiting.insert(SpawnKey::parse(&spawn, ""), at);
             }
         }
         Err(err) => error!("failed to load spawn timers: {err}"),
+    }
+    match db.spawn_counts() {
+        Ok(rows) => {
+            for (spawn, count) in rows {
+                timers.counts.insert(SpawnKey::parse(&spawn, ""), count);
+            }
+        }
+        Err(err) => error!("failed to load spawn counts: {err}"),
     }
 }
 
@@ -154,6 +269,7 @@ fn sync_mob_templates(
     zones: Res<Assets<ZoneDef>>,
     mut templates: ResMut<MobTemplates>,
     mut spawns: ResMut<Spawns>,
+    mut timers: ResMut<SpawnTimers>,
     time: Res<Time>,
     mut dice: ResMut<Dice>,
     mut mobs: Query<(Entity, &mut Mob, Option<&SpawnedBy>, Has<Wanderer>)>,
@@ -162,7 +278,7 @@ fn sync_mob_templates(
         return;
     }
     templates.0.clear();
-    spawns.0.clear();
+    let old = std::mem::take(&mut spawns.0);
     for (_, zone) in zones.iter() {
         for (id, def) in &zone.mobs {
             let key = MobKey {
@@ -176,6 +292,10 @@ fn sync_mob_templates(
                 zone: zone.id.clone(),
                 spawn: id.clone(),
             };
+            // A new schedule takes effect at once, rather than after the old one's next reset.
+            if old.get(&key).is_some_and(|old| old.every != def.every) {
+                timers.next.remove(&key);
+            }
             spawns.0.insert(key, def.clone());
         }
     }
@@ -263,19 +383,67 @@ fn run_spawns(
             continue;
         };
         let first = timers.seen.insert(key.clone());
-        let timer = timers.next.get(key).copied();
-        let wanted = def.refill.wanted();
+        let force = timers.force.remove(key);
         let count = alive.get(key).copied().unwrap_or(0);
-        let (make, next) = plan(&def.every, wanted, count, timer, first, now);
+        let after_death = matches!(def.every, Every::AfterDeath(_));
+        let mut next = timers.next.get(key).copied();
+        let mut waiting = timers.waiting.get(key).copied();
+        if force {
+            next = None;
+            waiting = waiting.map(|_| now);
+            if after_death || count == 0 {
+                waiting = Some(now);
+            }
+        }
 
-        if next != timer {
-            match next {
+        let (make, new_next, new_waiting) = match &def.refill {
+            Refill::Keep(wanted) if after_death => {
+                let (make, waiting) = plan(&def.every, *wanted, count, waiting, first, now);
+                (make, None, waiting)
+            }
+            Refill::Keep(wanted) => {
+                let (make, next) = plan(&def.every, *wanted, count, next, first, now);
+                (make, next, None)
+            }
+            Refill::Breed {
+                doubles_every,
+                max,
+                reseed,
+                start,
+            } => {
+                let breeding = Breeding {
+                    every: &def.every,
+                    doubles_every,
+                    max: *max,
+                    reseed: reseed.as_ref(),
+                    start: *start,
+                };
+                let saved = timers.counts.get(key).copied();
+                if !first && saved != Some(count) {
+                    timers.counts.insert(key.clone(), count);
+                    if let Err(err) = db.set_spawn_count(&key.to_string(), count) {
+                        error!("failed to save the count for spawn [{key}]: {err}");
+                    }
+                }
+                let last = timers.last.get(key).copied();
+                let step = plan_breed(&breeding, count, saved, next, waiting, last, first, now);
+                (step.make, step.next, step.waiting)
+            }
+        };
+
+        if new_next != timers.next.get(key).copied() {
+            timers.last.insert(key.clone(), now);
+            match new_next {
                 Some(at) => timers.next.insert(key.clone(), at),
                 None => timers.next.remove(key),
             };
-            if let Every::AfterDeath(_) = def.every
-                && let Err(err) = db.set_spawn_timer(&key.to_string(), next)
-            {
+        }
+        if new_waiting != timers.waiting.get(key).copied() {
+            match new_waiting {
+                Some(at) => timers.waiting.insert(key.clone(), at),
+                None => timers.waiting.remove(key),
+            };
+            if let Err(err) = db.set_spawn_timer(&key.to_string(), new_waiting) {
                 error!("failed to save the timer for spawn [{key}]: {err}");
             }
         }
@@ -317,7 +485,9 @@ fn may_enter(wander: &Wander, spawn: &SpawnKey, room: &RoomKey, no_wander: bool)
     }
 }
 
-/// Move each wandering mob whose time has come through a random open exit it's allowed to take.
+/// Move each wandering mob whose time has come through an open exit it's allowed to take: a random
+/// one, or, for a spawn that minds crowding, toward the room with the fewest of its kind, and
+/// only once its room holds too many.
 fn wander(
     time: Res<Time>,
     spawns: Res<Spawns>,
@@ -328,6 +498,13 @@ fn wander(
     mut events: MessageWriter<GameEvent>,
 ) {
     let elapsed = time.elapsed_secs_f64();
+    let mut crowds: HashMap<(SpawnKey, Entity), u32> = HashMap::new();
+    for (_, _, spawned_by, in_room, _) in &mobs {
+        *crowds.entry((spawned_by.0.clone(), in_room.0)).or_default() += 1;
+    }
+    let crowd = |crowds: &HashMap<(SpawnKey, Entity), u32>, key: &SpawnKey, room: Entity| {
+        crowds.get(&(key.clone(), room)).copied().unwrap_or(0)
+    };
     for (entity, mob, spawned_by, mut in_room, mut wanderer) in &mut mobs {
         if wanderer.next > elapsed {
             continue;
@@ -339,10 +516,17 @@ fn wander(
             continue;
         };
         wanderer.next = elapsed + roll_secs(&mut dice, secs);
+        let key = &spawned_by.0;
+        if def
+            .crowd
+            .is_some_and(|limit| crowd(&crowds, key, in_room.0) <= limit)
+        {
+            continue;
+        }
         let Ok((_, _, exits)) = rooms.get(in_room.0) else {
             continue;
         };
-        let choices: Vec<(&String, Entity)> = exits
+        let mut choices: Vec<(&String, Entity)> = exits
             .0
             .iter()
             .filter(|(_, exit)| {
@@ -357,11 +541,18 @@ fn wander(
             })
             .map(|(dir, exit)| (dir, exit.to))
             .collect();
+        if def.crowd.is_some()
+            && let Some(least) = choices.iter().map(|(_, to)| crowd(&crowds, key, *to)).min()
+        {
+            choices.retain(|(_, to)| crowd(&crowds, key, *to) == least);
+        }
         if choices.is_empty() {
             continue;
         }
         let pick = dice.range(0, 0..=(choices.len() as i64 - 1)) as usize;
         let (dir, to) = choices[pick];
+        *crowds.entry((key.clone(), in_room.0)).or_default() -= 1;
+        *crowds.entry((key.clone(), to)).or_default() += 1;
         let name = capitalized(&mob.name);
         events.write(GameEvent::Left {
             who: entity,
@@ -538,6 +729,102 @@ mod tests {
         assert_eq!(
             plan(&every, 1, 0, Some(10 + month), false, 10 + month),
             (1, None)
+        );
+    }
+
+    #[test]
+    fn breeding_doubles_while_small_and_levels_off() {
+        let hour = 3600;
+        // Doubling every 4 hours: after 4 hours, 8 rats are about 16.
+        assert_eq!(grow(8, 4 * hour, 4 * hour, 10_000), 15);
+        // Small steps still add one.
+        assert_eq!(grow(3, 60, 4 * hour, 200), 4);
+        // Near the cap, growth slows and never passes it.
+        assert_eq!(grow(190, 4 * hour, 4 * hour, 200), 194);
+        assert_eq!(grow(199, 100 * hour, 4 * hour, 200), 200);
+        assert_eq!(grow(200, 100 * hour, 4 * hour, 200), 200);
+        // Nothing breeds from nothing.
+        assert_eq!(grow(0, 100 * hour, 4 * hour, 200), 0);
+    }
+
+    #[test]
+    fn breeding_spawns_restore_grow_die_out_and_reseed() {
+        let (every, doubles, reseed) = (Every::Minutes(20), Every::Hours(4), Every::Days(7));
+        let rats = Breeding {
+            every: &every,
+            doubles_every: &doubles,
+            max: 200,
+            reseed: Some(&reseed),
+            start: 8,
+        };
+        let step = |make, next, waiting| BreedStep {
+            make,
+            next,
+            waiting,
+        };
+        let week = 7 * 86400;
+        // The first run starts with `start`; a restart brings back the saved count.
+        assert_eq!(
+            plan_breed(&rats, 0, None, None, None, None, true, 0),
+            step(8, Some(1200), None)
+        );
+        assert_eq!(
+            plan_breed(&rats, 0, Some(150), None, None, None, true, 0),
+            step(150, Some(1200), None)
+        );
+        // Between resets, nothing; at a reset, growth since the last one.
+        assert_eq!(
+            plan_breed(&rats, 8, Some(8), Some(1200), None, Some(0), false, 600),
+            step(0, Some(1200), None)
+        );
+        assert_eq!(
+            plan_breed(&rats, 8, Some(8), Some(1200), None, Some(0), false, 1200),
+            step(1, Some(2400), None)
+        );
+        // Wiped out: the reseed week starts, then one rat returns.
+        assert_eq!(
+            plan_breed(&rats, 0, Some(0), Some(2400), None, Some(1200), false, 2000),
+            step(0, None, Some(2000 + week))
+        );
+        assert_eq!(
+            plan_breed(
+                &rats,
+                0,
+                Some(0),
+                None,
+                Some(2000 + week),
+                None,
+                false,
+                3000
+            ),
+            step(0, None, Some(2000 + week))
+        );
+        // ... even across a restart.
+        assert_eq!(
+            plan_breed(&rats, 0, Some(0), None, Some(2000 + week), None, true, 3000),
+            step(0, None, Some(2000 + week))
+        );
+        assert_eq!(
+            plan_breed(
+                &rats,
+                0,
+                Some(0),
+                None,
+                Some(2000 + week),
+                None,
+                false,
+                2000 + week
+            ),
+            step(1, Some(2000 + week + 1200), None)
+        );
+        // Without a reseed, a wiped-out spawn stays gone.
+        let gone = Breeding {
+            reseed: None,
+            ..rats
+        };
+        assert_eq!(
+            plan_breed(&gone, 0, Some(0), None, None, None, false, 5000),
+            step(0, None, None)
         );
     }
 

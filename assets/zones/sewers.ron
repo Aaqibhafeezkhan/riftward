@@ -15,8 +15,9 @@
             mob: "sewer_rat",
             room: "nest",
             every: Minutes(20),
-            refill: Keep(8),
+            refill: Breed(doubles_every: Hours(4), max: 200, reseed: Days(7), start: 8),
             wander: Anywhere(secs: (30, 120)),
+            crowd: 6,
         ),
     },
     rooms: {

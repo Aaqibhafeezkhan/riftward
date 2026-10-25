@@ -63,11 +63,17 @@ const SCHEMA: &str = "
         container_id INTEGER REFERENCES items(id) ON DELETE CASCADE
     );
 
-    -- Spawns waiting to return after their last mob died (`AfterDeath`), so a restart doesn't
-    -- bring the dragon back early.
+    -- Spawns waiting to return after their last mob died (`AfterDeath`, or a wiped-out
+    -- breeding spawn's reseed), so a restart doesn't bring the dragon back early.
     CREATE TABLE IF NOT EXISTS spawn_state (
         spawn      TEXT PRIMARY KEY,       -- zone:spawn
         next_reset INTEGER NOT NULL        -- unix seconds
+    );
+
+    -- How many mobs each breeding spawn has, so a restart brings back the same number.
+    CREATE TABLE IF NOT EXISTS spawn_counts (
+        spawn TEXT PRIMARY KEY,            -- zone:spawn
+        count INTEGER NOT NULL
     );
 ";
 
@@ -445,6 +451,22 @@ impl Database {
             )?,
             None => conn.execute("DELETE FROM spawn_state WHERE spawn = ?1", [spawn])?,
         };
+        Ok(())
+    }
+
+    pub fn spawn_counts(&self) -> DbResult<Vec<(String, u32)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT spawn, count FROM spawn_counts")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn set_spawn_count(&self, spawn: &str, count: u32) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT INTO spawn_counts (spawn, count) VALUES (?1, ?2)
+             ON CONFLICT (spawn) DO UPDATE SET count = excluded.count",
+            params![spawn, count],
+        )?;
         Ok(())
     }
 

@@ -14,7 +14,7 @@ use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::commands::movement::{View, full_direction, move_player, toward};
 use crate::db::{Database, Permission, Role};
 use crate::events::{GameEvent, Way};
-use crate::mobs::SpawnedBy;
+use crate::mobs::{SpawnTimers, SpawnedBy};
 use crate::net::Connection;
 use crate::output::{
     Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_online,
@@ -123,8 +123,8 @@ impl Plugin for BuildPlugin {
             .add_command(
                 build(
                     "spawn",
-                    "spawn [<id> | new <id> <mob> [<count>] | remove <id> | <field> <id> <value>]",
-                    "list, show, add or edit this zone's spawns; fields: mob, count, every, wander, room",
+                    "spawn [<id> | new <id> <mob> [<count>] | reset <id> | remove <id> | <field> <id> <value>]",
+                    "list, show, add, reset or edit this zone's spawns; fields: mob, count, breed, crowd, every, wander, room",
                 ),
                 spawn_cmd,
             )
@@ -303,12 +303,25 @@ fn spawn_cmd(
     rooms: RoomQuery,
     mut zones: ResMut<Assets<ZoneDef>>,
     mobs: Query<&SpawnedBy>,
+    mut timers: ResMut<SpawnTimers>,
 ) {
     let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
         return;
     };
     let alive = |key: &SpawnKey| mobs.iter().filter(|s| s.0 == *key).count();
-    let reply = spawn(&here, &inv, &mut zones, alive);
+    let reply = match inv.args.split_once(' ') {
+        Some(("reset", id)) => {
+            let key = SpawnKey::parse(&id.trim().to_ascii_lowercase(), &here.zone);
+            match zone_def(&zones, &key.zone) {
+                Ok(zone) if zone.spawns.contains_key(&key.spawn) => {
+                    timers.force(key.clone());
+                    Ok(format!("Spawn [{key}] will reset in a moment."))
+                }
+                _ => Err(format!("There's no spawn [{key}].")),
+            }
+        }
+        _ => spawn(&here, &inv, &mut zones, alive),
+    };
     deliver(vec![reply_line(inv.entity, reply)], &mut players);
 }
 
@@ -1420,6 +1433,7 @@ fn spawn(
                     every: Every::Minutes(10),
                     refill: Refill::Keep(count),
                     wander: Wander::Never,
+                    crowd: None,
                 };
                 let text = describe_spawn(&key(&id), &def, 0);
                 zone.spawns.insert(id.clone(), def);
@@ -1438,13 +1452,15 @@ fn spawn(
                 ))
             })
         }
-        "mob" | "count" | "every" | "wander" | "room" => {
+        "mob" | "count" | "breed" | "crowd" | "every" | "wander" | "room" => {
             if !zone.spawns.contains_key(&id) || (value.is_empty() && first != "room") {
                 return Err(format!(
                     "Usage: spawn {first} <id> {}, for a spawn in [{}].",
                     match first {
                         "mob" => "<mob>",
-                        "count" => "<n>",
+                        "count" => "<n>, to keep that many",
+                        "breed" => "<doubling> <max> [<reseed>], like 4h 200 7d",
+                        "crowd" => "<n | none>",
                         "every" => "<10m | 2h | 1d | death 30d>",
                         "wander" => {
                             "<never | zone <min> <max> | anywhere <min> <max> | rooms <min> <max> \
@@ -1455,7 +1471,11 @@ fn spawn(
                     here.zone
                 ));
             }
-            let change = spawn_change(first, &value, here)?;
+            let start = match &zone.spawns[&id].refill {
+                Refill::Breed { start, .. } => *start,
+                Refill::Keep(_) => 1,
+            };
+            let change = spawn_change(first, &value, here, start)?;
             if let Some(mob) = change.mob()
                 && !mob_exists(zones, &MobKey::parse(mob, &here.zone))
             {
@@ -1489,6 +1509,8 @@ fn mob_exists(zones: &Assets<ZoneDef>, key: &MobKey) -> bool {
 enum SpawnChange {
     Mob(String),
     Count(u32),
+    Refill(Refill),
+    Crowd(Option<u32>),
     Every(Every),
     Wander(Wander),
     Room(String),
@@ -1506,6 +1528,8 @@ impl SpawnChange {
         match self {
             SpawnChange::Mob(mob) => def.mob = mob,
             SpawnChange::Count(n) => def.refill = Refill::Keep(n),
+            SpawnChange::Refill(refill) => def.refill = refill,
+            SpawnChange::Crowd(crowd) => def.crowd = crowd,
             SpawnChange::Every(every) => def.every = every,
             SpawnChange::Wander(wander) => def.wander = wander,
             SpawnChange::Room(room) => def.room = room,
@@ -1513,8 +1537,48 @@ impl SpawnChange {
     }
 }
 
-fn spawn_change(field: &str, value: &str, here: &RoomKey) -> Result<SpawnChange, String> {
+/// Parse one `spawn <field> <id> <value>` edit. `start` is how many a breeding spawn begins with.
+fn spawn_change(
+    field: &str,
+    value: &str,
+    here: &RoomKey,
+    start: u32,
+) -> Result<SpawnChange, String> {
+    let period = |word: Option<&str>| {
+        Every::parse(&word.unwrap_or("").to_ascii_lowercase())
+            .filter(|every| !matches!(every, Every::AfterDeath(_)))
+    };
     Ok(match field {
+        "breed" => {
+            let usage = "Use how long it takes to double, the most there can be, and optionally \
+                         how long it takes to come back once wiped out: 4h 200 7d.";
+            let mut words = value.split_whitespace();
+            let doubles_every = period(words.next()).ok_or(usage)?;
+            let max: u32 = words
+                .next()
+                .and_then(|n| n.parse().ok())
+                .filter(|n| *n > 0)
+                .ok_or(usage)?;
+            let reseed = match words.next() {
+                None => None,
+                word => Some(period(word).ok_or(usage)?),
+            };
+            SpawnChange::Refill(Refill::Breed {
+                doubles_every,
+                max,
+                reseed,
+                start: start.min(max),
+            })
+        }
+        "crowd" => SpawnChange::Crowd(match value {
+            "none" | "off" => None,
+            n => Some(
+                n.parse()
+                    .ok()
+                    .filter(|n| *n > 0)
+                    .ok_or("The crowd limit is a number, 1 or more, or none.")?,
+            ),
+        }),
         "mob" => SpawnChange::Mob(value.to_ascii_lowercase()),
         "count" => SpawnChange::Count(
             value
@@ -1564,9 +1628,28 @@ fn describe_spawn(key: &SpawnKey, def: &SpawnDef, alive: usize) -> String {
             secs: (min, max),
         } => format!("among {}, every {min}-{max}s", rooms.join(", ")),
     };
+    let refill = match &def.refill {
+        Refill::Keep(n) => format!("keeps {n}"),
+        Refill::Breed {
+            doubles_every,
+            max,
+            reseed,
+            start,
+        } => format!(
+            "breeds, doubling in {} up to {max}; starts with {start}; {}",
+            doubles_every.period(),
+            match reseed {
+                Some(reseed) => format!("returns {} after it's wiped out", reseed.period()),
+                None => "gone for good once wiped out".into(),
+            }
+        ),
+    };
+    let crowd = def
+        .crowd
+        .map_or("no limit".into(), |n| format!("{n} to a room"));
     format!(
         "Spawn [{key}]: {alive} of {} alive\r\n  mob: {}\r\n  room: {}\r\n  resets: {}\r\n  \
-         wander: {wander}",
+         refill: {refill}\r\n  wander: {wander}\r\n  crowd: {crowd}",
         def.refill.wanted(),
         def.mob,
         def.room,

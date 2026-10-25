@@ -1,6 +1,6 @@
 # The living world: spawns, wandering and world events
 
-[Design summary](README.md) · Status: mob spawns (`Keep`, timed and `AfterDeath` resets, counting by origin) and wandering are built; item spawns, breeding, crowding and world events are not. Breeding and world events need the time system and combat.
+[Design summary](README.md) · Status: mob spawns (`Keep` and `Breed`, timed and `AfterDeath` resets, counting by origin, reseeding), wandering and crowding are built; item spawns, time-of-day spawns and world events are not. World events need combat.
 
 The world populates itself and changes on its own. Every mob comes from a **spawn** in a zone file, which decides how often it resets and how many it wants. Mobs can **wander**, crowded rooms push them outward, and **world events** fire when the state of the world meets their conditions. There is one spawn model for everything, from a single dragon to a sewer full of breeding rats.
 
@@ -35,7 +35,7 @@ On each reset, a spawn counts its living mobs, works out how many it wants, and 
 | `refill` | Wants after a reset |
 | --- | --- |
 | `Keep(n)` | `n`: replaces whatever died |
-| `Breed(doubles_every, max, reseed)` | The current count grown by however much is due since the last reset, at least one more while any survive, never more than `max` |
+| `Breed(doubles_every, max, reseed, start)` | The current count grown by however much is due since the last reset, at least one more while any survive, never more than `max`. `reseed` is optional; `start` (default 1) is how many there are the first time the world runs |
 
 **Breeding speed is set per spawn,** as how long the group takes to double. That's independent of `every`, which only sets how often new mobs appear:
 
@@ -48,7 +48,9 @@ On each reset, a spawn counts its living mobs, works out how many it wants, and 
 
 Growth slows as a spawn nears `max`, so a nearly full nest fills in gradually rather than jumping to the cap.
 
-**Last one standing.** When a breeding spawn's last mob dies, breeding stops, and the `reseed` timer starts. When it ends, a single new mob appears at the spawn and breeding resumes. Clearing out the sewer rats buys the city a week of peace, then one rat appears in the nest and it starts again. Without `reseed`, a breeding spawn that's wiped out stays gone.
+**Last one standing.** When a breeding spawn's last mob dies, breeding stops, and the `reseed` timer starts. When it ends, a single new mob appears at the spawn and breeding resumes. Clearing out the sewer rats buys the city a week of peace, then one rat appears in the nest and it starts again. Without `reseed`, a breeding spawn that's wiped out stays gone (until a builder uses `spawn reset`).
+
+**The population survives restarts.** A breeding spawn's count is saved whenever it changes (`spawn_counts`), so after a restart the same number come back, all at the spawn, and crowding spreads them out again within a minute. The reseed timer is saved too.
 
 ### Counting by origin
 
@@ -104,8 +106,11 @@ Rooms show each mob's `here` line, with repeats counted (`(x8)`), and `look <dir
 | `mob <name\|here\|desc\|keywords> <id> <value>` | Edit one (`mob here <id> none` restores the plain line) |
 | `spawn` / `spawn <id>` | List this zone's spawns with how many are alive, or show one |
 | `spawn new <id> <mob> [<count>]` | Add a spawn in this room: keeps `count` (default 1), resets every 10 minutes, doesn't wander |
-| `spawn count <id> <n>` | How many it keeps |
-| `spawn every <id> <10m\|2h\|1d\|death 30d>` | How often it resets |
+| `spawn count <id> <n>` | Keep `n` (a breeding spawn becomes a keeping one) |
+| `spawn breed <id> <doubling> <max> [<reseed>]` | Breed: `spawn breed sewer_rats 4h 200 7d` |
+| `spawn crowd <id> <n\|none>` | How many of its mobs a room holds before they push outward |
+| `spawn reset <id>` | Reset it now, whatever its timers say: refill, grow, or bring back a wiped-out spawn |
+| `spawn every <id> <10m\|2h\|1d\|death 30d>` | How often it resets. A new schedule starts at once |
 | `spawn wander <id> never` / `zone <min> <max>` / `anywhere <min> <max>` / `rooms <min> <max> <room>...` | How far its mobs roam, and how often they move, in seconds |
 | `spawn mob <id> <mob>` / `spawn room <id>` | Change what it spawns, or move it to this room |
 | `spawn remove <id>` | Remove the spawn and its mobs |
@@ -164,7 +169,9 @@ A door with `hidden: true` isn't in a room's exits **for each character until th
 
 ## Crowding
 
-A spawn can set how many of its mobs one room holds comfortably (`crowd: 5`). Past that, each extra mob is likely to move on at its next wander check, to a neighbouring room within its wander range.
+A spawn can set how many of its mobs one room holds comfortably (`crowd: 6`). Its mobs then stay put at their wander checks while their room holds that many or fewer. Past that, the extras move on, each toward the neighbouring room within its wander range that holds the fewest of its kind (a random one among equals). A spawn without `crowd` wanders as usual, moving at every check.
+
+So the nest fills to its limit, then rats spill into the next rooms, which fill in turn, and the population pushes outward as it grows. They can only leave through open exits: the grates hold them in the sewers until someone opens one.
 
 Crowding plus breeding is how a neglected sewer overruns the city, with no special rule:
 
@@ -252,7 +259,7 @@ events: {
 ## Build order
 
 1. **With items and mobs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering. *Built for mobs; item spawns still to do.*
-2. **With the time system:** `Breed` and `reseed`, crowding, `TimeOfDay`.
+2. **With the time system:** `Breed` and `reseed`, crowding, `TimeOfDay`. *Built, except `TimeOfDay` spawns.*
 3. **With combat:** world flags, counters and events, starting with `Count`, `Event(Died(...))` and the actions above.
 
 ## Open questions
