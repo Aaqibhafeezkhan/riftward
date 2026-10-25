@@ -185,6 +185,27 @@
             wear: Belt,
             container: (capacity: Count(3), accepts: ["potion"]),
         ),
+        "sword_sheath": (
+            name: "a leather sheath",
+            keywords: ["sheath", "scabbard", "leather"],
+            description: "A plain leather sheath that hangs from a belt, sized for a single sword.",
+            wear: Belt,
+            container: (capacity: Count(1), accepts: ["blade"]),
+        ),
+        "weapon_loop": (
+            name: "an iron weapon loop",
+            keywords: ["loop", "iron", "weapon"],
+            description: "A ring of iron on a leather tab, for hanging an axe, hammer or mace from a belt.",
+            bulk: Negligible,
+            wear: Belt,
+            container: (capacity: Count(1), accepts: ["axe", "hammer", "mace"]),
+        ),
+        "hatchet": (
+            name: "a woodsman's hatchet",
+            keywords: ["hatchet", "axe", "woodsman"],
+            description: "A short-hafted hatchet with a well-worn grip.",
+            tags: ["axe"],
+        ),
         "travelers_coat": (
             name: "a traveller's coat",
             keywords: ["coat", "traveller"],

@@ -78,6 +78,8 @@ At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there'
 | `drop <item>` | Put down in the room, from anywhere you carry it |
 | `give <item> <player>` | Hand over; placed automatically on their side |
 | `hold <item>` | Move into your hands |
+| `sheath <weapon>` (`sheathe`) | Put a weapon in a worn sheath or loop that takes it; `sheath` alone puts away what you hold. `put sword sheath` works too |
+| `draw <weapon>` | Take a weapon from its sheath or loop into your hand |
 | `wear <item>`, `remove <item>` | Wear in its slot, or take off into your hands |
 | `inventory` (`i`) | Hands, what you wear, each container's contents and fill, and your Bulk against your limits |
 | `look <item>`, `examine <item>` | Describe it; examining a container lists its contents |
@@ -124,6 +126,10 @@ A container is an item with a `container` section. Worn containers carry your th
     container: (capacity: Light(4))),                          // four light items
 "keyring": (name: "a brass keyring", bulk: Negligible, wear: Belt,
     container: (capacity: Count(10), accepts: ["key"])),
+"sword_sheath": (name: "a leather sheath", wear: Belt,
+    container: (capacity: Count(1), accepts: ["blade"])),
+"weapon_loop": (name: "an iron weapon loop", bulk: Negligible, wear: Belt,
+    container: (capacity: Count(1), accepts: ["axe", "hammer", "mace"])),
 "travelers_coat": (name: "a traveller's coat", bulk: Light, wear: Body,
     container: (capacity: Count(2), max_item: Light)),         // pockets
 "oak_chest": (name: "an old oak chest", fixed: true,
@@ -141,6 +147,9 @@ A container is an item with a `container` section. Worn containers carry your th
 - **Any worn item can be a container,** which is how clothes get pockets.
 - **Fixed items are for anything that shouldn't be carried off:** chests, signposts, furniture, a well. They can't be picked up, held or worn, and rooms list them as part of the room ("An old oak chest is here.") rather than as things lying around. Give them a large `bulk` too, for when moving furniture becomes possible.
 - **A container's open, closed or locked state isn't saved,** like a door's: it returns to its template's state when the server restarts, and will reset with its zone.
+- **Containers nest.** A pouch can go in a backpack, and its contents count toward the backpack's fill and your Bulk. `inventory` and `examine` show what you carry as a tree.
+- **Only what's at hand can be moved:** what you hold or wear, what lies in the room, and what's directly inside an open container among those. A loaf in a pouch packed in a backpack can't be taken until the pouch comes out ("A belt pouch is packed inside your leather backpack; take it out first."). This applies to `get`, `put`, `drop`, `give`, `hold`, `wear`, `sheath`, `draw` and opening containers; looking is never restricted.
+- **Automatic placement only uses containers you hold or wear directly,** and never packs one container inside another: a pouch taken out of a pack goes to your hand, ready to use.
 - **Containers can't go inside themselves,** directly or through another container.
 - **Fixed containers belong to their spawn and are never real.** A chest's name is stable (its spawn's id), and each reset refills its contents and resets its lock. Until spawns exist, builders `create` them, which places a fixed item in the room.
 - **Contents follow the usual rule:** temporary until a player takes them, then real. Real items saved inside a fixed chest survive restarts, which is the basis for player storage later.

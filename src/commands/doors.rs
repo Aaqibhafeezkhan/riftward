@@ -170,7 +170,7 @@ fn find_lockable(
                 &world.templates,
             );
             let reach: Vec<_> = snapshot
-                .reachable(actor.entity, actor.room)
+                .at_hand(actor.entity, actor.room)
                 .into_iter()
                 .filter(|e| snapshot.is_container(*e))
                 .collect();

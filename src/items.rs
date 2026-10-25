@@ -78,6 +78,21 @@ impl Plugin for ItemsPlugin {
                 give,
             )
             .add_command(
+                CommandSpec::new("sheath", Interaction)
+                    .shortcuts(&["sheathe"])
+                    .usage("sheath [<weapon>]")
+                    .summary(
+                        "put a weapon away in a worn sheath or loop; alone, whatever you hold",
+                    ),
+                sheath,
+            )
+            .add_command(
+                CommandSpec::new("draw", Interaction)
+                    .usage("draw <weapon>")
+                    .summary("draw a weapon from its sheath or loop into your hand"),
+                draw,
+            )
+            .add_command(
                 CommandSpec::new("hold", Interaction)
                     .usage("hold <item>")
                     .summary("take something in your hand"),
@@ -163,6 +178,24 @@ pub fn capitalized(name: &str) -> String {
         .next()
         .map(|c| c.to_uppercase().chain(chars).collect())
         .unwrap_or_default()
+}
+
+/// A tag as a plural noun: "key" -> "keys", "axe" -> "axes".
+fn plural(tag: &str) -> String {
+    if tag.ends_with('s') || tag.ends_with('x') || tag.ends_with("sh") || tag.ends_with("ch") {
+        format!("{tag}es")
+    } else {
+        format!("{tag}s")
+    }
+}
+
+/// "a", "a and b", "a, b and c".
+fn list(words: &[String]) -> String {
+    match words {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
 }
 
 /// "your brass keyring", for an item someone carries.
@@ -350,11 +383,8 @@ impl Snapshot {
             .map(|def| def.tags.as_slice())
             .unwrap_or(&[]);
         if !spec.accepts.is_empty() && !spec.accepts.iter().any(|tag| tags.contains(tag)) {
-            return Err(format!(
-                "Only {}s go in {}.",
-                spec.accepts.join("s and "),
-                holder.name
-            ));
+            let kinds: Vec<String> = spec.accepts.iter().map(|tag| plural(tag)).collect();
+            return Err(format!("Only {} go in {}.", list(&kinds), holder.name));
         }
         let size = self.total_bulk(item);
         if spec.max_item.is_some_and(|max| size > max.tenths()) {
@@ -376,28 +406,52 @@ impl Snapshot {
         Ok(())
     }
 
+    /// The containers a character holds or wears directly, except `except` and `item` itself.
+    fn containers_on(&self, who: Entity, item: Entity, except: Option<Entity>) -> Vec<&ItemInfo> {
+        self.items
+            .iter()
+            .filter(|info| info.location.holder() == Some(who))
+            .filter(|info| Some(info.entity) != except && info.entity != item)
+            .filter(|info| self.is_container(info.entity))
+            .collect()
+    }
+
+    fn accepts_count(info: &ItemInfo) -> usize {
+        info.def
+            .as_ref()
+            .and_then(|def| def.container.as_ref())
+            .map_or(0, |spec| spec.accepts.len())
+    }
+
+    /// A container the character holds or wears that specifically accepts `item` and has room:
+    /// a keyring for a key, a sheath for a sword.
+    pub fn specialised_for(
+        &self,
+        who: Entity,
+        item: Entity,
+        except: Option<Entity>,
+    ) -> Option<Entity> {
+        self.containers_on(who, item, except)
+            .into_iter()
+            .filter(|info| Self::accepts_count(info) > 0)
+            .find(|info| self.fits(info.entity, item).is_ok())
+            .map(|info| info.entity)
+    }
+
     /// Where an item should go when a character takes it without saying where: a container they
     /// hold or wear that specifically accepts it, then a general container (smallest first), then
-    /// a free hand. `except` is a container to skip, such as the one it's coming out of.
+    /// a free hand. Containers skip the general ones, so a pouch taken out of a pack goes to your
+    /// hand, ready to use, rather than into your pockets. `except` is a container to skip, such
+    /// as the one it's coming out of.
     pub fn place_for(
         &self,
         who: Entity,
         item: Entity,
         except: Option<Entity>,
     ) -> Option<ItemLocation> {
-        let containers: Vec<&ItemInfo> = self
-            .items
-            .iter()
-            .filter(|info| info.location.holder() == Some(who))
-            .filter(|info| Some(info.entity) != except && info.entity != item)
-            .filter(|info| self.is_container(info.entity))
-            .collect();
-        let accepts = |info: &ItemInfo| {
-            info.def
-                .as_ref()
-                .and_then(|def| def.container.as_ref())
-                .map_or(0, |spec| spec.accepts.len())
-        };
+        if let Some(found) = self.specialised_for(who, item, except) {
+            return Some(ItemLocation::Inside(found));
+        }
         let size = |info: &ItemInfo| match info.def.as_ref().and_then(|d| d.container.as_ref()) {
             Some(spec) => match spec.capacity {
                 Capacity::Bulk(n) => n * 10,
@@ -406,14 +460,15 @@ impl Snapshot {
             None => 0,
         };
 
-        let specialised = containers
+        let containers = if self.is_container(item) {
+            Vec::new()
+        } else {
+            self.containers_on(who, item, except)
+        };
+        let mut general: Vec<_> = containers
             .iter()
-            .filter(|info| accepts(info) > 0)
-            .find(|info| self.fits(info.entity, item).is_ok());
-        if let Some(found) = specialised {
-            return Some(ItemLocation::Inside(found.entity));
-        }
-        let mut general: Vec<_> = containers.iter().filter(|i| accepts(i) == 0).collect();
+            .filter(|info| Self::accepts_count(info) == 0)
+            .collect();
         general.sort_by_key(|info| size(info));
         if let Some(found) = general
             .iter()
@@ -424,12 +479,50 @@ impl Snapshot {
         (self.at(ItemLocation::Held(who)).count() < HANDS).then_some(ItemLocation::Held(who))
     }
 
-    /// What a character can reach: what they carry, at any depth, then what lies in the room
-    /// (not inside room containers).
+    /// What a character can see to look at: what they carry, at any depth, then what lies in
+    /// the room (not inside room containers).
     pub fn reachable(&self, who: Entity, room: Entity) -> Vec<Entity> {
         let mut found: Vec<_> = self.carried_by(who).map(|info| info.entity).collect();
         found.extend(self.at(ItemLocation::Room(room)).map(|info| info.entity));
         found
+    }
+
+    /// Whether a location is directly on a character or in their room, not packed in anything.
+    fn top_level(location: ItemLocation, who: Entity, room: Entity) -> bool {
+        match location {
+            ItemLocation::Held(holder) | ItemLocation::Worn(holder, _) => holder == who,
+            ItemLocation::Room(here) => here == room,
+            ItemLocation::Inside(_) => false,
+        }
+    }
+
+    /// What a character can lay hands on without unpacking anything: what they hold or wear,
+    /// what lies in the room, and what's directly inside an open container among those. A
+    /// loaf in a pouch packed in a backpack isn't at hand until the pouch comes out. Their own
+    /// things come first.
+    pub fn at_hand(&self, who: Entity, room: Entity) -> Vec<Entity> {
+        let at_hand = |info: &ItemInfo| match info.location {
+            ItemLocation::Inside(container) => self.get(container).is_some_and(|outer| {
+                Self::top_level(outer.location, who, room) && outer.state == DoorState::Open
+            }),
+            location => Self::top_level(location, who, room),
+        };
+        let (mut mine, theirs): (Vec<_>, Vec<_>) = self
+            .items
+            .iter()
+            .filter(|info| at_hand(info))
+            .map(|info| info.entity)
+            .partition(|e| self.root(*e).and_then(ItemLocation::holder) == Some(who));
+        mine.extend(theirs);
+        mine
+    }
+
+    /// The things at hand that a character carries, rather than ones lying in the room.
+    pub fn at_hand_carried(&self, who: Entity, room: Entity) -> Vec<Entity> {
+        self.at_hand(who, room)
+            .into_iter()
+            .filter(|e| self.root(*e).and_then(ItemLocation::holder) == Some(who))
+            .collect()
     }
 }
 
@@ -762,17 +855,48 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         self.snapshot.burden(self.me()) + self.snapshot.total_bulk(entity) > max
     }
 
-    /// A container the actor can reach, by name.
+    /// A container the actor can reach into, by name: one they hold or wear, or one lying in
+    /// the room. A container packed inside another has to come out first.
     fn find_container(
         &self,
         target: &Target,
         keywords: &Query<&Keywords>,
     ) -> Result<Entity, String> {
-        let reach = self.snapshot.reachable(self.me(), self.actor.room);
-        let found = target
-            .find_one(self.me(), with_keywords(reach, keywords))
-            .filter(|e| *e != self.me())
-            .ok_or_else(|| format!("You don't see {} here.", target.describe()))?;
+        let (me, room) = (self.me(), self.actor.room);
+        let top: Vec<_> = self
+            .snapshot
+            .reachable(me, room)
+            .into_iter()
+            .filter(|e| {
+                self.snapshot
+                    .get(*e)
+                    .is_some_and(|info| Snapshot::top_level(info.location, me, room))
+            })
+            .collect();
+        let Some(found) = target
+            .find_one(me, with_keywords(top, keywords))
+            .filter(|e| *e != me)
+        else {
+            // Name a packed container, if that's what they meant.
+            let packed = target
+                .find_one(
+                    me,
+                    with_keywords(self.snapshot.reachable(me, room), keywords),
+                )
+                .filter(|e| *e != me);
+            if let Some(packed) = packed
+                && let Some(ItemLocation::Inside(outer)) =
+                    self.snapshot.get(packed).map(|info| info.location)
+            {
+                return Err(format!(
+                    "{} is packed inside {}; take it out first.",
+                    capitalized(&self.name(packed)),
+                    self.where_phrase(ItemLocation::Inside(outer))
+                        .trim_start_matches("in ")
+                ));
+            }
+            return Err(format!("You don't see {} here.", target.describe()));
+        };
         if !self.snapshot.is_container(found) {
             return Err(format!(
                 "{} isn't a container.",
@@ -782,7 +906,7 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         Ok(found)
     }
 
-    /// One item the actor carries or can reach in the room, among those `only` allows.
+    /// One item at hand, among those `only` allows.
     fn find_one(
         &self,
         arg: &str,
@@ -792,7 +916,7 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         let target = Target::parse(arg).ok_or_else(String::new)?;
         let reach: Vec<_> = self
             .snapshot
-            .reachable(self.me(), self.actor.room)
+            .at_hand(self.me(), self.actor.room)
             .into_iter()
             .filter(|e| self.snapshot.get(*e).is_some_and(&only))
             .collect();
@@ -819,11 +943,10 @@ fn inventory(
     } else {
         text += "You are holding:\r\n";
         for info in held {
-            text += &format!(
-                "  {}{}\r\n",
-                info.name,
-                contents_note(&snapshot, info.entity)
-            );
+            text += &format!("  {}{}\r\n", info.name, fill_note(&snapshot, info.entity));
+            for line in contents_lines(&snapshot, info.entity, 4) {
+                text += &format!("{line}\r\n");
+            }
         }
     }
     let worn: Vec<_> = Slot::ALL
@@ -837,8 +960,11 @@ fn inventory(
                 continue;
             };
             let slot = format!("<{}>", slot.name());
-            let note = contents_note(&snapshot, info.entity);
+            let note = fill_note(&snapshot, info.entity);
             text += &format!("  {slot:<7} {}{note}\r\n", info.name);
+            for line in contents_lines(&snapshot, info.entity, 12) {
+                text += &format!("{line}\r\n");
+            }
         }
     }
     let strength = sheets.get(who).map_or(1, |a| a.get(Attribute::Strength));
@@ -858,8 +984,8 @@ fn inventory(
     deliver(vec![Outgoing::line(who, text)], &mut players);
 }
 
-/// " [2/4 Bulk]: a torch, a loaf of bread" for a container; nothing for anything else.
-fn contents_note(snapshot: &Snapshot, container: Entity) -> String {
+/// " [2/4 Bulk]" for a container, " [closed]" for a closed one, nothing for anything else.
+fn fill_note(snapshot: &Snapshot, container: Entity) -> String {
     let Some((used, capacity)) = snapshot.fill(container) else {
         return String::new();
     };
@@ -869,21 +995,47 @@ fn contents_note(snapshot: &Snapshot, container: Entity) -> String {
     {
         return " [closed]".into();
     }
-    let fill = match capacity {
-        Capacity::Count(n) => format!("{used}/{n} items"),
-        Capacity::Bulk(n) => format!("{}/{n} Bulk", format_bulk(used)),
-        Capacity::Light(n) => format!("{used}/{n} light"),
-    };
-    let names = counted(
-        snapshot
-            .at(ItemLocation::Inside(container))
-            .map(|info| info.name.as_str()),
-    );
-    if names.is_empty() {
-        format!(" [{fill}, empty]")
-    } else {
-        format!(" [{fill}]: {}", names.join(", "))
+    match capacity {
+        Capacity::Count(n) => format!(" [{used}/{n} items]"),
+        Capacity::Bulk(n) if used == 0 => format!(" [0/{n} Bulk]"),
+        Capacity::Bulk(n) => format!(" [{}/{n} Bulk]", format_bulk(used)),
+        Capacity::Light(n) => format!(" [{used}/{n} light]"),
     }
+}
+
+/// The contents of a container as indented lines, each nested container followed by its own
+/// contents. Repeats of ordinary items are counted ("a torch (x2)"); closed containers keep
+/// their contents hidden.
+fn contents_lines(snapshot: &Snapshot, container: Entity, indent: usize) -> Vec<String> {
+    if snapshot
+        .get(container)
+        .is_some_and(|info| info.state != DoorState::Open)
+    {
+        return Vec::new();
+    }
+    let pad = " ".repeat(indent);
+    let inside: Vec<_> = snapshot.at(ItemLocation::Inside(container)).collect();
+    let mut lines: Vec<String> = counted(
+        inside
+            .iter()
+            .filter(|info| !snapshot.is_container(info.entity))
+            .map(|info| info.name.as_str()),
+    )
+    .into_iter()
+    .map(|name| format!("{pad}{name}"))
+    .collect();
+    for info in inside
+        .iter()
+        .filter(|info| snapshot.is_container(info.entity))
+    {
+        lines.push(format!(
+            "{pad}{}{}",
+            info.name,
+            fill_note(snapshot, info.entity)
+        ));
+        lines.extend(contents_lines(snapshot, info.entity, indent + 2));
+    }
+    lines
 }
 
 fn examine(
@@ -906,15 +1058,11 @@ fn examine(
                 if info.state != DoorState::Open {
                     text += "\r\nIt is closed.";
                 } else {
-                    let names = counted(
-                        snapshot
-                            .at(ItemLocation::Inside(entity))
-                            .map(|info| info.name.as_str()),
-                    );
-                    if names.is_empty() {
+                    let lines = contents_lines(&snapshot, entity, 2);
+                    if lines.is_empty() {
                         text += "\r\nIt is empty.";
                     } else {
-                        text += &format!("\r\nIt holds: {}.", names.join(", "));
+                        text += &format!("\r\nIt holds:\r\n{}", lines.join("\r\n"));
                     }
                 }
             }
@@ -1058,9 +1206,17 @@ fn get_items(
         let text = match (from, target) {
             (None, ItemLocation::Held(_)) => format!("You pick up {name}."),
             (None, _) => format!("You pick up {name} and put it {phrase}."),
+            (Some(c), ItemLocation::Held(_)) => format!(
+                "You take {name} out of {}.",
+                mover
+                    .where_phrase(ItemLocation::Inside(c))
+                    .trim_start_matches("in ")
+            ),
             (Some(c), _) => format!(
                 "You take {name} out of {} and put it {phrase}.",
-                mover.name(c)
+                mover
+                    .where_phrase(ItemLocation::Inside(c))
+                    .trim_start_matches("in ")
             ),
         };
         out.push(Outgoing::line(me, text));
@@ -1105,10 +1261,12 @@ fn put_items(
         return Err(inv.usage_error());
     };
     let container = mover.find_container(&into, keywords)?;
-    // Anything you carry that isn't worn, isn't already in it, and isn't around it.
+    // Anything at hand you carry that isn't worn, isn't already in it, and isn't around it.
     let candidates: Vec<_> = mover
         .snapshot
-        .carried_by(me)
+        .at_hand_carried(me, mover.actor.room)
+        .into_iter()
+        .filter_map(|e| mover.snapshot.get(e))
         .filter(|info| !matches!(info.location, ItemLocation::Worn(..)))
         .filter(|info| info.location != ItemLocation::Inside(container))
         .filter(|info| !mover.snapshot.is_within(container, info.entity))
@@ -1120,6 +1278,21 @@ fn put_items(
         .filter(|e| *e != me)
         .collect();
     if found.is_empty() {
+        let worn: Vec<_> = mover
+            .snapshot
+            .carried_by(me)
+            .filter(|info| matches!(info.location, ItemLocation::Worn(..)))
+            .map(|info| info.entity)
+            .collect();
+        if let Some(entity) = what
+            .find_one(me, with_keywords(worn, keywords))
+            .filter(|e| *e != me)
+        {
+            return Err(format!(
+                "You're wearing {}; take it off first.",
+                mover.name(entity)
+            ));
+        }
         return Err(format!("You aren't carrying {}.", what.describe()));
     }
     let mut out = Vec::new();
@@ -1167,7 +1340,9 @@ fn drop_items(inv: &Invocation, mover: &mut Mover, keywords: &Query<&Keywords>) 
     let dropping_all = matches!(target, Target::All { .. });
     let candidates: Vec<_> = mover
         .snapshot
-        .carried_by(me)
+        .at_hand_carried(me, room)
+        .into_iter()
+        .filter_map(|e| mover.snapshot.get(e))
         .filter(|info| !dropping_all || !matches!(info.location, ItemLocation::Worn(..)))
         .map(|info| info.entity)
         .collect();
@@ -1238,11 +1413,7 @@ fn give_item(
         .filter(|(_, p)| !p.is_empty())
         .ok_or_else(|| inv.usage_error())?;
     let what = Target::parse(what).ok_or_else(|| inv.usage_error())?;
-    let mine: Vec<_> = mover
-        .snapshot
-        .carried_by(me)
-        .map(|info| info.entity)
-        .collect();
+    let mine = mover.snapshot.at_hand_carried(me, mover.actor.room);
     let entity = what
         .find_one(me, with_keywords(mine, keywords))
         .filter(|e| *e != me)
@@ -1286,6 +1457,105 @@ fn give_item(
             .map(|e| Outgoing::line(e, seen.clone())),
     );
     Ok(out)
+}
+
+fn sheath(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    mut items: ItemMutQuery,
+    keywords: Query<&Keywords>,
+    templates: Res<ItemTemplates>,
+    db: Res<Database>,
+) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
+    let me = mover.me();
+    let reply: Reply = (|| {
+        // Something you carry and aren't wearing; with no argument, only what's in your hands.
+        let candidates: Vec<_> = mover
+            .snapshot
+            .at_hand_carried(me, mover.actor.room)
+            .into_iter()
+            .filter_map(|e| mover.snapshot.get(e))
+            .filter(|info| !matches!(info.location, ItemLocation::Worn(..)))
+            .filter(|info| !inv.args.is_empty() || info.location == ItemLocation::Held(me))
+            .map(|info| info.entity)
+            .collect();
+        let entity = if inv.args.is_empty() {
+            candidates
+                .into_iter()
+                .find(|e| mover.snapshot.specialised_for(me, *e, None).is_some())
+                .ok_or("You aren't holding anything you can sheath.")?
+        } else {
+            let target = Target::parse(&inv.args).ok_or_else(|| inv.usage_error())?;
+            target
+                .find_one(me, with_keywords(candidates, &keywords))
+                .filter(|e| *e != me)
+                .ok_or_else(|| format!("You aren't carrying {}.", target.describe()))?
+        };
+        let name = mover.name(entity);
+        let current = mover.snapshot.get(entity).map(|info| info.location);
+        if let Some(ItemLocation::Inside(container)) = current
+            && mover
+                .snapshot
+                .get(container)
+                .is_some_and(|info| Snapshot::accepts_count(info) > 0)
+        {
+            return Err(format!(
+                "{} is already {}.",
+                capitalized(&name),
+                mover.where_phrase(ItemLocation::Inside(container))
+            ));
+        }
+        let holder = mover
+            .snapshot
+            .specialised_for(me, entity, None)
+            .filter(|h| current != Some(ItemLocation::Inside(*h)))
+            .ok_or_else(|| format!("You're wearing nothing to sheath {name} in."))?;
+        let target = ItemLocation::Inside(holder);
+        mover.move_to(entity, target);
+        Ok(format!("You sheath {name} {}.", mover.where_phrase(target)))
+    })();
+    deliver(vec![reply_line(me, reply)], &mut players);
+}
+
+fn draw(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    rooms: RoomQuery,
+    mut items: ItemMutQuery,
+    keywords: Query<&Keywords>,
+    templates: Res<ItemTemplates>,
+    db: Res<Database>,
+) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
+    let me = mover.me();
+    let reply: Reply = (|| {
+        if inv.args.is_empty() {
+            return Err(inv.usage_error());
+        }
+        // Anything inside a container you carry.
+        let entity = mover
+            .find_one(&inv.args, &keywords, |info| {
+                matches!(info.location, ItemLocation::Inside(_))
+            })
+            .ok()
+            .filter(|e| mover.carries(*e))
+            .ok_or_else(|| format!("You have no {} to draw.", inv.args))?;
+        let name = mover.name(entity);
+        if mover.snapshot.at(ItemLocation::Held(me)).count() >= HANDS {
+            return Err(format!("Your hands are full; you can't draw {name}."));
+        }
+        mover.move_to(entity, ItemLocation::Held(me));
+        Ok(format!("You draw {name}."))
+    })();
+    deliver(vec![reply_line(me, reply)], &mut players);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1585,6 +1855,45 @@ mod tests {
     }
 
     #[test]
+    fn weapons_go_to_sheaths_and_loops() {
+        let mut f = Fixture::new();
+        let p = f.player;
+        let backpack = f.add(
+            container("a backpack", Bulk::Bulk(1), Capacity::Bulk(4), &[]),
+            &[],
+            ItemLocation::Worn(p, Slot::Back),
+        );
+        let sheath = f.add(
+            container("a sheath", Bulk::Light, Capacity::Count(1), &["blade"]),
+            &[],
+            ItemLocation::Worn(p, Slot::Belt),
+        );
+        let loop_ = f.add(
+            container(
+                "a loop",
+                Bulk::Negligible,
+                Capacity::Count(1),
+                &["axe", "mace"],
+            ),
+            &[],
+            ItemLocation::Worn(p, Slot::Belt),
+        );
+        let sword = f.on_floor(def("a sword", Bulk::Bulk(1)), &["blade"]);
+        let axe = f.on_floor(def("an axe", Bulk::Light), &["axe"]);
+
+        assert_eq!(f.snapshot.specialised_for(p, sword, None), Some(sheath));
+        assert_eq!(f.snapshot.specialised_for(p, axe, None), Some(loop_));
+        f.snapshot.set_location(sword, ItemLocation::Inside(sheath));
+        let second = f.on_floor(def("a second sword", Bulk::Bulk(1)), &["blade"]);
+        let place = f.snapshot.place_for(p, second, None);
+        assert_eq!(
+            place,
+            Some(ItemLocation::Inside(backpack)),
+            "the sheath holds one"
+        );
+    }
+
+    #[test]
     fn smaller_general_containers_come_first_then_hands() {
         let mut f = Fixture::new();
         let p = f.player;
@@ -1659,6 +1968,87 @@ mod tests {
         assert!(f.snapshot.fits(coat, c).is_ok());
         assert!(f.snapshot.fits(pouch, pouch).is_err(), "not inside itself");
         assert_eq!(f.snapshot.total_bulk(pouch), 2);
+    }
+
+    #[test]
+    fn nested_containers_count_their_contents_and_never_loop() {
+        let mut f = Fixture::new();
+        let p = f.player;
+        let backpack = f.add(
+            container("a backpack", Bulk::Bulk(1), Capacity::Bulk(4), &[]),
+            &[],
+            ItemLocation::Worn(p, Slot::Back),
+        );
+        let pouch = f.add(
+            container("a pouch", Bulk::Negligible, Capacity::Light(4), &[]),
+            &[],
+            ItemLocation::Inside(backpack),
+        );
+        f.add(def("a loaf", Bulk::Light), &[], ItemLocation::Inside(pouch));
+        let sword = f.add(
+            def("a sword", Bulk::Bulk(1)),
+            &[],
+            ItemLocation::Inside(backpack),
+        );
+
+        assert_eq!(
+            f.snapshot.total_bulk(backpack),
+            10 + 1 + 10,
+            "pack, loaf and sword"
+        );
+        assert_eq!(f.snapshot.burden(p), 21);
+        assert_eq!(
+            f.snapshot.root(pouch),
+            Some(ItemLocation::Worn(p, Slot::Back))
+        );
+        assert!(
+            f.snapshot.fits(pouch, backpack).is_err(),
+            "a pack can't go in its own pouch"
+        );
+        assert!(
+            f.snapshot.fits(pouch, sword).is_err(),
+            "a sword won't fit in the pouch"
+        );
+        assert_eq!(
+            f.snapshot.place_for(p, sword, Some(backpack)),
+            Some(ItemLocation::Held(p)),
+            "containers inside containers aren't automatic targets"
+        );
+    }
+
+    #[test]
+    fn only_one_container_deep_is_at_hand() {
+        let mut f = Fixture::new();
+        let (p, room) = (f.player, f.room);
+        let backpack = f.add(
+            container("a backpack", Bulk::Bulk(1), Capacity::Bulk(4), &[]),
+            &[],
+            ItemLocation::Worn(p, Slot::Back),
+        );
+        let pouch = f.add(
+            container("a pouch", Bulk::Negligible, Capacity::Light(4), &[]),
+            &[],
+            ItemLocation::Inside(backpack),
+        );
+        let bread = f.add(def("a loaf", Bulk::Light), &[], ItemLocation::Inside(pouch));
+        let rock = f.on_floor(def("a rock", Bulk::Light), &[]);
+        assert_eq!(
+            f.snapshot.place_for(p, pouch, Some(backpack)),
+            Some(ItemLocation::Held(p)),
+            "a container taken out goes to your hand, not into another container"
+        );
+
+        let at_hand = f.snapshot.at_hand(p, room);
+        assert!(at_hand.contains(&backpack) && at_hand.contains(&pouch));
+        assert!(!at_hand.contains(&bread), "the loaf is packed two deep");
+        assert_eq!(at_hand.last(), Some(&rock), "your own things come first");
+        assert!(!f.snapshot.at_hand_carried(p, room).contains(&rock));
+
+        f.snapshot.set_location(pouch, ItemLocation::Held(p));
+        assert!(
+            f.snapshot.at_hand(p, room).contains(&bread),
+            "out of the pack, it's at hand"
+        );
     }
 
     #[test]
