@@ -116,6 +116,17 @@ At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there'
 - **Resets only manage their own spawns.** Once a spawned item is picked up, it is real and no longer the reset's; the next reset spawns a fresh one.
 - **Mobs stay temporary** and reset with their zone.
 
+## Consumables
+
+A template can be eaten or drunk: it's used up. Food and drink speed recovery for a while (`recovery`); a draught gives back health or stamina at once, rolled in its ranges with Luck. See [Healing](trees.md#healing).
+
+```ron
+"bread": (name: "a loaf of bread", tags: ["food"], consumable: (by: Eat, recovery: (speed: 1.5, minutes: 10))),
+"healing_draught": (name: "a healing draught", tags: ["potion"], consumable: (by: Drink, health: (4, 8))),
+```
+
+You can only eat or drink what you carry. Bandages are items tagged `bandage`, used up by First Aid.
+
 ## Decay
 
 Status: built for corpses only. A mob's corpse rots in 5 minutes; a player's, holding everything they had, in 30, timed from when they fell so it survives restarts. A rotting container spills its contents where it lay. Litter, perishables and torches wait.

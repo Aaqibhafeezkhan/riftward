@@ -272,6 +272,21 @@
             keywords: ["bread", "loaf"],
             description: "A dense brown loaf, still faintly warm from the baker's oven.",
             tags: ["food"],
+            consumable: (by: Eat, recovery: (speed: 1.5, minutes: 10)),
+        ),
+        "water_flask": (
+            name: "a flask of water",
+            keywords: ["flask", "water"],
+            description: "A small clay flask of clean water, corked with a twist of rag.",
+            tags: ["drink"],
+            consumable: (by: Drink, recovery: (speed: 1.25, minutes: 5)),
+        ),
+        "bandage": (
+            name: "a roll of bandage",
+            keywords: ["bandage", "roll", "linen"],
+            description: "A clean roll of boiled linen, ready to bind a wound.",
+            bulk: Negligible,
+            tags: ["bandage"],
         ),
         "waterskin": (
             name: "a waterskin",
@@ -289,6 +304,7 @@
             keywords: ["draught", "potion", "healing"],
             description: "A stoppered vial of cloudy red liquid that smells of honey and iron.",
             tags: ["potion"],
+            consumable: (by: Drink, health: (4, 8)),
         ),
         "backpack": (
             name: "a leather backpack",
@@ -413,6 +429,7 @@
             keywords: ["herbalist", "woman"],
             here: "The herbalist sorts dried leaves into bundles, muttering their names.",
             description: "A stooped woman with green-stained fingers and a sharp eye, who smells faintly of mint and something less pleasant underneath.",
+            teaches: ["healing:first_aid"],
         ),
         "drill_sergeant": (
             name: "the drill sergeant",
@@ -481,7 +498,7 @@
         ),
         "cellar_chest": (
             item: "oak_chest",
-            contents: ["bread", "bread", "waterskin", "torch"],
+            contents: ["bread", "bread", "water_flask", "waterskin", "torch"],
             room: "guild_cellar",
             every: Hours(1),
             refill: Keep(1),
@@ -564,6 +581,18 @@
             mob: "contract_clerk",
             room: "contract_hall",
             every: Minutes(10),
+            refill: Keep(1),
+        ),
+        "herbalist_bandages": (
+            item: "bandage",
+            room: "herbalist",
+            every: Minutes(15),
+            refill: Keep(3),
+        ),
+        "herbalist_draughts": (
+            item: "healing_draught",
+            room: "herbalist",
+            every: Minutes(30),
             refill: Keep(1),
         ),
         "herbalist": (

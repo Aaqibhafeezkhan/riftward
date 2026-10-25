@@ -14,7 +14,7 @@
         summary: "You drilled, marched and stood your watch in someone's army.",
         requires: Stat(Body, 4),
         skills: ["athletics:toughness", "healing:first_aid"],
-        items: ["riftwatch:short_sword"],
+        items: ["riftwatch:short_sword", "riftwatch:bandage", "riftwatch:bandage"],
     ),
     (
         id: "poacher",
@@ -68,7 +68,7 @@
         summary: "You gathered, dried and brewed under a healer's eye.",
         requires: Stat(Intuition, 4),
         skills: ["nature:herbalism", "healing:first_aid"],
-        items: ["riftwatch:knife"],
+        items: ["riftwatch:knife", "riftwatch:bandage", "riftwatch:bandage"],
     ),
     (
         id: "minstrel",

@@ -130,8 +130,8 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 ## Proposed order
 
 1. **Combat techniques, conditions and passive bonuses together.** *Built:* see [Step 1, as built](#step-1-as-built).
-2. **Armour:** damage reduction, at a cost to dodging (see [Armour](#armour)). Next, since every fight now runs through the code it changes.
-3. **Healing and consumables:** First Aid and bandages, so fighters can patch up between fights without walking to town; herbs come with step 3.
+2. **Armour:** damage reduction, at a cost to dodging. *Built:* see [Armour](#armour).
+3. **Healing and consumables:** First Aid and bandages, so fighters can patch up without walking to town; herbs come with step 4. *Built:* see [Healing](#healing).
 4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things.
 5. **Seeing and being seen:** Stealth, and Backstab from hiding.
 6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions.
@@ -190,6 +190,15 @@ Built. Armour is **damage reduction**: every hit loses its wearer's armour, **ev
   The training yard keeps a padded jack, a leather cap and a buckler; the locked armory keeps mail, a helm, a round shield, gauntlets and greaves. Town guards wear studded leather and an iron helm, and carry a round shield.
 - **Skills work both sides of it.** In armour: **Heavy Armour** (the Armour tree's entry, practised by taking hits in armour; eases the penalty by 1 per 10 levels) and **Block** (the Shields tree's entry, practised by blocking; adds 1 to a shield's block per 10 levels). Out of it: the Adept's Quickened Reflexes, and an unarmoured Evasion later. Both entries are taught by the drill sergeant; their higher skills are to come.
 - **Piercing answers armour.** `Pierce(n)`, a technique effect, ignores `n` points of armour: **Lunge** has 1 (the point finds a gap), **Backstab** 2 (between the plates). A passive can add piercing too, `(stat: Pierce, per: 10, with: "knives:basics")`. **Crush** ignores armour entirely, so it's the answer to plate.
+
+## Healing
+
+Built.
+
+- **First Aid** is the Healing tree's entry skill (Intuition), taught by the herbalist and granted by the Soldier and Herbalist's Apprentice backgrounds, who also start with two bandages. `bandage [<someone>]` (or `use first aid [<someone>]`) uses up a bandage you carry. Its chance is your First Aid (level plus Intuition) against the health they've lost, by the ratio rule, so a bad wound is harder to treat. Done well, it heals half your First Aid plus 1 to 3, and stops bleeding; fumbled, the bandage is spoiled. It's an action, so in a fight it takes your turn, on yourself or anyone else there, player or mob.
+- **Consumables** are items with a `consumable` section, used up by `eat` or `drink` (also actions). **Food and drink don't heal**; they speed recovery of health and stamina for a while, on top of resting and never in a fight: a loaf of bread 1.5 times as fast for 10 minutes, a flask of water 1.25 times for 5. Another meal keeps the better speed and the later end, so eating more makes it last, not faster. The feeling is gone at logout. **Healing draughts** work at once, 4 to 8 health rolled with Luck, so they're what to drink in a fight.
+- **Where to find them:** the herbalist's stall keeps three bandages and a healing draught; the guild cellar's chest has bread and water.
+- **Later:** Treat Poison and Surgery (expert), Herbalism and Brewing to make draughts and poultices, and waterskins that refill (they're carried but can't yet be drunk from).
 
 ## Open questions
 

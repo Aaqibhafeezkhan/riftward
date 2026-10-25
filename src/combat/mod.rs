@@ -44,7 +44,7 @@ use crate::targeting::{Keywords, Target};
 use crate::vitals::{Maxima, Resting, Vitals};
 use crate::world::{InRoom, MobKey, Player, RoomIndex, RoomKey, without_article};
 
-pub use states::Conditions;
+pub use states::{Conditions, State};
 pub use strike::{Fighters, Move, Round, name_of};
 
 /// Seconds in a combat round, and between a player's actions.
@@ -191,8 +191,7 @@ fn queued_technique(queue: &ActionQueue, skills: &Skills, defs: &SkillDefs) -> O
     if invocation.command != "use" {
         return None;
     }
-    let name = invocation.args.split_whitespace().next()?;
-    let skill = defs.find_known(skills, name)?;
+    let (skill, _) = defs.find_known_in(skills, &invocation.args)?;
     matches!(skill.def.kind, SkillKind::Technique(_)).then(|| skill.key.clone())
 }
 

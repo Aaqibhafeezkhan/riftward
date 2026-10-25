@@ -198,6 +198,7 @@ type Recovering<'w, 's> = Query<
         Option<&'static BaseHealth>,
         Has<Resting>,
         Has<Fighting>,
+        Option<&'static Nourished>,
     ),
     Without<Dead>,
 >;
@@ -205,6 +206,24 @@ type Recovering<'w, 's> = Query<
 /// Sitting down to rest. Walking, attacking or being attacked gets them up.
 #[derive(Component, Debug)]
 pub struct Resting;
+
+/// Fed: recovering `speed` times as fast until `until` (seconds since the server started), on
+/// top of resting. Gone at logout.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct Nourished {
+    pub speed: f32,
+    pub until: f64,
+}
+
+impl Nourished {
+    /// Another meal: the better speed, and whichever lasts longer.
+    pub fn with(self, speed: f32, until: f64) -> Self {
+        Self {
+            speed: self.speed.max(speed),
+            until: self.until.max(until),
+        }
+    }
+}
 
 /// A character's prompt format. Lives on the player entity.
 #[derive(Component, Clone, Debug)]
@@ -227,7 +246,7 @@ fn recover(
     let now = time.elapsed_secs_f64();
     let secs = last.map_or(0.0, |last| now - last) as f32;
     *last = Some(now);
-    for (mut vitals, attributes, skills, base, resting, fighting) in &mut characters {
+    for (mut vitals, attributes, skills, base, resting, fighting, fed) in &mut characters {
         let max = Maxima::of(attributes, skills, &defs, base);
         let before = vitals.clone();
         let mut after = before.clone();
@@ -236,7 +255,9 @@ fn recover(
             (true, _) => 0.0,
             (false, true) => REST_SPEEDUP,
             (false, false) => 1.0,
-        };
+        } * fed
+            .filter(|fed| fed.until > now)
+            .map_or(1.0, |fed| fed.speed);
         after.recover(max, secs * pace);
         if after != before {
             *vitals = after;
@@ -550,6 +571,53 @@ mod tests {
             })
         );
         assert_eq!(world.get::<Vitals>(fighter), Some(&hurt));
+    }
+
+    #[test]
+    fn a_meal_speeds_recovery_until_it_wears_off() {
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(SkillDefs::default());
+        let hurt = Vitals {
+            health: 0.0,
+            stamina: 0.0,
+        };
+        let plain = world.spawn((hurt.clone(), sheet(), Skills::default())).id();
+        let fed = world.spawn((hurt.clone(), sheet(), Skills::default())).id();
+        // Twice as fast for the first 30 seconds only.
+        world.entity_mut(fed).insert(Nourished {
+            speed: 2.0,
+            until: 30.0,
+        });
+        let recover = world.register_system(recover);
+        world.run_system(recover).unwrap();
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs(20));
+        world.run_system(recover).unwrap();
+        let health = |world: &World, who| world.get::<Vitals>(who).unwrap().health;
+        // Health 10 refills in 600 seconds: 20 seconds is a third of a point, or two thirds fed.
+        assert!((health(&world, plain) - 1.0 / 3.0).abs() < 1e-4);
+        assert!((health(&world, fed) - 2.0 / 3.0).abs() < 1e-4);
+        // Worn off: both recover alike from here.
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs(20));
+        world.run_system(recover).unwrap();
+        assert!((health(&world, fed) - health(&world, plain) - 1.0 / 3.0).abs() < 1e-4);
+        // A second meal never makes it slower or shorter.
+        let meal = Nourished {
+            speed: 1.5,
+            until: 100.0,
+        };
+        assert_eq!(meal.with(1.25, 50.0), meal, "a lesser meal changes nothing");
+        assert_eq!(
+            meal.with(2.0, 200.0),
+            Nourished {
+                speed: 2.0,
+                until: 200.0
+            }
+        );
     }
 
     #[test]

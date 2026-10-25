@@ -98,6 +98,11 @@ impl Conditions {
         start
     }
 
+    /// End a state early, whatever its turns or strength: bandaged bleeding stops.
+    pub fn remove(&mut self, state: State) {
+        self.0.retain(|(s, _)| !s.same_kind(state));
+    }
+
     pub fn clear(&mut self) {
         self.0.clear();
     }
@@ -106,6 +111,18 @@ impl Conditions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_state_can_be_ended_early() {
+        let mut conditions = Conditions::default();
+        conditions.add(State::Bleeding(2), 3);
+        conditions.add(State::Held, 2);
+        // However hard and long the bleeding, a bandage stops it.
+        conditions.remove(State::Bleeding(0));
+        assert!(!conditions.has(State::Bleeding(0)));
+        assert!(conditions.has(State::Held));
+        assert_eq!(conditions.start_turn().bleeding, 0);
+    }
 
     #[test]
     fn states_count_down_in_turns() {

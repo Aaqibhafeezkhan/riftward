@@ -1,0 +1,27 @@
+// A skill tree. Its id is the file name: skills here are `healing:<id>`.
+(
+    name: "Healing",
+    rarity: Common,
+    attribute: Intuition,
+    skills: {
+        // `bandage` fills in {target} as the patient: "yourself" for the one bandaging
+        // themselves, "themselves" for the room.
+        "first_aid": (
+            name: "First Aid",
+            description: "Binding wounds with a bandage, with 'bandage [<someone>]', in a fight or out of one. The more they've lost, the harder it is; done well, it heals half your First Aid and stops bleeding. Each try uses up a bandage.",
+            kind: Active(command: "bandage"),
+            text: (
+                hit: (
+                    actor: "You bandage {target}.",
+                    target: "{actor} bandages your wounds.",
+                    room: "{actor} bandages {target}.",
+                ),
+                miss: (
+                    actor: "You fumble the bandage on {target}, and it's spoiled.",
+                    target: "{actor} fumbles a bandage on you.",
+                    room: "{actor} fumbles a bandage on {target}.",
+                ),
+            ),
+        ),
+    },
+)

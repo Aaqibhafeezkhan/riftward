@@ -241,6 +241,37 @@ pub struct ItemDef {
     /// What it does as armour, if it is some: worn in its slot, or held, like a shield.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub armour: Option<ArmourDef>,
+    /// What eating or drinking it does, if it's food, drink or a draught. It's used up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consumable: Option<ConsumableDef>,
+}
+
+/// Food, drink or a draught: how it's taken, and what it does. A draught gives back health or
+/// stamina at once, rolled in each range; food and drink only speed recovery for a while.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct ConsumableDef {
+    pub by: Consume,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health: Option<(u32, u32)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stamina: Option<(u32, u32)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery: Option<RecoveryDef>,
+}
+
+/// Faster recovery for a while, from a meal: health and stamina come back `speed` times as fast
+/// for `minutes`, out of a fight.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct RecoveryDef {
+    pub speed: f32,
+    pub minutes: u32,
+}
+
+/// How something is consumed: `eat` or `drink`.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Consume {
+    Eat,
+    Drink,
 }
 
 /// Armour: worn pieces take damage off every hit and hamper dodging; a held shield blocks.
@@ -411,6 +442,7 @@ impl ItemDef {
             unique: false,
             weapon: None,
             armour: None,
+            consumable: None,
         }
     }
 
@@ -1336,6 +1368,39 @@ mod tests {
         assert_eq!(door("An iron gate").the_capitalized(), "The iron gate");
         assert_eq!(door("trapdoor").the(), "the trapdoor");
         assert_eq!(without_article("a trapdoor"), "trapdoor");
+    }
+
+    /// No zone file names two things the same in one section. RON lets the second silently replace
+    /// the first, so a template added under a name already taken would never take effect.
+    #[test]
+    fn zone_files_have_no_duplicate_ids() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/zones");
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let text = std::fs::read_to_string(&path).unwrap();
+            let mut section = String::new();
+            let mut seen = std::collections::HashSet::new();
+            for line in text.lines() {
+                // Sections open at four spaces (`    items: {`); their entries sit at eight.
+                if let Some(name) = line
+                    .strip_prefix("    ")
+                    .and_then(|l| l.strip_suffix(": {"))
+                    && !name.starts_with(' ')
+                {
+                    section = name.to_string();
+                } else if let Some(id) = line
+                    .strip_prefix("        \"")
+                    .and_then(|l| l.split_once("\": ("))
+                    .map(|(id, _)| id)
+                {
+                    assert!(
+                        seen.insert((section.clone(), id.to_string())),
+                        "{} has two {section} called \"{id}\"",
+                        path.display()
+                    );
+                }
+            }
+        }
     }
 
     /// Every zone file in `assets/zones` parses, every exit leads to a real room, every door an

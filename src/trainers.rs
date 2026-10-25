@@ -189,12 +189,14 @@ fn learn_cmd(
     deliver(out, &mut players);
 }
 
-/// Whether a student asking for `wanted` means this skill: its id, its tree, or the start of a
-/// word of its name. `learn sword` is Swordplay; `learn knife` is Knife Fighting.
+/// Whether a student asking for `wanted` means this skill: its id, its tree, the start of its
+/// name, or the start of a word of it. `learn sword` is Swordplay; `learn knife` is Knife
+/// Fighting; `learn first aid` is First Aid.
 fn matches_name(skill: &Skill, wanted: &str) -> bool {
     skill.key == wanted
         || skill.tree == wanted
         || skill.tree.starts_with(wanted)
+        || skill.def.name.to_lowercase().starts_with(wanted)
         || skill
             .def
             .name

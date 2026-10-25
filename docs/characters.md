@@ -62,14 +62,14 @@ They're in `assets/backgrounds.ron`, in menu order. Any background can be gated 
 
 | Background | Requires | Everyday skills | Kit |
 | --- | --- | --- | --- |
-| Soldier | Body 4 | Toughness, First Aid | A short sword |
+| Soldier | Body 4 | Toughness, First Aid | A short sword, two bandages |
 | Poacher | Agility 4 | Stealth, Tracking | A knife |
 | Street Urchin | Nothing | Lockpicking, Pickpocketing, Stealth | A knife, lockpicks |
 | Farmhand | Nothing | Foraging, Animal Handling | A hatchet |
 | Sailor | Strength 4 | Swimming, Climbing | A knife |
 | Merchant's Child | Charisma 4 | Haggling, Appraisal | A knife |
 | Smith's Apprentice | Strength 4 | Smithing | A smith's hammer |
-| Herbalist's Apprentice | Intuition 4 | Herbalism, First Aid | A knife |
+| Herbalist's Apprentice | Intuition 4 | Herbalism, First Aid | A knife, two bandages |
 | Minstrel | Charisma 4 | Performance, Lore | A knife |
 | Scholar | Logic 4 | Lore, Scribing | A quarterstaff |
 | River Pilot | T'skrang | Sailing, Swimming | A knife |

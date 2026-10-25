@@ -73,7 +73,7 @@ dice.contest(luck_a, luck_b, p)      // both sides' Luck
 
 Each character has **current** health and stamina, below or at the maximums above (`src/vitals.rs`). Mobs have them too, by the same rules, except that a mob template's `health` replaces 8 + Body / 2 and mobs don't rest.
 
-- **Recovery** happens on the one-second heartbeat, worked out from elapsed time: health refills from empty in 10 minutes, stamina in 2. **`rest`** makes it three times as fast (walking, attacking or being attacked gets you up, and being caught resting is dangerous; see [Combat](architecture.md#combat)), and nothing recovers in a fight. Food and skills may change it later.
+- **Recovery** happens on the one-second heartbeat, worked out from elapsed time: health refills from empty in 10 minutes, stamina in 2. **`rest`** makes it three times as fast (walking, attacking or being attacked gets you up, and being caught resting is dangerous; see [Combat](architecture.md#combat)), and nothing recovers in a fight. First Aid and healing draughts restore health at once, and food and drink speed recovery for a while (see [Healing](trees.md#healing)).
 - **It continues offline.** Vitals are saved with the time they were saved (at logout, and every minute), and caught up at the next login, so a player who logs out hurt comes back rested.
 - **Fractions count.** Current values are kept as fractions and shown rounded down, so slow recovery still adds up.
 - **A maximum that goes down** (should one ever) clamps the current value to it.

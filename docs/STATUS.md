@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -21,12 +21,14 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Healing and consumables** (First Aid, bandages), step 3 of the plan in [Skill trees](trees.md#proposed-order). Armour, step 2, is built: see [Armour](trees.md#armour).
+**Room terrain and loot tables** (Foraging, Herbalism, Tracking, mob drops), step 4 of the plan in [Skill trees](trees.md#proposed-order). Armour and healing, steps 2 and 3, are built: see [Armour](trees.md#armour) and [Healing](trees.md#healing).
 
-After that, in order ([Proposed order](trees.md#proposed-order)): healing and consumables (First Aid, bandages), room terrain uses and loot tables (Foraging, Herbalism, mob drops), stealth, spells (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
+After that, in order ([Proposed order](trees.md#proposed-order)): room terrain uses and loot tables (Foraging, Herbalism, mob drops), stealth, spells (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
 
 ## Small things noticed and not yet done
 
+- First Aid's numbers are first guesses too: a novice (Intuition 3) heals 2 to 4, and treats a badly hurt patient about a third of the time.
+- Waterskins can't be drunk from; they need refilling, so they wait for wells and rivers.
 - Armour's numbers are first guesses. Guards in studded leather and a helm (3 armour) shrug off most of a new character's punches.
 - The tough-fight odds count armour's penalty and a shield's block, but not its reduction, so a heavily armoured foe counts as less tough than it is.
 - Town guards drop their short swords (and now armour) and respawn, so they can be farmed for them. Fine while nothing is sold; worth a look once shops exist.

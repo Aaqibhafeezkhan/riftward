@@ -13,6 +13,7 @@ mod conditions;
 mod db;
 mod dice;
 mod events;
+mod healing;
 mod items;
 mod login;
 mod mobs;
@@ -74,6 +75,7 @@ fn main() {
             combat::CombatPlugin,
             world_events::WorldEventsPlugin,
             trainers::TrainersPlugin,
+            healing::HealingPlugin,
         ))
         .run();
 }

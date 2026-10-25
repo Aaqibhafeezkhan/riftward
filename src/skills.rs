@@ -33,7 +33,7 @@ use crate::dice::Dice;
 use crate::events::GameEvent;
 use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line, targets_online};
 use crate::targeting::{Keywords, Target};
-use crate::vitals::Vitals;
+use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::ron_options;
 
 /// Asset folder holding one `.skill.ron` file per skill tree.
@@ -540,6 +540,26 @@ pub struct SkillDefs {
 impl SkillDefs {
     /// The skill `name` refers to among `known`: by `tree:skill`, by its id within its tree, or by
     /// the start of a word of its name. `lock` finds Lockpicking.
+    /// The known skill named at the start of `args`, and the rest: the longest run of words that
+    /// names one, so `first aid grok` is First Aid on Grok and `kick rat` is Kick on the rat.
+    pub fn find_known_in<'a, 'b>(
+        &'a self,
+        known: &Skills,
+        args: &'b str,
+    ) -> Option<(&'a Skill, &'b str)> {
+        let args = args.trim();
+        let mut ends: Vec<usize> = args.match_indices(' ').map(|(i, _)| i).collect();
+        ends.push(args.len());
+        ends.into_iter().rev().find_map(|end| {
+            let (name, rest) = args.split_at(end);
+            let name = name.trim();
+            (!name.is_empty())
+                .then(|| self.find_known(known, name))
+                .flatten()
+                .map(|skill| (skill, rest.trim()))
+        })
+    }
+
     pub fn find_known<'a>(&'a self, known: &Skills, name: &str) -> Option<&'a Skill> {
         let name = name.to_lowercase();
         let mut candidates = known.0.keys().filter_map(|key| self.skills.get(key));
@@ -549,12 +569,9 @@ impl SkillDefs {
         let all: Vec<&Skill> = candidates.by_ref().collect();
         all.iter().copied().find(exact).or_else(|| {
             all.into_iter().find(|skill| {
-                skill
-                    .def
-                    .name
-                    .to_lowercase()
-                    .split_whitespace()
-                    .any(|word| word.starts_with(&name))
+                let full = skill.def.name.to_lowercase();
+                full.starts_with(&name)
+                    || full.split_whitespace().any(|word| word.starts_with(&name))
                     || skill
                         .key
                         .split_once(':')
@@ -731,6 +748,22 @@ impl Practice<'_, '_> {
     /// Roll a yes-or-no with `who`'s Luck.
     pub fn chance(&mut self, luck: i32, p: f64) -> bool {
         self.dice.chance(luck, p)
+    }
+
+    /// Roll a value in `range`, higher being better, with `who`'s Luck.
+    pub fn roll(&mut self, luck: i32, range: std::ops::RangeInclusive<i64>) -> i64 {
+        self.dice.range(luck, range)
+    }
+
+    /// The current vitals of `who`, and their maximums (`base` for a mob's own health).
+    pub fn vitals(
+        &mut self,
+        who: Entity,
+        base: Option<&BaseHealth>,
+    ) -> Option<(Mut<'_, Vitals>, Maxima)> {
+        let (skills, vitals, attributes) = self.sheets.get_mut(who).ok()?;
+        let max = Maxima::of(&attributes, &skills, &self.defs, base);
+        Some((vitals, max))
     }
 
     /// Count one use of `key` by `who`: practice, maybe a level, maybe a discovery. Returns what
@@ -1120,12 +1153,12 @@ fn use_cmd(
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
-    let (name, target) = inv.args.split_once(' ').unwrap_or((&inv.args, ""));
+    let name = inv.args.split_whitespace().next().unwrap_or("");
     let reply: Reply = match sheets.get(inv.entity) {
         _ if name.is_empty() => Err(inv.usage_error()),
-        Ok(skills) => match defs.find_known(skills, name) {
+        Ok(skills) => match defs.find_known_in(skills, &inv.args) {
             None => Err(format!("You don't know a skill called '{name}'.")),
-            Some(skill) => match &skill.def.kind {
+            Some((skill, target)) => match &skill.def.kind {
                 SkillKind::Attack { .. } => Err(format!(
                     "{} is an attack: make it your auto-attack with 'autoattack {}', then fight.",
                     skill.def.name,
@@ -1624,6 +1657,43 @@ mod tests {
             ),
             "The guard punches Grok."
         );
+    }
+
+    #[test]
+    fn skills_are_found_by_their_whole_name_and_the_rest_is_the_target() {
+        let mut first_aid = tree_skill("healing:first_aid", None);
+        first_aid.1.def.name = "First Aid".into();
+        let mut kick = tree_skill("brawling:kick", None);
+        kick.1.def.name = "Kick".into();
+        let defs = SkillDefs {
+            skills: HashMap::from([first_aid, kick]),
+            trees: HashMap::new(),
+        };
+        let mut known = Skills::default();
+        for key in ["healing:first_aid", "brawling:kick"] {
+            known.0.insert(key.into(), SkillState::new("Taught"));
+        }
+        let found = |args: &str| {
+            defs.find_known_in(&known, args)
+                .map(|(skill, rest)| (skill.key.clone(), rest.to_string()))
+        };
+        assert_eq!(
+            found("first aid grok"),
+            Some(("healing:first_aid".into(), "grok".into()))
+        );
+        assert_eq!(
+            found("first aid"),
+            Some(("healing:first_aid".into(), String::new()))
+        );
+        assert_eq!(
+            found("first grok"),
+            Some(("healing:first_aid".into(), "grok".into()))
+        );
+        assert_eq!(
+            found("kick 2.rat"),
+            Some(("brawling:kick".into(), "2.rat".into()))
+        );
+        assert_eq!(found("dance"), None);
     }
 
     #[test]
