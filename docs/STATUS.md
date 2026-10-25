@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-24, after making it fatal to leave a fight
+[Design summary](README.md) · Last updated 2026-10-25, after giving mobs the same vitals as players and letting them use technique skills
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -33,7 +33,7 @@ After that, in order ([Proposed order](trees.md#proposed-order)): healing and co
 
 ## Small things noticed and not yet done
 
-- Mobs don't use techniques, and don't recover health between fights.
+- No mob template gives a technique skill (Cleave, Guard…) yet, so no mob uses one.
 - Room descriptions don't show who's fighting whom.
 - A pack attacking repeats "The sewer rat attacks you!" once per rat.
 - `pick` doesn't require lockpicks, though urchins carry them.

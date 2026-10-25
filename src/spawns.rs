@@ -19,6 +19,7 @@ use crate::dice::Dice;
 use crate::items::{self, Item, ItemLocation, ItemTemplates};
 use crate::mobs::{self, MobTemplates, Wanderer};
 use crate::output::RoomQuery;
+use crate::skills::SkillDefs;
 use crate::time::heartbeat;
 use crate::world::{
     Every, InRoom, ItemKey, MobKey, Refill, RoomIndex, RoomKey, SpawnDef, SpawnKey, Spawned,
@@ -305,6 +306,7 @@ fn run_spawns(
     rooms: RoomQuery,
     mob_templates: Res<MobTemplates>,
     item_templates: Res<ItemTemplates>,
+    defs: Res<SkillDefs>,
     spawns: Res<Spawns>,
     mut timers: ResMut<SpawnTimers>,
     mut dice: ResMut<Dice>,
@@ -452,7 +454,8 @@ fn run_spawns(
             Spawned::Mob(mob) => {
                 let mob = MobKey::parse(mob, &key.zone);
                 for _ in 0..make {
-                    let Some(entity) = mobs::spawn_mob(&mut commands, &mob_templates, &mob, room)
+                    let Some(entity) =
+                        mobs::spawn_mob(&mut commands, &mob_templates, &defs, &mob, room)
                     else {
                         break;
                     };

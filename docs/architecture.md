@@ -39,7 +39,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `combat/` | Combat: the round, death and respawn and the commands (`mod.rs`), attacks, techniques and ripostes (`strike.rs`), conditions (`states.rs`) |
 | `world_events.rs` | World flags, world events from zone files, and the admin `worldflag` |
 | `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
-| `vitals.rs` | Current health and stamina, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
+| `vitals.rs` | Current health and stamina for players and mobs alike, their maximums, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
@@ -130,7 +130,7 @@ Started.
 
 ### Combat
 
-Built (`src/combat.rs`). The round loop, initiative, damage, death and respawn: infrastructure with no actions of its own. Every action in combat is a skill, starting with the basic attack every character has (see [Skill kinds](skills.md#skill-kinds)). Every roll goes through `Dice`, and every contest follows the [ratio rule](attributes.md#the-ratio-rule).
+Built (`src/combat/`). The round loop, initiative, damage, death and respawn: infrastructure with no actions of its own. Every action in combat is a skill, starting with the basic attack every character has (see [Skill kinds](skills.md#skill-kinds)). Every roll goes through `Dice`, and every contest follows the [ratio rule](attributes.md#the-ratio-rule).
 
 - **Rounds** every 3 seconds. Everyone fighting acts once, in order of initiative (Reaction + Intuition, plus a d6 with Luck).
 - **Actions and the queue.** Commands marked as actions (`kill`, `flee`, `use`, `pick`, `bash`, future skills) take a round: at most one per round, and any typed sooner wait in the player's `ActionQueue` (up to 10; `stop` clears it). In a fight, a queued action takes the player's turn instead of their auto-attack. Everything else (looking, talking, inventory) happens at once.
@@ -142,11 +142,12 @@ Built (`src/combat.rs`). The round loop, initiative, damage, death and respawn: 
 - **Packs:** a spawn's `pack` caps how many of its aggressive mobs gang up on one player.
 - **An attack** pits the skill's effectiveness (level + its attribute) against the defender's Reaction + Dodge, as a ratio, with both sides' Luck. A hit does the weapon's (or attack's) damage plus Strength / 2 plus any training bonus, and the attacker is told how hurt the target looks. Every attack a player makes practises it; every dodge practises Dodge.
 - **Starting and ending fights:** `kill <mob>` (players can't fight each other yet). The target fights back. A fight ends when either side dies, leaves (`flee`: a random open exit, 60% before Luck, 2 stamina), or logs out. Walking away isn't possible mid-fight.
-- **Mobs fight by the same rules,** with attributes, skills, an attack and optionally a fixed health from their templates. `aggressive: true` mobs attack players in their room; the rest only fight back. Mobs in a fight don't wander.
+- **Mobs fight by the same rules,** with attributes, skills, an attack and optionally a base health from their templates, and recover between fights like players. `aggressive: true` mobs attack players in their room; the rest only fight back. Mobs in a fight don't wander.
+- **Mobs use their combat skills** as players do: each turn, with their template's `tactics` chance (25% by default), a technique skill they know and can use right then, picked at random, takes the place of their auto-attack. They never pick openers.
 - **A mob's death** leaves a corpse that rots in 5 minutes, and counts for its spawn like any death, so `AfterDeath` timers and breeding reseeds now matter.
 - **Leaving a fight is fatal.** A player who quits or disconnects while fighting is cut down as they go ("tries to slip away from the fight, and is cut down!"), and dies like anyone else, so logging out is never an escape.
 - **A player's death** leaves a real corpse where they fell, holding everything they carried and wore; it survives restarts and rots in 30 minutes, spilling what's left on the ground. They wake at the Wayside Shrine with a quarter of their health and stamina.
-- **Not yet:** armour (planned next, see [Armour](trees.md#armour)), mobs using techniques, expert and master techniques (Disarm, Whirlwind and the rest), mob tactics, a death penalty beyond the walk back, PvP, and grouping. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
+- **Not yet:** armour (planned next, see [Armour](trees.md#armour)), expert and master techniques (Disarm, Whirlwind and the rest), smarter mob tactics than a chance per turn, a death penalty beyond the walk back, PvP, and grouping. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
 
 ## Planned features
 

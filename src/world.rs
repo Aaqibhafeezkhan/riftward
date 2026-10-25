@@ -427,6 +427,10 @@ pub struct MobDef {
     /// Its health, instead of the usual 8 + Body / 2: a rat is small.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health: Option<i32>,
+    /// The chance, in percent, that it uses one of its technique skills on its turn instead of
+    /// its attack; without one, 25.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tactics: Option<u32>,
     /// Attacks players who come near, instead of only fighting back.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub aggressive: bool,
@@ -447,6 +451,7 @@ impl MobDef {
             skills: BTreeMap::new(),
             attack: None,
             health: None,
+            tactics: None,
             aggressive: false,
             teaches: Vec::new(),
         }

@@ -34,7 +34,7 @@ pub fn score(
     let who = format!("{} {background}", races.name(&player.race));
     let current = (vitals.health.floor() as i32, vitals.stamina.floor() as i32);
     let tradition = trainers::awakened(skills);
-    let max = Maxima::of(attributes, skills, &defs);
+    let max = Maxima::of(attributes, skills, &defs, None);
     let text = attributes::score_text(
         &player.name,
         who.trim(),

@@ -118,13 +118,14 @@ pub struct Fighting(pub Entity);
 #[derive(Component, Debug, Clone, Default)]
 pub struct AutoAttack(pub Option<String>);
 
-/// A mob's health, when its template sets one instead of the usual 8 + Body / 2.
-#[derive(Component, Debug, Clone, Copy)]
-pub struct MaxHealth(pub i32);
-
 /// A mob that attacks players who come near.
 #[derive(Component, Debug)]
 pub struct Aggressive;
+
+/// The chance, in percent, that a mob makes one of its techniques on its turn instead of its
+/// auto-attack.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Tactics(pub u32);
 
 /// Killed this round, waiting for `handle_deaths`.
 #[derive(Component, Debug)]
@@ -364,6 +365,10 @@ fn combat_round(
                 continue;
             }
         }
+        // Mobs choose their own, now and then.
+        if technique.is_none() {
+            technique = round.mob_technique(attacker);
+        }
         let moves = technique
             .as_ref()
             .and_then(|key| match defs.skills.get(key) {
@@ -596,7 +601,7 @@ fn handle_deaths(
         }
         if let Ok((mut vitals, attributes, skills, queue, mut conditions)) = sheets.get_mut(entity)
         {
-            let max = Maxima::of(attributes, skills, &defs);
+            let max = Maxima::of(attributes, skills, &defs, None);
             vitals.health = (max.health as f32 / 4.0).max(1.0);
             vitals.stamina = max.stamina as f32 / 4.0;
             if let Some(mut queue) = queue {
@@ -889,6 +894,7 @@ mod tests {
     use crate::skills::{
         Cost, Effect, Skill, SkillDef, SkillKind, SkillState, StrikeKind, Technique,
     };
+    use crate::vitals::BaseHealth;
     use crate::world::{Exits, Room, Terrain};
     use bevy::ecs::message::Messages;
     use bevy::ecs::system::RunSystemOnce;
@@ -1015,7 +1021,7 @@ mod tests {
                 attributes,
                 vitals,
                 skills,
-                MaxHealth(100),
+                BaseHealth(100),
             ))
             .id()
     }
@@ -1067,6 +1073,26 @@ mod tests {
         world.run_system_once(combat_round).unwrap();
         assert!(said(&world, cleaver, "carries on into"));
         assert!(world.get::<Vitals>(second).unwrap().health < 100.0);
+    }
+
+    #[test]
+    fn mobs_make_their_techniques_by_their_tactics() {
+        for (tactics, cleaves) in [(100, true), (0, false)] {
+            let (mut world, room) = world();
+            let cleaver = fighter(
+                &mut world,
+                room,
+                1000,
+                1,
+                &[BASIC_ATTACK, "brawling:cleave"],
+            );
+            let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+            world
+                .entity_mut(cleaver)
+                .insert((Fighting(foe), Tactics(tactics)));
+            world.run_system_once(combat_round).unwrap();
+            assert_eq!(said(&world, foe, "cleaves"), cleaves, "tactics {tactics}");
+        }
     }
 
     #[test]

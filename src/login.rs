@@ -873,7 +873,7 @@ fn enter_game(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or_default();
-    let max = Maxima::of(&attributes, &skills, choices.skills);
+    let max = Maxima::of(&attributes, &skills, choices.skills, None);
     let vitals = Vitals::restored(max, character.vitals, character.vitals_at, now);
     let prompt = PromptFormat(
         character

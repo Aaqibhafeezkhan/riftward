@@ -118,10 +118,13 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     attributes: {Body: 1, Strength: 1, Agility: 4, Reaction: 4},   // the rest at the base, 3
     skills: {"beast:bite": 2},       // levels; mobs don't improve
     attack: "beast:bite",            // without one, Brawling
-    health: 3,                        // instead of 8 + Body / 2
+    health: 3,                        // instead of 8 + Body / 2; Toughness still adds to it
+    tactics: 25,                      // % chance a turn to use a combat skill instead (default 25)
     aggressive: true,                 // attacks players in its room
 ),
 ```
+
+Mobs share players' vitals and recover by the same rules, at their own maximums: out of a fight, a hurt or winded mob gets its health and stamina back. Mobs use their skills the way players do. Besides its auto-attack, a mob uses the other combat skills it knows (technique skills like Cleave or Guard): each turn, with its `tactics` chance, it uses one it can right then (its attack ready, the stamina for it), picked at random, in place of its auto-attack. Openers like Backstab are for starting fights, so a mob already in one never picks them.
 
 ## Building mobs and spawns
 

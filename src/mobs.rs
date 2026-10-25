@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 
 use crate::attributes::Attributes;
-use crate::combat::{Aggressive, AutoAttack, Fighting, MaxHealth};
+use crate::combat::{Aggressive, AutoAttack, Fighting, Tactics};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Permission;
 use crate::dice::Dice;
@@ -17,12 +17,15 @@ use crate::events::{GameEvent, Way, way_back};
 use crate::items::{capitalized, counted};
 use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
-use crate::skills::{SkillState, Skills};
+use crate::skills::{SkillDefs, SkillState, Skills};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
-use crate::vitals::Vitals;
+use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{Door, InRoom, MobDef, MobKey, RoomKey, SpawnKey, Spawned, Wander, ZoneDef};
+
+/// The chance, in percent, that a mob uses a technique skill on its turn, unless its template says.
+const DEFAULT_TACTICS: u32 = 25;
 
 pub struct MobsPlugin;
 
@@ -141,6 +144,7 @@ pub fn sync_mob_templates(
 pub fn spawn_mob(
     commands: &mut Commands,
     templates: &MobTemplates,
+    defs: &SkillDefs,
     key: &MobKey,
     room: Entity,
 ) -> Option<Entity> {
@@ -164,11 +168,7 @@ pub fn spawn_mob(
         },
         0,
     );
-    let health = def.health.unwrap_or(attributes.health());
-    let vitals = Vitals {
-        health: health as f32,
-        stamina: attributes.stamina() as f32,
-    };
+    let base = def.health.map(BaseHealth);
     let skills = Skills(
         def.skills
             .iter()
@@ -179,6 +179,7 @@ pub fn spawn_mob(
             })
             .collect(),
     );
+    let vitals = Vitals::full(Maxima::of(&attributes, &skills, defs, base.as_ref()));
     let mut entity = commands.spawn((
         mob,
         def.keywords(),
@@ -187,8 +188,11 @@ pub fn spawn_mob(
         vitals,
         skills,
         AutoAttack(def.attack.clone()),
-        MaxHealth(health),
+        Tactics(def.tactics.unwrap_or(DEFAULT_TACTICS)),
     ));
+    if let Some(base) = base {
+        entity.insert(base);
+    }
     if def.aggressive {
         entity.insert(Aggressive);
     }
@@ -348,6 +352,7 @@ fn summon(
     mut players: PlayerQuery,
     rooms: RoomQuery,
     templates: Res<MobTemplates>,
+    defs: Res<SkillDefs>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -365,7 +370,7 @@ fn summon(
             format!("There's no mob template [{key}]."),
         )),
         Some(def) => {
-            spawn_mob(&mut commands, &templates, &key, actor.room);
+            spawn_mob(&mut commands, &templates, &defs, &key, actor.room);
             out.push(Outgoing::line(
                 inv.entity,
                 format!("You summon {} [{key}].", def.name),

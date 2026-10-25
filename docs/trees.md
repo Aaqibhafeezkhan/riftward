@@ -164,7 +164,7 @@ Each step adds its trees' skills to the trainers in Riftwatch: the drill sergean
   | Athletics | **Toughness** (+1 max health per 5 levels, practised by taking damage); **Endurance** now gives +1 max stamina per 5 levels |
   | Adept | **Killing Hands** (unarmed, 2–4: the Adept's weapon), **Quickened Reflexes** (+initiative, and +defence, practised by dodging) |
 
-- **Mobs** don't use techniques yet; their templates can give them auras and passives.
+- **Mobs** use whatever skills their templates give them: technique skills now and then, by their `tactics` chance (see [The living world](world.md)), as well as auras and passives.
 
 ## Armour
 

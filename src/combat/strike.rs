@@ -8,7 +8,7 @@ use bevy::prelude::*;
 
 use super::states::{Conditions, State};
 use super::{
-    ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, CombatLog, Dead, Fighting, MaxHealth,
+    ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, CombatLog, Dead, Fighting, Tactics,
 };
 use crate::attributes::{Attribute, Attributes};
 use crate::db::Database;
@@ -20,7 +20,7 @@ use crate::output::Outgoing;
 use crate::skills::{
     Bonus, Cost, Effect, SkillDefs, SkillKind, Skills, StrikeKind, Technique, boosts, count_use,
 };
-use crate::vitals::{Maxima, Vitals};
+use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{InRoom, Player};
 
 /// The skill that helps avoid attacks.
@@ -42,7 +42,8 @@ pub struct Fighter {
     pub conditions: &'static mut Conditions,
     pub fighting: Option<&'static Fighting>,
     pub auto: Option<&'static AutoAttack>,
-    pub most: Option<&'static MaxHealth>,
+    pub base: Option<&'static BaseHealth>,
+    pub tactics: Option<&'static Tactics>,
     pub queue: Option<&'static mut ActionQueue>,
     pub aggressive: Has<Aggressive>,
     pub dead: Has<Dead>,
@@ -59,16 +60,6 @@ pub fn name_of(player: Option<&Player>, mob: Option<&Mob>) -> String {
         (_, Some(mob)) => super::the(&mob.name),
         _ => "someone".into(),
     }
-}
-
-/// The most health a fighter can have.
-pub fn max_health(
-    attributes: &Attributes,
-    skills: &Skills,
-    defs: &SkillDefs,
-    override_: Option<&MaxHealth>,
-) -> i32 {
-    override_.map_or_else(|| Maxima::of(attributes, skills, defs).health, |m| m.0)
 }
 
 /// How hurt someone looks, from their health and their most.
@@ -287,6 +278,49 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         for line in lines {
             self.say(who, line);
         }
+    }
+
+    /// The technique a mob makes this turn instead of its auto-attack, if any: with its `Tactics`
+    /// chance, one it can make now (its attack ready, the stamina for it), picked at random.
+    /// Openers start fights, so a mob already in one never picks them.
+    pub fn mob_technique(&mut self, attacker: Entity) -> Option<String> {
+        let f = self.fighters.get(attacker).ok()?;
+        let chance = f.tactics?.0;
+        let (stamina, luck) = (f.vitals.stamina, f.attributes.get(Attribute::Luck));
+        let usable: Vec<String> = f
+            .skills
+            .0
+            .keys()
+            .filter(|key| {
+                let Some(SkillKind::Technique(t)) = self.defs.skills.get(*key).map(|s| &s.def.kind)
+                else {
+                    return false;
+                };
+                let needs = match t.cost {
+                    Cost::Free => 0.0,
+                    Cost::Stamina(n) => n as f32,
+                };
+                !t.opener
+                    && stamina >= needs
+                    && choose_attack(
+                        attacker,
+                        Some(&t.with),
+                        false,
+                        stamina,
+                        f.skills,
+                        self.items,
+                        self.templates,
+                        self.defs,
+                    )
+                    .is_some_and(|s| s.skill == t.with)
+            })
+            .cloned()
+            .collect();
+        if usable.is_empty() || !self.dice.chance(luck, f64::from(chance) / 100.0) {
+            return None;
+        }
+        let pick = self.dice.range(0, 0..=usable.len() as i64 - 1) as usize;
+        usable.into_iter().nth(pick)
     }
 
     /// Whether `target` is caught unawares by `attacker`: not fighting them before this round,
@@ -725,7 +759,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         };
         f.vitals.health -= dealt as f32;
         let health = f.vitals.health;
-        let max = max_health(&f.attributes, &f.skills, defs, f.most);
+        let max = Maxima::of(&f.attributes, &f.skills, defs, f.base).health;
         self.events.write(GameEvent::Damaged {
             who,
             amount: dealt as f32,

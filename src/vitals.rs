@@ -1,15 +1,16 @@
-//! Vitals: a character's current health and stamina, how they recover, and the status prompt that
-//! shows them.
+//! Vitals: current health and stamina, how they recover, and the status prompt that shows them.
+//! Players and mobs share them, and recover by the same rules.
 //!
-//! The maximums come from attributes (health 8 + Body / 2, stamina 8 + Willpower / 2). Current
-//! values recover on the heartbeat, worked out from elapsed time: three times as fast while
-//! resting, and not at all in a fight. They keep recovering while the character is offline: their
-//! vitals are saved with the time they were saved, and caught up at the next login.
+//! The maximums come from attributes (health 8 + Body / 2, stamina 8 + Willpower / 2), or a mob
+//! template's own health, plus what passive skills add. Current values recover on the heartbeat,
+//! worked out from elapsed time: three times as fast while resting, and not at all in a fight.
+//! Players keep recovering while offline: their vitals are saved with the time they were saved,
+//! and caught up at the next login.
 
 use bevy::prelude::*;
 
 use crate::attributes::Attributes;
-use crate::combat::{Conditions, Fighting};
+use crate::combat::{Conditions, Dead, Fighting};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
 use crate::net::{self, Connection};
@@ -72,8 +73,13 @@ impl Plugin for VitalsPlugin {
     }
 }
 
+/// A mob's health from its template, instead of the usual 8 + Body / 2: a rat is small. Skills
+/// like Toughness still add to it.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct BaseHealth(pub i32);
+
 /// The most health and stamina someone can have: from their attributes (8 + Body / 2, 8 +
-/// Willpower / 2), plus what passive skills like Toughness and Endurance add.
+/// Willpower / 2) or their `BaseHealth`, plus what passive skills like Toughness and Endurance add.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Maxima {
     pub health: i32,
@@ -81,10 +87,16 @@ pub struct Maxima {
 }
 
 impl Maxima {
-    pub fn of(attributes: &Attributes, skills: &Skills, defs: &SkillDefs) -> Self {
+    pub fn of(
+        attributes: &Attributes,
+        skills: &Skills,
+        defs: &SkillDefs,
+        base: Option<&BaseHealth>,
+    ) -> Self {
         let boosts = boosts(skills, defs);
+        let health = base.map_or_else(|| attributes.health(), |b| b.0);
         Self {
-            health: attributes.health() + boosts.max_health,
+            health: health + boosts.max_health,
             stamina: attributes.stamina() + boosts.max_stamina,
         }
     }
@@ -99,8 +111,8 @@ impl Maxima {
     }
 }
 
-/// Current health and stamina, which can be fractional while recovering. Lives on the player
-/// entity, next to the `Attributes` and `Skills` that set their maximums.
+/// Current health and stamina, which can be fractional while recovering. Lives on the player or
+/// mob entity, next to the `Attributes` and `Skills` that set their maximums.
 #[derive(Component, Clone, Debug, PartialEq)]
 #[require(Conditions)]
 pub struct Vitals {
@@ -175,7 +187,7 @@ pub fn render_prompt(format: &str, vitals: &Vitals, max: Maxima) -> String {
     text
 }
 
-/// Players' vitals and whether they're resting or fighting. Mobs don't recover yet.
+/// Everyone's vitals, players and mobs, and whether they're resting or fighting.
 type Recovering<'w, 's> = Query<
     'w,
     's,
@@ -183,10 +195,11 @@ type Recovering<'w, 's> = Query<
         &'static mut Vitals,
         &'static Attributes,
         &'static Skills,
+        Option<&'static BaseHealth>,
         Has<Resting>,
         Has<Fighting>,
     ),
-    With<Player>,
+    Without<Dead>,
 >;
 
 /// Sitting down to rest. Walking, attacking or being attacked gets them up.
@@ -208,14 +221,14 @@ fn unix_now() -> i64 {
 fn recover(
     time: Res<Time>,
     mut last: Local<Option<f64>>,
-    mut players: Recovering,
+    mut characters: Recovering,
     defs: Res<SkillDefs>,
 ) {
     let now = time.elapsed_secs_f64();
     let secs = last.map_or(0.0, |last| now - last) as f32;
     *last = Some(now);
-    for (mut vitals, attributes, skills, resting, fighting) in &mut players {
-        let max = Maxima::of(attributes, skills, &defs);
+    for (mut vitals, attributes, skills, base, resting, fighting) in &mut characters {
+        let max = Maxima::of(attributes, skills, &defs, base);
         let before = vitals.clone();
         let mut after = before.clone();
         after.clamp(max);
@@ -276,7 +289,7 @@ fn show_prompts(
     defs: Res<SkillDefs>,
 ) {
     for (mut conn, vitals, attributes, skills, format) in &mut players {
-        let max = Maxima::of(attributes, skills, &defs);
+        let max = Maxima::of(attributes, skills, &defs, None);
         conn.set_prompt(render_prompt(&format.0, vitals, max));
     }
 }
@@ -405,7 +418,7 @@ fn set_vitals(
     let (mut vitals, attributes, skills) = sheets
         .get_mut(actor.entity)
         .map_err(|_| format!("{} has no vitals loaded.", actor.name))?;
-    let max = Maxima::of(attributes, skills, defs);
+    let max = Maxima::of(attributes, skills, defs, None);
     vitals.health = health;
     if let Some(stamina) = number(stamina) {
         vitals.stamina = stamina;
@@ -487,6 +500,56 @@ mod tests {
             1000,
         );
         assert_eq!(over, Vitals::full(Maxima::bare(&attributes)));
+    }
+
+    #[test]
+    fn a_base_health_stands_in_for_body() {
+        let max = Maxima::of(
+            &sheet(),
+            &Skills::default(),
+            &SkillDefs::default(),
+            Some(&BaseHealth(3)),
+        );
+        assert_eq!(
+            max,
+            Maxima {
+                health: 3,
+                stamina: 9
+            }
+        );
+    }
+
+    #[test]
+    fn mobs_recover_too_but_not_in_a_fight() {
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(SkillDefs::default());
+        let hurt = Vitals {
+            health: 0.0,
+            stamina: 0.0,
+        };
+        let rat = world
+            .spawn((hurt.clone(), sheet(), Skills::default(), BaseHealth(3)))
+            .id();
+        let fighter = world
+            .spawn((hurt.clone(), sheet(), Skills::default(), BaseHealth(3)))
+            .id();
+        world.entity_mut(fighter).insert(Fighting(rat));
+        let recover = world.register_system(recover);
+        world.run_system(recover).unwrap();
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs(1000));
+        world.run_system(recover).unwrap();
+        // Full, at its own health rather than 8 + Body / 2.
+        assert_eq!(
+            world.get::<Vitals>(rat),
+            Some(&Vitals {
+                health: 3.0,
+                stamina: 9.0
+            })
+        );
+        assert_eq!(world.get::<Vitals>(fighter), Some(&hurt));
     }
 
     #[test]
