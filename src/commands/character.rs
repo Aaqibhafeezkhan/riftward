@@ -4,17 +4,58 @@ use bevy::prelude::*;
 
 use crate::aliases::{self, Aliases};
 use crate::attributes::{self, Attributes};
+use crate::characters::{Backgrounds, Races};
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
-use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
+use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line};
 
-pub fn score(In(inv): In<Invocation>, mut players: PlayerQuery, sheets: Query<&Attributes>) {
-    let (Some(actor), Ok(attributes)) = (Actor::get(&players, inv.entity), sheets.get(inv.entity))
+/// The longest description a character can have.
+const MAX_DESCRIPTION_LEN: usize = 600;
+
+pub fn score(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    sheets: Query<&Attributes>,
+    races: Res<Races>,
+    backgrounds: Res<Backgrounds>,
+) {
+    let (Ok((_, _, Some(player), _)), Ok(attributes)) =
+        (players.get(inv.entity), sheets.get(inv.entity))
     else {
         return;
     };
-    let text = attributes::score_text(&actor.name, attributes);
+    let background = backgrounds
+        .get(&player.background)
+        .map_or(player.background.clone(), |b| b.name.clone());
+    let who = format!("{} {background}", races.name(&player.race));
+    let text = attributes::score_text(&player.name, who.trim(), attributes);
     deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+}
+
+/// `describe [<text>]`: see or set what others see when they look at you.
+pub fn describe(In(inv): In<Invocation>, mut players: PlayerQuery, db: Res<Database>) {
+    let reply: Reply = match players.get_mut(inv.entity) {
+        Ok((_, _, Some(mut player), _)) => {
+            let text = inv.args.trim();
+            if text.is_empty() {
+                Ok(if player.description.is_empty() {
+                    "You haven't described yourself. Use 'describe <text>'.".into()
+                } else {
+                    format!("Others see:\r\n{}", player.description)
+                })
+            } else if text.chars().count() > MAX_DESCRIPTION_LEN {
+                Err(format!("Keep it under {MAX_DESCRIPTION_LEN} characters."))
+            } else if let Err(err) = db.set_description(player.character_id, text) {
+                error!("failed to save description for {}: {err}", player.name);
+                Err("Something went wrong saving that. Please try again.".into())
+            } else {
+                player.description = text.into();
+                Ok("Description updated.".into())
+            }
+        }
+        _ => return,
+    };
+    deliver(vec![reply_line(inv.entity, reply)], &mut players);
 }
 
 pub fn raise(

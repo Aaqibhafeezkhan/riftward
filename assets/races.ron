@@ -1,0 +1,61 @@
+// Races, in the order the creation menu shows them. Each shifts the base attributes (3, Luck 1,
+// Magic 0) and grants racial skills once skills exist. Every race's shifts plus its extra Karma
+// total +3, so none starts ahead overall.
+[
+    (
+        id: "dwarf",
+        name: "Dwarf",
+        summary: "Stout, stubborn crafters and miners.",
+        attributes: {Body: 2, Strength: 1, Willpower: 1, Reaction: -1},
+        skills: ["racial:heat_sight"],
+    ),
+    (
+        id: "elf",
+        name: "Elf",
+        summary: "Graceful and long-lived, close to the living world.",
+        attributes: {Agility: 2, Intuition: 1, Charisma: 1, Body: -1},
+        skills: ["racial:low_light_vision"],
+    ),
+    (
+        id: "human",
+        name: "Human",
+        summary: "Adaptable and everywhere; extra Karma to spend as you like.",
+        karma: 3,
+        skills: ["racial:versatility"],
+    ),
+    (
+        id: "obsidiman",
+        name: "Obsidiman",
+        summary: "Living stone: huge, patient and slow to move.",
+        attributes: {Body: 3, Strength: 3, Reaction: -2, Agility: -1},
+        skills: ["racial:stone_skin"],
+    ),
+    (
+        id: "ork",
+        name: "Ork",
+        summary: "Fierce, hardy and quick to anger.",
+        attributes: {Strength: 2, Body: 1, Reaction: 1, Charisma: -1},
+        skills: ["racial:low_light_vision", "racial:gahad"],
+    ),
+    (
+        id: "troll",
+        name: "Troll",
+        summary: "Towering and proud, of a warrior culture.",
+        attributes: {Strength: 3, Body: 2, Agility: -1, Logic: -1},
+        skills: ["racial:heat_sight"],
+    ),
+    (
+        id: "tskrang",
+        name: "T'skrang",
+        summary: "Flamboyant lizard-folk of the rivers.",
+        attributes: {Charisma: 2, Agility: 1, Reaction: 1, Willpower: -1},
+        skills: ["racial:tail_combat", "racial:swimming"],
+    ),
+    (
+        id: "windling",
+        name: "Windling",
+        summary: "Tiny, winged and endlessly curious.",
+        attributes: {Agility: 3, Reaction: 1, Intuition: 1, Strength: -2},
+        skills: ["racial:flight", "racial:astral_sight"],
+    ),
+]

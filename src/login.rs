@@ -2,11 +2,16 @@
 //!
 //! Each connection that hasn't entered the game yet carries a `LoginState` component. Once a
 //! character is chosen, the state is replaced by `Player` and `InRoom`.
+//!
+//! Creating a character goes: name, race, spending starting Karma, background, description. Each
+//! step after the name can go `back`. Nothing but the name is saved until the end, so a character
+//! left half-made (or made before races existed) goes through creation again at its next login.
 
 use bevy::prelude::*;
 
 use crate::aliases::Aliases;
-use crate::attributes::Attributes;
+use crate::attributes::{Attribute, Attributes};
+use crate::characters::{self, Backgrounds, RaceDef, Races};
 use crate::command;
 use crate::commands::movement::{View, describe_room};
 use crate::db::{Account, CharacterRecord, Database, Permission, Role};
@@ -62,6 +67,30 @@ pub enum LoginState {
     NameCharacter {
         account: Account,
     },
+    ChooseRace(Draft),
+    SpendKarma(Draft),
+    ChooseBackground(Draft),
+    Describe(Draft),
+}
+
+/// A character being created, as far as the player has got.
+pub struct Draft {
+    account: Account,
+    character: CharacterRecord,
+    race: String,
+    attributes: Attributes,
+    background: String,
+    /// A description they already have, which they can keep.
+    description: String,
+}
+
+/// The most a character description can hold.
+const MAX_DESCRIPTION_LEN: usize = 600;
+
+/// The races and backgrounds creation offers.
+struct Choices<'a> {
+    races: &'a Races,
+    backgrounds: &'a Backgrounds,
 }
 
 impl LoginState {
@@ -112,7 +141,13 @@ fn handle_login(
     view: View,
     index: Res<RoomIndex>,
     db: Res<Database>,
+    races: Res<Races>,
+    backgrounds: Res<Backgrounds>,
 ) {
+    let choices = Choices {
+        races: &races,
+        backgrounds: &backgrounds,
+    };
     let mut out = Vec::new();
     for PlayerInput { entity, line } in inputs.read() {
         let entity = *entity;
@@ -134,10 +169,16 @@ fn handle_login(
             LoginState::ChooseCharacter {
                 account,
                 characters,
-            } => choose_character(entity, line, account, characters, &db, &mut out),
+            } => choose_character(entity, line, account, characters, &choices, &db, &mut out),
             LoginState::NameCharacter { account } => {
-                name_character(entity, line, account, &db, &mut out)
+                name_character(entity, line, account, &choices, &db, &mut out)
             }
+            LoginState::ChooseRace(draft) => choose_race(entity, line, draft, &choices, &mut out),
+            LoginState::SpendKarma(draft) => spend_karma(entity, line, draft, &choices, &mut out),
+            LoginState::ChooseBackground(draft) => {
+                choose_background(entity, line, draft, &choices, &mut out)
+            }
+            LoginState::Describe(draft) => describe(entity, line, draft, &choices, &db, &mut out),
         };
 
         // The client doesn't echo the newline after a hidden password either, so add one.
@@ -169,6 +210,7 @@ fn handle_login(
                     &players,
                     &view,
                     &index,
+                    &choices,
                     &db,
                     &mut out,
                 ) {
@@ -329,11 +371,12 @@ fn choose_character(
     line: &str,
     account: Account,
     characters: Vec<CharacterRecord>,
+    choices: &Choices,
     db: &Database,
     out: &mut Vec<Outgoing>,
 ) -> Step {
     if let Some(name) = line.strip_prefix("new ") {
-        return name_character(entity, name.trim(), account, db, out);
+        return name_character(entity, name.trim(), account, choices, db, out);
     }
 
     let chosen = match line.parse::<usize>() {
@@ -342,7 +385,59 @@ fn choose_character(
             .iter()
             .find(|c| c.name.eq_ignore_ascii_case(line)),
     };
+    let race = chosen.and_then(|c| c.race.as_deref());
+    let background = chosen.and_then(|c| c.background.as_deref());
     match chosen {
+        Some(character) if race.is_none() => {
+            out.push(Outgoing::line(
+                entity,
+                format!("{} isn't finished yet. Let's finish them.", character.name),
+            ));
+            start_creation(entity, account, character.clone(), choices, out)
+        }
+        // A race or background removed from the data files since: choose again before playing.
+        Some(character) if race.is_some_and(|r| choices.races.get(r).is_none()) => {
+            out.push(Outgoing::line(
+                entity,
+                format!(
+                    "\x1b[33m{}'s race, '{}', no longer exists in this world. Choose a new one; \
+                     your starting Karma is yours to spend again.\x1b[0m",
+                    character.name,
+                    race.unwrap_or_default()
+                ),
+            ));
+            start_creation(entity, account, character.clone(), choices, out)
+        }
+        Some(character) if background.is_none_or(|b| choices.backgrounds.get(b).is_none()) => {
+            out.push(Outgoing::line(
+                entity,
+                format!(
+                    "\x1b[33m{}'s background, '{}', no longer exists. Choose a new one; \
+                     everything else stays as it was.\x1b[0m",
+                    character.name,
+                    background.unwrap_or_default()
+                ),
+            ));
+            let race = race.unwrap_or_default().to_string();
+            let attributes = choices
+                .races
+                .get(&race)
+                .map(RaceDef::starting_attributes)
+                .unwrap_or_default()
+                .with_rows(db.attributes(character.id).unwrap_or_default());
+            out.push(Outgoing::To(
+                entity,
+                characters::background_menu(choices.backgrounds, choices.races, &race, &attributes),
+            ));
+            Step::Next(LoginState::ChooseBackground(Draft {
+                description: character.description.clone(),
+                account,
+                character: character.clone(),
+                race,
+                attributes,
+                background: String::new(),
+            }))
+        }
         Some(character) => Step::Enter {
             character: character.clone(),
             account,
@@ -364,6 +459,7 @@ fn name_character(
     entity: Entity,
     line: &str,
     account: Account,
+    choices: &Choices,
     db: &Database,
     out: &mut Vec<Outgoing>,
 ) -> Step {
@@ -390,11 +486,205 @@ fn name_character(
         Ok(false) => match db.create_character(account.id, &name) {
             Ok(character) => {
                 info!("account '{}' created character {name}", account.username);
-                Step::Enter { account, character }
+                start_creation(entity, account, character, choices, out)
             }
             Err(err) => db_failure(entity, err, out),
         },
         Err(err) => db_failure(entity, err, out),
+    }
+}
+
+/// Begin creating a named character, at the choice of race.
+fn start_creation(
+    entity: Entity,
+    account: Account,
+    character: CharacterRecord,
+    choices: &Choices,
+    out: &mut Vec<Outgoing>,
+) -> Step {
+    out.push(Outgoing::To(entity, characters::race_menu(choices.races)));
+    Step::Next(LoginState::ChooseRace(Draft {
+        description: character.description.clone(),
+        account,
+        character,
+        race: String::new(),
+        attributes: Attributes::default(),
+        background: String::new(),
+    }))
+}
+
+fn choose_race(
+    entity: Entity,
+    line: &str,
+    mut draft: Draft,
+    choices: &Choices,
+    out: &mut Vec<Outgoing>,
+) -> Step {
+    let Some(race) = choices.races.choose(line) else {
+        out.push(Outgoing::To(
+            entity,
+            "That isn't one of the races. Enter a number or name: ".into(),
+        ));
+        return Step::Next(LoginState::ChooseRace(draft));
+    };
+    // Choosing again (after 'back') starts the Karma over, since the starting ratings change.
+    if draft.race != race.id {
+        draft.race = race.id.clone();
+        draft.attributes = race.starting_attributes();
+    }
+    out.push(Outgoing::To(
+        entity,
+        characters::karma_sheet(race, &draft.attributes),
+    ));
+    Step::Next(LoginState::SpendKarma(draft))
+}
+
+fn spend_karma(
+    entity: Entity,
+    line: &str,
+    mut draft: Draft,
+    choices: &Choices,
+    out: &mut Vec<Outgoing>,
+) -> Step {
+    let Some(race) = choices.races.get(&draft.race) else {
+        return start_creation(entity, draft.account, draft.character, choices, out);
+    };
+    let (verb, rest) = line.trim().split_once(' ').unwrap_or((line.trim(), ""));
+    let result = match verb.to_ascii_lowercase().as_str() {
+        "back" => {
+            out.push(Outgoing::To(entity, characters::race_menu(choices.races)));
+            return Step::Next(LoginState::ChooseRace(draft));
+        }
+        "done" => {
+            out.push(Outgoing::To(
+                entity,
+                characters::background_menu(
+                    choices.backgrounds,
+                    choices.races,
+                    &draft.race,
+                    &draft.attributes,
+                ),
+            ));
+            return Step::Next(LoginState::ChooseBackground(draft));
+        }
+        "raise" | "lower" => Attribute::parse(rest.trim()).and_then(|attribute| {
+            if verb.eq_ignore_ascii_case("raise") {
+                draft.attributes.raise(attribute).map(|_| ())
+            } else {
+                draft.attributes.lower(attribute)
+            }
+        }),
+        _ => Err("Type 'raise <attribute>', 'lower <attribute>', 'done' or 'back'.".into()),
+    };
+    let mut text = characters::karma_sheet(race, &draft.attributes);
+    if let Err(err) = result {
+        text = format!("\x1b[31m{err}\x1b[0m\r\n{text}");
+    }
+    out.push(Outgoing::To(entity, text));
+    Step::Next(LoginState::SpendKarma(draft))
+}
+
+fn choose_background(
+    entity: Entity,
+    line: &str,
+    mut draft: Draft,
+    choices: &Choices,
+    out: &mut Vec<Outgoing>,
+) -> Step {
+    if line.trim().eq_ignore_ascii_case("back") {
+        if let Some(race) = choices.races.get(&draft.race) {
+            out.push(Outgoing::To(
+                entity,
+                characters::karma_sheet(race, &draft.attributes),
+            ));
+        }
+        return Step::Next(LoginState::SpendKarma(draft));
+    }
+    let Some(background) = choices.backgrounds.choose(line) else {
+        out.push(Outgoing::To(
+            entity,
+            "That isn't one of the backgrounds. Enter a number or name, or 'back': ".into(),
+        ));
+        return Step::Next(LoginState::ChooseBackground(draft));
+    };
+    if let Some(refusal) =
+        characters::background_refusal(background, choices.races, &draft.race, &draft.attributes)
+    {
+        out.push(Outgoing::To(entity, refusal));
+        return Step::Next(LoginState::ChooseBackground(draft));
+    }
+    draft.background = background.id.clone();
+    let text = if draft.description.is_empty() {
+        format!(
+            "\r\nLast, describe {} as others see them when they look: a sentence or two about \
+             their looks and manner. You can change it later with 'describe'.\r\n\
+             Type the description, 'skip' to leave it for now, or 'back': ",
+            draft.character.name
+        )
+    } else {
+        format!(
+            "\r\nOthers see {} as:\r\n{}\r\nType a new description, 'keep' to keep it, or \
+             'back': ",
+            draft.character.name, draft.description
+        )
+    };
+    out.push(Outgoing::To(entity, text));
+    Step::Next(LoginState::Describe(draft))
+}
+
+fn describe(
+    entity: Entity,
+    line: &str,
+    mut draft: Draft,
+    choices: &Choices,
+    db: &Database,
+    out: &mut Vec<Outgoing>,
+) -> Step {
+    let line = line.trim();
+    if line.eq_ignore_ascii_case("back") {
+        out.push(Outgoing::To(
+            entity,
+            characters::background_menu(
+                choices.backgrounds,
+                choices.races,
+                &draft.race,
+                &draft.attributes,
+            ),
+        ));
+        return Step::Next(LoginState::ChooseBackground(draft));
+    }
+    if line.chars().count() > MAX_DESCRIPTION_LEN {
+        out.push(Outgoing::To(
+            entity,
+            format!("Keep it under {MAX_DESCRIPTION_LEN} characters. Try again: "),
+        ));
+        return Step::Next(LoginState::Describe(draft));
+    }
+    let description = match line.to_ascii_lowercase().as_str() {
+        "skip" => String::new(),
+        "keep" => draft.description.clone(),
+        _ => line.to_string(),
+    };
+    let id = draft.character.id;
+    if let Err(err) = db.finish_creation(
+        id,
+        &draft.race,
+        &draft.background,
+        &description,
+        &draft.attributes.rows(),
+    ) {
+        return db_failure(entity, err, out);
+    }
+    info!(
+        "{} finished creation: {} {}",
+        draft.character.name, draft.race, draft.background
+    );
+    draft.character.race = Some(draft.race);
+    draft.character.background = Some(draft.background);
+    draft.character.description = description;
+    Step::Enter {
+        account: draft.account,
+        character: draft.character,
     }
 }
 
@@ -417,6 +707,7 @@ fn enter_game(
     players: &PlayerQuery,
     view: &View,
     index: &RoomIndex,
+    choices: &Choices,
     db: &Database,
     out: &mut Vec<Outgoing>,
 ) -> Option<LoginState> {
@@ -458,7 +749,16 @@ fn enter_game(
         Default::default()
     });
 
-    let attributes = Attributes::from_rows(db.attributes(character.id).unwrap_or_else(|err| {
+    let race = character.race.clone().unwrap_or_default();
+    let start = choices
+        .races
+        .get(&race)
+        .map(RaceDef::starting_attributes)
+        .unwrap_or_else(|| {
+            warn!("{} is of unknown race '{race}'", character.name);
+            Attributes::default()
+        });
+    let attributes = start.with_rows(db.attributes(character.id).unwrap_or_else(|err| {
         error!("failed to load attributes for {}: {err}", character.name);
         Vec::new()
     }));
@@ -474,6 +774,9 @@ fn enter_game(
             character_id: character.id,
             account: account.username.clone(),
             role: account.role,
+            race,
+            background: character.background.clone().unwrap_or_default(),
+            description: character.description.clone(),
         },
         InRoom(room),
     ));

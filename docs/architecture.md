@@ -23,7 +23,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | --- | --- |
 | `main.rs` | Builds the app: a 30 Hz loop, logging, asset loading with file watching, and the plugins below |
 | `net.rs` | TCP listener; one entity per connection with a `Connection` component; queues each client's lines and hands out one per tick as a `PlayerInput` message; flushes output at the end of the frame |
-| `login.rs` | Login state machine: account, password (hidden with telnet echo control), new accounts, character choice and creation |
+| `login.rs` | Login state machine: account, password (hidden with telnet echo control), new accounts, character choice, and character creation (race, Karma, background, description) |
 | `command.rs` | The command system: `CommandSpec` registry, the dispatcher (alias expansion, permission hiding, unknown commands), generated `help`, and prompts |
 | `commands/` | Player commands, one system each: `movement` (look, go, directions), `communication` (say, whisper, yell, gossip, who), `character` (score, raise, alias, unalias, quit) |
 | `build.rs` | Builder and admin commands, registered with a permission |
@@ -38,6 +38,8 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
+| `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |
+| `conditions.rs` | The shared condition language (`Stat`, `Race`, `All`, `Any`, `Not`) |
 | `dice.rs` | The `Dice` resource, the only source of randomness |
 
 ### One tick
@@ -117,7 +119,7 @@ Started.
 - **The game clock** runs eight times faster than real time: a full day and night every **3 real hours**, a game hour every 7½ real minutes. It's worked out from the real time, so it needs no saving and a restart doesn't move it.
 - **Parts of the day:** dawn from 5, day from 7, dusk from 19, night from 21. Each begins with a message to everyone outdoors; rooms flagged `indoors` (the sewers, the guildhall, the keep's halls) don't see it. `time` shows the hour, read from the sky or guessed indoors.
 - **One heartbeat, once a second,** for systems that don't need every frame: spawns, wandering and the clock today; regeneration and cooldowns later. Heartbeat systems work from elapsed time and timestamps, never by counting beats, so the rate is a performance setting rather than a game rule, and a stalled server doesn't change the game. There's no old-style global tick to wait for.
-- **Still to come:** regeneration (once there's current health and fatigue), combat rounds (2-3 seconds, with combat), and actions that take time to finish (lessons, rituals, casting).
+- **Still to come:** regeneration (once there's current health and stamina), combat rounds (2-3 seconds, with combat), and actions that take time to finish (lessons, rituals, casting).
 - **Open:** a calendar (days, months, seasons) from *The Agryn's Legacy*, and whether night changes anything beyond the messages, such as needing light outdoors.
 
 ### Combat
@@ -170,19 +172,19 @@ An escape hatch for behaviour that data can't express: bespoke unique items (Ang
 
 ### Status prompt
 
-The in-game prompt shows the character's state, such as `<14/18hp 9/10fat>`, instead of a bare `> `.
+The in-game prompt shows the character's state, such as `<14/18hp 9/10st>`, instead of a bare `> `.
 
 - **Always current.** The connection writes the prompt once at the end of each tick (see [One tick](#one-tick)), so it is built fresh from the character's state every time, including damage taken between the player's own commands.
 - **Built by the game, shown by the connection.** A system just before output is flushed computes each player's prompt text and hands it to their `Connection`. `net.rs` only knows how to show "the current prompt", never game rules.
 - **Customisable per character,** saved like aliases, with placeholder codes and a default for new characters:
 
   ```
-  prompt <%h/%Hhp %f/%Ffat>      ->   <14/18hp 9/10fat>
+  prompt <%h/%Hhp %s/%Sst>       ->   <14/18hp 9/10st>
   prompt                          ->   back to the default
   ```
 
 - **Recognisable by MUD clients.** Marking the prompt with telnet IAC GA lets clients like Mudlet and TinTin++ draw gauges or pin the prompt. Raw `nc` would show stray characters, so it is sent only to clients that ask for it.
-- **Waits on current health and fatigue.** Only the maximums exist today (from Body and Willpower); current values arrive with combat and the time system (damage and regeneration).
+- **Waits on current health and stamina.** Only the maximums exist today (from Body and Willpower); current values arrive with combat and the time system (damage and regeneration).
 
 ## Proposed build order
 

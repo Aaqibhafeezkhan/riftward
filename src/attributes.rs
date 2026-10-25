@@ -1,18 +1,20 @@
 //! Character attributes and the Karma spent to raise them.
 //!
-//! Attributes are uncapped. Every character starts at 1, except Magic at 0, with `STARTING_KARMA`
-//! to spend. Magic can be raised like anything else, but it stays latent (it does nothing) until
-//! the character knows a casting skill. Karma spent is not stored: it is worked out from the current
-//! ratings, so it can never drift out of sync with them.
+//! Attributes are uncapped. Every character starts from the base ratings (3, Luck 1, Magic 0),
+//! shifted by their race, with `STARTING_KARMA` to spend (humans get more). Magic can be raised like
+//! anything else, but it stays latent (it does nothing) until the character knows a casting skill.
+//! Karma spent is not stored: it is worked out from the current ratings and the starting ones, so
+//! it can never drift out of sync with them.
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::db::Database;
 
 /// Karma every character starts with, to spend on attributes.
 pub const STARTING_KARMA: i32 = 10;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Attribute {
     Body,
     Agility,
@@ -55,11 +57,12 @@ impl Attribute {
         }
     }
 
-    /// The rating every new character starts with.
-    pub fn starting_rating(self) -> i32 {
+    /// The rating every character starts from, before their race shifts it.
+    pub fn base_rating(self) -> i32 {
         match self {
             Attribute::Magic => 0,
-            _ => 1,
+            Attribute::Luck => 1,
+            _ => 3,
         }
     }
 
@@ -97,35 +100,62 @@ pub fn raise_cost(rating: i32) -> i32 {
     1 + rating.max(0) / 5
 }
 
-/// A character's attribute ratings. Lives on the player entity.
+/// A character's attribute ratings, where they started, and the Karma they started with. Lives on
+/// the player entity.
 #[derive(Component, Clone, Debug)]
-pub struct Attributes([i32; 10]);
+pub struct Attributes {
+    ratings: [i32; 10],
+    start: [i32; 10],
+    karma: i32,
+}
 
 impl Default for Attributes {
     fn default() -> Self {
-        Self(Attribute::ALL.map(Attribute::starting_rating))
+        Self::starting(Attribute::base_rating, STARTING_KARMA)
     }
 }
 
 impl Attributes {
-    /// Build from database rows; attributes with no row keep their starting rating.
-    pub fn from_rows(rows: impl IntoIterator<Item = (String, i32)>) -> Self {
-        let mut attributes = Self::default();
+    /// A new character's attributes: each at its starting rating, with `karma` to spend.
+    pub fn starting(start: impl Fn(Attribute) -> i32, karma: i32) -> Self {
+        let start = Attribute::ALL.map(start);
+        Self {
+            ratings: start,
+            start,
+            karma,
+        }
+    }
+
+    /// Apply saved ratings from database rows; attributes with no row keep their starting rating.
+    pub fn with_rows(mut self, rows: impl IntoIterator<Item = (String, i32)>) -> Self {
         for (name, rating) in rows {
             match Attribute::ALL.into_iter().find(|a| a.name() == name) {
-                Some(attribute) => attributes.set(attribute, rating),
+                Some(attribute) => self.set(attribute, rating),
                 None => warn!("ignoring unknown attribute '{name}' in the database"),
             }
         }
-        attributes
+        self
     }
 
     pub fn get(&self, attribute: Attribute) -> i32 {
-        self.0[attribute.index()]
+        self.ratings[attribute.index()]
     }
 
     pub fn set(&mut self, attribute: Attribute, rating: i32) {
-        self.0[attribute.index()] = rating;
+        self.ratings[attribute.index()] = rating;
+    }
+
+    /// The rating it started at, which Karma can't take it below.
+    pub fn start(&self, attribute: Attribute) -> i32 {
+        self.start[attribute.index()]
+    }
+
+    /// Every rating, for saving.
+    pub fn rows(&self) -> Vec<(&'static str, i32)> {
+        Attribute::ALL
+            .into_iter()
+            .map(|attribute| (attribute.name(), self.get(attribute)))
+            .collect()
     }
 
     /// Total Karma spent to reach the current ratings from the starting ones.
@@ -133,7 +163,7 @@ impl Attributes {
         Attribute::ALL
             .into_iter()
             .map(|attribute| {
-                (attribute.starting_rating()..self.get(attribute))
+                (self.start(attribute)..self.get(attribute))
                     .map(raise_cost)
                     .sum::<i32>()
             })
@@ -142,14 +172,42 @@ impl Attributes {
 
     /// Karma available to spend. Earned Karma will be added once skills grant character levels.
     pub fn karma_unspent(&self) -> i32 {
-        (STARTING_KARMA - self.karma_spent()).max(0)
+        (self.karma - self.karma_spent()).max(0)
+    }
+
+    /// Raise an attribute by one if there's Karma for it, or say why not.
+    pub fn raise(&mut self, attribute: Attribute) -> Result<i32, String> {
+        let current = self.get(attribute);
+        let (cost, unspent) = (raise_cost(current), self.karma_unspent());
+        if cost > unspent {
+            return Err(format!(
+                "Raising {} to {} costs {cost} Karma, and you have {unspent}.",
+                attribute.name(),
+                current + 1
+            ));
+        }
+        self.set(attribute, current + 1);
+        Ok(cost)
+    }
+
+    /// Take back one point bought with Karma, during character creation.
+    pub fn lower(&mut self, attribute: Attribute) -> Result<(), String> {
+        let current = self.get(attribute);
+        if current <= self.start(attribute) {
+            return Err(format!(
+                "{} is at its starting rating of {current}.",
+                attribute.name()
+            ));
+        }
+        self.set(attribute, current - 1);
+        Ok(())
     }
 
     pub fn health(&self) -> i32 {
         8 + self.get(Attribute::Body) / 2
     }
 
-    pub fn fatigue(&self) -> i32 {
+    pub fn stamina(&self) -> i32 {
         8 + self.get(Attribute::Willpower) / 2
     }
 
@@ -158,8 +216,8 @@ impl Attributes {
     }
 }
 
-/// The `score` command.
-pub fn score_text(name: &str, attributes: &Attributes) -> String {
+/// The `score` command. `who` is what the character is, like "Troll Street Urchin".
+pub fn score_text(name: &str, who: &str, attributes: &Attributes) -> String {
     let row = |label: &str, list: &[Attribute]| {
         let cells: Vec<_> = list
             .iter()
@@ -176,12 +234,12 @@ pub fn score_text(name: &str, attributes: &Attributes) -> String {
     };
     let karma = attributes.karma_unspent();
     let mut text = format!(
-        "\x1b[1m{name}\x1b[0m\r\n{}\r\n{}\r\n{}{magic}\r\n\r\n  Health {}    Fatigue {}    Initiative {}\r\n  Karma: {karma} unspent",
+        "\x1b[1m{name}\x1b[0m, {who}\r\n{}\r\n{}\r\n{}{magic}\r\n\r\n  Health {}    Stamina {}    Initiative {}\r\n  Karma: {karma} unspent",
         row("Physical", &[Body, Agility, Reaction, Strength]),
         row("Mental", &[Willpower, Logic, Intuition, Charisma]),
         row("Special", &[Luck, Magic]),
         attributes.health(),
-        attributes.fatigue(),
+        attributes.stamina(),
         attributes.initiative(),
     );
     if karma > 0 {
@@ -205,22 +263,16 @@ pub fn raise_command(
         Err(err) => return err,
     };
     let current = attributes.get(attribute);
-
-    let cost = raise_cost(current);
-    let unspent = attributes.karma_unspent();
-    if cost > unspent {
-        return format!(
-            "Raising {} to {} costs {cost} Karma, and you have {unspent}.",
-            attribute.name(),
-            current + 1
-        );
-    }
-
+    let mut raised = attributes.clone();
+    let cost = match raised.raise(attribute) {
+        Ok(cost) => cost,
+        Err(err) => return err,
+    };
     if let Err(err) = db.set_attribute(character_id, attribute.name(), current + 1) {
         error!("failed to save attribute for character {character_id}: {err}");
         return "Something went wrong saving that. Please try again.".into();
     }
-    attributes.set(attribute, current + 1);
+    *attributes = raised;
     let mut reply = format!(
         "{} raised to {} for {cost} Karma. {} Karma left.",
         attribute.name(),
@@ -251,13 +303,40 @@ mod tests {
         assert_eq!(attributes.karma_spent(), 0);
         assert_eq!(attributes.karma_unspent(), STARTING_KARMA);
 
-        attributes.set(Attribute::Agility, 5); // 1 -> 5: four raises at 1 each
-        assert_eq!(attributes.karma_spent(), 4);
+        attributes.set(Attribute::Agility, 5); // 3 -> 5: two raises at 1 each
+        assert_eq!(attributes.karma_spent(), 2);
         attributes.set(Attribute::Agility, 7); // 5 -> 7: two more at 2 each
-        assert_eq!(attributes.karma_spent(), 8);
+        assert_eq!(attributes.karma_spent(), 6);
 
         attributes.set(Attribute::Magic, 2); // Magic starts at 0: two raises at 1 each
-        assert_eq!(attributes.karma_spent(), 10);
+        assert_eq!(attributes.karma_spent(), 8);
+    }
+
+    #[test]
+    fn karma_counts_from_where_a_race_starts() {
+        // A troll starts strong: their first points of Strength weren't bought.
+        let start = |a: Attribute| match a {
+            Attribute::Strength => 6,
+            other => other.base_rating(),
+        };
+        let mut troll = Attributes::starting(start, STARTING_KARMA);
+        assert_eq!(troll.karma_spent(), 0);
+        assert_eq!(troll.raise(Attribute::Strength), Ok(2));
+        assert_eq!(troll.karma_unspent(), STARTING_KARMA - 2);
+        assert!(troll.lower(Attribute::Strength).is_ok());
+        assert!(
+            troll.lower(Attribute::Strength).is_err(),
+            "not below the start"
+        );
+        // Humans start with more Karma.
+        assert_eq!(
+            Attributes::starting(Attribute::base_rating, 13).karma_unspent(),
+            13
+        );
+        // You can't spend Karma you don't have.
+        let mut broke = Attributes::starting(Attribute::base_rating, 1);
+        assert_eq!(broke.raise(Attribute::Body), Ok(1));
+        assert!(broke.raise(Attribute::Body).is_err());
     }
 
     #[test]
@@ -270,9 +349,10 @@ mod tests {
 
     #[test]
     fn rows_override_defaults() {
-        let attributes = Attributes::from_rows([("Body".to_string(), 4), ("Nonsense".into(), 9)]);
+        let attributes =
+            Attributes::default().with_rows([("Body".to_string(), 4), ("Nonsense".into(), 9)]);
         assert_eq!(attributes.get(Attribute::Body), 4);
-        assert_eq!(attributes.get(Attribute::Agility), 1);
+        assert_eq!(attributes.get(Attribute::Agility), 3);
         assert_eq!(attributes.get(Attribute::Magic), 0);
     }
 }

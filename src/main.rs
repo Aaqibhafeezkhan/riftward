@@ -5,8 +5,10 @@
 mod aliases;
 mod attributes;
 mod build;
+mod characters;
 mod command;
 mod commands;
+mod conditions;
 mod db;
 mod dice;
 mod events;
@@ -44,6 +46,7 @@ fn main() {
         ))
         .add_plugins((
             db::DbPlugin,
+            characters::CharactersPlugin,
             dice::DicePlugin,
             net::NetPlugin,
             world::WorldPlugin,

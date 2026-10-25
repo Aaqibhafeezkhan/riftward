@@ -33,7 +33,12 @@ const SCHEMA: &str = "
         name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
         -- Full room id (`zone:room`) the character was last in.
         room       TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        -- Chosen at creation; a character without a race hasn't finished creating.
+        race        TEXT,
+        background  TEXT,
+        -- What others see when they look at them.
+        description TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS character_aliases (
@@ -201,6 +206,10 @@ pub struct CharacterRecord {
     pub name: String,
     /// Full room id (`zone:room`) the character was last in.
     pub room: Option<String>,
+    /// `None` until character creation is finished.
+    pub race: Option<String>,
+    pub background: Option<String>,
+    pub description: String,
 }
 
 /// SQLite connection. Queries run synchronously on the main thread; they're small and local,
@@ -212,18 +221,23 @@ impl Database {
     pub fn open(path: &str) -> rusqlite::Result<Self> {
         let conn = Connection::open(path)?;
         conn.execute_batch(SCHEMA)?;
-        // The first items table had no slot or container columns.
-        for (column, ty) in [
-            ("slot", "TEXT"),
-            ("container_id", "INTEGER REFERENCES items(id)"),
+        // Columns added since the first versions of these tables.
+        for (table, column, ty) in [
+            ("items", "slot", "TEXT"),
+            ("items", "container_id", "INTEGER REFERENCES items(id)"),
+            ("characters", "race", "TEXT"),
+            ("characters", "background", "TEXT"),
+            ("characters", "description", "TEXT NOT NULL DEFAULT ''"),
         ] {
             let exists: bool = conn.query_row(
-                "SELECT EXISTS (SELECT 1 FROM pragma_table_info('items') WHERE name = ?1)",
+                &format!(
+                    "SELECT EXISTS (SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?1)"
+                ),
                 [column],
                 |row| row.get(0),
             )?;
             if !exists {
-                conn.execute_batch(&format!("ALTER TABLE items ADD COLUMN {column} {ty};"))?;
+                conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {ty};"))?;
             }
         }
         Ok(Self(Mutex::new(conn)))
@@ -288,13 +302,18 @@ impl Database {
 
     pub fn characters(&self, account_id: i64) -> DbResult<Vec<CharacterRecord>> {
         let conn = self.conn();
-        let mut stmt = conn
-            .prepare("SELECT id, name, room FROM characters WHERE account_id = ?1 ORDER BY id")?;
+        let mut stmt = conn.prepare(
+            "SELECT id, name, room, race, background, description FROM characters
+                 WHERE account_id = ?1 ORDER BY id",
+        )?;
         let rows = stmt.query_map([account_id], |row| {
             Ok(CharacterRecord {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 room: row.get(2)?,
+                race: row.get(3)?,
+                background: row.get(4)?,
+                description: row.get(5)?,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -318,10 +337,51 @@ impl Database {
             id: conn.last_insert_rowid(),
             name: name.into(),
             room: None,
+            race: None,
+            background: None,
+            description: String::new(),
         })
     }
 
-    /// Attribute ratings that differ from the starting values (only raised ones have rows).
+    /// Save the choices that finish character creation, replacing any attributes saved before.
+    pub fn finish_creation(
+        &self,
+        character_id: i64,
+        race: &str,
+        background: &str,
+        description: &str,
+        attributes: &[(&str, i32)],
+    ) -> DbResult<()> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "UPDATE characters SET race = ?1, background = ?2, description = ?3 WHERE id = ?4",
+            params![race, background, description, character_id],
+        )?;
+        tx.execute(
+            "DELETE FROM character_attributes WHERE character_id = ?1",
+            [character_id],
+        )?;
+        for (attribute, rating) in attributes {
+            tx.execute(
+                "INSERT INTO character_attributes (character_id, attribute, rating)
+                 VALUES (?1, ?2, ?3)",
+                params![character_id, attribute, rating],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn set_description(&self, character_id: i64, description: &str) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE characters SET description = ?1 WHERE id = ?2",
+            params![description, character_id],
+        )?;
+        Ok(())
+    }
+
+    /// Saved attribute ratings; attributes without a row are at their starting rating.
     pub fn attributes(&self, character_id: i64) -> DbResult<Vec<(String, i32)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(

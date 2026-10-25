@@ -69,7 +69,7 @@ Skills are either active, triggered by the player, or passive, applying automati
 ```ron
 "riposte": (
     name: "Riposte",
-    kind: Active(command: "riposte", target: Enemy, cost: Fatigue(3), cooldown: 8),
+    kind: Active(command: "riposte", target: Enemy, cost: Stamina(3), cooldown: 8),
     requires: [Skill("basics", 15)],
 ),
 "dodge_mastery": (

@@ -114,7 +114,7 @@ The Guildhall rents rooms in the Guild Quarters to members, at decent rates, pai
 - **Thieves are a guild matter.** Picking or bashing a chest in the Guild Quarters is possible, it's an ordinary lock, but the guild notices: it sets a flag that the clerk, guards and guild vendors react to, and can cost merit or rank standing. The open question is how far that goes.
 - **Rooms are real places.** The dormitory is a room in the `riftwatch` zone; Gold members' private rooms are doors off the quarters, each locked to its tenant. There's no instancing: the dormitory is shared and players meet there.
 - **Unpaid rent.** If the rent lapses, the chest stays locked and its contents wait with the clerk for a while (collected for a fee) before being sold off. Nothing vanishes silently.
-- **Resting there** will matter once health and fatigue regenerate over time: a bunk is a safe place to recover, and to log out.
+- **Resting there** will matter once health and stamina regenerate over time: a bunk is a safe place to recover, and to log out.
 - **Non-members have the inn,** once Riftwatch has one: dearer, and with no chest.
 
 **Common trainers stay open to everyone.** The training yard, the herbalist and the shrine teach anyone; guild rank gates the better-than-common instruction, alongside rarity and the mastery rules for player teaching (see [Acquiring skills](skills.md#acquiring-skills)).

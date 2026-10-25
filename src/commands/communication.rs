@@ -2,6 +2,7 @@
 
 use bevy::prelude::*;
 
+use crate::characters::Races;
 use crate::command::Invocation;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::targeting::{Keywords, Target};
@@ -130,10 +131,10 @@ pub fn gossip(In(inv): In<Invocation>, mut players: PlayerQuery) {
     deliver(out, &mut players);
 }
 
-pub fn who(In(inv): In<Invocation>, mut players: PlayerQuery) {
+pub fn who(In(inv): In<Invocation>, mut players: PlayerQuery, races: Res<Races>) {
     let mut names: Vec<_> = players
         .iter()
-        .filter_map(|(_, _, p, _)| p.map(|p| p.name.clone()))
+        .filter_map(|(_, _, p, _)| p.map(|p| format!("{} ({})", p.name, races.name(&p.race))))
         .collect();
     names.sort();
     let text = format!(

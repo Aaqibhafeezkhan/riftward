@@ -105,6 +105,12 @@ impl Plugin for CommandsPlugin {
                 character::score,
             )
             .add_command(
+                CommandSpec::new("describe", Character)
+                    .usage("describe [<text>]")
+                    .summary("see or change what others see when they look at you"),
+                character::describe,
+            )
+            .add_command(
                 CommandSpec::new("raise", Character)
                     .usage("raise <attribute>")
                     .summary("spend Karma to raise an attribute"),

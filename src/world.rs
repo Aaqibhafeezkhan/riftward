@@ -881,6 +881,11 @@ pub struct Player {
     pub character_id: i64,
     pub account: String,
     pub role: crate::db::Role,
+    /// Race and background ids, from `assets/races.ron` and `assets/backgrounds.ron`.
+    pub race: String,
+    pub background: String,
+    /// What others see when they look at them.
+    pub description: String,
 }
 
 /// Which room an entity is currently in.

@@ -26,7 +26,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Designed |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
-| [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds | Outlined |
+| [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds, conditions | Built, except granting starting skills |
 
 ## What exists today
 
@@ -41,7 +41,8 @@ Each document below covers one area and can be read on its own. This page is the
 - Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.
-- Attributes, starting Karma, `raise`, `score`, and the Luck-aware `Dice` service.
+- Character creation: race, starting Karma, background (15, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
+- Attributes, starting Karma, `raise`, `score`, `describe`, and the Luck-aware `Dice` service.
 
 ## Roadmap
 
@@ -61,7 +62,7 @@ Designed, waiting on other work:
 
 | Feature | Waits on | Details |
 | --- | --- | --- |
-| Status prompt (`<14/18hp 9/10fat>`), customisable per character | Current health and fatigue, from combat and time | [Architecture](architecture.md#status-prompt) |
+| Status prompt (`<14/18hp 9/10st>`), customisable per character | Current health and stamina, from combat and time | [Architecture](architecture.md#status-prompt) |
 | Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, mobs and game events | [Architecture](architecture.md#scripting) |
 | Game masters: admins and a new GM role can puppet any mob, playing it until they release it | Mobs | [Architecture](architecture.md#game-masters-and-puppeting) |
 | Quests and guild contracts, with guild ranks that gate trainers and rooms | Mobs, game events, combat | [Quests](quests.md) |
@@ -78,9 +79,9 @@ Designed, waiting on other work:
 | Skill kinds | Active (invoked with `use <skill> <target>`) and passive (progress on trigger events, usually outcomes) |
 | Combat | Made entirely of skills. Everyone starts with a basic attack skill; mobs fight with skills too. Built with the skill core |
 | Starting skills | Granted by race and background, plus universal skills. Racial abilities are skills that require the race. Backgrounds can require attributes or a race |
-| Races | The eight Earthdawn races: Dwarf, Elf, Human, Obsidiman, Ork, Troll, T'skrang, Windling |
+| Races | The eight Earthdawn races: Dwarf, Elf, Human, Obsidiman, Ork, Troll, T'skrang, Windling. Earthdawn-style attribute shifts that total +3 for every race; humans get +3 Karma instead |
 | Hidden skills | Learned by epiphany when conditions are met, with an optional trigger |
-| Attributes | Ten, uncapped, Shadowrun and Earthdawn flavoured. Start at 1 (Magic 0) with 10 Karma to spend, which can go on Magic as latent talent |
+| Attributes | Ten, uncapped, Shadowrun and Earthdawn flavoured. Base 3 (Luck 1, Magic 0), shifted by race, with 10 Karma to spend, which can go on Magic as latent talent |
 | Formulas | Contests compare ratios, never differences, because attributes are uncapped |
 | Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |
 | Magic | Latent until the character knows a casting skill; knowing one is being Awakened. Four traditions; masters can teach casting skills; Awakened backgrounds grant one but require Magic 1, bought with starting Karma |
@@ -99,5 +100,5 @@ Designed, waiting on other work:
 Each document lists its own open questions. These are the ones that shape the most:
 
 1. **What stops one character learning every tree?** A total cap on skill levels, skill slots, or rising costs. See [Skills](skills.md#open-questions).
-2. **Which backgrounds, do races adjust attributes,** and are Awakened backgrounds balanced? See [Races and backgrounds](characters.md#open-questions).
+2. **Are Awakened backgrounds balanced,** and what exactly does each background grant? See [Races and backgrounds](characters.md#open-questions).
 3. **Auto-attack or explicit attacks in combat?** See [Skills](skills.md#open-questions).

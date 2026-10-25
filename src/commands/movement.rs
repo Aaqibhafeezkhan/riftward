@@ -3,6 +3,7 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
+use crate::characters::{Races, article};
 use crate::command::Invocation;
 use crate::commands::doors::{DoorLookup, find_door};
 use crate::db::{Database, Permission};
@@ -13,7 +14,7 @@ use crate::items::{
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::targeting::{Keywords, Target};
-use crate::world::{Door, DoorState};
+use crate::world::{Door, DoorState, Player};
 
 /// Everything a room shows a player besides other players: the room itself, its doors, and the
 /// items lying in it.
@@ -34,6 +35,7 @@ pub fn look(
     view: View,
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
+    races: Res<Races>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -80,14 +82,17 @@ pub fn look(
         (Some(target), _) => {
             let mut candidates = targets_in_room(actor.room, &players, &keywords);
             candidates.extend(mobs::targets_in(actor.room, &view.mobs, &keywords));
-            match target
-                .find_one(actor.entity, candidates)
-                .map(|e| (e, Actor::get(&players, e), view.mobs.get(e).ok()))
-            {
-                Some((e, _, _)) if e == actor.entity => {
-                    "You look yourself over. You look ready for anything.\r\n".into()
+            match target.find_one(actor.entity, candidates).map(|e| {
+                (
+                    e,
+                    players.get(e).ok().and_then(|p| p.2),
+                    view.mobs.get(e).ok(),
+                )
+            }) {
+                Some((e, Some(me), _)) if e == actor.entity => {
+                    format!("You look yourself over. {}", describe_player(me, &races))
                 }
-                Some((_, Some(other), _)) => format!("You see {}, standing here.\r\n", other.name),
+                Some((_, Some(other), _)) => describe_player(other, &races),
                 Some((_, _, Some((_, mob, _)))) => mobs::describe(mob) + "\r\n",
                 _ => match find_item(&inv.args, &actor, &view.items, &keywords, &templates) {
                     Ok(item) => describe_item(item, &view.items, &templates) + "\r\n",
@@ -181,6 +186,16 @@ fn travel(
         way: Way::Walked(way_back(&view.rooms, to, actor.room)),
     });
     out
+}
+
+/// What someone sees looking at a player: their race, and their own description.
+fn describe_player(player: &Player, races: &Races) -> String {
+    let race = races.name(&player.race).to_lowercase();
+    let mut text = format!("{} is {} {race}.\r\n", player.name, article(&race));
+    if !player.description.is_empty() {
+        text += &format!("{}\r\n", player.description);
+    }
+    text
 }
 
 /// Where a direction is, for the middle of a sentence: "to the north", "above", "below".
