@@ -23,7 +23,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
-| [The living world](world.md) | Spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Designed |
+| [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns and wandering built |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Designed |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds | Outlined |
@@ -36,6 +36,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
 - Riftwatch, the starting town, and the sewers beneath it ([map](riftwatch.md#map)).
 - Items: templates with Bulk and tags, hands, wear slots, containers (backpacks, pouches, keyrings, pockets, chests) with automatic placement, encumbrance, keys, and real items that survive restarts.
+- Mobs: templates and spawns in zone files, timed and after-death resets that count their mobs wherever they wander, wandering within rooms, a zone or anywhere, and the builder `mob`, `spawn`, `summon` and `purge` commands. Riftwatch has guards, a stray dog, the contract clerk, the herbalist and the drill sergeant; the sewers have rats.
 - Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.

@@ -9,6 +9,7 @@ use crate::db::{Database, Permission};
 use crate::items::{
     ItemLocation, ItemQuery, ItemTemplates, capitalized, counted, describe_item, find_item,
 };
+use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::targeting::{Keywords, Target};
 use crate::world::{Door, DoorState};
@@ -21,6 +22,7 @@ pub struct View<'w, 's> {
     pub doors: Query<'w, 's, &'static Door>,
     pub items: ItemQuery<'w, 's>,
     pub templates: Res<'w, ItemTemplates>,
+    pub mobs: MobQuery<'w, 's>,
 }
 
 /// `look` describes the room; `look <target>` looks along an exit, at a door, at someone here, or
@@ -57,7 +59,7 @@ pub fn look(
                 "Through the open {} {} you see {}",
                 door.the().trim_start_matches("the "),
                 toward(&dir),
-                glimpse(exits.0[&dir].to, actor.entity, &players, &view.rooms)
+                glimpse(exits.0[&dir].to, actor.entity, &players, &view)
             ),
             Ok(door) => format!("You see {} {}. It is closed.\r\n", door.name, toward(&dir)),
             Err(_) => String::new(),
@@ -67,7 +69,7 @@ pub fn look(
             there[..1].make_ascii_uppercase();
             format!(
                 "{there} you see {}",
-                glimpse(exits.0[&dir].to, actor.entity, &players, &view.rooms)
+                glimpse(exits.0[&dir].to, actor.entity, &players, &view)
             )
         }
         (_, Some((DoorLookup::NotHere, _))) if is_direction(&inv.args.to_lowercase()) => {
@@ -75,16 +77,18 @@ pub fn look(
             format!("You see nothing special {}.\r\n", toward(&dir))
         }
         (Some(target), _) => {
-            let candidates = targets_in_room(actor.room, &players, &keywords);
+            let mut candidates = targets_in_room(actor.room, &players, &keywords);
+            candidates.extend(mobs::targets_in(actor.room, &view.mobs, &keywords));
             match target
                 .find_one(actor.entity, candidates)
-                .and_then(|e| Actor::get(&players, e))
+                .map(|e| (e, Actor::get(&players, e), view.mobs.get(e).ok()))
             {
-                Some(other) if other.entity == actor.entity => {
+                Some((e, _, _)) if e == actor.entity => {
                     "You look yourself over. You look ready for anything.\r\n".into()
                 }
-                Some(other) => format!("You see {}, standing here.\r\n", other.name),
-                None => match find_item(&inv.args, &actor, &view.items, &keywords, &templates) {
+                Some((_, Some(other), _)) => format!("You see {}, standing here.\r\n", other.name),
+                Some((_, _, Some((_, mob, _)))) => mobs::describe(mob) + "\r\n",
+                _ => match find_item(&inv.args, &actor, &view.items, &keywords, &templates) {
                     Ok(item) => describe_item(item, &view.items, &templates) + "\r\n",
                     Err(err) => err + "\r\n",
                 },
@@ -222,12 +226,16 @@ pub fn move_player(
 }
 
 /// What you see looking into a neighbouring room: its name and who's there.
-fn glimpse(room: Entity, viewer: Entity, players: &PlayerQuery, rooms: &RoomQuery) -> String {
-    let name = rooms
+fn glimpse(room: Entity, viewer: Entity, players: &PlayerQuery, view: &View) -> String {
+    let name = view
+        .rooms
         .get(room)
         .map(|(room, _, _)| room.name.clone())
         .unwrap_or_default();
     let mut text = format!("{name}.\r\n");
+    for name in mobs::names_in(room, &view.mobs) {
+        text += &format!("  {} is there.\r\n", capitalized(&name));
+    }
     for (other, _, player, in_room) in players.iter() {
         if let (Some(player), Some(in_room)) = (player, in_room)
             && other != viewer
@@ -312,6 +320,9 @@ pub fn describe_room(
         .collect();
     for name in counted(loose) {
         text += &format!("{} lies here.\r\n", capitalized(&name));
+    }
+    for line in mobs::here_lines(room, &view.mobs) {
+        text += &format!("{line}\r\n");
     }
 
     for (other, _, player, in_room) in players.iter() {

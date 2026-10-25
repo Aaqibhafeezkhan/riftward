@@ -233,6 +233,72 @@
             fixed: true,
         ),
     },
+    mobs: {
+        "town_guard": (
+            name: "a town guard",
+            keywords: ["town", "guard", "watchman"],
+            here: "A town guard keeps watch, one hand resting on the hilt of a short sword.",
+            description: "A broad-shouldered watchman in a dented helm and a tabard faded from Riftwatch's colours to something closer to grey. They look bored, which is not the same as inattentive.",
+        ),
+        "stray_dog": (
+            name: "a stray dog",
+            keywords: ["stray", "dog", "mutt"],
+            here: "A scruffy stray dog noses through the gutter for scraps.",
+            description: "A lean, rangy mutt of no particular breed, with one torn ear and a hopeful tail. Every market stall-keeper knows it, and most of them pretend not to feed it.",
+        ),
+        "contract_clerk": (
+            name: "the contract clerk",
+            keywords: ["contract", "clerk"],
+            here: "The contract clerk sits behind a desk heaped with ledgers, pen scratching.",
+            description: "A thin, ink-stained clerk with spectacles pushed up into greying hair. They keep the guild's contracts, its ledgers and its members' tags, and they remember everyone who has ever failed to finish a job.",
+        ),
+        "herbalist": (
+            name: "the herbalist",
+            keywords: ["herbalist", "woman"],
+            here: "The herbalist sorts dried leaves into bundles, muttering their names.",
+            description: "A stooped woman with green-stained fingers and a sharp eye, who smells faintly of mint and something less pleasant underneath.",
+        ),
+        "drill_sergeant": (
+            name: "the drill sergeant",
+            keywords: ["drill", "sergeant"],
+            here: "The drill sergeant paces the yard, barking at anyone who stands still.",
+            description: "A grizzled veteran with a voice like a rockslide and a wooden practice sword that has broken more knuckles than any real blade.",
+        ),
+    },
+    spawns: {
+        "gate_guards": (
+            mob: "town_guard",
+            room: "north_gate",
+            every: Minutes(30),
+            refill: Keep(2),
+            wander: Zone(secs: (60, 180)),
+        ),
+        "market_dog": (
+            mob: "stray_dog",
+            room: "market",
+            every: Hours(1),
+            refill: Keep(1),
+            wander: Rooms(rooms: ["market", "stalls", "back_alley", "tinkers_corner", "guild_row"], secs: (30, 90)),
+        ),
+        "contract_clerk": (
+            mob: "contract_clerk",
+            room: "contract_hall",
+            every: Minutes(10),
+            refill: Keep(1),
+        ),
+        "herbalist": (
+            mob: "herbalist",
+            room: "herbalist",
+            every: Minutes(10),
+            refill: Keep(1),
+        ),
+        "drill_sergeant": (
+            mob: "drill_sergeant",
+            room: "training_yard",
+            every: Minutes(10),
+            refill: Keep(1),
+        ),
+    },
     rooms: {
         "north_gate": (
             name: "North Gate",
@@ -276,6 +342,7 @@
         "herbalist": (
             name: "Herbalist's Stall",
             description: "Bundles of drying herbs hang thick from the poles of this cramped stall, and shelves of stoppered jars line its back wall. The air is green and bitter with crushed leaves.",
+            no_wander: true,
             exits: {
                 "south": "stalls",
             },
@@ -326,6 +393,7 @@
         "contract_hall": (
             name: "Contract Hall",
             description: "A quieter room where the guild's work is posted. A great board is layered with contracts, bounties and warnings, the older ones curling at the edges beneath the newer.",
+            no_wander: true,
             exits: {
                 "east": "guildhall",
             },
@@ -333,6 +401,7 @@
         "guild_archive": (
             name: "Guild Archive",
             description: "Shelves of ledgers, maps and battered books fill this cramped room, the guild's long memory of what lies beyond the walls. A reading desk sits beneath the only window, and a locked case holds the volumes the guild guards most closely.",
+            no_wander: true,
             exits: {
                 "west": "guildhall",
             },
@@ -340,6 +409,7 @@
         "guild_quarters": (
             name: "Guild Quarters",
             description: "A narrow upstairs corridor lined with plain sleeping rooms, rented by the night to members between contracts.",
+            no_wander: true,
             exits: {
                 "down": "guildhall",
             },
@@ -358,6 +428,7 @@
         "shrine": (
             name: "Wayside Shrine",
             description: "A small stone shrine set back from the street, lit by guttering candles and heaped with offerings. Travellers stop here to give thanks for safe roads, or to ask for them.",
+            no_wander: true,
             exits: {
                 "east": "high_street",
             },
@@ -438,6 +509,7 @@
         "lords_solar": (
             name: "Lord's Solar",
             description: "The lord's private chamber: a warm, book-lined room with a wide desk covered in maps, letters and reports from the border.",
+            no_wander: true,
             exits: {
                 "down": (to: "great_hall", door: "solar_door"),
             },

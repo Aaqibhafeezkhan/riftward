@@ -57,6 +57,12 @@ pub struct ZoneDef {
     /// Item templates, by id. Items elsewhere refer to them as `zone:item`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub items: BTreeMap<String, ItemDef>,
+    /// Mob templates, by id. Spawns elsewhere refer to them as `zone:mob`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub mobs: BTreeMap<String, MobDef>,
+    /// What this zone keeps populated, by id.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub spawns: BTreeMap<String, SpawnDef>,
     pub rooms: BTreeMap<String, RoomDef>,
 }
 
@@ -66,6 +72,9 @@ pub struct RoomDef {
     pub description: String,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub exits: BTreeMap<String, ExitDef>,
+    /// Wandering mobs never enter, like a shrine or a shop.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_wander: bool,
 }
 
 /// Where an exit leads: a room id in this zone, or `zone:room` for another zone. Plain exits are
@@ -289,6 +298,217 @@ impl ItemDef {
     }
 }
 
+/// A mob template: a monster, an animal or a townsperson.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct MobDef {
+    pub name: String,
+    /// Words players can call it by. When empty, the words of its name are used.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    /// The line a room shows while it's there, like "A sewer rat scurries along the walkway.".
+    /// When empty, "A sewer rat is here.".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub here: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+}
+
+impl MobDef {
+    /// A plain mob with just a name, as builders create them.
+    pub fn named(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            keywords: Vec::new(),
+            here: String::new(),
+            description: String::new(),
+        }
+    }
+
+    pub fn keywords(&self) -> Keywords {
+        if !self.keywords.is_empty() {
+            return Keywords(self.keywords.iter().map(|k| k.to_lowercase()).collect());
+        }
+        Keywords::from_name(without_article(&self.name))
+    }
+
+    /// The line a room shows for it.
+    pub fn here_line(&self) -> String {
+        if self.here.is_empty() {
+            let mut chars = self.name.chars();
+            let name: String = chars
+                .next()
+                .map(|c| c.to_uppercase().chain(chars).collect())
+                .unwrap_or_default();
+            format!("{name} is here.")
+        } else {
+            self.here.clone()
+        }
+    }
+}
+
+/// Keeps a room stocked with mobs: what, where, how often, how many, and how far they roam.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SpawnDef {
+    /// The mob template, `mob` or `zone:mob`.
+    pub mob: String,
+    /// Where they appear, `room` or `zone:room`.
+    pub room: String,
+    pub every: Every,
+    pub refill: Refill,
+    #[serde(default, skip_serializing_if = "Wander::is_never")]
+    pub wander: Wander,
+}
+
+/// When a spawn resets, in real time.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Every {
+    Minutes(u64),
+    Hours(u64),
+    Days(u64),
+    /// Once, this long after its last mob is gone: the dragon returns 30 days after it's killed.
+    AfterDeath(Box<Every>),
+}
+
+impl Every {
+    pub fn secs(&self) -> i64 {
+        let secs = match self {
+            Every::Minutes(n) => n * 60,
+            Every::Hours(n) => n * 3600,
+            Every::Days(n) => n * 86400,
+            Every::AfterDeath(every) => return every.secs(),
+        };
+        secs as i64
+    }
+
+    /// Parse a builder's `10m`, `2h`, `30d`, or `death 30d`.
+    pub fn parse(s: &str) -> Option<Self> {
+        if let Some(rest) = s.strip_prefix("death ") {
+            return Every::parse(rest.trim())
+                .filter(|every| !matches!(every, Every::AfterDeath(_)))
+                .map(|every| Every::AfterDeath(Box::new(every)));
+        }
+        let (n, unit) = s.split_at(s.find(|c: char| !c.is_ascii_digit())?);
+        let n: u64 = n.parse().ok().filter(|n| *n > 0)?;
+        match unit {
+            "m" => Some(Every::Minutes(n)),
+            "h" => Some(Every::Hours(n)),
+            "d" => Some(Every::Days(n)),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Every {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (n, unit) = match self {
+            Every::Minutes(n) => (n, "minute"),
+            Every::Hours(n) => (n, "hour"),
+            Every::Days(n) => (n, "day"),
+            Every::AfterDeath(every) => {
+                return match every.to_string().strip_prefix("every ") {
+                    Some(period) if period.starts_with(|c: char| c.is_ascii_digit()) => {
+                        write!(f, "{period} after the last one dies")
+                    }
+                    Some(unit) => write!(f, "a {unit} after the last one dies"),
+                    None => write!(f, "{every}"),
+                };
+            }
+        };
+        match n {
+            1 => write!(f, "every {unit}"),
+            n => write!(f, "every {n} {unit}s"),
+        }
+    }
+}
+
+/// How many mobs a spawn wants after each reset.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Refill {
+    /// This many: a reset replaces whatever died.
+    Keep(u32),
+}
+
+impl Refill {
+    pub fn wanted(&self) -> u32 {
+        match self {
+            Refill::Keep(n) => *n,
+        }
+    }
+}
+
+/// How far a spawn's mobs roam, and how often they move: a random number of seconds in `secs`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub enum Wander {
+    #[default]
+    Never,
+    /// Among these rooms (`room` or `zone:room`), like a dog in the market.
+    Rooms {
+        rooms: Vec<String>,
+        secs: (u32, u32),
+    },
+    /// Anywhere in the spawn's zone, like a city guard.
+    Zone { secs: (u32, u32) },
+    /// Anywhere at all, including other zones.
+    Anywhere { secs: (u32, u32) },
+}
+
+impl Wander {
+    pub fn is_never(&self) -> bool {
+        *self == Wander::Never
+    }
+
+    pub fn secs(&self) -> Option<(u32, u32)> {
+        match self {
+            Wander::Never => None,
+            Wander::Rooms { secs, .. } | Wander::Zone { secs } | Wander::Anywhere { secs } => {
+                Some(*secs)
+            }
+        }
+    }
+}
+
+/// A mob template's full id: its zone and its id there. Written `zone:mob`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MobKey {
+    pub zone: String,
+    pub mob: String,
+}
+
+impl MobKey {
+    /// Parse `zone:mob`, or a bare `mob` relative to `current_zone`.
+    pub fn parse(s: &str, current_zone: &str) -> Self {
+        let RoomKey { zone, room } = RoomKey::parse(s, current_zone);
+        Self { zone, mob: room }
+    }
+}
+
+impl fmt::Display for MobKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.zone, self.mob)
+    }
+}
+
+/// A spawn's full id: its zone and its id there. Written `zone:spawn`.
+#[derive(Component, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SpawnKey {
+    pub zone: String,
+    pub spawn: String,
+}
+
+impl SpawnKey {
+    /// Parse `zone:spawn`, or a bare `spawn` relative to `current_zone`.
+    pub fn parse(s: &str, current_zone: &str) -> Self {
+        let RoomKey { zone, room } = RoomKey::parse(s, current_zone);
+        Self { zone, spawn: room }
+    }
+}
+
+impl fmt::Display for SpawnKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.zone, self.spawn)
+    }
+}
+
 /// An item template's full id: its zone and its id there. Written `zone:item`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ItemKey {
@@ -350,6 +570,7 @@ impl ZoneDef {
             name: name.into(),
             description: "An unfinished room. (Use 'desc' to describe it.)".into(),
             exits: BTreeMap::new(),
+            no_wander: false,
         };
         Self {
             id: id.into(),
@@ -357,6 +578,8 @@ impl ZoneDef {
             name: name.into(),
             doors: BTreeMap::new(),
             items: BTreeMap::new(),
+            mobs: BTreeMap::new(),
+            spawns: BTreeMap::new(),
             rooms: BTreeMap::from([(ZONE_ENTRANCE.into(), entrance)]),
         }
     }
@@ -477,6 +700,8 @@ impl fmt::Display for RoomKey {
 pub struct Room {
     pub name: String,
     pub description: String,
+    /// Wandering mobs never enter.
+    pub no_wander: bool,
 }
 
 /// Direction name -> where that exit leads.
@@ -719,6 +944,7 @@ fn sync_world(
                     room.description = def.description.clone();
                     touched.push(entity);
                 }
+                room.no_wander = def.no_wander;
             }
             None => {
                 let entity = commands
@@ -726,6 +952,7 @@ fn sync_world(
                         Room {
                             name: def.name.clone(),
                             description: def.description.clone(),
+                            no_wander: def.no_wander,
                         },
                         key.clone(),
                         Exits::default(),
@@ -891,6 +1118,11 @@ mod tests {
                 .iter()
                 .any(|z| z.id == key.zone && z.items.contains_key(&key.item))
         };
+        let mob_exists = |key: &MobKey| {
+            zones
+                .iter()
+                .any(|z| z.id == key.zone && z.mobs.contains_key(&key.mob))
+        };
         let door_exists = |key: &DoorKey| {
             zones
                 .iter()
@@ -912,6 +1144,28 @@ mod tests {
                     && !item_exists(&ItemKey::parse(key, &zone.id))
                 {
                     problems.push(format!("door {}:{door_id}: no key item '{key}'", zone.id));
+                }
+            }
+            for (spawn_id, spawn) in &zone.spawns {
+                let here = format!("spawn {}:{spawn_id}", zone.id);
+                if !mob_exists(&MobKey::parse(&spawn.mob, &zone.id)) {
+                    problems.push(format!("{here}: no mob '{}'", spawn.mob));
+                }
+                let mut rooms = vec![&spawn.room];
+                if let Wander::Rooms { rooms: wander, .. } = &spawn.wander {
+                    rooms.extend(wander);
+                }
+                for room in rooms {
+                    if !room_exists(&RoomKey::parse(room, &zone.id)) {
+                        problems.push(format!("{here}: no room '{room}'"));
+                    }
+                }
+                if let Some((min, max)) = spawn.wander.secs()
+                    && (min == 0 || min > max)
+                {
+                    problems.push(format!(
+                        "{here}: wander secs must be 1 or more, low to high"
+                    ));
                 }
             }
             for (room_id, room) in &zone.rooms {
@@ -936,6 +1190,32 @@ mod tests {
             "zone problems:\n{}",
             problems.join("\n")
         );
+    }
+
+    #[test]
+    fn spawn_periods_parse_and_read_naturally() {
+        assert_eq!(Every::parse("10m"), Some(Every::Minutes(10)));
+        assert_eq!(Every::parse("2h"), Some(Every::Hours(2)));
+        let dragon = Every::AfterDeath(Box::new(Every::Days(30)));
+        assert_eq!(Every::parse("death 30d"), Some(dragon.clone()));
+        assert_eq!(dragon.secs(), 30 * 86400);
+        assert_eq!(dragon.to_string(), "30 days after the last one dies");
+        assert_eq!(Every::Hours(1).to_string(), "every hour");
+        assert_eq!(Every::Minutes(20).to_string(), "every 20 minutes");
+        let quick = Every::AfterDeath(Box::new(Every::Minutes(1)));
+        assert_eq!(quick.to_string(), "a minute after the last one dies");
+        assert_eq!(Every::parse("0m"), None);
+        assert_eq!(Every::parse("10"), None);
+        assert_eq!(Every::parse("death death 1d"), None);
+
+        let spawn: SpawnDef = ron_options()
+            .from_str(
+                "(mob: \"rat\", room: \"nest\", every: AfterDeath(Days(7)), refill: Keep(1), \
+                 wander: Zone(secs: (30, 90)))",
+            )
+            .unwrap();
+        assert_eq!(spawn.every, Every::AfterDeath(Box::new(Every::Days(7))));
+        assert_eq!(spawn.wander.secs(), Some((30, 90)));
     }
 
     #[test]

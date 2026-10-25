@@ -29,8 +29,10 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `build.rs` | Builder and admin commands, registered with a permission |
 | `targeting.rs` | `Keywords` and `Target`: resolving `goblin`, `2.goblin`, `all.coin`, `me` |
 | `output.rs` | Shared output plumbing: `Outgoing`, `deliver`, `Actor`, the common queries, target candidate lists |
-| `world.rs` | Zone assets, room entities, the `RoomIndex`, and `sync_world`, which applies zone changes live |
-| `db.rs` | SQLite: accounts, characters, roles, aliases, attributes |
+| `world.rs` | Zone assets (rooms, doors, item and mob templates, spawns), room entities, the `RoomIndex`, and `sync_world`, which applies zone changes live |
+| `items.rs` | Item entities, Bulk and placement rules, persistence, and the item commands |
+| `mobs.rs` | Mob entities, spawns and their timers, wandering, `summon` and `purge` |
+| `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `dice.rs` | The `Dice` resource, the only source of randomness |
@@ -92,7 +94,7 @@ app.add_command(
 
 ### Things in the world
 
-Items and mobs become entities, with one location component replacing `InRoom`. Items, containers, locks, persistence and decay are designed in [Items, containers and locks](items.md); spawns, resets, wandering and doors in [The living world](world.md). Builder commands will edit templates and spawns.
+Items and mobs are entities made from templates in zone files. Items have an `ItemLocation` (a room, hands, a wear slot, or inside another item); mobs share players' `InRoom`, so queries that mean only one of them filter on `Connection`. Items, containers, locks, persistence and decay are in [Items, containers and locks](items.md); mob templates, spawns, resets, wandering and doors in [The living world](world.md). Builders edit templates with `item` and `mob`, and spawns with `spawn`.
 
 ### Game events
 
@@ -169,7 +171,7 @@ The in-game prompt shows the character's state, such as `<14/18hp 9/10fat>`, ins
 ## Proposed build order
 
 1. ~~**Command system and targeting.**~~ Built.
-2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then mobs that stand in rooms and can be looked at.
+2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then mobs that stand in rooms and can be looked at. *Built, except item spawns.*
 3. **Game events and time.** Both small, but everything after this uses them.
 4. **The [skill core](skills.md#build-plan), with combat as its first use.** The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
 

@@ -11,6 +11,7 @@ mod db;
 mod dice;
 mod items;
 mod login;
+mod mobs;
 mod net;
 mod output;
 mod targeting;
@@ -48,6 +49,7 @@ fn main() {
             commands::CommandsPlugin,
             build::BuildPlugin,
             items::ItemsPlugin,
+            mobs::MobsPlugin,
         ))
         .run();
 }

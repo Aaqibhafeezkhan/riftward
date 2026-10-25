@@ -1,6 +1,6 @@
 # Riftwatch
 
-[Design summary](README.md) · Status: rooms and doors built (zones `riftwatch` and `sewers`); trainers, mobs and the rats wait on mobs and spawns
+[Design summary](README.md) · Status: rooms, doors and the first mobs built (zones `riftwatch` and `sewers`); trainers teach nothing until skills exist, and the rats don't breed until the time system
 
 Riftwatch is the starting town. Every new character begins in its market square, and it's the hub players return to between ventures. It holds the Adventurers' Guild, an open-air market, the garrison, the lord's keep, and beneath it all a sewer system as large as the town itself: 25 rooms above, 22 below, joined by nine grates, hatches and doors. Room descriptions only lightly touch the setting (the barrier's shimmer from the watchtower, adventurers drawn by the rifts); change anything that doesn't fit *The Agryn's Legacy*.
 
@@ -137,6 +137,19 @@ From any room, `look <direction>` shows what lies that way and who's there, incl
 | A rusted iron door | Keep Dungeon, sewers' Sluice | Locked | Pick 12, bash 40 |
 
 None of the locks have keys yet; keys arrive with items.
+
+## Who's about
+
+| Spawn | Where | Keeps | Wanders |
+| --- | --- | --- | --- |
+| Town guards | North Gate | 2 | Anywhere in town, every 1-3 minutes |
+| A stray dog | Market Square | 1 | Market, stalls, back alley, tinkers, Guild Row |
+| The contract clerk | Contract Hall | 1 | No |
+| The herbalist | Herbalist's Stall | 1 | No |
+| The drill sergeant | Training Yard | 1 | No |
+| Sewer rats | The Warren | 8, for now | Anywhere, through open grates too |
+
+The herbalist's stall, Contract Hall, Guild Archive, Guild Quarters, shrine and Lord's Solar turn wanderers away.
 
 ## Where trainers go
 

@@ -1,6 +1,6 @@
 # The living world: spawns, wandering and world events
 
-[Design summary](README.md) · Status: designed, not built. Spawns and wandering come with items and mobs; breeding and world events need the time system and combat.
+[Design summary](README.md) · Status: mob spawns (`Keep`, timed and `AfterDeath` resets, counting by origin) and wandering are built; item spawns, breeding, crowding and world events are not. Breeding and world events need the time system and combat.
 
 The world populates itself and changes on its own. Every mob comes from a **spawn** in a zone file, which decides how often it resets and how many it wants. Mobs can **wander**, crowded rooms push them outward, and **world events** fire when the state of the world meets their conditions. There is one spawn model for everything, from a single dragon to a sewer full of breeding rats.
 
@@ -11,12 +11,12 @@ A zone file lists its spawns. Each says **what** it spawns and **where**, **how 
 ```ron
 spawns: {
     "gate_guards": (mob: "city_guard", room: "gate",
-        every: Hours(1), refill: Keep(4), wander: Zone(every_secs: 30..90)),
+        every: Hours(1), refill: Keep(4), wander: Zone(secs: (30, 90))),
     "red_dragon": (mob: "old_red_dragon", room: "lair",
-        every: AfterDeath(days: 30), refill: Keep(1), wander: Never),
+        every: AfterDeath(Days(30)), refill: Keep(1)),
     "sewer_rats": (mob: "sewer_rat", room: "sewers:nest",
         every: Minutes(20), refill: Breed(doubles_every: Hours(4), max: 200, reseed: Days(7)),
-        wander: Anywhere(every_secs: 30..120)),
+        wander: Anywhere(secs: (30, 120))),
     "angorim": (item: "angorim", room: "lair", every: Hours(6), refill: Keep(1)),
 }
 ```
@@ -26,7 +26,7 @@ spawns: {
 | `every` | Resets |
 | --- | --- |
 | `Minutes(n)`, `Hours(n)`, `Days(n)` | On a fixed schedule, in real time |
-| `AfterDeath(...)` | Once, that long after its last mob dies or its item is taken. The dragon returns 30 days after it is killed |
+| `AfterDeath(...)` | Once, that long after its last mob dies or its item is taken. The dragon returns 30 days after it is killed; a boss with guards returns only once all of them are dead |
 
 ### How many it wants
 
@@ -68,15 +68,51 @@ Each spawn says how far its mobs may roam and how often they move.
 
 | `wander` | Moves |
 | --- | --- |
-| `Never` | Stays in its spawn room |
-| `Rooms([...], every_secs)` | Among the listed rooms, like a dog in the market |
-| `Zone(every_secs)` | Anywhere in its zone, like a city guard |
-| `Anywhere(every_secs)` | Anywhere, including other zones |
+| `Never` (the default) | Stays in its spawn room |
+| `Rooms(rooms: [...], secs: (min, max))` | Among the listed rooms, like a dog in the market |
+| `Zone(secs: (min, max))` | Anywhere in its zone, like a city guard |
+| `Anywhere(secs: (min, max))` | Anywhere, including other zones |
 
-- **Each mob moves on its own random interval** from the range, so a room's goblins don't all move in the same tick. Each move picks a random allowed exit, rolled through [`Dice`](attributes.md#the-dice-service).
+- **Each mob moves on its own random interval,** `min` to `max` seconds, so a room's goblins don't all move in the same tick. Each move picks a random open exit it's allowed to take, rolled through [`Dice`](attributes.md#the-dice-service). Mobs don't open doors yet.
 - **Rooms can refuse wanderers** with a `no_wander` flag: temples, shops, players' homes.
 - **A puppeted mob doesn't wander.** While a GM or admin [puppets](architecture.md#game-masters-and-puppeting) it, it only moves when they move it.
 - **Wanderers move like players.** Rooms see "A stray dog arrives." and "A city guard leaves north.", and each move fires the same `EnteredRoom` [game event](architecture.md#game-events), so triggers and passive skills see mob movement too.
+
+## Mob templates
+
+Mobs are templates in a zone's `mobs`, like items:
+
+```ron
+mobs: {
+    "sewer_rat": (
+        name: "a sewer rat",
+        keywords: ["sewer", "rat"],                                   // default: the words of the name
+        here: "A sewer rat scurries along the edge of the channel.",   // default: "A sewer rat is here."
+        description: "A fat, filthy rat as long as your forearm...",  // what `look rat` shows
+    ),
+},
+```
+
+Rooms show each mob's `here` line, with repeats counted (`(x8)`), and `look <direction>` shows who's there. What a mob can *do* (attributes, skills, behaviour) arrives with combat.
+
+## Building mobs and spawns
+
+| Command | Does |
+| --- | --- |
+| `mob` / `mob <id>` | List this zone's mob templates, or show one |
+| `mob new <id> <name>` | Create a template |
+| `mob <name\|here\|desc\|keywords> <id> <value>` | Edit one (`mob here <id> none` restores the plain line) |
+| `spawn` / `spawn <id>` | List this zone's spawns with how many are alive, or show one |
+| `spawn new <id> <mob> [<count>]` | Add a spawn in this room: keeps `count` (default 1), resets every 10 minutes, doesn't wander |
+| `spawn count <id> <n>` | How many it keeps |
+| `spawn every <id> <10m\|2h\|1d\|death 30d>` | How often it resets |
+| `spawn wander <id> never` / `zone <min> <max>` / `anywhere <min> <max>` / `rooms <min> <max> <room>...` | How far its mobs roam, and how often they move, in seconds |
+| `spawn mob <id> <mob>` / `spawn room <id>` | Change what it spawns, or move it to this room |
+| `spawn remove <id>` | Remove the spawn and its mobs |
+| `summon <mob>` | Bring a mob here that belongs to no spawn, for testing |
+| `purge [<mob>]` | Remove a mob here, or every mob here. Its spawn refills at its next reset |
+
+Rooms marked `no_wander: true` in the zone file turn wanderers away. Riftwatch marks its shops, the shrine and the guild's quieter rooms.
 
 ## Doors
 
@@ -215,7 +251,7 @@ events: {
 
 ## Build order
 
-1. **With items and mobs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering.
+1. **With items and mobs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering. *Built for mobs; item spawns still to do.*
 2. **With the time system:** `Breed` and `reseed`, crowding, `TimeOfDay`.
 3. **With combat:** world flags, counters and events, starting with `Count`, `Event(Died(...))` and the actions above.
 

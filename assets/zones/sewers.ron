@@ -2,6 +2,23 @@
 // This file is rewritten by in-game builder commands, so comments other than this header are lost.
 (
     name: "Riftwatch Sewers",
+    mobs: {
+        "sewer_rat": (
+            name: "a sewer rat",
+            keywords: ["sewer", "rat"],
+            here: "A sewer rat scurries along the edge of the channel.",
+            description: "A fat, filthy rat as long as your forearm, not counting the tail. It watches you with bright black eyes and doesn't seem nearly as afraid as it should be.",
+        ),
+    },
+    spawns: {
+        "sewer_rats": (
+            mob: "sewer_rat",
+            room: "nest",
+            every: Minutes(20),
+            refill: Keep(8),
+            wander: Anywhere(secs: (30, 120)),
+        ),
+    },
     rooms: {
         "outflow_arch": (
             name: "Outflow Arch",

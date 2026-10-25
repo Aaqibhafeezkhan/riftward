@@ -62,6 +62,13 @@ const SCHEMA: &str = "
         slot         TEXT,
         container_id INTEGER REFERENCES items(id) ON DELETE CASCADE
     );
+
+    -- Spawns waiting to return after their last mob died (`AfterDeath`), so a restart doesn't
+    -- bring the dragon back early.
+    CREATE TABLE IF NOT EXISTS spawn_state (
+        spawn      TEXT PRIMARY KEY,       -- zone:spawn
+        next_reset INTEGER NOT NULL        -- unix seconds
+    );
 ";
 
 pub struct DbPlugin;
@@ -418,6 +425,27 @@ impl Database {
             conn.prepare("SELECT id, template FROM items WHERE container_id = ?1 ORDER BY id")?;
         let rows = stmt.query_map([container_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
         Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn spawn_timers(&self) -> DbResult<Vec<(String, i64)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT spawn, next_reset FROM spawn_state")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Remember when a spawn next resets, or forget it with `None`.
+    pub fn set_spawn_timer(&self, spawn: &str, next_reset: Option<i64>) -> DbResult<()> {
+        let conn = self.conn();
+        match next_reset {
+            Some(at) => conn.execute(
+                "INSERT INTO spawn_state (spawn, next_reset) VALUES (?1, ?2)
+                 ON CONFLICT (spawn) DO UPDATE SET next_reset = excluded.next_reset",
+                params![spawn, at],
+            )?,
+            None => conn.execute("DELETE FROM spawn_state WHERE spawn = ?1", [spawn])?,
+        };
+        Ok(())
     }
 
     pub fn save_location(&self, character_id: i64, room: &str) -> DbResult<()> {
