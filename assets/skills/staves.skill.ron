@@ -7,19 +7,51 @@
         // A weapon skill: no damage of its own, it needs a weapon that uses it in hand.
         "basics": (
             name: "Staff Fighting",
-            kind: Attack(verb: "strike"),
+            description: "Fighting with a staff: reach, balance and both hands. You do the staff's damage, and a point more for every 10 levels.",
+            kind: Attack(),
+            text: (
+                hit: (
+                    actor: "You strike {target}.",
+                    target: "{actor} strikes you.",
+                    room: "{actor} strikes {target}.",
+                ),
+                miss: (
+                    actor: "You strike at {target}, but miss.",
+                    target: "{actor} strikes at you, but misses.",
+                    room: "{actor} strikes at {target}, but misses.",
+                ),
+            ),
         ),
         "sweep": (
             name: "Sweep",
-            kind: Technique((with: "staves:basics", verb: "sweep", cost: Stamina(3),
-                effects: [KnockDown])),
+            description: "A low sweep that takes a foe off their feet: they lose their next turn, and defend at half until then.",
+            kind: Technique((with: "staves:basics", cost: Stamina(3), effects: [KnockDown])),
             requires: Skill("staves:basics", 15),
+            text: (
+                hit: (
+                    actor: "You sweep {target}'s legs from under them.",
+                    target: "{actor} sweeps the legs from under you.",
+                    room: "{actor} sweeps the legs from under {target}.",
+                ),
+                miss: (
+                    actor: "You sweep at {target}'s legs, but miss.",
+                    target: "{actor} sweeps at you, but misses.",
+                    room: "{actor} sweeps at {target}, but misses.",
+                ),
+            ),
         ),
         "guard": (
             name: "Guard",
-            kind: Technique((with: "staves:basics", verb: "take a guarding stance",
-                cost: Stamina(1), strike: None, effects: [Guard(defence: 4, rounds: 2)])),
+            description: "Hold your staff across you instead of attacking: 4 more defence for two turns.",
+            kind: Technique((with: "staves:basics", cost: Stamina(1), strike: None,
+                effects: [Guard(defence: 4, rounds: 2)])),
             requires: Skill("staves:basics", 15),
+            text: (
+                hit: (
+                    actor: "You take a guarding stance.",
+                    room: "{actor} takes a guarding stance.",
+                ),
+            ),
         ),
     },
 )

@@ -7,19 +7,56 @@
         // A weapon skill: no damage of its own, it needs a weapon that uses it in hand.
         "basics": (
             name: "Axe Fighting",
-            kind: Attack(verb: "hack"),
+            description: "Fighting with an axe: heavy, simple blows. You do the axe's damage, and a point more for every 10 levels.",
+            kind: Attack(),
+            text: (
+                hit: (
+                    actor: "You hack at {target}.",
+                    target: "{actor} hacks at you.",
+                    room: "{actor} hacks at {target}.",
+                ),
+                miss: (
+                    actor: "You hack at {target}, but miss.",
+                    target: "{actor} hacks at you, but misses.",
+                    room: "{actor} hacks at {target}, but misses.",
+                ),
+            ),
         ),
         "cleave": (
             name: "Cleave",
-            kind: Technique((with: "axes:basics", verb: "cleave", cost: Stamina(3),
-                effects: [Cleave])),
+            description: "A great swing that carries on into a second foe fighting you, even when it fells the first.",
+            kind: Technique((with: "axes:basics", cost: Stamina(3), effects: [Cleave])),
             requires: Skill("axes:basics", 15),
+            text: (
+                hit: (
+                    actor: "You cleave into {target}.",
+                    target: "{actor} cleaves into you.",
+                    room: "{actor} cleaves into {target}.",
+                ),
+                miss: (
+                    actor: "You swing wide at {target}, and miss.",
+                    target: "{actor} swings wide at you, but misses.",
+                    room: "{actor} swings wide at {target}, but misses.",
+                ),
+            ),
         ),
         "hew": (
             name: "Hew",
-            kind: Technique((with: "axes:basics", verb: "hew at", cost: Stamina(2), damage: 3,
-                accuracy: -2)),
+            description: "A huge, slow chop: 3 more damage, but harder to land.",
+            kind: Technique((with: "axes:basics", cost: Stamina(2), damage: 3, accuracy: -2)),
             requires: Skill("axes:basics", 15),
+            text: (
+                hit: (
+                    actor: "You hew at {target}, and the blade bites deep.",
+                    target: "{actor} hews deep into you.",
+                    room: "{actor} hews deep into {target}.",
+                ),
+                miss: (
+                    actor: "You hew at {target}, but the blow goes wide.",
+                    target: "{actor} hews at you, but misses.",
+                    room: "{actor} hews at {target}, but misses.",
+                ),
+            ),
         ),
     },
 )

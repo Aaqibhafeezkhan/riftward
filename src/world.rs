@@ -248,9 +248,6 @@ pub struct WeaponDef {
     pub skill: String,
     /// Damage before the Strength bonus, low to high.
     pub damage: (u32, u32),
-    /// What it does, if not the skill's verb: a knife might "stab".
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub verb: Option<String>,
 }
 
 /// Size and awkwardness, as in Pathfinder 2e: 10 Light make 1 Bulk.

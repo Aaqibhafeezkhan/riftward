@@ -18,8 +18,8 @@ use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
 use crate::mobs::Mob;
 use crate::output::Outgoing;
 use crate::skills::{
-    Bonus, Boosts, Cost, Effect, Learner, Skill, SkillDefs, SkillKind, Skills, StrikeKind,
-    Technique, boosts, count_use, tough_fight_boost,
+    Bonus, Boosts, Cost, Effect, Learner, Lines, Skill, SkillDefs, SkillKind, SkillText, Skills,
+    StrikeKind, Technique, Trigger, boosts, count_use, fill, tough_fight_boost,
 };
 use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{InRoom, Player};
@@ -71,25 +71,6 @@ pub fn condition(health: f32, max: i32) -> &'static str {
         f if f >= 0.5 => "hurt",
         f if f >= 0.25 => "badly wounded",
         _ => "barely standing",
-    }
-}
-
-/// "punches" for "punch", "slashes" for "slash".
-pub fn third_person(verb: &str) -> String {
-    // A phrasal verb changes its first word: "lunge at" is "lunges at".
-    let (first, rest) = verb.split_once(' ').unwrap_or((verb, ""));
-    let first = if ["s", "x", "z", "sh", "ch"]
-        .iter()
-        .any(|end| first.ends_with(end))
-    {
-        format!("{first}es")
-    } else {
-        format!("{first}s")
-    };
-    if rest.is_empty() {
-        first
-    } else {
-        format!("{first} {rest}")
     }
 }
 
@@ -162,13 +143,13 @@ pub fn hit_chance(attack: i32, defence: i32) -> f64 {
     attack / (attack + defence)
 }
 
-/// The attack a fighter makes this round: which skill, how much damage, and the verb.
+/// The attack a fighter makes this round: which skill, how much damage, and what it looks like.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Strike {
     /// The skill it's made with, and practises.
     pub skill: String,
     pub damage: (u32, u32),
-    pub verb: String,
+    pub text: SkillText,
     /// Extra damage from training in the weapon.
     pub bonus: i32,
     /// Stamina it takes.
@@ -201,9 +182,10 @@ pub fn choose_attack(
     });
     let strike = |key: &str| {
         let skill = defs.skills.get(key)?;
-        let SkillKind::Attack { verb, damage, cost } = &skill.def.kind else {
+        let SkillKind::Attack { damage, cost } = &skill.def.kind else {
             return None;
         };
+        let text = skill.def.text.clone().unwrap_or_else(untrained);
         if is_player && !skills.0.contains_key(key) {
             return None;
         }
@@ -219,14 +201,14 @@ pub fn choose_attack(
             Some(w) if w.skill == key => Some(Strike {
                 skill: key.to_string(),
                 damage: w.damage,
-                verb: w.verb.clone().unwrap_or_else(|| verb.clone()),
+                text,
                 bonus: level / LEVELS_PER_DAMAGE,
                 cost,
             }),
             _ => damage.map(|damage| Strike {
                 skill: key.to_string(),
                 damage,
-                verb: verb.clone(),
+                text,
                 bonus: 0,
                 cost,
             }),
@@ -241,12 +223,48 @@ pub fn choose_attack(
                 // Swung untrained: Brawling's aim, the weapon's damage.
                 Some(w) => Strike {
                     damage: w.damage,
-                    verb: "hit".into(),
+                    text: untrained(),
                     ..brawl
                 },
                 None => brawl,
             })
         })
+}
+
+/// What a weapon swung untrained looks like: there's no skill of its own to describe it.
+fn untrained() -> SkillText {
+    let lines = |actor: &str, target: &str, room: &str| Lines {
+        actor: actor.into(),
+        target: Some(target.into()),
+        room: room.into(),
+        beyond: None,
+    };
+    SkillText {
+        hit: lines(
+            "You hit {target}.",
+            "{actor} hits you.",
+            "{actor} hits {target}.",
+        ),
+        miss: Some(lines(
+            "You swing at {target}, but miss.",
+            "{actor} swings at you, but misses.",
+            "{actor} swings at {target}, but misses.",
+        )),
+    }
+}
+
+/// `lines` filled in for `actor` using a skill on `target`: what the actor, the target and the
+/// room see.
+fn told(lines: &Lines, actor: &str, target: &str) -> (String, String, String) {
+    let with = [("actor", actor), ("target", target)];
+    (
+        fill(&lines.actor, &with),
+        lines
+            .target
+            .as_ref()
+            .map_or_else(String::new, |t| fill(t, &with)),
+        fill(&lines.room, &with),
+    )
 }
 
 /// A technique to make, and its skill.
@@ -553,17 +571,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 }
             }
             if t.strike == StrikeKind::None {
-                let verbs = third_person(&t.verb);
-                self.say(attacker, format!("You {}.", t.verb));
-                self.tell_room(
-                    room,
-                    attacker,
-                    attacker,
-                    &format!("{} {verbs}.", capitalized(&a_name)),
-                );
-                if let Some(Move { key, .. }) = technique {
-                    self.practise(attacker, key);
+                let key = technique.as_ref().map_or("", |m| m.key);
+                if let Some(text) = self.defs.skills.get(key).and_then(|s| s.def.text.clone()) {
+                    let (mine, _, theirs) = told(&text.hit, &a_name, &d_name);
+                    self.say(attacker, mine);
+                    self.tell_room(room, attacker, attacker, &theirs);
                 }
+                self.practise(attacker, key);
                 return died;
             }
         }
@@ -575,7 +589,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let Some(Strike {
             skill: key,
             damage,
-            verb,
+            text,
             bonus,
             cost,
         }) = choose_attack(
@@ -597,9 +611,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         if technique.is_none() && cost > 0 {
             self.pay(attacker, cost as f32);
         }
-        let verb = technique
+        // A technique looks like itself; a plain attack like its skill.
+        let text = technique
             .as_ref()
-            .map_or(verb, |m| m.technique.verb.clone());
+            .and_then(|m| self.defs.skills.get(m.key)?.def.text.clone())
+            .unwrap_or(text);
         let (accuracy, extra) = technique
             .as_ref()
             .map_or((0, 0), |m| (m.technique.accuracy, m.technique.damage));
@@ -632,7 +648,6 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             .dice
             .contest(a_luck, d_luck, hit_chance(attack_rating, defence));
 
-        let verbs = third_person(&verb);
         let mut tell = Telling {
             lines: Vec::new(),
             room: Vec::new(),
@@ -645,14 +660,12 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             .is_some_and(|m| m.technique.effects.contains(&Effect::IgnoreArmour));
         let mut dealt = 0;
         if hit {
+            let (mine, theirs, seen) = told(&text.hit, &a_name, &d_name);
             if harmless {
-                tell.lines.push((attacker, format!("You {verb} {d_name}.")));
-                tell.lines.push((
-                    target,
-                    format!("\x1b[31m{} {verbs} you.\x1b[0m", capitalized(&a_name)),
-                ));
-                tell.room
-                    .push(format!("{} {verbs} {d_name}.", capitalized(&a_name)));
+                tell.lines.push((attacker, mine));
+                tell.lines
+                    .push((target, format!("\x1b[31m{theirs}\x1b[0m")));
+                tell.room.push(seen);
             } else {
                 let (low, high) = (damage.0.min(damage.1), damage.0.max(damage.1));
                 let rolled = self.dice.range(a_luck, i64::from(low)..=i64::from(high)) as i32;
@@ -668,17 +681,10 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     + extra
                     - armour)
                     .max(1);
+                tell.lines.push((attacker, format!("{mine} ({dealt})")));
                 tell.lines
-                    .push((attacker, format!("You {verb} {d_name}. ({dealt})")));
-                tell.lines.push((
-                    target,
-                    format!(
-                        "\x1b[31m{} {verbs} you. ({dealt})\x1b[0m",
-                        capitalized(&a_name)
-                    ),
-                ));
-                tell.room
-                    .push(format!("{} {verbs} {d_name}.", capitalized(&a_name)));
+                    .push((target, format!("\x1b[31m{theirs} ({dealt})\x1b[0m")));
+                tell.room.push(seen);
                 if self.wound(
                     target,
                     dealt,
@@ -773,18 +779,33 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 }
             }
         } else {
-            let missed = if technique.is_some() {
-                format!("You try to {verb} {d_name}, but miss.")
+            // A defender whose dodging has words for it dodges; otherwise the attack misses.
+            let dodge = d_skills.0.keys().find_map(|key| {
+                let skill = self.defs.skills.get(key)?;
+                match &skill.def.kind {
+                    SkillKind::Passive { triggers, .. } if triggers.contains(&Trigger::Dodged) => {
+                        skill.def.text.as_ref().map(|t| t.hit.clone())
+                    }
+                    _ => None,
+                }
+            });
+            if let Some(dodge) = dodge {
+                // The dodger is the one using the skill.
+                let (theirs, mine, seen) = told(&dodge, &d_name, &a_name);
+                tell.lines.push((attacker, mine));
+                tell.lines.push((target, theirs));
+                tell.room.push(seen);
             } else {
-                format!("You miss {d_name}.")
-            };
-            tell.lines.push((attacker, missed));
-            tell.lines.push((
-                target,
-                format!("{} {verbs} at you, but misses.", capitalized(&a_name)),
-            ));
-            tell.room
-                .push(format!("{} misses {d_name}.", capitalized(&a_name)));
+                let miss = text
+                    .miss
+                    .clone()
+                    .or_else(|| untrained().miss)
+                    .unwrap_or(text.hit);
+                let (mine, theirs, seen) = told(&miss, &a_name, &d_name);
+                tell.lines.push((attacker, mine));
+                tell.lines.push((target, theirs));
+                tell.room.push(seen);
+            }
             self.events.write(GameEvent::Dodged { who: target });
         }
 
@@ -885,9 +906,20 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         if !self.pay(defender, RIPOSTE_COST) {
             return Vec::new();
         }
-        self.say(defender, "\x1b[1mYou riposte!\x1b[0m");
-        let name = capitalized(&self.name(defender));
-        self.say(attacker, format!("\x1b[1m{name} ripostes!\x1b[0m"));
+        if let Some(text) = self
+            .defs
+            .skills
+            .get(&counter)
+            .and_then(|s| s.def.text.clone())
+        {
+            let room = self.fighters.get(defender).map(|f| f.in_room.0);
+            let (mine, theirs, seen) = told(&text.hit, &self.name(defender), &self.name(attacker));
+            self.say(defender, format!("\x1b[1m{mine}\x1b[0m"));
+            self.say(attacker, format!("\x1b[1m{theirs}\x1b[0m"));
+            if let Ok(room) = room {
+                self.tell_room(room, defender, attacker, &seen);
+            }
+        }
         self.practise(defender, &counter);
         self.strike(defender, attacker, None, true)
     }
@@ -896,18 +928,6 @@ impl Round<'_, '_, '_, '_, '_, '_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn verbs_read_naturally() {
-        assert_eq!(third_person("punch"), "punches");
-        assert_eq!(third_person("bite"), "bites");
-        assert_eq!(third_person("slash"), "slashes");
-        assert_eq!(third_person("lunge at"), "lunges at");
-        assert_eq!(
-            third_person("take a guarding stance"),
-            "takes a guarding stance"
-        );
-    }
 
     #[test]
     fn hits_follow_the_ratio_rule() {

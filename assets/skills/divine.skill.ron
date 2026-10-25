@@ -8,6 +8,7 @@
         // A god's answer to your devotion: the root of all Divine magic.
         "foundation": (
             name: "Faith",
+            description: "A god's answer to your devotion. Knowing it, you are Awakened to Divine magic, and it is your first school: blessings and mending.",
             kind: Passive(triggers: []),
             requires: Stat(Magic, 1),
         ),

@@ -56,6 +56,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 - **All randomness goes through `Dice`** (`dice.rs`), never your own RNG, so Luck applies to every roll.
 - **Contests compare ratios, never differences**: attributes are uncapped (`docs/attributes.md#the-ratio-rule`).
 - **Designed content goes in data files**, not code.
+- **A skill's wording lives in its `.skill.ron`, never in code.** Every skill needs a `description`; attacks, techniques, counters and active skills need `text` templates (`{actor}`, `{target}`) for each viewpoint, on hit and miss. `SkillDef::check` enforces this at load and the tree-file test runs it (`docs/skills.md#skill-text`). Code that shows a skill being used fills in its templates with `skills::fill`.
 - **Schema:** tables use `CREATE TABLE IF NOT EXISTS`; there are no migrations yet. Changing an existing table needs numbered migrations (`PRAGMA user_version`); raise it before doing so.
 - **Zone files:** room ids are local to their zone (cross-zone links use `zone:room`), and comments in a zone file are lost the next time a builder command saves it.
 - **Design docs are the record of decisions.** A change that alters a design updates its doc in `docs/` in the same change; keep `docs/README.md` ("What exists today") and `docs/STATUS.md` current.

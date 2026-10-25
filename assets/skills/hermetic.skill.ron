@@ -8,6 +8,7 @@
         // Magic as a discipline: the formulae and correspondences at the root of all Hermetic magic.
         "foundation": (
             name: "Hermetic Principles",
+            description: "Magic as a discipline of formulae and correspondences. Knowing it, you are Awakened to Hermetic magic, and it is your first school: force and light.",
             kind: Passive(triggers: []),
             requires: Stat(Magic, 1),
         ),

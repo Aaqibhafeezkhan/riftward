@@ -7,19 +7,57 @@
         // A weapon skill: no damage of its own, it needs a weapon that uses it in hand.
         "basics": (
             name: "Hammer Fighting",
-            kind: Attack(verb: "smash"),
+            description: "Fighting with a hammer or mace: blows that bruise and break. You do the weapon's damage, and a point more for every 10 levels.",
+            kind: Attack(),
+            text: (
+                hit: (
+                    actor: "You smash {target}.",
+                    target: "{actor} smashes you.",
+                    room: "{actor} smashes {target}.",
+                ),
+                miss: (
+                    actor: "You swing at {target}, but miss.",
+                    target: "{actor} swings at you, but misses.",
+                    room: "{actor} swings at {target}, but misses.",
+                ),
+            ),
         ),
         "stagger": (
             name: "Stagger",
-            kind: Technique((with: "hammers:basics", verb: "slam", cost: Stamina(4),
-                effects: [Stagger])),
+            description: "A heavy slam that leaves a foe reeling: they lose their next turn.",
+            kind: Technique((with: "hammers:basics", cost: Stamina(4), effects: [Stagger])),
             requires: Skill("hammers:basics", 15),
+            text: (
+                hit: (
+                    actor: "You slam into {target}.",
+                    target: "{actor} slams into you.",
+                    room: "{actor} slams into {target}.",
+                ),
+                miss: (
+                    actor: "You swing hard at {target}, but miss.",
+                    target: "{actor} swings hard at you, but misses.",
+                    room: "{actor} swings hard at {target}, but misses.",
+                ),
+            ),
         ),
         "crush": (
             name: "Crush",
-            kind: Technique((with: "hammers:basics", verb: "crush", cost: Stamina(2), damage: 1,
+            description: "A blow that drives straight through armour, for a point more damage.",
+            kind: Technique((with: "hammers:basics", cost: Stamina(2), damage: 1,
                 effects: [IgnoreArmour])),
             requires: Skill("hammers:basics", 15),
+            text: (
+                hit: (
+                    actor: "You bring a crushing blow down on {target}.",
+                    target: "{actor} brings a crushing blow down on you.",
+                    room: "{actor} brings a crushing blow down on {target}.",
+                ),
+                miss: (
+                    actor: "You bring a blow down at {target}, but miss.",
+                    target: "{actor} brings a blow down at you, but misses.",
+                    room: "{actor} brings a blow down at {target}, but misses.",
+                ),
+            ),
         ),
     },
 )

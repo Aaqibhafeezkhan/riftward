@@ -6,11 +6,22 @@
     skills: {
         "dodge": (
             name: "Dodge",
+            description: "Getting out of the way. It makes you harder to hit, and every attack you avoid trains it.",
             attribute: Reaction,
             kind: Passive(triggers: [Dodged]),
+            // Shown instead of a miss when someone who knows it avoids an attack: {actor} is the
+            // dodger, {target} the attacker.
+            text: (
+                hit: (
+                    actor: "You dodge {target}'s attack!",
+                    target: "{actor} dodges your attack!",
+                    room: "{actor} dodges {target}'s attack.",
+                ),
+            ),
         ),
         "endurance": (
             name: "Endurance",
+            description: "Staying power. Every bit of stamina you spend trains it, and it raises your stamina by 1 for every 5 levels.",
             attribute: Willpower,
             kind: Passive(
                 triggers: [StaminaSpent(per: 3)],
@@ -19,6 +30,7 @@
         ),
         "toughness": (
             name: "Toughness",
+            description: "Taking a beating and staying up. The damage you take trains it, and it raises your health by 1 for every 5 levels.",
             kind: Passive(
                 triggers: [Damaged(per: 3)],
                 bonuses: [(stat: MaxHealth, per: 5)],

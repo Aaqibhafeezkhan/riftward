@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 

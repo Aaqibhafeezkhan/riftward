@@ -8,6 +8,7 @@
         // The world of spirits, seen and spoken to: the root of all Shamanic magic.
         "foundation": (
             name: "Spirit Sight",
+            description: "Seeing the world of spirits, and speaking with it. Knowing it, you are Awakened to Shamanic magic, and it is your first school.",
             kind: Passive(triggers: []),
             requires: Stat(Magic, 1),
         ),

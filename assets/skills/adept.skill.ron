@@ -11,6 +11,7 @@
         // powers stronger.
         "foundation": (
             name: "Inner Discipline",
+            description: "Magic turned inward through breath and body. Knowing it, you are Awakened as an Adept. Unarmed fighting and every power you use train it, and it strengthens Killing Hands.",
             kind: Passive(
                 triggers: [UsedTree, UsedSkill("brawling:basics")],
                 bonuses: [
@@ -23,12 +24,26 @@
         // The Adept's weapon: unarmed strikes that land like a blade.
         "killing_hands": (
             name: "Killing Hands",
+            description: "Unarmed strikes that land like a blade, for 2 to 4 damage, stronger as your Inner Discipline grows.",
             attribute: Agility,
-            kind: Attack(verb: "strike", damage: (2, 4)),
+            kind: Attack(damage: (2, 4)),
             requires: Skill("adept:foundation", 0),
+            text: (
+                hit: (
+                    actor: "You strike {target} with an open hand.",
+                    target: "{actor} strikes you with an open hand.",
+                    room: "{actor} strikes {target} with an open hand.",
+                ),
+                miss: (
+                    actor: "You strike at {target}, but miss.",
+                    target: "{actor} strikes at you, but misses.",
+                    room: "{actor} strikes at {target}, but misses.",
+                ),
+            ),
         ),
         "quickened_reflexes": (
             name: "Quickened Reflexes",
+            description: "Magic sharpening your reflexes: you act sooner in a fight and are harder to hit. Dodging trains it.",
             attribute: Reaction,
             kind: Passive(
                 triggers: [Dodged],

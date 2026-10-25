@@ -47,6 +47,8 @@ Trees live in data files, one per tree, hot-reloaded like zones. The files end i
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `name` | required | Display name |
+| `description` | required | What players read about it, with `skills <skill>` |
+| `text` | required for attacks, techniques, counters and active skills | What everyone sees when it's used; see [Skill text](#skill-text) |
 | `max_level` | 50 | Level at which the skill is mastered |
 | `requires` | none | Conditions the learner must meet |
 | `attribute` | the tree's | The attribute added to the skill's level |
@@ -56,6 +58,32 @@ Trees live in data files, one per tree, hot-reloaded like zones. The files end i
 | `kind` | required | `Active(...)` or `Passive(...)`; see [Skill kinds](#skill-kinds) |
 | `difficulty` | 1.0 | Multiplier on the gain chance |
 | `hidden`, `unlock`, `trigger`, `hint` | off | See [Hidden skills](#hidden-skills) |
+
+## Skill text
+
+Every skill says, in its own file, what it looks like. Nothing about a skill's wording lives in the code, so a new skill can't ship without it.
+
+- **`description`** (every skill) is what players read with `skills <skill>`: what it is and what it does.
+- **`text`** is what everyone sees when it's used, as templates: `{actor}` is the user and `{target}` what it's used on, and a command can offer more (`pick` gives `{door}`). Each moment has a line for the user (`actor`), for its target (`target`, when that's someone), for everyone else there (`room`), and, for skills used on doors, for whoever is on the other side (`beyond`). A line that starts with a name gets its capital letter. The game adds only what isn't flavour: the damage count, and conditions like "is bleeding!".
+- **`hit` and `miss`:** the moment it works (a blow lands, a lock gives) and the moment it doesn't.
+
+  ```ron
+  "kick": (
+      name: "Kick",
+      description: "A swift kick that lands harder than a punch, for a little stamina.",
+      kind: Technique((with: "brawling:basics", cost: Stamina(1), damage: 2)),
+      text: (
+          hit: (actor: "You kick {target}.", target: "{actor} kicks you.", room: "{actor} kicks {target}."),
+          miss: (actor: "You kick at {target}, but miss.", target: "{actor} kicks at you, but misses.",
+              room: "{actor} kicks at {target}, but misses."),
+      ),
+  ),
+  ```
+
+- **Required where it shows.** Attacks and techniques that strike need `hit` and `miss`, each with a `target` line; a technique that doesn't strike (Guard) needs `hit`; a counter (Riposte) needs `hit` with a `target` line; an active skill needs `hit` and `miss`. A tree with a skill missing any of these doesn't load, and the tests check every tree file, including that each `{placeholder}` is one the game fills in.
+- **Passives may have text too,** shown when they decide a moment. **Dodge** has: when an attack misses someone who knows it, they see "You dodge the town guard's attack!" instead of a plain miss. In a dodge's text `{actor}` is the dodger and `{target}` the attacker. Passives with nothing to show (Toughness, auras) have only a description, and ones that fire constantly (Endurance) shouldn't have text.
+- **Planned: crediting a miss to a defence.** When shields and parries arrive with [armour](trees.md#armour), a miss should be credited to one of the defender's defences in proportion to how much each adds to their defence, so a big shield more often shows "Your shield turns the blow aside!" than a sidestep shows a dodge.
+- **Untrained weapons** have no skill to describe them, so the game says it plainly: "You hit the rat."
 
 ## Skill kinds
 
@@ -250,7 +278,7 @@ The skill core, without combat, proved on non-combat skills first:
   An **attack** skill is made every round of a fight once chosen with `autoattack` (see [Combat](architecture.md#combat)). It can cost stamina (`cost: Stamina(4)` for a crushing blow); one its maker can't afford falls back to the free basic attack:
 
   ```ron
-  "basics": (name: "Swordplay", kind: Attack(verb: "slash", damage: (2, 5), weapon: "blade")),
+  "basics": (name: "Swordplay", description: "...", kind: Attack(), text: (...)),
   ```
 
   An **aura** skill, held by a mob, makes certain other mobs in its zone fight better while the holder lives:

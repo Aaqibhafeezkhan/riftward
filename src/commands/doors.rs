@@ -17,7 +17,7 @@ use crate::items::{
     Item, ItemLocation, ItemTemplates, Snapshot, capitalized, carries, with_keywords,
 };
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
-use crate::skills::{Learner, Practice};
+use crate::skills::{Learner, Practice, fill};
 use crate::targeting::{Keywords, Target};
 use crate::world::{Door, DoorKey, DoorState, Exits, ItemKey, LockDef, without_article};
 
@@ -124,6 +124,7 @@ impl Lockable {
         ];
         if let Kind::Door { other_side, .. } = self.kind
             && other_side != self.actor.room
+            && !beyond.is_empty()
         {
             out.push(Outgoing::Room {
                 room: other_side,
@@ -413,26 +414,32 @@ pub fn pick(
             boost: 1.0,
         };
         gains = practice.exercise(it.actor.entity, learner, LOCKPICKING);
+        let text = practice
+            .defs
+            .skills
+            .get(LOCKPICKING)
+            .and_then(|skill| skill.def.text.clone())
+            .ok_or_else(String::new)?;
+        let lines = match (picked, &text.miss) {
+            (false, Some(miss)) => miss,
+            _ => &text.hit,
+        };
         let the = it.the();
-        let (name, lock) = (&it.actor.name, format!("the lock of {the}"));
+        let lock = format!("the lock of {the}");
+        let with = [
+            ("actor", it.actor.name.as_str()),
+            ("target", lock.as_str()),
+            ("door", the.as_str()),
+        ];
+        let beyond = lines
+            .beyond
+            .as_ref()
+            .map_or_else(String::new, |b| fill(b, &with));
+        let told = it.announce(fill(&lines.actor, &with), fill(&lines.room, &with), beyond);
         Ok(if picked {
-            (
-                DoorState::Closed,
-                it.announce(
-                    format!("You work at {lock} until it gives with a click."),
-                    format!("{name} picks {lock}."),
-                    format!("You hear a faint click from {the}."),
-                ),
-            )
+            (DoorState::Closed, told)
         } else {
-            (
-                DoorState::Locked,
-                it.announce(
-                    format!("You work at {lock}, but it won't give."),
-                    format!("{name} fiddles with {lock}."),
-                    format!("Something scratches at {the}."),
-                ),
-            )
+            (DoorState::Locked, told)
         })
     });
     let out = gains

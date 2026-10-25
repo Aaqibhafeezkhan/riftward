@@ -7,24 +7,77 @@
     skills: {
         "bite": (
             name: "Bite",
-            kind: Attack(verb: "bite", damage: (1, 2)),
+            description: "A beast's bite.",
+            kind: Attack(damage: (1, 2)),
+            text: (
+                hit: (
+                    actor: "You bite {target}.",
+                    target: "{actor} bites you.",
+                    room: "{actor} bites {target}.",
+                ),
+                miss: (
+                    actor: "You snap at {target}, but miss.",
+                    target: "{actor} snaps at you, but misses.",
+                    room: "{actor} snaps at {target}, but misses.",
+                ),
+            ),
         ),
         "rat_bite": (
             name: "Rat Bite",
-            kind: Attack(verb: "bite", damage: (1, 1)),
+            description: "A rat's small, sharp bite.",
+            kind: Attack(damage: (1, 1)),
+            text: (
+                hit: (
+                    actor: "You bite {target}.",
+                    target: "{actor} bites you.",
+                    room: "{actor} bites {target}.",
+                ),
+                miss: (
+                    actor: "You snap at {target}, but miss.",
+                    target: "{actor} snaps at you, but misses.",
+                    room: "{actor} snaps at {target}, but misses.",
+                ),
+            ),
         ),
         "claw": (
             name: "Claw",
-            kind: Attack(verb: "claw", damage: (1, 3)),
+            description: "Raking claws.",
+            kind: Attack(damage: (1, 3)),
+            text: (
+                hit: (
+                    actor: "You claw {target}.",
+                    target: "{actor} claws you.",
+                    room: "{actor} claws {target}.",
+                ),
+                miss: (
+                    actor: "You claw at {target}, but miss.",
+                    target: "{actor} claws at you, but misses.",
+                    room: "{actor} claws at {target}, but misses.",
+                ),
+            ),
         ),
         // Raking claws that leave wounds bleeding.
         "rend": (
             name: "Rend",
-            kind: Technique((with: "beast:claw", verb: "rake", cost: Stamina(2),
+            description: "Claws that tear, leaving wounds that bleed for three turns.",
+            kind: Technique((with: "beast:claw", cost: Stamina(2),
                 effects: [Bleed(damage: 1, rounds: 3)])),
+            text: (
+                hit: (
+                    actor: "You rake {target} open.",
+                    target: "{actor} rakes you open.",
+                    room: "{actor} rakes {target} open.",
+                ),
+                miss: (
+                    actor: "You rake at {target}, but miss.",
+                    target: "{actor} rakes at you, but misses.",
+                    room: "{actor} rakes at {target}, but misses.",
+                ),
+            ),
         ),
         "rat_kings_command": (
             name: "Rat King's Command",
+            description: "The Rat King's will over the rats of the sewers: while he lives, they fight harder.",
             kind: Aura(affects: "sewers:sewer_rat", bonus: (attack: 2, defence: 2, armour: 1)),
         ),
     },

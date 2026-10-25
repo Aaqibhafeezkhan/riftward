@@ -4,13 +4,40 @@
     rarity: Common,
     attribute: Agility,
     skills: {
+        // `pick` fills in {target} as the lock and {door} as what it's on; `beyond` is heard on
+        // the other side of a door.
         "lockpicking": (
             name: "Lockpicking",
+            description: "Opening locks without their keys, with 'pick <door or container>'. Better locks need more skill.",
             kind: Active(command: "pick", cost: Stamina(1), cooldown: 2),
+            text: (
+                hit: (
+                    actor: "You work at {target} until it gives with a click.",
+                    room: "{actor} picks {target}.",
+                    beyond: "You hear a faint click from {door}.",
+                ),
+                miss: (
+                    actor: "You work at {target}, but it won't give.",
+                    room: "{actor} fiddles with {target}.",
+                    beyond: "Something scratches at {door}.",
+                ),
+            ),
         ),
         "pickpocketing": (
             name: "Pickpocketing",
+            description: "Lifting things from someone's pockets without their noticing.",
             kind: Active(command: "steal", cost: Stamina(1), cooldown: 5),
+            text: (
+                hit: (
+                    actor: "You slip a hand into {target}'s pocket, unnoticed.",
+                    room: "{actor} brushes past {target}.",
+                ),
+                miss: (
+                    actor: "{target} catches your hand in their pocket!",
+                    target: "You catch {actor} with a hand in your pocket!",
+                    room: "{target} catches {actor} with a hand in their pocket!",
+                ),
+            ),
         ),
     },
 )

@@ -914,18 +914,31 @@ fn stop(In(inv): In<Invocation>, mut players: PlayerQuery, mut queues: Query<&mu
 mod tests {
     use super::*;
     use crate::skills::{
-        Cost, Effect, Skill, SkillDef, SkillKind, SkillState, StrikeKind, Technique,
+        Cost, Effect, Lines, Skill, SkillDef, SkillKind, SkillState, SkillText, StrikeKind,
+        Technique,
     };
     use crate::vitals::BaseHealth;
     use crate::world::{Exits, Room, Terrain};
     use bevy::ecs::message::Messages;
     use bevy::ecs::system::RunSystemOnce;
 
+    /// A skill whose text is made from its id: "You cleave {target}.", "{actor} cleaves you."
     fn skill(key: &str, kind: SkillKind) -> (String, Skill) {
-        let (tree, _) = key.split_once(':').unwrap();
+        let (tree, id) = key.split_once(':').unwrap();
+        let lines = |verb: &str| Lines {
+            actor: format!("You {verb} {{target}}."),
+            target: Some(format!("{{actor}} {verb}s you.")),
+            room: format!("{{actor}} {verb}s {{target}}."),
+            beyond: None,
+        };
         let def = SkillDef {
             name: key.into(),
+            description: key.into(),
             kind,
+            text: Some(SkillText {
+                hit: lines(id),
+                miss: Some(lines(&format!("miss with a {id} at"))),
+            }),
             max_level: 50,
             attribute: None,
             rarity: None,
@@ -950,7 +963,6 @@ mod tests {
                 skill(
                     BASIC_ATTACK,
                     SkillKind::Attack {
-                        verb: "punch".into(),
                         damage: Some((2, 2)),
                         cost: Cost::Free,
                     },
@@ -967,7 +979,6 @@ mod tests {
                     "brawling:cleave",
                     SkillKind::Technique(Technique {
                         with: BASIC_ATTACK.into(),
-                        verb: "cleave".into(),
                         cost: Cost::Free,
                         accuracy: 0,
                         damage: 0,
@@ -1069,7 +1080,7 @@ mod tests {
         );
         world.entity_mut(attacker).insert(Fighting(defender));
         world.run_system_once(combat_round).unwrap();
-        assert!(said(&world, defender, "You riposte!"));
+        assert!(said(&world, defender, "You riposte"));
     }
 
     #[test]

@@ -6,18 +6,57 @@
     skills: {
         "basics": (
             name: "Brawling",
-            kind: Attack(verb: "punch", damage: (1, 3)),
+            description: "Fighting with fists, feet and whatever's in reach. Everyone knows a little, and it's what you fall back on.",
+            kind: Attack(damage: (1, 3)),
+            text: (
+                hit: (
+                    actor: "You punch {target}.",
+                    target: "{actor} punches you.",
+                    room: "{actor} punches {target}.",
+                ),
+                miss: (
+                    actor: "You swing at {target}, but miss.",
+                    target: "{actor} swings at you, but misses.",
+                    room: "{actor} swings at {target}, but misses.",
+                ),
+            ),
         ),
         "kick": (
             name: "Kick",
-            kind: Technique((with: "brawling:basics", verb: "kick", cost: Stamina(1), damage: 2)),
+            description: "A swift kick that lands harder than a punch, for a little stamina.",
+            kind: Technique((with: "brawling:basics", cost: Stamina(1), damage: 2)),
             requires: Skill("brawling:basics", 15),
+            text: (
+                hit: (
+                    actor: "You kick {target}.",
+                    target: "{actor} kicks you.",
+                    room: "{actor} kicks {target}.",
+                ),
+                miss: (
+                    actor: "You kick at {target}, but miss.",
+                    target: "{actor} kicks at you, but misses.",
+                    room: "{actor} kicks at {target}, but misses.",
+                ),
+            ),
         ),
         "grapple": (
             name: "Grapple",
-            kind: Technique((with: "brawling:basics", verb: "grab", cost: Stamina(2),
-                strike: Harmless, effects: [Hold(rounds: 2)])),
+            description: "Grab hold of a foe and pin them: for two turns they can't flee, and they defend poorly.",
+            kind: Technique((with: "brawling:basics", cost: Stamina(2), strike: Harmless,
+                effects: [Hold(rounds: 2)])),
             requires: Skill("brawling:basics", 15),
+            text: (
+                hit: (
+                    actor: "You grab {target} and hold on.",
+                    target: "{actor} grabs you and holds on.",
+                    room: "{actor} grabs {target} and holds on.",
+                ),
+                miss: (
+                    actor: "You grab at {target}, but they slip away.",
+                    target: "{actor} grabs at you, but you slip away.",
+                    room: "{actor} grabs at {target}, who slips away.",
+                ),
+            ),
         ),
     },
 )

@@ -70,7 +70,8 @@ impl Plugin for SkillsPlugin {
             .add_systems(Update, (sync_skill_defs, practise_passives))
             .add_command(
                 CommandSpec::new("skills", Category::Character)
-                    .summary("list your skills, their levels, and how warmed up they are"),
+                    .usage("skills [<skill>]")
+                    .summary("list your skills, their levels and how warmed up they are, or read about one"),
                 skills_cmd,
             )
             .add_command(
@@ -117,7 +118,13 @@ pub enum Rarity {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SkillDef {
     pub name: String,
+    /// What players read about it: what it is and does.
+    pub description: String,
     pub kind: SkillKind,
+    /// What everyone sees when it's used. Required for every skill that shows itself in play
+    /// (attacks, techniques, counters and active skills); see [`SkillDef::check`].
+    #[serde(default)]
+    pub text: Option<SkillText>,
     /// The level at which it's mastered.
     #[serde(default = "default_max_level")]
     pub max_level: u32,
@@ -132,6 +139,82 @@ pub struct SkillDef {
     /// Who may learn it. Checked by teaching later; starting skills are granted regardless.
     #[serde(default)]
     pub requires: Option<Condition>,
+}
+
+impl SkillDef {
+    /// Whether it has all the text its kind shows in play, so none is forgotten. A skill that
+    /// fails this keeps its whole tree from loading.
+    pub fn check(&self) -> Result<(), String> {
+        if self.description.trim().is_empty() {
+            return Err("needs a description".into());
+        }
+        let (target, miss) = match &self.kind {
+            // Struck at someone, so their view and a miss are needed.
+            SkillKind::Attack { .. } => (true, true),
+            SkillKind::Technique(t) if t.strike == StrikeKind::None => (false, false),
+            SkillKind::Technique(_) => (true, true),
+            SkillKind::Passive {
+                counter: Some(_), ..
+            } => (true, false),
+            // Its command says whether it worked.
+            SkillKind::Active { .. } => (false, true),
+            // Nothing to show.
+            SkillKind::Passive { .. } | SkillKind::Aura { .. } => return Ok(()),
+        };
+        let Some(text) = &self.text else {
+            return Err("needs text: what it looks like when used".into());
+        };
+        if target && text.hit.target.is_none() {
+            return Err("needs text for its target (hit.target)".into());
+        }
+        match &text.miss {
+            None if miss => Err("needs text for when it misses or fails (miss)".into()),
+            Some(lines) if target && lines.target.is_none() => {
+                Err("needs text for its target when it misses (miss.target)".into())
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+/// What everyone sees when a skill is used, as templates filled in at the time: `{actor}` is the
+/// user and `{target}` what it's used on, and a command can offer more (`pick` gives `{door}`).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SkillText {
+    /// When it works: a blow that lands, a lock that gives.
+    pub hit: Lines,
+    /// When it doesn't: a miss, a lock that won't give.
+    #[serde(default)]
+    pub miss: Option<Lines>,
+}
+
+/// One moment, as each onlooker sees it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Lines {
+    /// What the user sees: "You kick {target}."
+    pub actor: String,
+    /// What the one it's used on sees, when that's someone: "{actor} kicks you."
+    #[serde(default)]
+    pub target: Option<String>,
+    /// What everyone else there sees: "{actor} kicks {target}."
+    pub room: String,
+    /// What's heard through a door, for skills used on one.
+    #[serde(default)]
+    pub beyond: Option<String>,
+}
+
+/// Fill in a text template: each `{name}` from `with`. A line that starts with a name, like
+/// "{actor} kicks you.", gets its capital letter: "The town guard kicks you."
+pub fn fill(template: &str, with: &[(&str, &str)]) -> String {
+    let mut text = template.to_string();
+    for (name, value) in with {
+        text = text.replace(&format!("{{{name}}}"), value);
+    }
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => text,
+    }
 }
 
 fn default_max_level() -> u32 {
@@ -171,8 +254,6 @@ pub enum SkillKind {
     /// own and needs a weapon that uses it in hand; an unarmed or natural attack (Brawling, a
     /// rat's Bite) has its own.
     Attack {
-        /// What it does, as the attacker says it: "punch" ("Grok punches the rat").
-        verb: String,
         /// Damage before the Strength bonus, low to high, for attacks made without a weapon.
         #[serde(default)]
         damage: Option<(u32, u32)>,
@@ -285,8 +366,6 @@ pub fn boosts(skills: &Skills, defs: &SkillDefs) -> Boosts {
 pub struct Technique {
     /// The attack skill it's made with, `tree:skill`; its weapon (or fists) must be ready.
     pub with: String,
-    /// What it does: "kick" ("Grok kicks the rat").
-    pub verb: String,
     #[serde(default)]
     pub cost: Cost,
     /// Added to the attack rating.
@@ -877,6 +956,22 @@ fn skills_cmd(
     let Ok((skills, attributes)) = sheets.get(inv.entity) else {
         return;
     };
+    let wanted = inv.args.trim();
+    if !wanted.is_empty() {
+        let text = match defs.find_known(skills, wanted) {
+            Some(skill) => {
+                let tree = defs.trees.get(&skill.tree).cloned().unwrap_or_default();
+                let level = skills.0.get(&skill.key).map_or(0, |s| s.level);
+                format!(
+                    "\x1b[1m{}\x1b[0m ({tree}), level {level} of {}\r\n{}",
+                    skill.def.name, skill.def.max_level, skill.def.description
+                )
+            }
+            None => format!("You don't know a skill called '{wanted}'."),
+        };
+        deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+        return;
+    }
     let text = skills_text(
         skills,
         attributes,
@@ -1168,6 +1263,8 @@ enum SkillTreeLoaderError {
     Io(#[from] std::io::Error),
     #[error("could not parse skill tree: {0}")]
     Ron(#[from] ron::error::SpannedError),
+    #[error("skill {0}")]
+    Incomplete(String),
 }
 
 impl AssetLoader for SkillTreeLoader {
@@ -1185,6 +1282,11 @@ impl AssetLoader for SkillTreeLoader {
         reader.read_to_end(&mut bytes).await?;
         let mut tree: SkillTreeDef = ron_options().from_bytes(&bytes)?;
         tree.id = tree_id(load_context.path().path());
+        for (id, skill) in &tree.skills {
+            skill.check().map_err(|err| {
+                SkillTreeLoaderError::Incomplete(format!("{}:{id} {err}", tree.id))
+            })?;
+        }
         Ok(tree)
     }
 
@@ -1270,6 +1372,8 @@ mod tests {
             attribute: Attribute::Body,
             def: SkillDef {
                 name: "Toughness".into(),
+                description: String::new(),
+                text: None,
                 kind: SkillKind::Passive {
                     triggers: Vec::new(),
                     counter: None,
@@ -1317,6 +1421,8 @@ mod tests {
             attribute: Attribute::Strength,
             def: SkillDef {
                 name: key.into(),
+                description: String::new(),
+                text: None,
                 kind: SkillKind::Passive {
                     triggers: Vec::new(),
                     counter: None,
@@ -1435,6 +1541,50 @@ mod tests {
     }
 
     #[test]
+    fn skills_that_show_in_play_must_say_how() {
+        let (_, mut skill) = tree_skill("brawling:basics", None);
+        skill.def.description = "Fists.".into();
+        // A passive with nothing to show needs only its description.
+        assert!(skill.def.check().is_ok());
+        skill.def.kind = SkillKind::Attack {
+            damage: Some((1, 3)),
+            cost: Cost::Free,
+        };
+        assert!(skill.def.check().unwrap_err().contains("needs text"));
+        let lines = |target: Option<&str>| Lines {
+            actor: "You punch {target}.".into(),
+            target: target.map(String::from),
+            room: "{actor} punches {target}.".into(),
+            beyond: None,
+        };
+        skill.def.text = Some(SkillText {
+            hit: lines(Some("{actor} punches you.")),
+            miss: None,
+        });
+        assert!(skill.def.check().unwrap_err().contains("miss"));
+        skill.def.text = Some(SkillText {
+            hit: lines(Some("{actor} punches you.")),
+            miss: Some(lines(None)),
+        });
+        assert!(skill.def.check().unwrap_err().contains("miss.target"));
+        skill.def.text = Some(SkillText {
+            hit: lines(Some("{actor} punches you.")),
+            miss: Some(lines(Some("{actor} swings at you, but misses."))),
+        });
+        assert!(skill.def.check().is_ok());
+        skill.def.description.clear();
+        assert!(skill.def.check().unwrap_err().contains("description"));
+        // Filled in, with a capital where a name starts the line.
+        assert_eq!(
+            fill(
+                "{actor} punches {target}.",
+                &[("actor", "the guard"), ("target", "Grok")]
+            ),
+            "The guard punches Grok."
+        );
+    }
+
+    #[test]
     fn character_level_is_total_levels_over_five() {
         let mut skills = Skills::default();
         for (key, level) in [("a:x", 3), ("a:y", 4), ("b:z", 2)] {
@@ -1460,6 +1610,31 @@ mod tests {
                 for (id, skill) in &tree.skills {
                     if let SkillKind::Active { command, .. } = &skill.kind {
                         assert!(!command.is_empty(), "{id} has no command");
+                    }
+                    // Its text is all there, and every placeholder is one the game fills in.
+                    if let Err(err) = skill.check() {
+                        panic!("{} {id} {err}", path.display());
+                    }
+                    let all = skill
+                        .text
+                        .iter()
+                        .flat_map(|t| std::iter::once(&t.hit).chain(&t.miss));
+                    for lines in all {
+                        let templates =
+                            [Some(&lines.actor), lines.target.as_ref(), Some(&lines.room)];
+                        for template in templates
+                            .into_iter()
+                            .chain([lines.beyond.as_ref()])
+                            .flatten()
+                        {
+                            let filled =
+                                fill(template, &[("actor", "a"), ("target", "b"), ("door", "c")]);
+                            assert!(
+                                !filled.contains('{'),
+                                "{} {id}: unknown placeholder in {template:?}",
+                                path.display()
+                            );
+                        }
                     }
                 }
                 assert!(!tree_id(&path).contains('.'), "{}", path.display());

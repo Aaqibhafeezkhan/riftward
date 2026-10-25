@@ -147,7 +147,9 @@ Each step adds its trees' entry skills to the trainers in Riftwatch: the drill s
 
   ```ron
   "cleave": (name: "Cleave", requires: Skill("axes:basics", 15),
-      kind: Technique((with: "axes:basics", verb: "cleave", cost: Stamina(3), effects: [Cleave]))),
+      description: "A great swing that carries on into a second foe fighting you, even when it fells the first.",
+      kind: Technique((with: "axes:basics", cost: Stamina(3), effects: [Cleave])),
+      text: (hit: (...), miss: (...))),
   ```
 
 - **Counters:** a passive can answer a dodge with an immediate strike for a stamina, if the defender is fighting with the attack it counters with: Riposte.

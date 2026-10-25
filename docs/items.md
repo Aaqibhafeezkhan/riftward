@@ -36,7 +36,7 @@ A template can be a weapon:
 "short_sword": (name: "a short sword", bulk: Bulk(1), tags: ["blade"],
     weapon: (skill: "swordplay:basics", damage: (2, 5))),
 "knife": (name: "a knife", tags: ["blade"],
-    weapon: (skill: "knives:basics", damage: (1, 4))),   // `verb: "stab"` would override the skill's
+    weapon: (skill: "knives:basics", damage: (1, 4))),   // what a blow looks like is its skill's text
 ```
 
 Held in hand, it's what its holder fights with (see [Combat](architecture.md#combat)): its damage in anyone's hands, and better aim and more damage for those trained in its skill. `examine` shows a weapon's damage and skill. Armour comes later.
