@@ -1,9 +1,11 @@
-//! Doors: opening, closing, locking and forcing them. A door is targeted by the direction of its
-//! exit (`open north`) or by name (`open trapdoor`); directions are checked first.
+//! Doors and closable containers: opening, closing, locking and forcing them. A door is targeted
+//! by the direction of its exit (`open north`) or by name (`open trapdoor`); directions and doors
+//! are checked first, then containers you carry or that lie here (`unlock chest`).
 //!
-//! Locking and unlocking needs a copy of the lock's key item in your pack. Builders can lock and
-//! unlock any door without one, for testing.
+//! Locking and unlocking needs a copy of the lock's key item on you. Builders can lock and unlock
+//! anything without one, for testing.
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
@@ -11,12 +13,12 @@ use crate::command::Invocation;
 use crate::commands::movement::{full_direction, is_direction, toward};
 use crate::db::Permission;
 use crate::dice::Dice;
-use crate::items::{ItemLocation, ItemQuery};
+use crate::items::{
+    Item, ItemLocation, ItemTemplates, Snapshot, capitalized, carries, with_keywords,
+};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::targeting::{Keywords, Target};
-use crate::world::{Door, DoorKey, DoorState, Exits, ItemKey};
-
-pub type DoorQuery<'w, 's> = Query<'w, 's, (&'static mut Door, &'static Keywords)>;
+use crate::world::{Door, DoorKey, DoorState, Exits, ItemKey, LockDef, without_article};
 
 /// What a door argument refers to, from inside one room.
 pub enum DoorLookup {
@@ -77,75 +79,156 @@ pub fn find_door<'a>(
     }
 }
 
-/// The player, their door, the exit it's on, and the room on the other side.
-struct Doorway {
-    actor: Actor,
-    door: Entity,
-    other_side: Entity,
+/// Everything a lock command needs to find and change doors and containers.
+#[derive(SystemParam)]
+pub struct Lockables<'w, 's> {
+    rooms: RoomQuery<'w, 's>,
+    doors: Query<'w, 's, (&'static mut Door, &'static DoorKey)>,
+    items: Query<'w, 's, (Entity, &'static mut Item, &'static ItemLocation)>,
+    keywords: Query<'w, 's, &'static Keywords>,
+    templates: Res<'w, ItemTemplates>,
 }
 
-fn doorway(
+/// The door or container a command acts on, as it is now.
+struct Lockable {
+    actor: Actor,
+    kind: Kind,
+    name: String,
+    state: DoorState,
+    lock: Option<LockDef>,
+    /// The zone a key named without a zone belongs to.
+    key_zone: String,
+}
+
+enum Kind {
+    Door { entity: Entity, other_side: Entity },
+    Container(Entity),
+}
+
+impl Lockable {
+    /// "the heavy oak door", for the middle of a sentence.
+    fn the(&self) -> String {
+        format!("the {}", without_article(&self.name))
+    }
+
+    /// Tell the player and the room what happened; for a door, the room beyond hears too.
+    fn announce(&self, you: String, room: String, beyond: String) -> Vec<Outgoing> {
+        let mut out = vec![
+            Outgoing::line(self.actor.entity, you),
+            Outgoing::Room {
+                room: self.actor.room,
+                except: self.actor.entity,
+                text: room + "\r\n",
+            },
+        ];
+        if let Kind::Door { other_side, .. } = self.kind
+            && other_side != self.actor.room
+        {
+            out.push(Outgoing::Room {
+                room: other_side,
+                except: self.actor.entity,
+                text: beyond + "\r\n",
+            });
+        }
+        out
+    }
+}
+
+fn find_lockable(
     inv: &Invocation,
     players: &PlayerQuery,
-    rooms: &RoomQuery,
-    doors: &DoorQuery,
-) -> Result<Doorway, String> {
+    world: &Lockables,
+) -> Result<Lockable, String> {
     let actor = Actor::get(players, inv.entity).ok_or_else(String::new)?;
     if inv.args.is_empty() {
         return Err(inv.usage_error());
     }
-    let (_, _, exits) = rooms.get(actor.room).map_err(|_| String::new())?;
-    match find_door(&inv.args, exits, |e| doors.get(e).ok().map(|(_, k)| k)) {
-        DoorLookup::Door { door, dir } => Ok(Doorway {
-            other_side: exits.0[&dir].to,
-            actor,
-            door,
-        }),
+    let (_, _, exits) = world.rooms.get(actor.room).map_err(|_| String::new())?;
+    match find_door(&inv.args, exits, |e| world.keywords.get(e).ok()) {
+        DoorLookup::Door { door, dir } => {
+            let (found, key) = world.doors.get(door).map_err(|_| String::new())?;
+            Ok(Lockable {
+                kind: Kind::Door {
+                    entity: door,
+                    other_side: exits.0[&dir].to,
+                },
+                name: found.name.clone(),
+                state: found.state,
+                lock: found.lock.clone(),
+                key_zone: key.zone.clone(),
+                actor,
+            })
+        }
         DoorLookup::NoDoor { dir } => Err(format!("There's no door {}.", toward(&dir))),
         DoorLookup::NotHere if is_direction(&inv.args.to_lowercase()) => Err(format!(
             "There's no way out {}.",
             toward(full_direction(&inv.args.to_lowercase()))
         )),
-        DoorLookup::NotHere => Err(format!("You don't see a door called '{}' here.", inv.args)),
+        DoorLookup::NotHere => {
+            let snapshot = Snapshot::new(
+                world.items.iter().map(|(e, i, l)| (e, i, *l)),
+                &world.templates,
+            );
+            let reach: Vec<_> = snapshot
+                .reachable(actor.entity, actor.room)
+                .into_iter()
+                .filter(|e| snapshot.is_container(*e))
+                .collect();
+            let target = Target::parse(&inv.args).ok_or_else(String::new)?;
+            let entity = target
+                .find_one(actor.entity, with_keywords(reach, &world.keywords))
+                .filter(|e| *e != actor.entity)
+                .ok_or_else(|| format!("You don't see {} here.", target.describe()))?;
+            let (_, item, _) = world.items.get(entity).map_err(|_| String::new())?;
+            let spec = world
+                .templates
+                .0
+                .get(&item.key)
+                .and_then(|def| def.container.as_ref());
+            let closable = spec.is_some_and(|c| c.lock.is_some() || c.state != DoorState::Open);
+            if !closable {
+                return Err(format!(
+                    "{} doesn't open or close.",
+                    capitalized(&item.name)
+                ));
+            }
+            Ok(Lockable {
+                kind: Kind::Container(entity),
+                name: item.name.clone(),
+                state: item.state,
+                lock: spec.and_then(|c| c.lock.clone()),
+                key_zone: item.key.zone.clone(),
+                actor,
+            })
+        }
     }
 }
 
-/// Tell the player, the room, and the room on the other side what happened to a door.
-fn announce(way: &Doorway, you: String, room: String, beyond: String) -> Vec<Outgoing> {
-    let mut out = vec![
-        Outgoing::line(way.actor.entity, you),
-        Outgoing::Room {
-            room: way.actor.room,
-            except: way.actor.entity,
-            text: room + "\r\n",
-        },
-    ];
-    if way.other_side != way.actor.room {
-        out.push(Outgoing::Room {
-            room: way.other_side,
-            except: way.actor.entity,
-            text: beyond + "\r\n",
-        });
-    }
-    out
-}
-
-/// Run a door command: find the door, then let `act` change it and say what happened.
-fn with_door(
+/// Run a lock command: find the door or container, let `act` decide its new state and what
+/// everyone sees, then apply it.
+fn with_lockable(
     inv: &Invocation,
     players: &mut PlayerQuery,
-    rooms: &RoomQuery,
-    doors: &mut DoorQuery,
-    act: impl FnOnce(&Doorway, &mut Door) -> Result<Vec<Outgoing>, String>,
+    world: &mut Lockables,
+    act: impl FnOnce(&Lockable, &Lockables) -> Result<(DoorState, Vec<Outgoing>), String>,
 ) {
-    let out = match doorway(inv, players, rooms, doors) {
-        Ok(way) => match doors.get_mut(way.door) {
-            Ok((mut door, _)) => act(&way, &mut door),
-            Err(_) => Err(String::new()),
-        },
-        Err(err) => Err(err),
-    };
-    let out = match out {
+    let result = find_lockable(inv, players, world).and_then(|target| {
+        let (state, out) = act(&target, world)?;
+        match target.kind {
+            Kind::Door { entity, .. } => {
+                if let Ok((mut door, _)) = world.doors.get_mut(entity) {
+                    door.state = state;
+                }
+            }
+            Kind::Container(entity) => {
+                if let Ok((_, mut item, _)) = world.items.get_mut(entity) {
+                    item.state = state;
+                }
+            }
+        }
+        Ok(out)
+    });
+    let out = match result {
         Ok(out) => out,
         Err(err) if err.is_empty() => Vec::new(),
         Err(err) => vec![Outgoing::line(inv.entity, err)],
@@ -153,138 +236,110 @@ fn with_door(
     deliver(out, players);
 }
 
-pub fn open(
-    In(inv): In<Invocation>,
-    mut players: PlayerQuery,
-    rooms: RoomQuery,
-    mut doors: DoorQuery,
-) {
-    with_door(&inv, &mut players, &rooms, &mut doors, |way, door| {
-        match door.state {
+pub fn open(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockables) {
+    with_lockable(&inv, &mut players, &mut world, |it, _| {
+        match it.state {
             DoorState::Open => return Err("It's already open.".into()),
             DoorState::Locked => return Err("It's locked.".into()),
-            DoorState::Closed => door.state = DoorState::Open,
+            DoorState::Closed => {}
         }
-        Ok(announce(
-            way,
-            format!("You open {}.", door.the()),
-            format!("{} opens {}.", way.actor.name, door.the()),
-            format!("{} opens.", door.the_capitalized()),
+        let the = it.the();
+        Ok((
+            DoorState::Open,
+            it.announce(
+                format!("You open {the}."),
+                format!("{} opens {the}.", it.actor.name),
+                format!("{} opens.", capitalized(&the)),
+            ),
         ))
     });
 }
 
-pub fn close(
-    In(inv): In<Invocation>,
-    mut players: PlayerQuery,
-    rooms: RoomQuery,
-    mut doors: DoorQuery,
-) {
-    with_door(&inv, &mut players, &rooms, &mut doors, |way, door| {
-        if !door.is_open() {
+pub fn close(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockables) {
+    with_lockable(&inv, &mut players, &mut world, |it, _| {
+        if it.state != DoorState::Open {
             return Err("It's already closed.".into());
         }
-        door.state = DoorState::Closed;
-        Ok(announce(
-            way,
-            format!("You close {}.", door.the()),
-            format!("{} closes {}.", way.actor.name, door.the()),
-            format!("{} closes.", door.the_capitalized()),
+        let the = it.the();
+        Ok((
+            DoorState::Closed,
+            it.announce(
+                format!("You close {the}."),
+                format!("{} closes {the}.", it.actor.name),
+                format!("{} closes.", capitalized(&the)),
+            ),
         ))
     });
 }
 
-/// Whether the player can work this lock: they carry a copy of its key item. A key named without
-/// a zone is in the door's zone. Builders can always, for testing.
-fn has_key(
-    way: &Doorway,
-    door: &Door,
-    door_keys: &Query<&DoorKey>,
-    items: &ItemQuery,
-) -> Result<(), String> {
-    if way.actor.role.can(Permission::Build) {
+/// Whether the player can work this lock: they carry a copy of its key item. A key named
+/// without a zone is in the door's or container's zone. Builders can always, for testing.
+fn has_key(it: &Lockable, world: &Lockables) -> Result<(), String> {
+    if it.actor.role.can(Permission::Build) {
         return Ok(());
     }
-    let Some(key) = door.lock.as_ref().and_then(|lock| lock.key.as_ref()) else {
+    let Some(key) = it.lock.as_ref().and_then(|lock| lock.key.as_ref()) else {
         return Err("It has no keyhole.".into());
     };
-    let zone = door_keys
-        .get(way.door)
-        .map(|k| k.zone.as_str())
-        .unwrap_or("");
-    let key = ItemKey::parse(key, zone);
-    let pack = ItemLocation::Carried(way.actor.entity);
-    let held = items
-        .iter()
-        .any(|(_, item, location)| *location == pack && item.key == key);
-    if held {
+    let key = ItemKey::parse(key, &it.key_zone);
+    let items = world.items.iter().map(|(e, i, l)| (e, i, *l));
+    if carries(items, it.actor.entity, &key) {
         Ok(())
     } else {
         Err("You don't have the key.".into())
     }
 }
 
-pub fn lock(
-    In(inv): In<Invocation>,
-    mut players: PlayerQuery,
-    rooms: RoomQuery,
-    mut doors: DoorQuery,
-    door_keys: Query<&DoorKey>,
-    items: ItemQuery,
-) {
-    with_door(&inv, &mut players, &rooms, &mut doors, |way, door| {
-        if door.lock.is_none() {
+pub fn lock(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockables) {
+    with_lockable(&inv, &mut players, &mut world, |it, world| {
+        if it.lock.is_none() {
             return Err("It has no lock.".into());
         }
-        match door.state {
+        match it.state {
             DoorState::Locked => return Err("It's already locked.".into()),
             DoorState::Open => return Err("You'll have to close it first.".into()),
             DoorState::Closed => {}
         }
-        has_key(way, door, &door_keys, &items)?;
-        door.state = DoorState::Locked;
-        Ok(announce(
-            way,
-            format!("You lock {}.", door.the()),
-            format!("{} locks {}.", way.actor.name, door.the()),
-            format!("You hear a click from {}.", door.the()),
+        has_key(it, world)?;
+        let the = it.the();
+        Ok((
+            DoorState::Locked,
+            it.announce(
+                format!("You lock {the}."),
+                format!("{} locks {the}.", it.actor.name),
+                format!("You hear a click from {the}."),
+            ),
         ))
     });
 }
 
-pub fn unlock(
-    In(inv): In<Invocation>,
-    mut players: PlayerQuery,
-    rooms: RoomQuery,
-    mut doors: DoorQuery,
-    door_keys: Query<&DoorKey>,
-    items: ItemQuery,
-) {
-    with_door(&inv, &mut players, &rooms, &mut doors, |way, door| {
-        if door.lock.is_none() {
+pub fn unlock(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockables) {
+    with_lockable(&inv, &mut players, &mut world, |it, world| {
+        if it.lock.is_none() {
             return Err("It has no lock.".into());
         }
-        if door.state != DoorState::Locked {
+        if it.state != DoorState::Locked {
             return Err("It isn't locked.".into());
         }
-        has_key(way, door, &door_keys, &items)?;
-        door.state = DoorState::Closed;
-        Ok(announce(
-            way,
-            format!("You unlock {}.", door.the()),
-            format!("{} unlocks {}.", way.actor.name, door.the()),
-            format!("You hear a click from {}.", door.the()),
+        has_key(it, world)?;
+        let the = it.the();
+        Ok((
+            DoorState::Closed,
+            it.announce(
+                format!("You unlock {the}."),
+                format!("{} unlocks {the}.", it.actor.name),
+                format!("You hear a click from {the}."),
+            ),
         ))
     });
 }
 
-/// Force a locked door open: Strength against the lock's sturdiness, as a ratio, with Luck.
-/// It only forces the door open; the lock still works afterwards.
+/// Force a locked door or container open: Strength against the lock's sturdiness, as a ratio,
+/// with Luck. It only forces it open; the lock still works afterwards.
 pub fn bash(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
-    rooms: RoomQuery,
-    mut doors: DoorQuery,
+    mut world: Lockables,
     sheets: Query<&Attributes>,
     mut dice: ResMut<Dice>,
 ) {
@@ -292,31 +347,35 @@ pub fn bash(
         .get(inv.entity)
         .map(|a| (a.get(Attribute::Strength), a.get(Attribute::Luck)))
         .unwrap_or((1, 0));
-    with_door(&inv, &mut players, &rooms, &mut doors, |way, door| {
-        match door.state {
+    with_lockable(&inv, &mut players, &mut world, |it, _| {
+        match it.state {
             DoorState::Open => return Err("It's already open.".into()),
             DoorState::Closed => return Err("It isn't locked; just open it.".into()),
             DoorState::Locked => {}
         }
-        let Some(sturdiness) = door.lock.as_ref().and_then(|lock| lock.bash) else {
+        let Some(sturdiness) = it.lock.as_ref().and_then(|lock| lock.bash) else {
             return Err("It's far too sturdy to force.".into());
         };
         let strength = f64::from(strength.max(1));
         let chance = strength / (strength + f64::from(sturdiness.max(1)));
+        let the = it.the();
         if dice.chance(luck, chance) {
-            door.state = DoorState::Open;
-            Ok(announce(
-                way,
-                format!("You bash {} open!", door.the()),
-                format!("{} bashes {} open!", way.actor.name, door.the()),
-                format!("{} bursts open!", door.the_capitalized()),
+            Ok((
+                DoorState::Open,
+                it.announce(
+                    format!("You bash {the} open!"),
+                    format!("{} bashes {the} open!", it.actor.name),
+                    format!("{} bursts open!", capitalized(&the)),
+                ),
             ))
         } else {
-            Ok(announce(
-                way,
-                format!("You throw yourself against {}, but it holds.", door.the()),
-                format!("{} slams into {}.", way.actor.name, door.the()),
-                format!("Something slams against {}.", door.the()),
+            Ok((
+                DoorState::Locked,
+                it.announce(
+                    format!("You throw yourself against {the}, but it holds."),
+                    format!("{} slams into {the}.", it.actor.name),
+                    format!("Something slams against {the}."),
+                ),
             ))
         }
     });

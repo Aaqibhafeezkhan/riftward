@@ -48,6 +48,8 @@ Builders build from inside the game. Type `help` to see the commands your role a
 | `dig <dir> <name>` | Create a room through a new exit, with a way back |
 | `desc <text>`, `rename <name>` | Edit the room you're standing in |
 | `link <dir> <room>`, `unlink <dir>` | Add or remove a one-way exit |
+| `item`, `item new <id> <name>`, `item <field> <id> <value>` | List, show, create and edit this zone's item templates (fields: name, desc, keywords, bulk, tags, wear, fixed, container) |
+| `create <item>`, `destroy <item>` | Make an item from a template, or destroy one for good |
 | `door <dir> <name>`, `door <dir> lock`, `door <dir> remove` | Add a door to an exit (shared with the way back), give it a lock, or remove it; `door <dir>` shows it |
 | `zone create <id> <name>`, `zone rename <name>` | Create or rename a zone |
 

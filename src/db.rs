@@ -50,13 +50,17 @@ const SCHEMA: &str = "
         PRIMARY KEY (character_id, attribute)
     );
 
-    -- Real items: ones a player has touched. Exactly one of `room` and `character_id` is set.
+    -- Real items: ones a player has touched. An item is in exactly one place: lying in a `room`,
+    -- with a character (`character_id`, held when `slot` is 'held', else worn in that slot), or
+    -- inside another item (`container_id`).
     CREATE TABLE IF NOT EXISTS items (
         id           INTEGER PRIMARY KEY,
         template     TEXT NOT NULL,        -- zone:item
-        room         TEXT,                 -- zone:room, when lying in a room
-        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE, -- when carried
-        dropped_at   INTEGER               -- unix seconds, when it was last put down
+        room         TEXT,                 -- zone:room
+        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+        dropped_at   INTEGER,              -- unix seconds, when it was last put down
+        slot         TEXT,
+        container_id INTEGER REFERENCES items(id) ON DELETE CASCADE
     );
 ";
 
@@ -85,15 +89,22 @@ pub type DbResult<T> = Result<T, DbError>;
 pub enum ItemPlace {
     /// Lying in a room (`zone:room`).
     Room(String),
-    /// Carried by a character.
-    Carried(i64),
+    /// In a character's hands.
+    Held(i64),
+    /// Worn by a character, in a slot like `back` or `belt`.
+    Worn(i64, &'static str),
+    /// Inside another real item.
+    Inside(i64),
 }
 
 impl ItemPlace {
-    fn columns(&self) -> (Option<&str>, Option<i64>) {
+    /// The (room, character_id, slot, container_id) columns for this place.
+    fn columns(&self) -> (Option<&str>, Option<i64>, Option<&str>, Option<i64>) {
         match self {
-            ItemPlace::Room(room) => (Some(room), None),
-            ItemPlace::Carried(character) => (None, Some(*character)),
+            ItemPlace::Room(room) => (Some(room), None, None, None),
+            ItemPlace::Held(character) => (None, Some(*character), Some("held"), None),
+            ItemPlace::Worn(character, slot) => (None, Some(*character), Some(slot), None),
+            ItemPlace::Inside(container) => (None, None, None, Some(*container)),
         }
     }
 
@@ -106,7 +117,7 @@ impl ItemPlace {
                     .map(|d| d.as_secs() as i64)
                     .unwrap_or_default(),
             ),
-            ItemPlace::Carried(_) => None,
+            _ => None,
         }
     }
 }
@@ -188,6 +199,20 @@ impl Database {
     pub fn open(path: &str) -> rusqlite::Result<Self> {
         let conn = Connection::open(path)?;
         conn.execute_batch(SCHEMA)?;
+        // The first items table had no slot or container columns.
+        for (column, ty) in [
+            ("slot", "TEXT"),
+            ("container_id", "INTEGER REFERENCES items(id)"),
+        ] {
+            let exists: bool = conn.query_row(
+                "SELECT EXISTS (SELECT 1 FROM pragma_table_info('items') WHERE name = ?1)",
+                [column],
+                |row| row.get(0),
+            )?;
+            if !exists {
+                conn.execute_batch(&format!("ALTER TABLE items ADD COLUMN {column} {ty};"))?;
+            }
+        }
         Ok(Self(Mutex::new(conn)))
     }
 
@@ -331,19 +356,28 @@ impl Database {
     /// Save a new real item at `location` and return its id.
     pub fn create_item(&self, template: &str, location: &ItemPlace) -> DbResult<i64> {
         let conn = self.conn();
-        let (room, character) = location.columns();
+        let (room, character, slot, container) = location.columns();
         conn.execute(
-            "INSERT INTO items (template, room, character_id, dropped_at) VALUES (?1, ?2, ?3, ?4)",
-            params![template, room, character, location.dropped_at()],
+            "INSERT INTO items (template, room, character_id, slot, container_id, dropped_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                template,
+                room,
+                character,
+                slot,
+                container,
+                location.dropped_at()
+            ],
         )?;
         Ok(conn.last_insert_rowid())
     }
 
     pub fn move_item(&self, id: i64, location: &ItemPlace) -> DbResult<()> {
-        let (room, character) = location.columns();
+        let (room, character, slot, container) = location.columns();
         self.conn().execute(
-            "UPDATE items SET room = ?1, character_id = ?2, dropped_at = ?3 WHERE id = ?4",
-            params![room, character, location.dropped_at(), id],
+            "UPDATE items SET room = ?1, character_id = ?2, slot = ?3, container_id = ?4,
+             dropped_at = ?5 WHERE id = ?6",
+            params![room, character, slot, container, location.dropped_at(), id],
         )?;
         Ok(())
     }
@@ -363,12 +397,26 @@ impl Database {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    /// Every item a character carries: (id, template).
-    pub fn items_carried(&self, character_id: i64) -> DbResult<Vec<(i64, String)>> {
+    /// Every item a character holds or wears: (id, template, slot). The slot is `held` for
+    /// items in their hands.
+    pub fn items_on_character(&self, character_id: i64) -> DbResult<Vec<(i64, String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, template, COALESCE(slot, 'held') FROM items
+             WHERE character_id = ?1 ORDER BY id",
+        )?;
+        let rows = stmt.query_map([character_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Every item inside a container: (id, template).
+    pub fn items_inside(&self, container_id: i64) -> DbResult<Vec<(i64, String)>> {
         let conn = self.conn();
         let mut stmt =
-            conn.prepare("SELECT id, template FROM items WHERE character_id = ?1 ORDER BY id")?;
-        let rows = stmt.query_map([character_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            conn.prepare("SELECT id, template FROM items WHERE container_id = ?1 ORDER BY id")?;
+        let rows = stmt.query_map([container_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
 

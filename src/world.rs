@@ -128,15 +128,159 @@ pub struct ItemDef {
     pub keywords: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
-    #[serde(default = "default_weight")]
-    pub weight: u32,
+    #[serde(default)]
+    pub bulk: Bulk,
+    /// Kinds like `key`, `scroll` or `potion`; specialised containers accept them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    /// The slot it's worn in, if it can be worn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wear: Option<Slot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container: Option<ContainerDef>,
+    /// Can't be picked up, like a chest bolted to the floor.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fixed: bool,
 }
 
-fn default_weight() -> u32 {
-    1
+/// Size and awkwardness, as in Pathfinder 2e: 10 Light make 1 Bulk.
+// `Bulk::Bulk` reads oddly in Rust, but zone files read naturally: `bulk: Bulk(2)`.
+#[allow(clippy::enum_variant_names)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Bulk {
+    Negligible,
+    #[default]
+    Light,
+    Bulk(u32),
+}
+
+impl Bulk {
+    /// In tenths of 1 Bulk, so Light is 1 and Bulk(1) is 10.
+    pub fn tenths(self) -> u32 {
+        match self {
+            Bulk::Negligible => 0,
+            Bulk::Light => 1,
+            Bulk::Bulk(n) => n * 10,
+        }
+    }
+
+    /// Parse a builder's `negligible`, `light`, or a whole number of Bulk.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "negligible" | "-" => Some(Bulk::Negligible),
+            "light" | "l" => Some(Bulk::Light),
+            n => n.parse().ok().map(Bulk::Bulk),
+        }
+    }
+}
+
+/// Show a quantity of Bulk in tenths the way players read it: "2", "L", "2.3".
+pub fn format_bulk(tenths: u32) -> String {
+    match (tenths / 10, tenths % 10) {
+        (0, 0) => "-".into(),
+        (0, 1) => "L".into(),
+        (whole, 0) => whole.to_string(),
+        (whole, tenth) => format!("{whole}.{tenth}"),
+    }
+}
+
+/// Where an item is worn.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Slot {
+    Head,
+    Neck,
+    Body,
+    Back,
+    Belt,
+    Feet,
+}
+
+impl Slot {
+    pub const ALL: [Slot; 6] = [
+        Slot::Head,
+        Slot::Neck,
+        Slot::Body,
+        Slot::Back,
+        Slot::Belt,
+        Slot::Feet,
+    ];
+
+    /// How many items can be worn in this slot at once: a belt takes several attachments.
+    pub fn capacity(self) -> usize {
+        match self {
+            Slot::Belt => 3,
+            _ => 1,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Slot::Head => "head",
+            Slot::Neck => "neck",
+            Slot::Body => "body",
+            Slot::Back => "back",
+            Slot::Belt => "belt",
+            Slot::Feet => "feet",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Slot::ALL
+            .into_iter()
+            .find(|slot| slot.name() == s.to_ascii_lowercase())
+    }
+}
+
+/// What a container holds and how much.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ContainerDef {
+    pub capacity: Capacity,
+    /// Tags it accepts; empty means anything. Specialised containers are filled first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accepts: Vec<String>,
+    /// The largest single item it takes, so a sword can't go in a pocket.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_item: Option<Bulk>,
+    /// Whether it starts open, closed or locked. Most containers are always open.
+    #[serde(default = "always_open", skip_serializing_if = "is_open")]
+    pub state: DoorState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock: Option<LockDef>,
+}
+
+fn always_open() -> DoorState {
+    DoorState::Open
+}
+
+fn is_open(state: &DoorState) -> bool {
+    *state == DoorState::Open
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Capacity {
+    /// This much Bulk.
+    Bulk(u32),
+    /// This many light items' worth: a belt pouch holds `Light(4)`.
+    Light(u32),
+    /// This many items, whatever their Bulk: a keyring holds `Count(10)`.
+    Count(u32),
 }
 
 impl ItemDef {
+    /// A plain item with just a name, as builders create them.
+    pub fn named(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            keywords: Vec::new(),
+            description: String::new(),
+            bulk: Bulk::default(),
+            tags: Vec::new(),
+            wear: None,
+            container: None,
+            fixed: false,
+        }
+    }
+
     pub fn keywords(&self) -> Keywords {
         if !self.keywords.is_empty() {
             return Keywords(self.keywords.iter().map(|k| k.to_lowercase()).collect());
@@ -186,6 +330,12 @@ pub struct LockDef {
     /// Sturdiness against `bash`; `None` means it can't be forced.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bash: Option<u32>,
+}
+
+/// How zone files are read and written: optional fields can be written plainly, as
+/// `wear: Back` rather than `wear: Some(Back)`. The explicit `Some(...)` form still works.
+pub fn ron_options() -> ron::Options {
+    ron::Options::default().with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
 }
 
 const ZONE_FILE_HEADER: &str = "\
@@ -239,7 +389,7 @@ impl ZoneDef {
 
     fn file_contents(&self) -> Result<String, SaveError> {
         let pretty = ron::ser::PrettyConfig::new().struct_names(false);
-        let body = ron::ser::to_string_pretty(self, pretty)?;
+        let body = ron_options().to_string_pretty(self, pretty)?;
         Ok(format!("{ZONE_FILE_HEADER}{body}\n"))
     }
 }
@@ -279,7 +429,7 @@ impl AssetLoader for ZoneDefLoader {
     ) -> Result<ZoneDef, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        let mut zone: ZoneDef = ron::de::from_bytes(&bytes)?;
+        let mut zone: ZoneDef = ron_options().from_bytes(&bytes)?;
         let path = load_context.path().path();
         zone.id = path
             .file_stem()
@@ -684,6 +834,23 @@ mod tests {
     }
 
     #[test]
+    fn optional_fields_are_written_plainly() {
+        let def = ItemDef {
+            wear: Some(Slot::Back),
+            ..ItemDef::named("a backpack")
+        };
+        let pretty = ron::ser::PrettyConfig::new().struct_names(false);
+        let written = ron_options().to_string_pretty(&def, pretty).unwrap();
+        assert!(written.contains("wear: Back"), "{written}");
+        let read: ItemDef = ron_options().from_str(&written).unwrap();
+        assert_eq!(read, def);
+        let explicit: ItemDef = ron_options()
+            .from_str("(name: \"a pack\", wear: Some(Back))")
+            .unwrap();
+        assert_eq!(explicit.wear, Some(Slot::Back));
+    }
+
+    #[test]
     fn door_names_read_naturally() {
         let door = |name: &str| Door {
             name: name.into(),
@@ -707,7 +874,8 @@ mod tests {
             let path = entry.unwrap().path();
             if path.extension().is_some_and(|e| e == "ron") {
                 let text = std::fs::read_to_string(&path).unwrap();
-                let mut zone: ZoneDef = ron::from_str(&text)
+                let mut zone: ZoneDef = ron_options()
+                    .from_str(&text)
                     .unwrap_or_else(|err| panic!("{} doesn't parse: {err}", path.display()));
                 zone.id = path.file_stem().unwrap().to_string_lossy().into_owned();
                 zones.push(zone);
@@ -731,6 +899,14 @@ mod tests {
 
         let mut problems = Vec::new();
         for zone in &zones {
+            for (item_id, item) in &zone.items {
+                let key = item.container.as_ref().and_then(|c| c.lock.as_ref());
+                if let Some(key) = key.and_then(|lock| lock.key.as_ref())
+                    && !item_exists(&ItemKey::parse(key, &zone.id))
+                {
+                    problems.push(format!("item {}:{item_id}: no key item '{key}'", zone.id));
+                }
+            }
             for (door_id, door) in &zone.doors {
                 if let Some(key) = door.lock.as_ref().and_then(|lock| lock.key.as_ref())
                     && !item_exists(&ItemKey::parse(key, &zone.id))

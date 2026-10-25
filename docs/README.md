@@ -20,7 +20,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Designed |
 | [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
-| [Items, containers and locks](items.md) | Item templates and location, what survives a restart, decay, unique items, containers, locks and keys, traps | Designed |
+| [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Designed |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds | Outlined |
@@ -32,6 +32,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Zone files in `assets/zones`, hot-reloaded, plus in-game building: `dig`, `desc`, `link`, `zone create`, and more.
 - Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
 - Riftwatch, the starting town, and the sewers beneath it ([map](riftwatch.md#map)).
+- Items: templates with Bulk and tags, hands, wear slots, containers (backpacks, pouches, keyrings, pockets, chests) with automatic placement, encumbrance, keys, and real items that survive restarts.
 - Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.

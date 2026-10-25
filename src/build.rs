@@ -19,8 +19,8 @@ use crate::output::{
 };
 use crate::targeting::{Keywords, Target};
 use crate::world::{
-    DoorDef, DoorKey, DoorState, ExitDef, ItemDef, ItemKey, LockDef, RoomDef, RoomIndex, RoomKey,
-    ZONE_ENTRANCE, ZoneDef, without_article,
+    Bulk, Capacity, ContainerDef, DoorDef, DoorKey, DoorState, ExitDef, ItemDef, ItemKey, LockDef,
+    RoomDef, RoomIndex, RoomKey, Slot, ZONE_ENTRANCE, ZoneDef, format_bulk, without_article,
 };
 
 pub struct BuildPlugin;
@@ -96,8 +96,8 @@ impl Plugin for BuildPlugin {
             .add_command(
                 build(
                     "item",
-                    "item [<id> | new <id> <name> | name|desc|keywords|weight <id> <value>]",
-                    "list, show, create or edit this zone's item templates",
+                    "item [<id> | new <id> <name> | <field> <id> <value>]",
+                    "list, show, create or edit item templates; fields: name, desc, keywords, bulk, tags, wear, fixed, container",
                 ),
                 item_cmd,
             )
@@ -1009,58 +1009,45 @@ fn item_template(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) 
                     .chars()
                     .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
             if !valid || value.is_empty() {
-                return Err(
-                    "Usage: item new <id> <name>, with an id of 2-32 lowercase letters, digits or underscores.".into(),
-                );
+                return Err("Usage: item new <id> <name>, with an id of 2-32 lowercase \
+                            letters, digits or underscores."
+                    .into());
             }
             if zone.items.contains_key(&id) {
                 return Err(format!("[{}:{id}] already exists.", here.zone));
             }
             edit_zone(zones, &here.zone, |zone| {
-                zone.items.insert(
-                    id.clone(),
-                    ItemDef {
-                        name: value.into(),
-                        keywords: Vec::new(),
-                        description: String::new(),
-                        weight: 1,
-                    },
-                );
+                zone.items.insert(id.clone(), ItemDef::named(value));
                 Ok(format!(
                     "Created item template {value} [{}:{id}]. Make one with 'create {id}'.",
                     here.zone
                 ))
             })
         }
-        "name" | "desc" | "keywords" | "weight" => {
+        "name" | "desc" | "keywords" | "bulk" | "tags" | "wear" | "fixed" | "container" => {
             if !zone.items.contains_key(&id) || value.is_empty() {
                 return Err(format!(
-                    "Usage: item {first} <id> <value>, for a template in [{}].",
-                    here.zone
+                    "Usage: item {first} <id> <value>, for a template in [{}].{}",
+                    here.zone,
+                    match first {
+                        "bulk" => " Bulk is negligible, light, or a number.",
+                        "wear" => " Slots: head, neck, body, back, belt, feet, or none.",
+                        "fixed" => " Use yes or no.",
+                        "container" => {
+                            " Use bulk <n>, light <n> or count <n>, then any tags it \
+                             accepts; or none."
+                        }
+                        _ => "",
+                    }
                 ));
             }
-            let weight = if first == "weight" {
-                Some(
-                    value
-                        .parse::<u32>()
-                        .map_err(|_| "Weights are whole numbers.".to_string())?,
-                )
-            } else {
-                None
-            };
+            let change = template_change(first, value)?;
             edit_zone(zones, &here.zone, |zone| {
                 let def = zone
                     .items
                     .get_mut(&id)
                     .ok_or_else(|| "That template no longer exists.".to_string())?;
-                match first {
-                    "name" => def.name = value.into(),
-                    "desc" => def.description = value.into(),
-                    "keywords" => {
-                        def.keywords = value.split_whitespace().map(str::to_lowercase).collect()
-                    }
-                    _ => def.weight = weight.unwrap_or(def.weight),
-                }
+                change(def);
                 Ok(describe_item_template(&here.zone, &id, def))
             })
         }
@@ -1074,17 +1061,107 @@ fn item_template(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) 
     }
 }
 
+/// A change to apply to an item template.
+type TemplateEdit = Box<dyn FnOnce(&mut ItemDef)>;
+
+/// Parse one `item <field> <id> <value>` edit into a change to apply to the template.
+fn template_change(field: &str, value: &str) -> Result<TemplateEdit, String> {
+    let value = value.to_string();
+    Ok(match field {
+        "name" => Box::new(move |def| def.name = value),
+        "desc" => Box::new(move |def| def.description = value),
+        "keywords" => Box::new(move |def| {
+            def.keywords = value.split_whitespace().map(str::to_lowercase).collect()
+        }),
+        "tags" => Box::new(move |def| {
+            def.tags = value.split_whitespace().map(str::to_lowercase).collect()
+        }),
+        "bulk" => {
+            let bulk = Bulk::parse(&value).ok_or("Bulk is negligible, light, or a number.")?;
+            Box::new(move |def| def.bulk = bulk)
+        }
+        "wear" => {
+            let slot = match value.as_str() {
+                "none" => None,
+                other => Some(
+                    Slot::parse(other)
+                        .ok_or("Slots are head, neck, body, back, belt and feet, or none.")?,
+                ),
+            };
+            Box::new(move |def| def.wear = slot)
+        }
+        "fixed" => {
+            let fixed = match value.as_str() {
+                "yes" | "true" | "on" => true,
+                "no" | "false" | "off" => false,
+                _ => return Err("Use 'yes' or 'no'.".into()),
+            };
+            Box::new(move |def| def.fixed = fixed)
+        }
+        _ => {
+            if value == "none" {
+                return Ok(Box::new(|def: &mut ItemDef| def.container = None));
+            }
+            let mut words = value.split_whitespace();
+            let usage = "Use bulk <n>, light <n> or count <n>, then any tags it accepts.";
+            let kind = words.next().unwrap_or("");
+            let n: u32 = words.next().and_then(|n| n.parse().ok()).ok_or(usage)?;
+            let capacity = match kind {
+                "bulk" => Capacity::Bulk(n),
+                "light" => Capacity::Light(n),
+                "count" => Capacity::Count(n),
+                _ => return Err(usage.into()),
+            };
+            let accepts: Vec<String> = words.map(str::to_lowercase).collect();
+            Box::new(move |def| {
+                let (state, lock, max_item) = def
+                    .container
+                    .take()
+                    .map(|c| (c.state, c.lock, c.max_item))
+                    .unwrap_or((DoorState::Open, None, None));
+                def.container = Some(ContainerDef {
+                    capacity,
+                    accepts,
+                    max_item,
+                    state,
+                    lock,
+                });
+            })
+        }
+    })
+}
+
 fn describe_item_template(zone: &str, id: &str, def: &ItemDef) -> String {
+    let none = |s: String| {
+        if s.is_empty() {
+            "(none)".to_string()
+        } else {
+            s
+        }
+    };
+    let container = def.container.as_ref().map(|c| {
+        let capacity = match c.capacity {
+            Capacity::Bulk(n) => format!("{n} Bulk"),
+            Capacity::Light(n) => format!("{n} light"),
+            Capacity::Count(n) => format!("{n} items"),
+        };
+        if c.accepts.is_empty() {
+            capacity
+        } else {
+            format!("{capacity}, only {}", c.accepts.join(", "))
+        }
+    });
     format!(
-        "{} [{zone}:{id}]\r\n  keywords: {}\r\n  weight: {}\r\n  description: {}",
+        "{} [{zone}:{id}]\r\n  keywords: {}\r\n  bulk: {}\r\n  tags: {}\r\n  wear: {}\r\n  \
+         container: {}\r\n  fixed: {}\r\n  description: {}",
         def.name,
         def.keywords().0.join(", "),
-        def.weight,
-        if def.description.is_empty() {
-            "(none)"
-        } else {
-            &def.description
-        }
+        format_bulk(def.bulk.tenths()),
+        none(def.tags.join(", ")),
+        def.wear.map_or("(none)", Slot::name),
+        container.unwrap_or_else(|| "(none)".into()),
+        if def.fixed { "yes" } else { "no" },
+        none(def.description.clone())
     )
 }
 

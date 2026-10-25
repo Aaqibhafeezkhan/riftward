@@ -7,7 +7,7 @@ use crate::command::Invocation;
 use crate::commands::doors::{DoorLookup, find_door};
 use crate::db::{Database, Permission};
 use crate::items::{
-    ItemLocation, ItemQuery, ItemTemplates, capitalized, describe_item, find_item, item_list,
+    ItemLocation, ItemQuery, ItemTemplates, capitalized, counted, describe_item, find_item,
 };
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::targeting::{Keywords, Target};
@@ -20,6 +20,7 @@ pub struct View<'w, 's> {
     pub rooms: RoomQuery<'w, 's>,
     pub doors: Query<'w, 's, &'static Door>,
     pub items: ItemQuery<'w, 's>,
+    pub templates: Res<'w, ItemTemplates>,
 }
 
 /// `look` describes the room; `look <target>` looks along an exit, at a door, at someone here, or
@@ -83,7 +84,7 @@ pub fn look(
                     "You look yourself over. You look ready for anything.\r\n".into()
                 }
                 Some(other) => format!("You see {}, standing here.\r\n", other.name),
-                None => match find_item(&inv.args, &actor, &view.items, &keywords) {
+                None => match find_item(&inv.args, &actor, &view.items, &keywords, &templates) {
                     Ok(item) => describe_item(item, &view.items, &templates) + "\r\n",
                     Err(err) => err + "\r\n",
                 },
@@ -279,7 +280,37 @@ pub fn describe_room(
         }
     );
 
-    for name in item_list(ItemLocation::Room(room), &view.items) {
+    // Fixed things, like a chest or a signpost, are part of the room; loose things lie in it.
+    let fixed = |entity: Entity| {
+        view.items
+            .get(entity)
+            .ok()
+            .and_then(|(_, item, _)| view.templates.0.get(&item.key))
+            .is_some_and(|def| def.fixed)
+    };
+    let mut here: Vec<_> = view
+        .items
+        .iter()
+        .filter(|(_, _, loc)| **loc == ItemLocation::Room(room))
+        .map(|(entity, _, _)| entity)
+        .collect();
+    here.sort();
+    for entity in here.iter().filter(|e| fixed(**e)) {
+        if let Ok((_, item, _)) = view.items.get(*entity) {
+            text += &format!("{} is here.\r\n", capitalized(&item.name));
+        }
+    }
+    let loose: Vec<_> = here
+        .iter()
+        .filter(|e| !fixed(**e))
+        .filter_map(|e| {
+            view.items
+                .get(*e)
+                .ok()
+                .map(|(_, item, _)| item.name.as_str())
+        })
+        .collect();
+    for name in counted(loose) {
         text += &format!("{} lies here.\r\n", capitalized(&name));
     }
 

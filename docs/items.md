@@ -1,34 +1,86 @@
 # Items, containers and locks
 
-[Design summary](README.md) · Status: designed, not built; next in the [build order](architecture.md#proposed-build-order)
+[Design summary](README.md) · Status: built, except decay, spawned items, unique items and loot tables (those need spawns and resets) and traps
 
 Items are entities defined by templates in zone files. They can be carried, worn, dropped, or put inside containers. An item becomes **real**, saved to the database, the moment a player touches it, and most items slowly **decay** when left lying around. Doors and containers share one **lock** model: open, closed or locked, with keys, lockpicking, bashing and traps.
 
-## Templates and location
+## Templates
 
-Zone files define item templates; [spawns](world.md#spawns-and-resets) place them in the world.
+Zone files define item templates; [spawns](world.md#spawns-and-resets) place them in the world, and builders make them with `create`.
 
 ```ron
 items: {
     "longsword": (name: "a longsword", keywords: ["longsword", "sword"],
-        description: "A plain, well-balanced blade.", weight: 3),
-    "bread": (name: "a loaf of bread", keywords: ["bread", "loaf"], weight: 1,
+        description: "A plain, well-balanced blade.", bulk: Bulk(1), tags: ["blade"]),
+    "iron_key": (name: "an iron key", bulk: Negligible, tags: ["key"]),
+    "bread": (name: "a loaf of bread", tags: ["food"],
         decay: Perishable(hours: 6, message: "The bread has gone mouldy and crumbles away.")),
-    "cellar_key": (name: "a small iron key", keywords: ["key", "iron"], weight: 0),
 }
 ```
 
-One **location** component, replacing `InRoom`, says where anything is: in a room, carried by someone, worn, or inside another item. Items are found with the usual [targeting](architecture.md#command-system-and-targeting-built) (`sword`, `2.key`, `all.coin`).
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `name`, `description` | required, empty | What players see |
+| `keywords` | words of the name | What players can call it |
+| `bulk` | `Light` | How much space and burden it takes; see [Bulk](#bulk) |
+| `tags` | none | Kinds, such as `key`, `scroll`, `potion`; specialised containers accept them |
+| `wear` | none | The slot it's worn in: `Head`, `Neck`, `Body`, `Back`, `Belt`, `Feet` |
+| `container` | none | It holds things; see [Containers](#containers) |
+| `fixed` | `false` | Can't be picked up, like a chest bolted to the floor |
+
+## Bulk
+
+Bulk works as in Pathfinder 2e. It measures size and awkwardness together, not weight alone.
+
+| `bulk` | Counts as | Examples |
+| --- | --- | --- |
+| `Negligible` | Nothing | A key, a ring, a coin |
+| `Light` | A tenth of 1 Bulk | A torch, a dagger, a loaf of bread |
+| `Bulk(n)` | n Bulk | A longsword is 1; armour 1 to 4 |
+
+## Where items are
+
+| Place | Space | Counts toward encumbrance |
+| --- | --- | --- |
+| In a room | | |
+| **Held**, in your two hands | 2 items | Yes |
+| **Worn** in a slot | One per slot, except the belt, which takes up to 3 attachments | Yes, but takes no inventory space |
+| **Inside a container** | The container's capacity | Yes, wherever the container is |
+
+Without containers, a character can carry two things, one in each hand. Ordinary clothes with pockets, a belt pouch, a keyring and eventually a backpack are what let them carry more.
+
+### Automatic placement
+
+When you pick something up without saying where it goes, it goes to the first of these with room:
+
+1. **A worn container that accepts the item's tags:** keys onto the keyring, scrolls into the scroll tube, potions into the potion pouch.
+2. **A general worn container,** smallest first, so a light item goes into a belt pouch before the backpack.
+3. **A free hand,** as a last resort; hands are for what you're using.
+
+Otherwise: "You have nowhere to put the iron key." The reply always says where an item went ("You put an iron key on your keyring."). `hold` and `put` choose the place yourself.
+
+### Encumbrance
+
+Everything held, worn and inside carried containers counts toward your total Bulk.
+
+- **Encumbered** past 5 + Strength / 2 Bulk. For now this only shows in `inventory`; its effects arrive with fatigue.
+- **Can't carry more** past 10 + Strength / 2 Bulk: you can't pick up, take or be given anything that would push you past it.
+
+At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there's no backpack discount.
+
+### Commands
 
 | Command | Does |
 | --- | --- |
-| `get <item>`, `get <item> <container>` | Pick up from the room, or take out of a container |
-| `drop <item>` | Put down in the room |
-| `put <item> <container>` | Put into a container |
-| `inventory` (`i`) | List what you carry |
+| `get <item>`, `get all`, `get all.<item>` | Pick up from the room, placed automatically |
+| `get <item> <container>` | Take out of a container, here or carried |
+| `put <item> <container>` | Put into a container, here or carried |
+| `drop <item>` | Put down in the room, from anywhere you carry it |
+| `give <item> <player>` | Hand over; placed automatically on their side |
+| `hold <item>` | Move into your hands |
+| `wear <item>`, `remove <item>` | Wear in its slot, or take off into your hands |
+| `inventory` (`i`) | Hands, what you wear, each container's contents and fill, and your Bulk against your limits |
 | `look <item>`, `examine <item>` | Describe it; examining a container lists its contents |
-
-`all` forms work where they make sense: `get all`, `get all.coin chest`, `drop all.bread`.
 
 ## What survives a restart
 
@@ -63,24 +115,37 @@ Some items exist only once and never respawn: once *Angorim* has been found, no 
 
 ## Containers
 
-A container is an item with a `container` section, optionally with a [lock](#locks-and-keys):
+A container is an item with a `container` section. Worn containers carry your things; fixed ones, like chests, sit in rooms.
 
 ```ron
-"oak_chest": (name: "an old oak chest", keywords: ["chest", "oak"],
-    fixed: true,                                          // can't be picked up
-    container: (capacity: 20,
-        state: Locked, lock: Some((key: None, pick: Some(6), bash: Some(15)))),
-    contents: Table([("gold_coins", 60), ("healing_draught", 30), ("angorim", 1)]),
-),
-"satchel": (name: "a leather satchel", keywords: ["satchel", "bag"],
-    container: (capacity: 10)),
+"backpack": (name: "a leather backpack", bulk: Bulk(1), wear: Back,
+    container: (capacity: Bulk(4))),
+"belt_pouch": (name: "a belt pouch", bulk: Negligible, wear: Belt,
+    container: (capacity: Light(4))),                          // four light items
+"keyring": (name: "a brass keyring", bulk: Negligible, wear: Belt,
+    container: (capacity: Count(10), accepts: ["key"])),
+"travelers_coat": (name: "a traveller's coat", bulk: Light, wear: Body,
+    container: (capacity: Count(2), max_item: Light)),         // pockets
+"oak_chest": (name: "an old oak chest", fixed: true,
+    container: (capacity: Bulk(10), state: Locked,
+        lock: Some((key: Some("chest_key"), pick: Some(6), bash: Some(15))))),
 ```
 
-- **Fixed containers belong to their spawn and are never real.** A chest's name is stable (its spawn's id), and each reset refills its contents and resets its lock.
-- **Contents follow the usual rule:** temporary until a player takes them, then real.
-- **Players can store things in fixed containers.** Real items saved as inside `tavern:oak_chest` survive restarts, because the chest's name is stable. That's the basis for player storage later.
-- **Loot tables** roll through [`Dice.pick`](attributes.md#the-dice-service), so Luck applies; for a group, the group's average Luck.
-- **Portable containers** like bags, and corpses, are ordinary items with a `container` section.
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `capacity` | required | `Bulk(n)`, `Light(n)` (n light items' worth), or `Count(n)` items |
+| `accepts` | anything | Tags it takes; a keyring takes only `key`. Specialised containers are filled first |
+| `max_item` | no limit | The largest single item it takes, so a sword can't go in a pocket |
+| `state`, `lock` | always open | Like a [door](#locks-and-keys): containers can be closed, locked, picked and bashed |
+
+- **Any worn item can be a container,** which is how clothes get pockets.
+- **Fixed items are for anything that shouldn't be carried off:** chests, signposts, furniture, a well. They can't be picked up, held or worn, and rooms list them as part of the room ("An old oak chest is here.") rather than as things lying around. Give them a large `bulk` too, for when moving furniture becomes possible.
+- **A container's open, closed or locked state isn't saved,** like a door's: it returns to its template's state when the server restarts, and will reset with its zone.
+- **Containers can't go inside themselves,** directly or through another container.
+- **Fixed containers belong to their spawn and are never real.** A chest's name is stable (its spawn's id), and each reset refills its contents and resets its lock. Until spawns exist, builders `create` them, which places a fixed item in the room.
+- **Contents follow the usual rule:** temporary until a player takes them, then real. Real items saved inside a fixed chest survive restarts, which is the basis for player storage later.
+- **Loot tables** roll through [`Dice.pick`](attributes.md#the-dice-service), so Luck applies; for a group, the group's average Luck. They come with spawns.
+- **Corpses** will be portable containers with perishable decay.
 
 ## Locks and keys
 
@@ -139,4 +204,4 @@ trap: Some((on: Opened, find: 5, disarm: 7, effect: Damage(6))),
 - [ ] **Preserving perishables:** salting, a preserving spell, or cold storage that slows or pauses decay. A good hook for skills; templates only need to allow it.
 - [ ] **Does an NPC picking up an item make it real?** Proposed: no, only players.
 - [ ] **Corpses:** are player corpses real (they survive a restart) while NPC corpses stay temporary until looted?
-- [ ] **Carrying limits:** by weight (Strength and Body), by count, or both?
+- [ ] **Starting equipment:** which clothes, pouch and keyring new characters start with, likely set by background.
