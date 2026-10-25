@@ -151,6 +151,17 @@ None of the locks have keys yet; keys arrive with items.
 
 The herbalist's stall, Contract Hall, Guild Archive, Guild Quarters, shrine and Lord's Solar turn wanderers away.
 
+Item spawns keep a few things in place:
+
+| Spawn | Where | Keeps | Resets |
+| --- | --- | --- | --- |
+| A weathered signpost (fixed) | Market Square | 1 | Every hour |
+| An old oak chest (fixed, locked), with two loaves of bread, a waterskin and a torch | Guild Cellar | 1 | Every hour, topping up its contents |
+| Wooden practice swords | Training Yard | 2 | Every 30 minutes |
+| A rolled parchment | Guild Archive | 1 | Every 2 hours |
+
+The chest's key isn't spawned anywhere yet; it's meant for a mob to carry once mobs carry things.
+
 ## Where trainers go
 
 Each basic skill has a home in town, so trainers can be placed once mobs exist. Trainers teach Common and Uncommon skills (see [Acquiring skills](skills.md#acquiring-skills)).

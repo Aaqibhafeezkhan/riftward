@@ -153,6 +153,9 @@ pub struct ItemDef {
     /// Can't be picked up, like a chest bolted to the floor.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fixed: bool,
+    /// Only one can ever exist: once a player has found it, its spawn never makes another.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unique: bool,
 }
 
 /// Size and awkwardness, as in Pathfinder 2e: 10 Light make 1 Bulk.
@@ -290,6 +293,7 @@ impl ItemDef {
             wear: None,
             container: None,
             fixed: false,
+            unique: false,
         }
     }
 
@@ -349,11 +353,20 @@ impl MobDef {
     }
 }
 
-/// Keeps a room stocked with mobs: what, where, how often, how many, and how far they roam.
+/// Keeps a room stocked with mobs or items: what, where, how often, how many, and how far mobs
+/// roam. A spawn names either a `mob` or an `item`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SpawnDef {
     /// The mob template, `mob` or `zone:mob`.
-    pub mob: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mob: Option<String>,
+    /// The item template, `item` or `zone:item`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item: Option<String>,
+    /// For a container item: what each reset puts back inside it, as item templates. A template
+    /// listed twice keeps two.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contents: Vec<String>,
     /// Where they appear, `room` or `zone:room`.
     pub room: String,
     pub every: Every,
@@ -364,6 +377,32 @@ pub struct SpawnDef {
     /// holds more than this, then the extras move on toward the least crowded room they may enter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crowd: Option<u32>,
+}
+
+/// What a spawn makes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Spawned<'a> {
+    Mob(&'a str),
+    Item(&'a str),
+}
+
+impl SpawnDef {
+    /// What it makes, if it names exactly one mob or item.
+    pub fn what(&self) -> Option<Spawned<'_>> {
+        match (&self.mob, &self.item) {
+            (Some(mob), None) => Some(Spawned::Mob(mob)),
+            (None, Some(item)) => Some(Spawned::Item(item)),
+            _ => None,
+        }
+    }
+
+    /// The template it makes, mob or item, for showing to builders.
+    pub fn template(&self) -> &str {
+        match self.what() {
+            Some(Spawned::Mob(id) | Spawned::Item(id)) => id,
+            None => "(nothing)",
+        }
+    }
 }
 
 /// When a spawn resets, in real time.
@@ -1188,8 +1227,32 @@ mod tests {
             }
             for (spawn_id, spawn) in &zone.spawns {
                 let here = format!("spawn {}:{spawn_id}", zone.id);
-                if !mob_exists(&MobKey::parse(&spawn.mob, &zone.id)) {
-                    problems.push(format!("{here}: no mob '{}'", spawn.mob));
+                match spawn.what() {
+                    Some(Spawned::Mob(mob)) => {
+                        if !mob_exists(&MobKey::parse(mob, &zone.id)) {
+                            problems.push(format!("{here}: no mob '{mob}'"));
+                        }
+                        if !spawn.contents.is_empty() {
+                            problems.push(format!("{here}: only item spawns have contents"));
+                        }
+                    }
+                    Some(Spawned::Item(item)) => {
+                        if !item_exists(&ItemKey::parse(item, &zone.id)) {
+                            problems.push(format!("{here}: no item '{item}'"));
+                        }
+                        if matches!(spawn.refill, Refill::Breed { .. })
+                            || !spawn.wander.is_never()
+                            || spawn.crowd.is_some()
+                        {
+                            problems.push(format!("{here}: items don't breed, wander or crowd"));
+                        }
+                        for inside in &spawn.contents {
+                            if !item_exists(&ItemKey::parse(inside, &zone.id)) {
+                                problems.push(format!("{here}: no content item '{inside}'"));
+                            }
+                        }
+                    }
+                    None => problems.push(format!("{here}: name one mob or one item")),
                 }
                 let mut rooms = vec![&spawn.room];
                 if let Wander::Rooms { rooms: wander, .. } = &spawn.wander {

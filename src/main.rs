@@ -15,6 +15,7 @@ mod login;
 mod mobs;
 mod net;
 mod output;
+mod spawns;
 mod targeting;
 mod time;
 mod world;
@@ -52,6 +53,7 @@ fn main() {
             build::BuildPlugin,
             items::ItemsPlugin,
             mobs::MobsPlugin,
+            spawns::SpawnsPlugin,
             events::EventsPlugin,
             time::TimePlugin,
         ))

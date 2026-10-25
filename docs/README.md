@@ -36,7 +36,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
 - Riftwatch, the starting town, and the sewers beneath it ([map](riftwatch.md#map)).
 - Items: templates with Bulk and tags, hands, wear slots, containers (backpacks, pouches, keyrings, pockets, chests) with automatic placement, encumbrance, keys, and real items that survive restarts.
-- Mobs: templates and spawns in zone files, timed and after-death resets that count their mobs wherever they wander, breeding populations that grow toward a cap and reseed after being wiped out, crowding that pushes them outward, wandering within rooms, a zone or anywhere, and the builder `mob`, `spawn`, `summon` and `purge` commands. Riftwatch has guards, a stray dog, the contract clerk, the herbalist and the drill sergeant; the sewers have rats.
+- Mobs: templates and spawns in zone files, timed and after-death resets that count their mobs wherever they wander, breeding populations that grow toward a cap and reseed after being wiped out, crowding that pushes them outward, wandering within rooms, a zone or anywhere, and the builder `mob`, `spawn`, `summon` and `purge` commands. Item spawns keep rooms stocked and top up containers, and unique items are never made twice. Riftwatch has guards, a stray dog, the contract clerk, the herbalist and the drill sergeant, a signpost, practice swords and a stocked chest in the guild cellar; the sewers have rats.
 - Game time: a day and night every 3 real hours, dawn and dusk announced outdoors, `time`, and a one-second heartbeat. Movement goes through shared game events, so arrivals say where people came from.
 - Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
@@ -62,7 +62,6 @@ Designed, waiting on other work:
 | Feature | Waits on | Details |
 | --- | --- | --- |
 | Status prompt (`<14/18hp 9/10fat>`), customisable per character | Current health and fatigue, from combat and time | [Architecture](architecture.md#status-prompt) |
-| Unique items that never respawn once found, like *Angorim*, and never decay | Items and resets | [Architecture](items.md#unique-items) |
 | Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, mobs and game events | [Architecture](architecture.md#scripting) |
 | Game masters: admins and a new GM role can puppet any mob, playing it until they release it | Mobs | [Architecture](architecture.md#game-masters-and-puppeting) |
 | Quests and guild contracts, with guild ranks that gate trainers and rooms | Mobs, game events, combat | [Quests](quests.md) |

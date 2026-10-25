@@ -1,6 +1,6 @@
 # Items, containers and locks
 
-[Design summary](README.md) · Status: built, except decay, spawned items, unique items and loot tables (those need spawns and resets) and traps
+[Design summary](README.md) · Status: built, except decay, loot tables and traps. Item spawns and unique items are built (see [The living world](world.md#items))
 
 Items are entities defined by templates in zone files. They can be carried, worn, dropped, or put inside containers. An item becomes **real**, saved to the database, the moment a player touches it, and most items slowly **decay** when left lying around. Doors and containers share one **lock** model: open, closed or locked, with keys, lockpicking, bashing and traps.
 
@@ -113,7 +113,7 @@ Some items exist only once and never respawn: once *Angorim* has been found, no 
 
 - **Templates are marked unique** (`unique: true`) and have no decay: a unique item stays wherever it is dropped, forever, until someone picks it up.
 - **Before it's found,** a unique item is an ordinary temporary spawn; a restart before anyone touches it just spawns it again.
-- **Once found,** it is a real item like any other, saved wherever it goes. Its spawn checks the `items` table for a real copy before spawning one, so a second copy never appears.
+- **Once found,** it is a real item like any other, saved wherever it goes. Its spawn checks the `items` table for a real copy before spawning one, so a second copy never appears. *Built: `unique: true` on a template, or `item unique <id> yes`. Never decaying waits on decay.*
 
 ## Containers
 

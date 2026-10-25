@@ -266,6 +266,31 @@
         ),
     },
     spawns: {
+        "market_signpost": (
+            item: "market_signpost",
+            room: "market",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "cellar_chest": (
+            item: "oak_chest",
+            contents: ["bread", "bread", "waterskin", "torch"],
+            room: "guild_cellar",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "practice_swords": (
+            item: "practice_sword",
+            room: "training_yard",
+            every: Minutes(30),
+            refill: Keep(2),
+        ),
+        "archive_scroll": (
+            item: "scroll",
+            room: "guild_archive",
+            every: Hours(2),
+            refill: Keep(1),
+        ),
         "gate_guards": (
             mob: "town_guard",
             room: "north_gate",

@@ -454,6 +454,15 @@ impl Database {
         Ok(())
     }
 
+    /// Whether any real item is made from this template (`zone:item`), anywhere.
+    pub fn item_exists(&self, template: &str) -> DbResult<bool> {
+        Ok(self.conn().query_row(
+            "SELECT EXISTS (SELECT 1 FROM items WHERE template = ?1)",
+            [template],
+            |row| row.get(0),
+        )?)
+    }
+
     pub fn spawn_counts(&self) -> DbResult<Vec<(String, u32)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare("SELECT spawn, count FROM spawn_counts")?;

@@ -31,7 +31,8 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `output.rs` | Shared output plumbing: `Outgoing`, `deliver`, `Actor`, the common queries, target candidate lists |
 | `world.rs` | Zone assets (rooms, doors, item and mob templates, spawns), room entities, the `RoomIndex`, and `sync_world`, which applies zone changes live |
 | `items.rs` | Item entities, Bulk and placement rules, persistence, and the item commands |
-| `mobs.rs` | Mob entities, spawns and their timers, wandering, `summon` and `purge` |
+| `mobs.rs` | Mob entities, wandering and crowding, `summon` and `purge` |
+| `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
 | `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
@@ -186,7 +187,7 @@ The in-game prompt shows the character's state, such as `<14/18hp 9/10fat>`, ins
 ## Proposed build order
 
 1. ~~**Command system and targeting.**~~ Built.
-2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then mobs that stand in rooms and can be looked at. *Built, except item spawns.*
+2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then mobs that stand in rooms and can be looked at. *Built.*
 3. **Game events and time.** Both small, but everything after this uses them. *Started: the clock, the heartbeat, and movement and day events.*
 4. **The [skill core](skills.md#build-plan), with combat as its first use.** The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
 

@@ -14,16 +14,16 @@ use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::commands::movement::{View, full_direction, move_player, toward};
 use crate::db::{Database, Permission, Role};
 use crate::events::{GameEvent, Way};
-use crate::mobs::{SpawnTimers, SpawnedBy};
 use crate::net::Connection;
 use crate::output::{
     Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_online,
 };
+use crate::spawns::SpawnTimers;
 use crate::targeting::{Keywords, Target};
 use crate::world::{
     Bulk, Capacity, ContainerDef, DoorDef, DoorKey, DoorState, Every, ExitDef, ItemDef, ItemKey,
-    LockDef, MobDef, MobKey, Refill, RoomDef, RoomIndex, RoomKey, Slot, SpawnDef, SpawnKey, Wander,
-    ZONE_ENTRANCE, ZoneDef, format_bulk, without_article,
+    LockDef, MobDef, MobKey, Refill, RoomDef, RoomIndex, RoomKey, Slot, SpawnDef, SpawnKey,
+    Spawned, Wander, ZONE_ENTRANCE, ZoneDef, format_bulk, without_article,
 };
 
 pub struct BuildPlugin;
@@ -108,7 +108,7 @@ impl Plugin for BuildPlugin {
                 build(
                     "item",
                     "item [<id> | new <id> <name> | <field> <id> <value>]",
-                    "list, show, create or edit item templates; fields: name, desc, keywords, bulk, tags, wear, fixed, container",
+                    "list, show, create or edit item templates; fields: name, desc, keywords, bulk, tags, wear, fixed, unique, container",
                 ),
                 item_cmd,
             )
@@ -123,8 +123,8 @@ impl Plugin for BuildPlugin {
             .add_command(
                 build(
                     "spawn",
-                    "spawn [<id> | new <id> <mob> [<count>] | reset <id> | remove <id> | <field> <id> <value>]",
-                    "list, show, add, reset or edit this zone's spawns; fields: mob, count, breed, crowd, every, wander, room",
+                    "spawn [<id> | new <id> <mob|item> [<count>] | reset <id> | remove <id> | <field> <id> <value>]",
+                    "list, show, add, reset or edit this zone's spawns; fields: mob, item, contents, count, breed, crowd, every, wander, room",
                 ),
                 spawn_cmd,
             )
@@ -302,13 +302,11 @@ fn spawn_cmd(
     mut players: PlayerQuery,
     rooms: RoomQuery,
     mut zones: ResMut<Assets<ZoneDef>>,
-    mobs: Query<&SpawnedBy>,
     mut timers: ResMut<SpawnTimers>,
 ) {
     let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
         return;
     };
-    let alive = |key: &SpawnKey| mobs.iter().filter(|s| s.0 == *key).count();
     let reply = match inv.args.split_once(' ') {
         Some(("reset", id)) => {
             let key = SpawnKey::parse(&id.trim().to_ascii_lowercase(), &here.zone);
@@ -320,7 +318,7 @@ fn spawn_cmd(
                 _ => Err(format!("There's no spawn [{key}].")),
             }
         }
-        _ => spawn(&here, &inv, &mut zones, alive),
+        _ => spawn(&here, &inv, &mut zones, |key| timers.alive(key)),
     };
     deliver(vec![reply_line(inv.entity, reply)], &mut players);
 }
@@ -1132,7 +1130,8 @@ fn item_template(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) 
                 ))
             })
         }
-        "name" | "desc" | "keywords" | "bulk" | "tags" | "wear" | "fixed" | "container" => {
+        "name" | "desc" | "keywords" | "bulk" | "tags" | "wear" | "fixed" | "unique"
+        | "container" => {
             if !zone.items.contains_key(&id) || value.is_empty() {
                 return Err(format!(
                     "Usage: item {first} <id> <value>, for a template in [{}].{}",
@@ -1140,7 +1139,7 @@ fn item_template(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) 
                     match first {
                         "bulk" => " Bulk is negligible, light, or a number.",
                         "wear" => " Slots: head, neck, body, back, belt, feet, or none.",
-                        "fixed" => " Use yes or no.",
+                        "fixed" | "unique" => " Use yes or no.",
                         "container" => {
                             " Use bulk <n>, light <n> or count <n>, then any tags it \
                              accepts; or none."
@@ -1198,13 +1197,17 @@ fn template_change(field: &str, value: &str) -> Result<TemplateEdit, String> {
             };
             Box::new(move |def| def.wear = slot)
         }
-        "fixed" => {
-            let fixed = match value.as_str() {
+        "fixed" | "unique" => {
+            let on = match value.as_str() {
                 "yes" | "true" | "on" => true,
                 "no" | "false" | "off" => false,
                 _ => return Err("Use 'yes' or 'no'.".into()),
             };
-            Box::new(move |def| def.fixed = fixed)
+            if field == "fixed" {
+                Box::new(move |def| def.fixed = on)
+            } else {
+                Box::new(move |def| def.unique = on)
+            }
         }
         _ => {
             if value == "none" {
@@ -1261,7 +1264,7 @@ fn describe_item_template(zone: &str, id: &str, def: &ItemDef) -> String {
     });
     format!(
         "{} [{zone}:{id}]\r\n  keywords: {}\r\n  bulk: {}\r\n  tags: {}\r\n  wear: {}\r\n  \
-         container: {}\r\n  fixed: {}\r\n  description: {}",
+         container: {}\r\n  fixed: {}\r\n  unique: {}\r\n  description: {}",
         def.name,
         def.keywords().0.join(", "),
         format_bulk(def.bulk.tenths()),
@@ -1269,6 +1272,7 @@ fn describe_item_template(zone: &str, id: &str, def: &ItemDef) -> String {
         def.wear.map_or("(none)", Slot::name),
         container.unwrap_or_else(|| "(none)".into()),
         if def.fixed { "yes" } else { "no" },
+        if def.unique { "yes" } else { "no" },
         none(def.description.clone())
     )
 }
@@ -1379,7 +1383,7 @@ fn spawn(
     here: &RoomKey,
     inv: &Invocation,
     zones: &mut Assets<ZoneDef>,
-    alive: impl Fn(&SpawnKey) -> usize,
+    alive: impl Fn(&SpawnKey) -> u32,
 ) -> Reply {
     let mut words = inv.args.splitn(3, ' ');
     let first = words.next().unwrap_or("");
@@ -1392,7 +1396,7 @@ fn spawn(
         "" => {
             if zone.spawns.is_empty() {
                 return Ok(format!(
-                    "Zone [{}] has no spawns. Add one here with 'spawn new <id> <mob> <count>'.",
+                    "Zone [{}] has no spawns. Add one here with 'spawn new <id> <mob|item> <count>'.",
                     zone.id
                 ));
             }
@@ -1402,7 +1406,7 @@ fn spawn(
                     "\r\n  {id:<20} {}/{} {} in {}",
                     alive(&key(id)),
                     def.refill.wanted(),
-                    def.mob,
+                    def.template(),
                     def.room
                 );
             }
@@ -1410,25 +1414,31 @@ fn spawn(
         }
         "new" => {
             let mut rest = value.split_whitespace();
-            let mob = rest.next().unwrap_or("").to_ascii_lowercase();
+            let template = rest.next().unwrap_or("").to_ascii_lowercase();
             let count = match rest.next() {
                 None => Some(1),
                 Some(n) => n.parse::<u32>().ok().filter(|n| *n > 0),
             };
-            let (true, false, Some(count)) = (valid_id(&id), mob.is_empty(), count) else {
+            let (true, false, Some(count)) = (valid_id(&id), template.is_empty(), count) else {
                 return Err(format!(
-                    "Usage: spawn new <id> <mob> [<count>], with {ID_RULES}."
+                    "Usage: spawn new <id> <mob|item> [<count>], with {ID_RULES}."
                 ));
             };
             if zone.spawns.contains_key(&id) {
                 return Err(format!("[{}:{id}] already exists.", here.zone));
             }
-            if !mob_exists(zones, &MobKey::parse(&mob, &here.zone)) {
-                return Err(format!("There's no mob template [{mob}]."));
-            }
+            let (mob, item) = if mob_exists(zones, &MobKey::parse(&template, &here.zone)) {
+                (Some(template), None)
+            } else if item_exists(zones, &ItemKey::parse(&template, &here.zone)) {
+                (None, Some(template))
+            } else {
+                return Err(format!("There's no mob or item template [{template}]."));
+            };
             edit_zone(zones, &here.zone, |zone| {
                 let def = SpawnDef {
                     mob,
+                    item,
+                    contents: Vec::new(),
                     room: here.room.clone(),
                     every: Every::Minutes(10),
                     refill: Refill::Keep(count),
@@ -1447,17 +1457,19 @@ fn spawn(
             edit_zone(zones, &here.zone, |zone| {
                 zone.spawns.remove(&id);
                 Ok(format!(
-                    "Removed spawn [{}:{id}], and its mobs with it.",
+                    "Removed spawn [{}:{id}], and its mobs and untouched items with it.",
                     here.zone
                 ))
             })
         }
-        "mob" | "count" | "breed" | "crowd" | "every" | "wander" | "room" => {
+        "mob" | "item" | "contents" | "count" | "breed" | "crowd" | "every" | "wander" | "room" => {
             if !zone.spawns.contains_key(&id) || (value.is_empty() && first != "room") {
                 return Err(format!(
                     "Usage: spawn {first} <id> {}, for a spawn in [{}].",
                     match first {
                         "mob" => "<mob>",
+                        "item" => "<item>",
+                        "contents" => "<item> [<item>...] | none, for a container",
                         "count" => "<n>, to keep that many",
                         "breed" => "<doubling> <max> [<reseed>], like 4h 200 7d",
                         "crowd" => "<n | none>",
@@ -1476,10 +1488,33 @@ fn spawn(
                 Refill::Keep(_) => 1,
             };
             let change = spawn_change(first, &value, here, start)?;
-            if let Some(mob) = change.mob()
-                && !mob_exists(zones, &MobKey::parse(mob, &here.zone))
-            {
-                return Err(format!("There's no mob template [{mob}]."));
+            let is_item = matches!(zone.spawns[&id].what(), Some(Spawned::Item(_)));
+            match &change {
+                SpawnChange::Mob(mob) if !mob_exists(zones, &MobKey::parse(mob, &here.zone)) => {
+                    return Err(format!("There's no mob template [{mob}]."));
+                }
+                SpawnChange::Item(item)
+                    if !item_exists(zones, &ItemKey::parse(item, &here.zone)) =>
+                {
+                    return Err(format!("There's no item template [{item}]."));
+                }
+                SpawnChange::Contents(contents) => {
+                    if !is_item {
+                        return Err("Only item spawns have contents.".into());
+                    }
+                    if let Some(item) = contents
+                        .iter()
+                        .find(|c| !item_exists(zones, &ItemKey::parse(c, &here.zone)))
+                    {
+                        return Err(format!("There's no item template [{item}]."));
+                    }
+                }
+                SpawnChange::Refill(_) | SpawnChange::Crowd(_) | SpawnChange::Wander(_)
+                    if is_item =>
+                {
+                    return Err("Items don't breed, wander or crowd.".into());
+                }
+                _ => {}
             }
             let alive = alive(&key(&id));
             edit_zone(zones, &here.zone, |zone| {
@@ -1505,9 +1540,15 @@ fn mob_exists(zones: &Assets<ZoneDef>, key: &MobKey) -> bool {
     zone_def(zones, &key.zone).is_ok_and(|zone| zone.mobs.contains_key(&key.mob))
 }
 
+fn item_exists(zones: &Assets<ZoneDef>, key: &ItemKey) -> bool {
+    zone_def(zones, &key.zone).is_ok_and(|zone| zone.items.contains_key(&key.item))
+}
+
 /// One `spawn <field> <id> <value>` edit.
 enum SpawnChange {
     Mob(String),
+    Item(String),
+    Contents(Vec<String>),
     Count(u32),
     Refill(Refill),
     Crowd(Option<u32>),
@@ -1517,16 +1558,23 @@ enum SpawnChange {
 }
 
 impl SpawnChange {
-    fn mob(&self) -> Option<&str> {
-        match self {
-            SpawnChange::Mob(mob) => Some(mob),
-            _ => None,
-        }
-    }
-
     fn apply(self, def: &mut SpawnDef) {
         match self {
-            SpawnChange::Mob(mob) => def.mob = mob,
+            SpawnChange::Mob(mob) => {
+                def.mob = Some(mob);
+                def.item = None;
+                def.contents.clear();
+            }
+            SpawnChange::Item(item) => {
+                def.item = Some(item);
+                def.mob = None;
+                def.wander = Wander::Never;
+                def.crowd = None;
+                if let Refill::Breed { .. } = def.refill {
+                    def.refill = Refill::Keep(1);
+                }
+            }
+            SpawnChange::Contents(contents) => def.contents = contents,
             SpawnChange::Count(n) => def.refill = Refill::Keep(n),
             SpawnChange::Refill(refill) => def.refill = refill,
             SpawnChange::Crowd(crowd) => def.crowd = crowd,
@@ -1549,6 +1597,11 @@ fn spawn_change(
             .filter(|every| !matches!(every, Every::AfterDeath(_)))
     };
     Ok(match field {
+        "item" => SpawnChange::Item(value.to_ascii_lowercase()),
+        "contents" => SpawnChange::Contents(match value {
+            "none" => Vec::new(),
+            list => list.split_whitespace().map(str::to_lowercase).collect(),
+        }),
         "breed" => {
             let usage = "Use how long it takes to double, the most there can be, and optionally \
                          how long it takes to come back once wiped out: 4h 200 7d.";
@@ -1618,7 +1671,7 @@ fn spawn_change(
     })
 }
 
-fn describe_spawn(key: &SpawnKey, def: &SpawnDef, alive: usize) -> String {
+fn describe_spawn(key: &SpawnKey, def: &SpawnDef, alive: u32) -> String {
     let wander = match &def.wander {
         Wander::Never => "never".to_string(),
         Wander::Zone { secs: (min, max) } => format!("in its zone, every {min}-{max}s"),
@@ -1644,17 +1697,40 @@ fn describe_spawn(key: &SpawnKey, def: &SpawnDef, alive: usize) -> String {
             }
         ),
     };
-    let crowd = def
-        .crowd
-        .map_or("no limit".into(), |n| format!("{n} to a room"));
-    format!(
-        "Spawn [{key}]: {alive} of {} alive\r\n  mob: {}\r\n  room: {}\r\n  resets: {}\r\n  \
-         refill: {refill}\r\n  wander: {wander}\r\n  crowd: {crowd}",
+    let header = format!(
+        "Spawn [{key}]: {alive} of {} {}\r\n  room: {}\r\n  resets: {}",
         def.refill.wanted(),
-        def.mob,
+        if matches!(def.what(), Some(Spawned::Item(_))) {
+            "in place"
+        } else {
+            "alive"
+        },
         def.room,
         def.every,
-    )
+    );
+    match def.what() {
+        Some(Spawned::Item(item)) => {
+            let contents = if def.contents.is_empty() {
+                "(none)".to_string()
+            } else {
+                def.contents.join(", ")
+            };
+            format!(
+                "{header}\r\n  item: {item}\r\n  keeps: {}\r\n  contents: {contents}",
+                def.refill.wanted()
+            )
+        }
+        _ => {
+            let crowd = def
+                .crowd
+                .map_or("no limit".into(), |n| format!("{n} to a room"));
+            format!(
+                "{header}\r\n  mob: {}\r\n  refill: {refill}\r\n  wander: {wander}\r\n  \
+                 crowd: {crowd}",
+                def.template()
+            )
+        }
+    }
 }
 
 /// Turn a room name into an id: "The Old Mill" -> "the_old_mill".

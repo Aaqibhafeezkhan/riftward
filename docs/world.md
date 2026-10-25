@@ -1,6 +1,6 @@
 # The living world: spawns, wandering and world events
 
-[Design summary](README.md) · Status: mob spawns (`Keep` and `Breed`, timed and `AfterDeath` resets, counting by origin, reseeding), wandering and crowding are built; item spawns, time-of-day spawns and world events are not. World events need combat.
+[Design summary](README.md) · Status: spawns for mobs and items (`Keep` and `Breed`, timed and `AfterDeath` resets, counting by origin, reseeding, container contents, unique items), wandering and crowding are built; time-of-day spawns and world events are not. World events need combat.
 
 The world populates itself and changes on its own. Every mob comes from a **spawn** in a zone file, which decides how often it resets and how many it wants. Mobs can **wander**, crowded rooms push them outward, and **world events** fire when the state of the world meets their conditions. There is one spawn model for everything, from a single dragon to a sewer full of breeding rats.
 
@@ -62,7 +62,20 @@ Every mob a spawn creates carries a tag naming its spawn, `SpawnedBy("sewer_rats
 
 ### Items
 
-Item spawns use the same model. A spawned item belongs to its spawn until a player touches it; from then on it is a [real item](items.md#what-survives-a-restart) and no longer counts, so the next reset spawns a fresh one. [Unique items](items.md#unique-items) are the exception: their spawn checks for a real copy anywhere and never spawns a second. Fixed [containers](items.md#containers) such as chests belong to their spawn, which refills their contents on each reset.
+Item spawns use the same model, naming an `item` instead of a `mob`:
+
+```ron
+"practice_swords": (item: "practice_sword", room: "training_yard", every: Minutes(30), refill: Keep(2)),
+"cellar_chest": (item: "oak_chest", room: "guild_cellar", every: Hours(1), refill: Keep(1),
+    contents: ["bread", "bread", "waterskin", "torch"]),
+```
+
+- **A spawned item belongs to its spawn until a player touches it;** from then on it is a [real item](items.md#what-survives-a-restart) and no longer counts, so the next reset spawns a fresh one. Take a practice sword and drop it again, and the yard has three until someone tidies up.
+- **Fixed items stay counted.** A chest or signpost can't leave its room, so a real one lying in its spawn room still counts. A chest made real by a player putting something in it is restored after a restart, and its spawn doesn't add a second.
+- **Containers are topped up on each reset** from `contents`, a list of item templates (a template listed twice keeps two). Only what's missing is added: anything a player put in stays, and doesn't count against the list. Locked chests are filled too.
+- **[Unique items](items.md#unique-items) are never made twice:** their spawn checks for a copy in play or a real one anywhere in the database.
+- **Items don't breed, wander or crowd,** and a restart makes untouched spawned items fresh.
+- **A removed spawn takes its untouched items with it,** like its mobs.
 
 ## Wandering
 
@@ -105,14 +118,15 @@ Rooms show each mob's `here` line, with repeats counted (`(x8)`), and `look <dir
 | `mob new <id> <name>` | Create a template |
 | `mob <name\|here\|desc\|keywords> <id> <value>` | Edit one (`mob here <id> none` restores the plain line) |
 | `spawn` / `spawn <id>` | List this zone's spawns with how many are alive, or show one |
-| `spawn new <id> <mob> [<count>]` | Add a spawn in this room: keeps `count` (default 1), resets every 10 minutes, doesn't wander |
+| `spawn new <id> <mob\|item> [<count>]` | Add a spawn in this room, of a mob or item template: keeps `count` (default 1), resets every 10 minutes, doesn't wander |
 | `spawn count <id> <n>` | Keep `n` (a breeding spawn becomes a keeping one) |
 | `spawn breed <id> <doubling> <max> [<reseed>]` | Breed: `spawn breed sewer_rats 4h 200 7d` |
 | `spawn crowd <id> <n\|none>` | How many of its mobs a room holds before they push outward |
 | `spawn reset <id>` | Reset it now, whatever its timers say: refill, grow, or bring back a wiped-out spawn |
 | `spawn every <id> <10m\|2h\|1d\|death 30d>` | How often it resets. A new schedule starts at once |
 | `spawn wander <id> never` / `zone <min> <max>` / `anywhere <min> <max>` / `rooms <min> <max> <room>...` | How far its mobs roam, and how often they move, in seconds |
-| `spawn mob <id> <mob>` / `spawn room <id>` | Change what it spawns, or move it to this room |
+| `spawn mob <id> <mob>` / `spawn item <id> <item>` / `spawn room <id>` | Change what it spawns, or move it to this room |
+| `spawn contents <id> <item>... \| none` | What an item spawn's container is topped up with on each reset |
 | `spawn remove <id>` | Remove the spawn and its mobs |
 | `summon <mob>` | Bring a mob here that belongs to no spawn, for testing |
 | `purge [<mob>]` | Remove a mob here, or every mob here. Its spawn refills at its next reset |
@@ -258,7 +272,7 @@ events: {
 
 ## Build order
 
-1. **With items and mobs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering. *Built for mobs; item spawns still to do.*
+1. **With items and mobs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering. *Built.*
 2. **With the time system:** `Breed` and `reseed`, crowding, `TimeOfDay`. *Built, except `TimeOfDay` spawns.*
 3. **With combat:** world flags, counters and events, starting with `Count`, `Event(Died(...))` and the actions above.
 

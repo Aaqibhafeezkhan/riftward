@@ -31,6 +31,7 @@ impl Plugin for ItemsPlugin {
     fn build(&self, app: &mut App) {
         use Category::*;
         app.init_resource::<ItemTemplates>()
+            .init_resource::<Restored>()
             .add_systems(
                 Update,
                 (sync_templates, restore_room_items, load_carried_items).chain(),
@@ -170,6 +171,17 @@ pub type ItemMutQuery<'w, 's> =
 /// Every item template from every loaded zone.
 #[derive(Resource, Default)]
 pub struct ItemTemplates(pub HashMap<ItemKey, ItemDef>);
+
+impl ItemTemplates {
+    /// The template's own key, if there is such a template.
+    pub fn find(&self, key: &ItemKey) -> Option<&ItemKey> {
+        self.0.get_key_value(key).map(|(key, _)| key)
+    }
+}
+
+/// Whether real items have been put back in their rooms since the server started.
+#[derive(Resource, Default)]
+pub struct Restored(pub bool);
 
 /// "A torch", to start a sentence.
 pub fn capitalized(name: &str) -> String {
@@ -558,7 +570,7 @@ pub fn counted<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<String> {
         .collect()
 }
 
-fn spawn_item(
+pub fn spawn_item(
     commands: &mut Commands,
     templates: &ItemTemplates,
     key: ItemKey,
@@ -639,20 +651,20 @@ fn sync_templates(
 
 /// Once the world has loaded, put real items back in the rooms they were left in, with their
 /// contents. Items whose room no longer exists are moved to the start room.
-fn restore_room_items(
+pub fn restore_room_items(
     mut commands: Commands,
-    mut done: Local<bool>,
+    mut done: ResMut<Restored>,
     index: Res<RoomIndex>,
     templates: Res<ItemTemplates>,
     db: Res<Database>,
 ) {
-    if *done || templates.0.is_empty() {
+    if done.0 || templates.0.is_empty() {
         return;
     }
     let Some(start) = index.start() else {
         return;
     };
-    *done = true;
+    done.0 = true;
 
     let rows = match db.items_in_rooms() {
         Ok(rows) => rows,
