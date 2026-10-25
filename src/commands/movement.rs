@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use crate::command::Invocation;
 use crate::commands::doors::{DoorLookup, find_door};
 use crate::db::{Database, Permission};
+use crate::events::{GameEvent, Way, way_back};
 use crate::items::{
     ItemLocation, ItemQuery, ItemTemplates, capitalized, counted, describe_item, find_item,
 };
@@ -99,18 +100,37 @@ pub fn look(
 }
 
 /// `go <direction>`.
-pub fn go(In(inv): In<Invocation>, mut players: PlayerQuery, view: View, db: Res<Database>) {
+pub fn go(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    view: View,
+    db: Res<Database>,
+    mut events: MessageWriter<GameEvent>,
+) {
     let out = if inv.args.is_empty() {
         vec![Outgoing::line(inv.entity, "Go where?")]
     } else {
-        travel(inv.entity, &inv.args, &mut players, &view, &db)
+        travel(inv.entity, &inv.args, &mut players, &view, &db, &mut events)
     };
     deliver(out, &mut players);
 }
 
 /// `north`, `south`, ... and their short forms: the command's name is the direction.
-pub fn walk(In(inv): In<Invocation>, mut players: PlayerQuery, view: View, db: Res<Database>) {
-    let out = travel(inv.entity, inv.command, &mut players, &view, &db);
+pub fn walk(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    view: View,
+    db: Res<Database>,
+    mut events: MessageWriter<GameEvent>,
+) {
+    let out = travel(
+        inv.entity,
+        inv.command,
+        &mut players,
+        &view,
+        &db,
+        &mut events,
+    );
     deliver(out, &mut players);
 }
 
@@ -120,6 +140,7 @@ fn travel(
     players: &mut PlayerQuery,
     view: &View,
     db: &Database,
+    events: &mut MessageWriter<GameEvent>,
 ) -> Vec<Outgoing> {
     let mut out = Vec::new();
     let Some(actor) = Actor::get(players, entity) else {
@@ -146,16 +167,18 @@ fn travel(
     }
     let to = exit.to;
 
-    out.push(Outgoing::Room {
+    events.write(GameEvent::Left {
+        who: entity,
+        name: actor.name.clone(),
         room: actor.room,
-        except: entity,
-        text: format!("{} leaves {dir}.\r\n", actor.name),
+        way: Way::Walked(Some(dir)),
     });
     move_player(entity, actor.character_id, to, players, view, db, &mut out);
-    out.push(Outgoing::Room {
+    events.write(GameEvent::Entered {
+        who: entity,
+        name: actor.name.clone(),
         room: to,
-        except: entity,
-        text: format!("{} arrives.\r\n", actor.name),
+        way: Way::Walked(way_back(&view.rooms, to, actor.room)),
     });
     out
 }

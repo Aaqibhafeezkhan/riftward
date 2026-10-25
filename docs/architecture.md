@@ -32,6 +32,8 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `world.rs` | Zone assets (rooms, doors, item and mob templates, spawns), room entities, the `RoomIndex`, and `sync_world`, which applies zone changes live |
 | `items.rs` | Item entities, Bulk and placement rules, persistence, and the item commands |
 | `mobs.rs` | Mob entities, spawns and their timers, wandering, `summon` and `purge` |
+| `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
+| `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
@@ -98,11 +100,24 @@ Items and mobs are entities made from templates in zone files. Items have an `It
 
 ### Game events
 
-One vocabulary of game events (`Attacked`, `DodgeSucceeded`, `ManaSpent`, `DamageTaken`, `EnteredRoom`, `ItemPickedUp`, ...) published as Bevy messages by every system. Passive-skill triggers, hidden-skill triggers and easter-egg flags all listen to the same events, so new content adds events, not special cases.
+Started. One vocabulary of game events, the `GameEvent` message in `events.rs`, written by whichever system makes something happen. Passive-skill triggers, hidden-skill triggers, quests, world events and easter-egg flags all listen to the same events, so new content adds events, not special cases.
+
+| Event | Written by | Heard by |
+| --- | --- | --- |
+| `Left`, `Entered` (with `Way::Walked(direction)` or `Way::Teleported`) | Walking, `goto`, wandering mobs | The room announcements: "A stray dog leaves east.", "Gandalf arrives from the west." |
+| `PhaseChanged(phase)` | The game clock | Announcements to everyone outdoors |
+
+More arrive as their systems do: `ItemPickedUp`, `DoorOpened`, `Attacked`, `DodgeSucceeded`, `ManaSpent`, `DamageTaken`, `Died`.
 
 ### Time
 
-A game clock with day and night, a regular tick for regeneration, and actions that take time to complete (lessons, rituals, casting). Practice fade and cooldowns already use stored timestamps, so they need no timer of their own.
+Started.
+
+- **The game clock** runs eight times faster than real time: a full day and night every **3 real hours**, a game hour every 7½ real minutes. It's worked out from the real time, so it needs no saving and a restart doesn't move it.
+- **Parts of the day:** dawn from 5, day from 7, dusk from 19, night from 21. Each begins with a message to everyone outdoors; rooms flagged `indoors` (the sewers, the guildhall, the keep's halls) don't see it. `time` shows the hour, read from the sky or guessed indoors.
+- **One heartbeat, once a second,** for systems that don't need every frame: spawns, wandering and the clock today; regeneration and cooldowns later. Heartbeat systems work from elapsed time and timestamps, never by counting beats, so the rate is a performance setting rather than a game rule, and a stalled server doesn't change the game. There's no old-style global tick to wait for.
+- **Still to come:** regeneration (once there's current health and fatigue), combat rounds (2-3 seconds, with combat), and actions that take time to finish (lessons, rituals, casting).
+- **Open:** a calendar (days, months, seasons) from *The Agryn's Legacy*, and whether night changes anything beyond the messages, such as needing light outdoors.
 
 ### Combat
 
@@ -172,7 +187,7 @@ The in-game prompt shows the character's state, such as `<14/18hp 9/10fat>`, ins
 
 1. ~~**Command system and targeting.**~~ Built.
 2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then mobs that stand in rooms and can be looked at. *Built, except item spawns.*
-3. **Game events and time.** Both small, but everything after this uses them.
+3. **Game events and time.** Both small, but everything after this uses them. *Started: the clock, the heartbeat, and movement and day events.*
 4. **The [skill core](skills.md#build-plan), with combat as its first use.** The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
 
 Then teaching, epiphany, trainers and loot follow: trainers are mobs, loot scrolls are items, and passive skills have events to trigger on.

@@ -13,16 +13,15 @@ use bevy::prelude::*;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
 use crate::dice::Dice;
+use crate::events::{GameEvent, Way, way_back};
 use crate::items::{capitalized, counted};
 use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::targeting::{Keywords, Target};
+use crate::time::heartbeat;
 use crate::world::{
     Door, Every, InRoom, MobDef, MobKey, RoomIndex, RoomKey, SpawnDef, SpawnKey, Wander, ZoneDef,
 };
-
-/// How often, in seconds, spawns check whether they're due.
-const SPAWN_CHECK_SECS: f64 = 1.0;
 
 pub struct MobsPlugin;
 
@@ -32,7 +31,10 @@ impl Plugin for MobsPlugin {
             .init_resource::<Spawns>()
             .init_resource::<SpawnTimers>()
             .add_systems(Startup, load_spawn_timers)
-            .add_systems(Update, (sync_mob_templates, run_spawns, wander).chain())
+            .add_systems(
+                Update,
+                (sync_mob_templates, (run_spawns, wander).run_if(heartbeat())).chain(),
+            )
             .add_command(
                 CommandSpec::new("summon", Category::Building)
                     .usage("summon <mob>")
@@ -223,11 +225,10 @@ pub fn spawn_mob(
     Some(commands.spawn((mob, def.keywords(), InRoom(room))).id())
 }
 
-/// Check each spawn about once a second and refill the ones that are due.
+/// Check each spawn, on the heartbeat, and refill the ones that are due.
 #[allow(clippy::too_many_arguments)]
 fn run_spawns(
     mut commands: Commands,
-    mut last: Local<f64>,
     time: Res<Time>,
     index: Res<RoomIndex>,
     rooms: RoomQuery,
@@ -239,10 +240,9 @@ fn run_spawns(
     mobs: Query<(Entity, &InRoom, Option<&SpawnedBy>), OnlyMobs>,
 ) {
     let elapsed = time.elapsed_secs_f64();
-    if elapsed - *last < SPAWN_CHECK_SECS || index.0.is_empty() || templates.0.is_empty() {
+    if index.0.is_empty() || templates.0.is_empty() {
         return;
     }
-    *last = elapsed;
 
     // Mobs whose room was removed from its zone go away; their spawn will replace them.
     let mut alive: HashMap<&SpawnKey, u32> = HashMap::new();
@@ -324,12 +324,11 @@ fn wander(
     rooms: RoomQuery,
     doors: Query<&Door>,
     mut dice: ResMut<Dice>,
-    mut mobs: Query<(&Mob, &SpawnedBy, &mut InRoom, &mut Wanderer), Without<Connection>>,
-    mut players: PlayerQuery,
+    mut mobs: Query<(Entity, &Mob, &SpawnedBy, &mut InRoom, &mut Wanderer), Without<Connection>>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let elapsed = time.elapsed_secs_f64();
-    let mut out = Vec::new();
-    for (mob, spawned_by, mut in_room, mut wanderer) in &mut mobs {
+    for (entity, mob, spawned_by, mut in_room, mut wanderer) in &mut mobs {
         if wanderer.next > elapsed {
             continue;
         }
@@ -364,19 +363,20 @@ fn wander(
         let pick = dice.range(0, 0..=(choices.len() as i64 - 1)) as usize;
         let (dir, to) = choices[pick];
         let name = capitalized(&mob.name);
-        out.push(Outgoing::Room {
+        events.write(GameEvent::Left {
+            who: entity,
+            name: name.clone(),
             room: in_room.0,
-            except: Entity::PLACEHOLDER,
-            text: format!("{name} leaves {dir}.\r\n"),
+            way: Way::Walked(Some(dir.clone())),
         });
-        out.push(Outgoing::Room {
+        events.write(GameEvent::Entered {
+            who: entity,
+            name,
             room: to,
-            except: Entity::PLACEHOLDER,
-            text: format!("{name} arrives.\r\n"),
+            way: Way::Walked(way_back(&rooms, to, in_room.0)),
         });
         in_room.0 = to;
     }
-    deliver(out, &mut players);
 }
 
 /// The lines a room shows for the mobs in it, with repeats counted.

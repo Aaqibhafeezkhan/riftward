@@ -75,6 +75,9 @@ pub struct RoomDef {
     /// Wandering mobs never enter, like a shrine or a shop.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_wander: bool,
+    /// Under a roof or underground: the sky can't be seen, so dawn and dusk pass unnoticed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub indoors: bool,
 }
 
 /// Where an exit leads: a room id in this zone, or `zone:room` for another zone. Plain exits are
@@ -571,6 +574,7 @@ impl ZoneDef {
             description: "An unfinished room. (Use 'desc' to describe it.)".into(),
             exits: BTreeMap::new(),
             no_wander: false,
+            indoors: false,
         };
         Self {
             id: id.into(),
@@ -702,6 +706,8 @@ pub struct Room {
     pub description: String,
     /// Wandering mobs never enter.
     pub no_wander: bool,
+    /// The sky can't be seen from here.
+    pub indoors: bool,
 }
 
 /// Direction name -> where that exit leads.
@@ -945,6 +951,7 @@ fn sync_world(
                     touched.push(entity);
                 }
                 room.no_wander = def.no_wander;
+                room.indoors = def.indoors;
             }
             None => {
                 let entity = commands
@@ -953,6 +960,7 @@ fn sync_world(
                             name: def.name.clone(),
                             description: def.description.clone(),
                             no_wander: def.no_wander,
+                            indoors: def.indoors,
                         },
                         key.clone(),
                         Exits::default(),

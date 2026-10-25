@@ -17,7 +17,7 @@ Each document below covers one area and can be read on its own. This page is the
 
 | Document | Covers | Status |
 | --- | --- | --- |
-| [Architecture](architecture.md) | How the server is built today, and the foundation still needed: commands, items and mobs, events, time, combat | Partly built; foundation proposed |
+| [Architecture](architecture.md) | How the server is built today, and the foundation still needed: commands, items and mobs, events, time, combat | Partly built; events and time started |
 | [Skills](skills.md) | Skill trees, active and passive skills, rarity, how skills are acquired, hidden skills | Designed |
 | [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Designed |
 | [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
@@ -37,6 +37,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Riftwatch, the starting town, and the sewers beneath it ([map](riftwatch.md#map)).
 - Items: templates with Bulk and tags, hands, wear slots, containers (backpacks, pouches, keyrings, pockets, chests) with automatic placement, encumbrance, keys, and real items that survive restarts.
 - Mobs: templates and spawns in zone files, timed and after-death resets that count their mobs wherever they wander, wandering within rooms, a zone or anywhere, and the builder `mob`, `spawn`, `summon` and `purge` commands. Riftwatch has guards, a stray dog, the contract clerk, the herbalist and the drill sergeant; the sewers have rats.
+- Game time: a day and night every 3 real hours, dawn and dusk announced outdoors, `time`, and a one-second heartbeat. Movement goes through shared game events, so arrivals say where people came from.
 - Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.
@@ -86,6 +87,7 @@ Designed, waiting on other work:
 | Magic | Latent until the character knows a casting skill; knowing one is being Awakened. Four traditions; masters can teach casting skills; Awakened backgrounds grant one but require Magic 1, bought with starting Karma |
 | Commands | Players can define aliases; aliases can't shadow built-in commands |
 | Persistence | An item becomes real (saved) the moment a player touches it, and then survives restarts wherever it is. Untouched spawns and mobs reset |
+| Time | A day and night every 3 real hours. No global tick: a one-second heartbeat, and systems that work from elapsed time and timestamps |
 | Spawns | One model: each spawn resets on its own timer (`every`, or `AfterDeath` for bosses) and either keeps a count or breeds, reseeding a week after being wiped out. Mobs count toward their spawn wherever they wander |
 | World events | Data-driven triggers and actions over world flags, counters, spawn counts and game events |
 | Item decay | Dropped items decay (litter); perishables rot even when carried; unique items never decay |

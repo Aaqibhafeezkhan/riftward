@@ -13,6 +13,7 @@ use crate::attributes::{Attribute, Attributes};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::commands::movement::{View, full_direction, move_player, toward};
 use crate::db::{Database, Permission, Role};
+use crate::events::{GameEvent, Way};
 use crate::mobs::SpawnedBy;
 use crate::net::Connection;
 use crate::output::{
@@ -74,6 +75,14 @@ impl Plugin for BuildPlugin {
             .add_command(
                 build("desc", "desc <text>", "set this room's description"),
                 desc_cmd,
+            )
+            .add_command(
+                build(
+                    "flag",
+                    "flag [indoors | no_wander] [on | off]",
+                    "show this room's flags, or set one: indoors (no sky), no_wander (mobs keep out)",
+                ),
+                flag_cmd,
             )
             .add_command(
                 build(
@@ -189,6 +198,7 @@ fn goto_cmd(
     view: View,
     index: Res<RoomIndex>,
     db: Res<Database>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let Some((actor, here)) = locate(&players, &view.rooms, inv.entity) else {
         return;
@@ -203,6 +213,7 @@ fn goto_cmd(
         &index,
         &db,
         &mut out,
+        &mut events,
     ) {
         out.push(reply_line(inv.entity, Err(err)));
     }
@@ -230,6 +241,7 @@ macro_rules! zone_edit_command {
 zone_edit_command!(dig_cmd, dig);
 zone_edit_command!(rename_cmd, rename);
 zone_edit_command!(desc_cmd, describe);
+zone_edit_command!(flag_cmd, room_flag);
 zone_edit_command!(unlink_cmd, unlink);
 
 fn link_cmd(
@@ -416,6 +428,7 @@ fn goto(
     index: &RoomIndex,
     db: &Database,
     out: &mut Vec<Outgoing>,
+    events: &mut MessageWriter<GameEvent>,
 ) -> Result<(), String> {
     if inv.args.is_empty() {
         return Err(inv.usage_error());
@@ -427,16 +440,18 @@ fn goto(
         .get(&target)
         .ok_or_else(|| format!("There is no room [{target}]."))?;
 
-    out.push(Outgoing::Room {
+    events.write(GameEvent::Left {
+        who: entity,
+        name: name.clone(),
         room: from,
-        except: entity,
-        text: format!("{name} vanishes.\r\n"),
+        way: Way::Teleported,
     });
     move_player(entity, actor.character_id, to, players, view, db, out);
-    out.push(Outgoing::Room {
+    events.write(GameEvent::Entered {
+        who: entity,
+        name: name.clone(),
         room: to,
-        except: entity,
-        text: format!("{name} appears out of thin air.\r\n"),
+        way: Way::Teleported,
     });
     Ok(())
 }
@@ -470,6 +485,7 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
                 description: "An unfinished room. (Use 'desc' to describe it.)".into(),
                 exits,
                 no_wander: false,
+                indoors: false,
             },
         );
         room_mut(zone, here)?
@@ -503,6 +519,44 @@ fn describe(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Re
     edit_zone(zones, &here.zone, |zone| {
         room_mut(zone, here)?.description = args.into();
         Ok("Description updated.".into())
+    })
+}
+
+/// `flag [<flag> <on|off>]`: show or set the current room's flags.
+fn room_flag(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    let show = |room: &RoomDef| {
+        let on_off = |on: bool| if on { "on" } else { "off" };
+        format!(
+            "Flags for [{here}]: indoors {}, no_wander {}.",
+            on_off(room.indoors),
+            on_off(room.no_wander)
+        )
+    };
+    let words: Vec<&str> = inv.args.split_whitespace().collect();
+    let on = match words.get(1).copied() {
+        Some("on" | "yes") => true,
+        Some("off" | "no") => false,
+        None if words.is_empty() => {
+            let zone = zone_def(zones, &here.zone)?;
+            let room = zone
+                .rooms
+                .get(&here.room)
+                .ok_or("This room no longer exists in its zone file.")?;
+            return Ok(show(room));
+        }
+        _ => return Err(inv.usage_error()),
+    };
+    let flag = words[0].to_string();
+    if !matches!(flag.as_str(), "indoors" | "no_wander") {
+        return Err(inv.usage_error());
+    }
+    edit_zone(zones, &here.zone, |zone| {
+        let room = room_mut(zone, here)?;
+        match flag.as_str() {
+            "indoors" => room.indoors = on,
+            _ => room.no_wander = on,
+        }
+        Ok(show(room))
     })
 }
 

@@ -76,7 +76,7 @@ Each spawn says how far its mobs may roam and how often they move.
 - **Each mob moves on its own random interval,** `min` to `max` seconds, so a room's goblins don't all move in the same tick. Each move picks a random open exit it's allowed to take, rolled through [`Dice`](attributes.md#the-dice-service). Mobs don't open doors yet.
 - **Rooms can refuse wanderers** with a `no_wander` flag: temples, shops, players' homes.
 - **A puppeted mob doesn't wander.** While a GM or admin [puppets](architecture.md#game-masters-and-puppeting) it, it only moves when they move it.
-- **Wanderers move like players.** Rooms see "A stray dog arrives." and "A city guard leaves north.", and each move fires the same `EnteredRoom` [game event](architecture.md#game-events), so triggers and passive skills see mob movement too.
+- **Wanderers move like players.** Rooms see "A stray dog arrives from the west." and "A city guard leaves north.", from the same `Left` and `Entered` [game events](architecture.md#game-events) players' moves write, so triggers and passive skills will see mob movement too.
 
 ## Mob templates
 
@@ -112,7 +112,7 @@ Rooms show each mob's `here` line, with repeats counted (`(x8)`), and `look <dir
 | `summon <mob>` | Bring a mob here that belongs to no spawn, for testing |
 | `purge [<mob>]` | Remove a mob here, or every mob here. Its spawn refills at its next reset |
 
-Rooms marked `no_wander: true` in the zone file turn wanderers away. Riftwatch marks its shops, the shrine and the guild's quieter rooms.
+Rooms can be flagged with `flag <indoors|no_wander> <on|off>`, or in the zone file. `no_wander` turns wanderers away; Riftwatch marks its shops, the shrine and the guild's quieter rooms. `indoors` hides the sky, so dawn and dusk pass unannounced; the sewers and the town's halls are indoors.
 
 ## Doors
 

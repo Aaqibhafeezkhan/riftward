@@ -9,12 +9,14 @@ mod command;
 mod commands;
 mod db;
 mod dice;
+mod events;
 mod items;
 mod login;
 mod mobs;
 mod net;
 mod output;
 mod targeting;
+mod time;
 mod world;
 
 use std::time::Duration;
@@ -50,6 +52,8 @@ fn main() {
             build::BuildPlugin,
             items::ItemsPlugin,
             mobs::MobsPlugin,
+            events::EventsPlugin,
+            time::TimePlugin,
         ))
         .run();
 }

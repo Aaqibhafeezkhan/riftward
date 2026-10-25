@@ -374,6 +374,7 @@
         "guildhall": (
             name: "Adventurers' Guildhall",
             description: "A long common hall with a roaring hearth, scarred tables and a crowd of adventurers trading stories and lies. Trophies from beyond the walls hang from the rafters, some of them still unsettling to look at.",
+            indoors: true,
             exits: {
                 "south": (to: "guild_row", door: "guild_doors"),
                 "west": "contract_hall",
@@ -385,6 +386,7 @@
         "guild_cellar": (
             name: "Guild Cellar",
             description: "A low stone cellar crowded with barrels, sacks and crates of the guild's stores. In the far corner an iron hatch is set into the floor, padlocked and smelling faintly of the sewers.",
+            indoors: true,
             exits: {
                 "up": "guildhall",
                 "down": (to: "sewers:guild_drain", door: "guild_hatch"),
@@ -393,6 +395,7 @@
         "contract_hall": (
             name: "Contract Hall",
             description: "A quieter room where the guild's work is posted. A great board is layered with contracts, bounties and warnings, the older ones curling at the edges beneath the newer.",
+            indoors: true,
             no_wander: true,
             exits: {
                 "east": "guildhall",
@@ -401,6 +404,7 @@
         "guild_archive": (
             name: "Guild Archive",
             description: "Shelves of ledgers, maps and battered books fill this cramped room, the guild's long memory of what lies beyond the walls. A reading desk sits beneath the only window, and a locked case holds the volumes the guild guards most closely.",
+            indoors: true,
             no_wander: true,
             exits: {
                 "west": "guildhall",
@@ -409,6 +413,7 @@
         "guild_quarters": (
             name: "Guild Quarters",
             description: "A narrow upstairs corridor lined with plain sleeping rooms, rented by the night to members between contracts.",
+            indoors: true,
             no_wander: true,
             exits: {
                 "down": "guildhall",
@@ -428,6 +433,7 @@
         "shrine": (
             name: "Wayside Shrine",
             description: "A small stone shrine set back from the street, lit by guttering candles and heaped with offerings. Travellers stop here to give thanks for safe roads, or to ask for them.",
+            indoors: true,
             no_wander: true,
             exits: {
                 "east": "high_street",
@@ -454,6 +460,7 @@
         "barracks": (
             name: "Barracks",
             description: "Rows of narrow bunks and footlockers, smelling of sweat, oil and woodsmoke. Off-duty soldiers dice and doze between watches.",
+            indoors: true,
             exits: {
                 "south": "garrison_yard",
             },
@@ -461,6 +468,7 @@
         "armory": (
             name: "Armory",
             description: "Racks of spears, crossbows and shields stand in careful order, each one tallied in the quartermaster's ledger.",
+            indoors: true,
             exits: {
                 "west": (to: "garrison_yard", door: "armory_door"),
             },
@@ -486,6 +494,7 @@
         "keep_dungeon": (
             name: "Keep Dungeon",
             description: "A row of damp cells beneath the keep, most of them empty, their doors hanging open. Water seeps down the walls, and a stout iron door at the end of the passage leads deeper still.",
+            indoors: true,
             exits: {
                 "up": "keep_courtyard",
                 "down": (to: "sewers:sluice", door: "dungeon_door"),
@@ -501,6 +510,7 @@
         "great_hall": (
             name: "Great Hall",
             description: "The lord's great hall, hung with faded tapestries and lit by high windows. A long table runs beneath a raised dais where the lord holds court and hears petitions.",
+            indoors: true,
             exits: {
                 "north": "keep_courtyard",
                 "up": (to: "lords_solar", door: "solar_door"),
@@ -509,6 +519,7 @@
         "lords_solar": (
             name: "Lord's Solar",
             description: "The lord's private chamber: a warm, book-lined room with a wide desk covered in maps, letters and reports from the border.",
+            indoors: true,
             no_wander: true,
             exits: {
                 "down": (to: "great_hall", door: "solar_door"),
