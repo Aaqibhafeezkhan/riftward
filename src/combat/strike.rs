@@ -886,6 +886,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             return Vec::new();
         }
         self.say(defender, "\x1b[1mYou riposte!\x1b[0m");
+        let name = capitalized(&self.name(defender));
+        self.say(attacker, format!("\x1b[1m{name} ripostes!\x1b[0m"));
         self.practise(defender, &counter);
         self.strike(defender, attacker, None, true)
     }

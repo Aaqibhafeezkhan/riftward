@@ -285,7 +285,11 @@
             here: "A town guard keeps watch, one hand resting on the hilt of a short sword.",
             description: "A broad-shouldered watchman in a dented helm and a tabard faded from Riftwatch's colours to something closer to grey. They look bored, which is not the same as inattentive.",
             attributes: {Body: 6, Strength: 5, Agility: 4, Reaction: 4},
-            skills: {"brawling:basics": 10, "athletics:dodge": 5},
+            skills: {
+                "brawling:basics": 10, "brawling:grapple": 5, "swordplay:basics": 10,
+                "swordplay:lunge": 5, "swordplay:riposte": 5, "athletics:dodge": 5,
+            },
+            equipment: ["short_sword"],
         ),
         "stray_dog": (
             name: "a stray dog",
@@ -315,7 +319,13 @@
             here: "The drill sergeant paces the yard, barking at anyone who stands still.",
             description: "A grizzled veteran with a voice like a rockslide and a wooden practice sword that has broken more knuckles than any real blade.",
             attributes: {Body: 7, Strength: 6, Agility: 5, Reaction: 5},
-            skills: {"brawling:basics": 20, "athletics:dodge": 10},
+            skills: {
+                "brawling:basics": 20, "brawling:grapple": 10, "brawling:kick": 10,
+                "swordplay:basics": 20, "swordplay:lunge": 10, "swordplay:riposte": 10,
+                "athletics:dodge": 10,
+            },
+            equipment: ["practice_sword"],
+            tactics: 40,
             teaches: [
                 "swordplay:basics", "knives:basics", "axes:basics", "hammers:basics", "staves:basics",
                 "athletics:toughness",

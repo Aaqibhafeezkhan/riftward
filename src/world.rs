@@ -424,6 +424,10 @@ pub struct MobDef {
     /// The attack it makes each round; without one, the basic attack.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attack: Option<String>,
+    /// Items it's made with (`item` or `zone:item` templates): wearable ones worn, the rest held,
+    /// two at most. It fights with a weapon in hand, and its gear falls into its corpse.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub equipment: Vec<String>,
     /// Its health, instead of the usual 8 + Body / 2: a rat is small.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health: Option<i32>,
@@ -450,6 +454,7 @@ impl MobDef {
             attributes: BTreeMap::new(),
             skills: BTreeMap::new(),
             attack: None,
+            equipment: Vec::new(),
             health: None,
             tactics: None,
             aggressive: false,

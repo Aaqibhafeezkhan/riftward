@@ -14,7 +14,7 @@ use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Permission;
 use crate::dice::Dice;
 use crate::events::{GameEvent, Way, way_back};
-use crate::items::{capitalized, counted};
+use crate::items::{self, HANDS, ItemLocation, ItemTemplates, capitalized, counted};
 use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::skills::{SkillDefs, SkillState, Skills};
@@ -22,7 +22,9 @@ use crate::spawns::{SpawnedBy, Spawns};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
-use crate::world::{Door, InRoom, MobDef, MobKey, RoomKey, SpawnKey, Spawned, Wander, ZoneDef};
+use crate::world::{
+    Door, InRoom, ItemKey, MobDef, MobKey, RoomKey, SpawnKey, Spawned, Wander, ZoneDef,
+};
 
 /// The chance, in percent, that a mob uses a technique skill on its turn, unless its template says.
 const DEFAULT_TACTICS: u32 = 25;
@@ -140,10 +142,11 @@ pub fn sync_mob_templates(
     }
 }
 
-/// Make a mob from its template in `room`.
+/// Make a mob from its template in `room`, with its gear.
 pub fn spawn_mob(
     commands: &mut Commands,
     templates: &MobTemplates,
+    item_templates: &ItemTemplates,
     defs: &SkillDefs,
     key: &MobKey,
     room: Entity,
@@ -196,7 +199,32 @@ pub fn spawn_mob(
     if def.aggressive {
         entity.insert(Aggressive);
     }
-    Some(entity.id())
+    let id = entity.id();
+    // Its gear: what can be worn is worn, the rest held while it has hands free.
+    let (mut held, mut worn) = (0, Vec::new());
+    for item in &def.equipment {
+        let item = ItemKey::parse(item, &key.zone);
+        let Some(item_def) = item_templates.0.get(&item) else {
+            warn!("mob [{key}]: no item template [{item}]");
+            continue;
+        };
+        let location = match item_def.wear {
+            Some(slot) if !worn.contains(&slot) => {
+                worn.push(slot);
+                ItemLocation::Worn(id, slot)
+            }
+            _ if held < HANDS => {
+                held += 1;
+                ItemLocation::Held(id)
+            }
+            _ => {
+                warn!("mob [{key}]: no room to carry [{item}]");
+                continue;
+            }
+        };
+        items::spawn_item(commands, item_templates, item, None, location);
+    }
+    Some(id)
 }
 
 /// A random wait in the range `secs`, inclusive.
@@ -352,6 +380,7 @@ fn summon(
     mut players: PlayerQuery,
     rooms: RoomQuery,
     templates: Res<MobTemplates>,
+    item_templates: Res<ItemTemplates>,
     defs: Res<SkillDefs>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
@@ -370,7 +399,14 @@ fn summon(
             format!("There's no mob template [{key}]."),
         )),
         Some(def) => {
-            spawn_mob(&mut commands, &templates, &defs, &key, actor.room);
+            spawn_mob(
+                &mut commands,
+                &templates,
+                &item_templates,
+                &defs,
+                &key,
+                actor.room,
+            );
             out.push(Outgoing::line(
                 inv.entity,
                 format!("You summon {} [{key}].", def.name),
@@ -430,6 +466,60 @@ fn purge(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::items::Item;
+    use crate::world::Slot;
+    use bevy::ecs::system::RunSystemOnce;
+
+    #[test]
+    fn mobs_are_made_with_their_gear() {
+        let mut world = World::new();
+        let key = MobKey::parse("town:guard", "");
+        let mut guard = MobDef::named("a town guard");
+        // The helm is worn, the sword and shield fill both hands, so a second helm has nowhere to
+        // go, and there's no such thing as a torch here.
+        guard.equipment = ["sword", "helm", "shield", "helm", "torch"]
+            .map(String::from)
+            .to_vec();
+        let mut items = ItemTemplates::default();
+        for (id, wear) in [
+            ("sword", None),
+            ("helm", Some(Slot::Head)),
+            ("shield", None),
+        ] {
+            let mut def = crate::world::ItemDef::named(id);
+            def.wear = wear;
+            items.0.insert(ItemKey::parse(id, "town"), def);
+        }
+        world.insert_resource(MobTemplates(HashMap::from([(key.clone(), guard)])));
+        world.insert_resource(items);
+        world.insert_resource(SkillDefs::default());
+        let room = world.spawn_empty().id();
+        let mob = world
+            .run_system_once(
+                move |mut commands: Commands,
+                      mobs: Res<MobTemplates>,
+                      items: Res<ItemTemplates>,
+                      defs: Res<SkillDefs>| {
+                    spawn_mob(&mut commands, &mobs, &items, &defs, &key, room)
+                },
+            )
+            .unwrap()
+            .unwrap();
+        let mut gear: Vec<(String, ItemLocation)> = world
+            .query::<(&Item, &ItemLocation)>()
+            .iter(&world)
+            .map(|(item, location)| (item.name.clone(), *location))
+            .collect();
+        gear.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            gear,
+            [
+                ("helm".to_string(), ItemLocation::Worn(mob, Slot::Head)),
+                ("shield".to_string(), ItemLocation::Held(mob)),
+                ("sword".to_string(), ItemLocation::Held(mob)),
+            ]
+        );
+    }
 
     #[test]
     fn wanderers_keep_to_their_range() {

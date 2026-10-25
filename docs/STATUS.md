@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -11,7 +11,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Engine:** telnet with proper negotiation (`src/telnet.rs`), prompts marked with EOR or GA for MUD clients, one command per tick, an action queue (combat actions take a 3-second round), game events, a game clock (a day every 3 real hours), a one-second heartbeat.
 - **World:** zone files (RON, hot-reloaded) for Riftwatch (25 rooms), its sewers (22) and the Darkwood (6); doors and locks; terrain that costs stamina to cross; in-game building.
 - **Items:** templates, Bulk and encumbrance, hands and wear slots, containers and automatic placement, weapons, corpses that rot, real items that survive restarts, item spawns, unique items.
-- **Mobs:** templates and spawns (keeping a count, breeding, after-death and reseed timers, gated by world flags), wandering and crowding, pack limits, aggression, auras.
+- **Mobs:** templates and spawns (keeping a count, breeding, after-death and reseed timers, gated by world flags), wandering and crowding, pack limits, aggression, auras, the players' vitals, technique skills used by chance, and equipment they fight with and drop.
 - **Characters:** creation (race with Earthdawn-style shifts, starting Karma, a background as a past life, a description), vitals that recover (faster resting, offline too, never in a fight), `score`, `describe`, aliases, a custom prompt.
 - **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, character levels that earn Karma, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`, entry skills only), discovery of a tree's other skills through use, a tough-fight boost to learning, Awakening to the four magic traditions.
 - **Combat:** rounds in initiative order, auto-attacks, weapons (trained and untrained), techniques for every weapon tree's journeyman tier, conditions (staggered, down, bleeding, held, guarding, exposed), stamina costs, fleeing, death and respawn at the shrine, corpses that keep a player's gear, and death for anyone who quits or disconnects mid-fight.
@@ -33,7 +33,7 @@ After that, in order ([Proposed order](trees.md#proposed-order)): healing and co
 
 ## Small things noticed and not yet done
 
-- No mob template gives a technique skill (Cleave, Guard…) yet, so no mob uses one.
+- Town guards drop their short swords and respawn, so they can be farmed for them. Fine while nothing is sold; worth a look once shops exist.
 - Discovery chance (0.1% a use) and the tough-fight cap (2×) are first guesses, untested in play.
 - Room descriptions don't show who's fighting whom.
 - A pack attacking repeats "The sewer rat attacks you!" once per rat.

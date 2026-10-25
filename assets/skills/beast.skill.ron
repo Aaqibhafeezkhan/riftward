@@ -17,6 +17,12 @@
             name: "Claw",
             kind: Attack(verb: "claw", damage: (1, 3)),
         ),
+        // Raking claws that leave wounds bleeding.
+        "rend": (
+            name: "Rend",
+            kind: Technique((with: "beast:claw", verb: "rake", cost: Stamina(2),
+                effects: [Bleed(damage: 1, rounds: 3)])),
+        ),
         "rat_kings_command": (
             name: "Rat King's Command",
             kind: Aura(affects: "sewers:sewer_rat", bonus: (attack: 2, defence: 2, armour: 1)),

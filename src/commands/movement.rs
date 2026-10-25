@@ -5,13 +5,14 @@ use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
 use crate::characters::{Races, article};
-use crate::combat::Fighting;
+use crate::combat::{Fighting, the};
 use crate::command::Invocation;
 use crate::commands::doors::{DoorLookup, find_door};
 use crate::db::{Database, Permission};
 use crate::events::{GameEvent, Way, way_back};
 use crate::items::{
     ItemLocation, ItemQuery, ItemTemplates, capitalized, counted, describe_item, find_item,
+    gear_lines,
 };
 use crate::items::{Snapshot, bulk_limits};
 use crate::mobs::{self, MobQuery};
@@ -96,8 +97,12 @@ pub fn look(
                 Some((e, Some(me), _)) if e == actor.entity => {
                     format!("You look yourself over. {}", describe_player(me, &races))
                 }
-                Some((_, Some(other), _)) => describe_player(other, &races),
-                Some((_, _, Some((_, mob, _)))) => mobs::describe(mob) + "\r\n",
+                Some((e, Some(other), _)) => {
+                    describe_player(other, &races) + &gear_lines(e, &view.items, &other.name)
+                }
+                Some((e, _, Some((_, mob, _)))) => {
+                    mobs::describe(mob) + "\r\n" + &gear_lines(e, &view.items, &the(&mob.name))
+                }
                 _ => match find_item(&inv.args, &actor, &view.items, &keywords, &templates) {
                     Ok(item) => describe_item(item, &view.items, &templates) + "\r\n",
                     Err(err) => err + "\r\n",

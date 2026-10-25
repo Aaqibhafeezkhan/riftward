@@ -168,7 +168,8 @@ A container is an item with a `container` section. Worn containers carry your th
 - **Containers can't go inside themselves,** directly or through another container.
 - **Fixed containers belong to their spawn and are never real.** A chest's name is stable (its spawn's id), and each reset refills its contents and resets its lock. Until spawns exist, builders `create` them, which places a fixed item in the room.
 - **Contents follow the usual rule:** temporary until a player takes them, then real. Real items saved inside a fixed chest survive restarts, which is the basis for player storage later.
-- **Loot tables** roll through [`Dice.pick`](attributes.md#the-dice-service), so Luck applies; for a group, the group's average Luck. They come with spawns.
+- **A mob's gear is its first drop.** Mobs hold and wear items from their template's `equipment` (see [Mobs](world.md)); when one dies, its gear falls into its corpse, temporary like any untouched item until a player takes it. A guard killed in the market leaves its short sword behind. A mob removed any other way (purged, its template deleted) takes its gear with it.
+- **Loot tables** roll through [`Dice.pick`](attributes.md#the-dice-service), so Luck applies; for a group, the group's average Luck. They come with spawns, and add to what a mob's gear already drops.
 - **Corpses** will be portable containers with perishable decay.
 
 ## Locks and keys

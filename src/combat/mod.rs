@@ -532,7 +532,7 @@ fn handle_deaths(
     }
     let now = unix_now();
     for (entity, mob, in_room) in &dead_mobs {
-        items::spawn_corpse(
+        let corpse = items::spawn_corpse(
             &mut commands,
             &templates,
             &mob.name,
@@ -540,6 +540,14 @@ fn handle_deaths(
             in_room.0,
             now + MOB_CORPSE_SECS,
         );
+        // Its gear falls with it, for whoever wants it.
+        if let Some(corpse) = corpse {
+            for (_, _, mut location) in &mut items {
+                if location.holder() == Some(entity) {
+                    *location = ItemLocation::Inside(corpse);
+                }
+            }
+        }
         commands.entity(entity).despawn();
     }
 

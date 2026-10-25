@@ -454,9 +454,14 @@ fn run_spawns(
             Spawned::Mob(mob) => {
                 let mob = MobKey::parse(mob, &key.zone);
                 for _ in 0..make {
-                    let Some(entity) =
-                        mobs::spawn_mob(&mut commands, &mob_templates, &defs, &mob, room)
-                    else {
+                    let Some(entity) = mobs::spawn_mob(
+                        &mut commands,
+                        &mob_templates,
+                        &item_templates,
+                        &defs,
+                        &mob,
+                        room,
+                    ) else {
                         break;
                     };
                     let mut entity = commands.entity(entity);

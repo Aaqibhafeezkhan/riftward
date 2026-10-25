@@ -37,7 +37,7 @@ impl Plugin for ItemsPlugin {
                 Update,
                 (
                     (sync_templates, restore_room_items, load_carried_items).chain(),
-                    rot.run_if(heartbeat()),
+                    (rot, drop_orphaned).run_if(heartbeat()),
                 ),
             )
             .add_systems(
@@ -652,6 +652,41 @@ pub fn counted<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<String> {
         .collect()
 }
 
+/// What someone looking at `who` sees in their hands and on them, one line each, or nothing:
+/// "The town guard is holding a short sword." `name` is how to call them.
+pub fn gear_lines(who: Entity, items: &ItemQuery, name: &str) -> String {
+    let list = |names: Vec<&str>| {
+        let names = counted(names);
+        match names.as_slice() {
+            [rest @ .., last] if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+            _ => names.concat(),
+        }
+    };
+    let held: Vec<&str> = items
+        .iter()
+        .filter(|(_, _, location)| **location == ItemLocation::Held(who))
+        .map(|(_, item, _)| item.name.as_str())
+        .collect();
+    let worn: Vec<&str> = Slot::ALL
+        .into_iter()
+        .flat_map(|slot| {
+            items
+                .iter()
+                .filter(move |(_, _, location)| **location == ItemLocation::Worn(who, slot))
+                .map(|(_, item, _)| item.name.as_str())
+        })
+        .collect();
+    let name = capitalized(name);
+    let mut text = String::new();
+    if !held.is_empty() {
+        text += &format!("{name} is holding {}.\r\n", list(held));
+    }
+    if !worn.is_empty() {
+        text += &format!("{name} is wearing {}.\r\n", list(worn));
+    }
+    text
+}
+
 pub fn spawn_item(
     commands: &mut Commands,
     templates: &ItemTemplates,
@@ -899,6 +934,23 @@ fn unload_carried_items(mut commands: Commands, items: ItemQuery, connections: Q
     for info in &snapshot.items {
         if let Some(holder) = snapshot.root(info.entity).and_then(ItemLocation::holder)
             && connections.get(holder).is_ok_and(|conn| conn.closing)
+        {
+            commands.entity(info.entity).despawn();
+        }
+    }
+}
+
+/// Items held or worn by someone who's gone, like a purged mob's gear, go too, with whatever is
+/// inside them. (A mob's gear falls into its corpse when it dies, and players' items are unloaded
+/// as they leave, so this only catches mobs removed some other way.)
+fn drop_orphaned(mut commands: Commands, items: ItemQuery, existing: Query<()>) {
+    let snapshot = Snapshot::new(
+        items.iter().map(|(e, i, l)| (e, i, *l)),
+        &ItemTemplates::default(),
+    );
+    for info in &snapshot.items {
+        if let Some(holder) = snapshot.root(info.entity).and_then(ItemLocation::holder)
+            && existing.get(holder).is_err()
         {
             commands.entity(info.entity).despawn();
         }
@@ -1989,6 +2041,29 @@ mod tests {
             }),
             ..def(name, bulk)
         }
+    }
+
+    #[test]
+    fn gear_goes_when_its_holder_does() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        let item = |name: &str| Item {
+            key: ItemKey::parse(name, "test"),
+            name: name.into(),
+            id: None,
+            state: DoorState::Open,
+        };
+        let (gone, here) = (world.spawn_empty().id(), world.spawn_empty().id());
+        let pack = world
+            .spawn((item("pack"), ItemLocation::Worn(gone, Slot::Back)))
+            .id();
+        let coin = world.spawn((item("coin"), ItemLocation::Inside(pack))).id();
+        let sword = world.spawn((item("sword"), ItemLocation::Held(here))).id();
+        world.despawn(gone);
+        world.run_system_once(drop_orphaned).unwrap();
+        assert!(world.get_entity(pack).is_err());
+        assert!(world.get_entity(coin).is_err());
+        assert!(world.get_entity(sword).is_ok());
     }
 
     struct Fixture {
