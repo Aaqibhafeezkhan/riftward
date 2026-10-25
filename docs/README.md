@@ -18,15 +18,15 @@ Each document below covers one area and can be read on its own. This page is the
 | Document | Covers | Status |
 | --- | --- | --- |
 | [Architecture](architecture.md) | How the server is built today, and the foundation still needed: commands, items and mobs, events, time, combat | Partly built; events and time started |
-| [Skills](skills.md) | Skill trees, active and passive skills, rarity, how skills are acquired, hidden skills | Designed |
-| [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Designed |
+| [Skills](skills.md) | Skill trees, active and passive skills, rarity, how skills are acquired, hidden skills | Core built |
+| [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Built |
 | [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, vitals, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Designed |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
-| [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds, conditions | Built, except granting starting skills |
+| [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds, conditions | Built |
 
 ## What exists today
 
@@ -43,6 +43,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Per-character aliases.
 - Character creation: race, starting Karma, background (15, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
 - Attributes, starting Karma, `raise`, `score`, `describe`, and the Luck-aware `Dice` service.
+- Skills: trees as data, use-based progression with practice and cooldowns, active skills (`use`, `pick` for Lockpicking) and passive ones (Endurance), starting skills, character levels that earn Karma, `skills`.
 - Vitals: current health and stamina that recover over time (offline too), and a customisable status prompt, `<7/10hp 9/9st>`.
 
 ## Roadmap

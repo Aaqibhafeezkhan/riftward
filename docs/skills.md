@@ -1,6 +1,6 @@
 # Skills
 
-[Design summary](README.md) · Status: designed, not built
+[Design summary](README.md) · Status: the skill core is built (trees as data, levels, progression, active and passive skills, starting skills, `skills`, `use`); teaching, loot, epiphany, rarity rules and combat are not
 
 Characters have no class. What a character can do is the set of skills they have learned, organized into skill trees. Every skill improves only by being used; how that works is in [Progression](progression.md).
 
@@ -14,10 +14,10 @@ A tree is a themed set of skills, and a character has "opened" a tree once they 
 - **Skill ids** follow the zone convention: `basics` inside its own tree, `fire:basics` from another tree.
 - **Each skill links to an attribute.** A skill's effectiveness is its level plus that attribute (see [Attributes](attributes.md)). Trees set a default `attribute`, and a skill can override it.
 
-Trees live in data files, one per tree, hot-reloaded like zones:
+Trees live in data files, one per tree, hot-reloaded like zones. The files end in `.skill.ron` so Bevy doesn't mistake them for zone files:
 
 ```ron
-// assets/skills/swordplay.ron
+// assets/skills/swordplay.skill.ron
 (
     name: "Swordplay",
     rarity: Common,
@@ -216,6 +216,29 @@ flowchart LR
 ```
 
 **Skill core scope:** the combat round loop with the basic attack as its first skill, starting skills at character creation, tree files and their hot reload, the `character_skills` table with numbered migrations, the `Skills` component, `roll_skill_gain` with tests and a tuning simulation, a `skills` command, and an admin command to grant skills for testing.
+
+### What's built
+
+The skill core, without combat, proved on non-combat skills first:
+
+- **Trees** in `assets/skills/<tree>.skill.ron`, hot-reloaded: `thievery` (Lockpicking, Pickpocketing) and `athletics` (Endurance) so far. Fields built: `name`, `kind`, `max_level`, `attribute`, `rarity` (shown, not yet enforced), `difficulty`, `requires` (recorded for teaching).
+- **Kinds as built:**
+
+  ```ron
+  "lockpicking": (name: "Lockpicking", kind: Active(command: "pick", cost: Stamina(1), cooldown: 2)),
+  "endurance": (name: "Endurance", attribute: Willpower, kind: Passive(triggers: [StaminaSpent(per: 3)])),
+  ```
+
+  An **active** skill names the command that performs it; `use lockpicking north` runs `pick north`, so `use` stays generic and each skill's work lives with the system it acts on. The command checks the skill is known, off its use cooldown and affordable, pays the stamina, does its work, and counts the use. An active skill whose command doesn't exist yet ("You can't put Pickpocketing to use yet") can still be known and taught.
+
+  A **passive** skill lists [game event](architecture.md#game-events) triggers; `StaminaSpent(per: 3)` counts one use for every 3 stamina spent, so Endurance improves as a character exerts themselves.
+- **Effectiveness** is level + the skill's attribute, used in contests by the [ratio rule](attributes.md#the-ratio-rule). Lockpicking 0 with Agility 3 against a difficulty-6 lock is a 33% chance.
+- **Progression** exactly as in [Progression](progression.md), with Luck on the gain roll.
+- **Character level and Karma:** each gain that takes total skill levels past a multiple of 5 earns a point of Karma, at once.
+- **Starting skills** from race, background, and the universal list (`athletics:endurance` for now; the basic attack joins it with combat) are granted at login if the character lacks them, so skills added to the data later reach existing characters. Starting skills that don't exist as data yet are skipped.
+- **`skills`** lists what a character knows by tree: level, how warmed up it is (cold, warming, warm, hot), its attribute, and how long until it can improve again. Skills whose tree file is gone are listed as forgotten for now, and come back with it.
+- **Admins:** `grantskill <player> <tree:skill> [<level>]`.
+- **Saved** in `character_skills` on every use and learn.
 
 ## Open questions
 

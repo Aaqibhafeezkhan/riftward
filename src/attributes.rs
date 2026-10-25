@@ -107,6 +107,8 @@ pub struct Attributes {
     ratings: [i32; 10],
     start: [i32; 10],
     karma: i32,
+    /// Karma earned in play: one per character level.
+    earned: i32,
 }
 
 impl Default for Attributes {
@@ -123,6 +125,7 @@ impl Attributes {
             ratings: start,
             start,
             karma,
+            earned: 0,
         }
     }
 
@@ -170,9 +173,14 @@ impl Attributes {
             .sum()
     }
 
-    /// Karma available to spend. Earned Karma will be added once skills grant character levels.
+    /// Karma available to spend: starting and earned Karma, less what's been spent.
     pub fn karma_unspent(&self) -> i32 {
-        (self.karma - self.karma_spent()).max(0)
+        (self.karma + self.earned - self.karma_spent()).max(0)
+    }
+
+    /// Set the Karma earned in play, which is the character's level.
+    pub fn set_earned(&mut self, earned: i32) {
+        self.earned = earned;
     }
 
     /// Raise an attribute by one if there's Karma for it, or say why not.

@@ -35,6 +35,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
 | `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
+| `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
 | `vitals.rs` | Current health and stamina, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
@@ -193,7 +194,7 @@ Built, except the IAC GA marker. The in-game prompt shows the character's state,
 1. ~~**Command system and targeting.**~~ Built.
 2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then mobs that stand in rooms and can be looked at. *Built.*
 3. **Game events and time.** Both small, but everything after this uses them. *Started: the clock, the heartbeat, and movement and day events.*
-4. **The [skill core](skills.md#build-plan), with combat as its first use.** The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
+4. **The [skill core](skills.md#build-plan), with combat as its first use.** *Core built without combat; combat next.* The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
 
 Then teaching, epiphany, trainers and loot follow: trainers are mobs, loot scrolls are items, and passive skills have events to trigger on.
 

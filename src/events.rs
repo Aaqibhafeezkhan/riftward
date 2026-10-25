@@ -36,6 +36,8 @@ pub enum GameEvent {
     },
     /// A new part of the day began.
     PhaseChanged(Phase),
+    /// A character spent stamina, as on an active skill.
+    StaminaSpent { who: Entity, amount: u32 },
 }
 
 /// How someone moved.
@@ -67,8 +69,8 @@ fn from(dir: &str) -> String {
     }
 }
 
-/// What the people nearby see of each event.
-fn text(event: &GameEvent) -> String {
+/// What the people nearby see of each event, if anything.
+fn text(event: &GameEvent) -> Option<String> {
     let line = match event {
         GameEvent::Left { name, way, .. } => match way {
             Way::Walked(Some(dir)) => format!("{name} leaves {dir}."),
@@ -81,15 +83,18 @@ fn text(event: &GameEvent) -> String {
             Way::Teleported => format!("{name} appears out of thin air."),
         },
         GameEvent::PhaseChanged(phase) => phase.arrives().into(),
+        GameEvent::StaminaSpent { .. } => return None,
     };
-    line + "\r\n"
+    Some(line + "\r\n")
 }
 
 /// Tell players what they see happen around them.
 fn announce(mut events: MessageReader<GameEvent>, rooms: RoomQuery, mut players: PlayerQuery) {
     let mut out = Vec::new();
     for event in events.read() {
-        let text = text(event);
+        let Some(text) = text(event) else {
+            continue;
+        };
         match event {
             GameEvent::Left { who, room, .. } | GameEvent::Entered { who, room, .. } => {
                 out.push(Outgoing::Room {
@@ -98,6 +103,7 @@ fn announce(mut events: MessageReader<GameEvent>, rooms: RoomQuery, mut players:
                     text,
                 });
             }
+            GameEvent::StaminaSpent { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, player, in_room) in &players {
                     let outdoors = in_room
@@ -133,7 +139,7 @@ mod tests {
             room: who,
             way,
         };
-        let says = |event| text(&event);
+        let says = |event| text(&event).unwrap();
         assert_eq!(
             says(left(walked(Some("east")))),
             "A stray dog leaves east.\r\n"

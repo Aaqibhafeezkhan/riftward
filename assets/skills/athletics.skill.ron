@@ -1,0 +1,13 @@
+// A skill tree. Its id is the file name: skills here are `athletics:<id>`.
+(
+    name: "Athletics",
+    rarity: Common,
+    attribute: Body,
+    skills: {
+        "endurance": (
+            name: "Endurance",
+            attribute: Willpower,
+            kind: Passive(triggers: [StaminaSpent(per: 3)]),
+        ),
+    },
+)

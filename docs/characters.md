@@ -1,6 +1,6 @@
 # Races, backgrounds and character creation
 
-[Design summary](README.md) · Status: built, except granting the starting skills (they wait on skills)
+[Design summary](README.md) · Status: built. Starting skills are granted for the skills that exist as data so far
 
 A new character's starting point comes from two choices: their **race** and their **background**. There are still no classes. Race and background only decide where a character starts; from there, they learn and use whatever skills they like.
 

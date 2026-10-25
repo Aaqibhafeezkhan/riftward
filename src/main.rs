@@ -17,6 +17,7 @@ mod login;
 mod mobs;
 mod net;
 mod output;
+mod skills;
 mod spawns;
 mod targeting;
 mod time;
@@ -45,22 +46,27 @@ fn main() {
                 ..default()
             },
         ))
+        // The engine: storage, connections, commands, time and events.
         .add_plugins((
             db::DbPlugin,
-            characters::CharactersPlugin,
             dice::DicePlugin,
             net::NetPlugin,
-            world::WorldPlugin,
             login::LoginPlugin,
             command::CommandPlugin,
             commands::CommandsPlugin,
             build::BuildPlugin,
+            events::EventsPlugin,
+            time::TimePlugin,
+        ))
+        // The game: the world and what's in it, and characters.
+        .add_plugins((
+            world::WorldPlugin,
             items::ItemsPlugin,
             mobs::MobsPlugin,
             spawns::SpawnsPlugin,
-            events::EventsPlugin,
-            time::TimePlugin,
+            characters::CharactersPlugin,
             vitals::VitalsPlugin,
+            skills::SkillsPlugin,
         ))
         .run();
 }

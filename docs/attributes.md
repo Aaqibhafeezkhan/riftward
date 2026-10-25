@@ -1,6 +1,6 @@
 # Attributes, Karma and Luck
 
-[Design summary](README.md) · Status: built, except earning Karma from character level (waits on skills)
+[Design summary](README.md) · Status: built
 
 Characters have ten uncapped attributes, raised with Karma. Skills say what a character can do; attributes say how well their body and mind do it. Luck gives every random roll in the game a chance to be rolled twice, keeping the better result.
 
@@ -27,7 +27,7 @@ Players see their attributes with `score` and spend Karma with `raise <attribute
 
 ## Karma
 
-- **Earning:** character level is total skill levels divided by 5, rounded down, and each character level grants 1 Karma. Karma is therefore scarce and every point is a small event. Until skills exist, the 10 starting Karma is the only source.
+- **Earning:** character level is total skill levels divided by 5, rounded down, and each character level grants 1 Karma. Karma is therefore scarce and every point is a small event; it arrives the moment the gain that earns it happens.
 - **Cost:** raising an attribute from r to r + 1 costs 1 + floor(r / 5): 1 Karma up to 5, then 2, 3, 4 per point for each further band of five. Concentrating is possible; spreading goes further.
 - **Estimates, to be checked by simulation:** about 10 Karma after a first week, 60 after a few months, 200 or more for long-term veterans.
 - **Karma spent is not stored.** It is worked out from current ratings and the race's starting ratings, so it can never drift out of sync, and points a race gives aren't counted as spent.

@@ -17,6 +17,7 @@ use crate::items::{
     Item, ItemLocation, ItemTemplates, Snapshot, capitalized, carries, with_keywords,
 };
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::skills::Practice;
 use crate::targeting::{Keywords, Target};
 use crate::world::{Door, DoorKey, DoorState, Exits, ItemKey, LockDef, without_article};
 
@@ -379,4 +380,59 @@ pub fn bash(
             ))
         }
     });
+}
+
+/// The skill `pick` uses.
+const LOCKPICKING: &str = "thievery:lockpicking";
+
+/// Pick a locked door or container: Lockpicking (level plus Agility) against the lock's
+/// difficulty, as a ratio, with Luck. Every attempt practises the skill.
+pub fn pick(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    mut world: Lockables,
+    mut practice: Practice,
+) {
+    let mut gains = Vec::new();
+    with_lockable(&inv, &mut players, &mut world, |it, _| {
+        match it.state {
+            DoorState::Open => return Err("It's already open.".into()),
+            DoorState::Closed => return Err("It isn't locked.".into()),
+            DoorState::Locked => {}
+        }
+        let Some(difficulty) = it.lock.as_ref().and_then(|lock| lock.pick) else {
+            return Err("That lock can't be picked.".into());
+        };
+        let ready = practice.begin(it.actor.entity, LOCKPICKING)?;
+        let skill = f64::from(ready.effectiveness.max(1));
+        let chance = skill / (skill + f64::from(difficulty.max(1)));
+        let picked = practice.chance(ready.luck, chance);
+        gains = practice.exercise(it.actor.entity, it.actor.character_id, LOCKPICKING);
+        let the = it.the();
+        let (name, lock) = (&it.actor.name, format!("the lock of {the}"));
+        Ok(if picked {
+            (
+                DoorState::Closed,
+                it.announce(
+                    format!("You work at {lock} until it gives with a click."),
+                    format!("{name} picks {lock}."),
+                    format!("You hear a faint click from {the}."),
+                ),
+            )
+        } else {
+            (
+                DoorState::Locked,
+                it.announce(
+                    format!("You work at {lock}, but it won't give."),
+                    format!("{name} fiddles with {lock}."),
+                    format!("Something scratches at {the}."),
+                ),
+            )
+        })
+    });
+    let out = gains
+        .into_iter()
+        .map(|line| Outgoing::line(inv.entity, line))
+        .collect();
+    deliver(out, &mut players);
 }

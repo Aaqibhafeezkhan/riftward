@@ -1,6 +1,6 @@
 # Progression
 
-[Design summary](README.md) · Status: designed, not built
+[Design summary](README.md) · Status: built as designed (tuning values are constants in `src/skills.rs` for now, not yet a config file)
 
 Skills level up only through use: each use may roll a chance to gain a level. The chance grows with recent practice, fades with time away, and each gain puts that skill on a cooldown that lengthens with level. All numbers below are starting points for tuning, and will live in `assets/config/progression.ron`.
 

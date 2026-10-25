@@ -1,0 +1,16 @@
+// A skill tree. Its id is the file name: skills here are `thievery:<id>`.
+(
+    name: "Thievery",
+    rarity: Common,
+    attribute: Agility,
+    skills: {
+        "lockpicking": (
+            name: "Lockpicking",
+            kind: Active(command: "pick", cost: Stamina(1), cooldown: 2),
+        ),
+        "pickpocketing": (
+            name: "Pickpocketing",
+            kind: Active(command: "steal", cost: Stamina(1), cooldown: 5),
+        ),
+    },
+)

@@ -17,6 +17,7 @@ use crate::commands::movement::{View, describe_room};
 use crate::db::{Account, CharacterRecord, Database, Permission, Role};
 use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::output::{Outgoing, PlayerQuery, deliver};
+use crate::skills::{SkillDefs, Skills, UNIVERSAL_SKILLS, learn};
 use crate::targeting::Keywords;
 use crate::vitals::{DEFAULT_PROMPT, PromptFormat, Vitals};
 use crate::world::{InRoom, Player, RoomIndex, RoomKey};
@@ -88,10 +89,11 @@ pub struct Draft {
 /// The most a character description can hold.
 const MAX_DESCRIPTION_LEN: usize = 600;
 
-/// The races and backgrounds creation offers.
+/// The races and backgrounds creation offers, and the skills they grant.
 struct Choices<'a> {
     races: &'a Races,
     backgrounds: &'a Backgrounds,
+    skills: &'a SkillDefs,
 }
 
 impl LoginState {
@@ -144,10 +146,12 @@ fn handle_login(
     db: Res<Database>,
     races: Res<Races>,
     backgrounds: Res<Backgrounds>,
+    skill_defs: Res<SkillDefs>,
 ) {
     let choices = Choices {
         races: &races,
         backgrounds: &backgrounds,
+        skills: &skill_defs,
     };
     let mut out = Vec::new();
     for PlayerInput { entity, line } in inputs.read() {
@@ -759,10 +763,45 @@ fn enter_game(
             warn!("{} is of unknown race '{race}'", character.name);
             Attributes::default()
         });
-    let attributes = start.with_rows(db.attributes(character.id).unwrap_or_else(|err| {
+    let mut attributes = start.with_rows(db.attributes(character.id).unwrap_or_else(|err| {
         error!("failed to load attributes for {}: {err}", character.name);
         Vec::new()
     }));
+
+    // Skills, plus any starting skills from race and background they don't have yet: ones that
+    // didn't exist when they were made, or that this is their first time in the game to get.
+    let mut skills = Skills(
+        db.skills(character.id)
+            .unwrap_or_else(|err| {
+                error!("failed to load skills for {}: {err}", character.name);
+                Vec::new()
+            })
+            .into_iter()
+            .collect(),
+    );
+    let background = character.background.clone().unwrap_or_default();
+    let starting = choices
+        .races
+        .get(&race)
+        .map(|r| r.skills.clone())
+        .into_iter()
+        .chain(
+            choices
+                .backgrounds
+                .get(&background)
+                .map(|b| b.skills.clone()),
+        )
+        .flatten()
+        .chain(UNIVERSAL_SKILLS.iter().map(|key| key.to_string()));
+    let mut learned = Vec::new();
+    for key in starting {
+        if let Some(skill) = choices.skills.skills.get(&key)
+            && learn(&mut skills, &key, "Starting", character.id, db)
+        {
+            learned.push(skill.def.name.clone());
+        }
+    }
+    attributes.set_earned(skills.character_level() as i32);
     let karma = attributes.karma_unspent();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -782,6 +821,7 @@ fn enter_game(
         attributes,
         vitals,
         prompt,
+        skills,
         Keywords::from_name(&character.name),
         Player {
             name: name.clone(),
@@ -800,6 +840,15 @@ fn enter_game(
         entity,
         format!("\r\nWelcome, {name}! Type 'help' for a list of commands.\r\n"),
     ));
+    if !learned.is_empty() {
+        out.push(Outgoing::line(
+            entity,
+            format!(
+                "\x1b[1;32mFrom your life before, you know: {}. Type 'skills' to see them.\x1b[0m\r\n",
+                learned.join(", ")
+            ),
+        ));
+    }
     if karma > 0 {
         out.push(Outgoing::line(
             entity,

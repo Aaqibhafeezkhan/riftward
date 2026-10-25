@@ -13,6 +13,8 @@ use bevy::prelude::*;
 use rusqlite::{Connection, OptionalExtension, params};
 use thiserror::Error;
 
+use crate::skills::SkillState;
+
 /// Database file, unless overridden by the `MUD_DB` environment variable.
 pub const DEFAULT_DB_PATH: &str = "mud.db";
 
@@ -72,6 +74,19 @@ const SCHEMA: &str = "
         dropped_at   INTEGER,              -- unix seconds, when it was last put down
         slot         TEXT,
         container_id INTEGER REFERENCES items(id) ON DELETE CASCADE
+    );
+
+    -- What each character has learned, and how far they've got.
+    CREATE TABLE IF NOT EXISTS character_skills (
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        skill        TEXT NOT NULL,        -- tree:skill
+        level        INTEGER NOT NULL,
+        practice     REAL NOT NULL,
+        last_used    INTEGER,              -- unix seconds
+        next_gain_at INTEGER NOT NULL,     -- unix seconds
+        learned_via  TEXT NOT NULL,
+        learned_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (character_id, skill)
     );
 
     -- Spawns waiting to return after their last mob died (`AfterDeath`, or a wiped-out
@@ -582,6 +597,45 @@ impl Database {
             "INSERT INTO spawn_counts (spawn, count) VALUES (?1, ?2)
              ON CONFLICT (spawn) DO UPDATE SET count = excluded.count",
             params![spawn, count],
+        )?;
+        Ok(())
+    }
+
+    /// A character's skills, by `tree:skill`.
+    pub fn skills(&self, character_id: i64) -> DbResult<Vec<(String, SkillState)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT skill, level, practice, last_used, next_gain_at, learned_via
+             FROM character_skills WHERE character_id = ?1",
+        )?;
+        let rows = stmt.query_map([character_id], |row| {
+            let mut state = SkillState::new(&row.get::<_, String>(5)?);
+            state.level = row.get(1)?;
+            state.practice = row.get(2)?;
+            state.last_used = row.get(3)?;
+            state.next_gain_at = row.get(4)?;
+            Ok((row.get(0)?, state))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn save_skill(&self, character_id: i64, skill: &str, state: &SkillState) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT INTO character_skills
+                 (character_id, skill, level, practice, last_used, next_gain_at, learned_via)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT (character_id, skill) DO UPDATE SET
+                 level = excluded.level, practice = excluded.practice,
+                 last_used = excluded.last_used, next_gain_at = excluded.next_gain_at",
+            params![
+                character_id,
+                skill,
+                state.level,
+                state.practice,
+                state.last_used,
+                state.next_gain_at,
+                state.learned_via
+            ],
         )?;
         Ok(())
     }
