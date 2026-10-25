@@ -9,5 +9,17 @@
             name: "Knife Fighting",
             kind: Attack(verb: "stab"),
         ),
+        "backstab": (
+            name: "Backstab",
+            kind: Technique((with: "knives:basics", verb: "stab", cost: Stamina(2), damage: 4,
+                opener: true)),
+            requires: Skill("knives:basics", 15),
+        ),
+        "open_vein": (
+            name: "Open Vein",
+            kind: Technique((with: "knives:basics", verb: "slash", cost: Stamina(2),
+                effects: [Bleed(damage: 1, rounds: 3)])),
+            requires: Skill("knives:basics", 15),
+        ),
     },
 )

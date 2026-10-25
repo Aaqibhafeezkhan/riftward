@@ -14,6 +14,9 @@
 //!
 //! Players can't fight each other yet.
 
+mod states;
+mod strike;
+
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
@@ -32,18 +35,19 @@ use crate::items::{
 };
 use crate::mobs::{self, Mob, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
-use crate::skills::{Bonus, Cost, SkillDefs, SkillKind, Skills, count_use};
+use crate::skills::{Bonus, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::targeting::{Keywords, Target};
-use crate::vitals::{Resting, Vitals};
+use crate::vitals::{Maxima, Resting, Vitals};
 use crate::world::{InRoom, MobKey, Player, RoomIndex, RoomKey, without_article};
+
+pub use states::Conditions;
+pub use strike::{Fighters, Move, Round, name_of};
 
 /// Seconds in a combat round, and between a player's actions.
 pub const ROUND_SECS: f64 = 3.0;
 /// Everyone's most basic attack, used until they choose another.
 pub const BASIC_ATTACK: &str = "brawling:basics";
-/// The skill that helps avoid attacks.
-const DODGE: &str = "athletics:dodge";
 /// Where players wake after they die.
 const RESPAWN_ROOM: &str = "riftwatch:shrine";
 /// Stamina it takes to flee.
@@ -89,6 +93,14 @@ impl Plugin for CombatPlugin {
                 CommandSpec::new("stop", Category::Character)
                     .summary("forget the actions you've queued up"),
                 stop,
+            )
+            // Run by `use` for a technique; players don't type it themselves.
+            .add_command(
+                CommandSpec::new("technique", Category::Interaction)
+                    .usage("use <technique> [<target>]")
+                    .summary("make a technique: in a fight, or an opener to start one")
+                    .unlisted(),
+                technique,
             );
     }
 }
@@ -117,22 +129,6 @@ pub struct Dead;
 #[derive(Resource, Default)]
 pub struct CombatLog(Vec<Outgoing>);
 
-/// The most health someone can have.
-pub fn max_health(attributes: &Attributes, override_: Option<&MaxHealth>) -> i32 {
-    override_.map_or(attributes.health(), |m| m.0)
-}
-
-/// How hurt someone looks, from their health and their most.
-pub fn condition(health: f32, max: i32) -> &'static str {
-    match health / max.max(1) as f32 {
-        f if f >= 1.0 => "unhurt",
-        f if f >= 0.75 => "scratched",
-        f if f >= 0.5 => "hurt",
-        f if f >= 0.25 => "badly wounded",
-        _ => "barely standing",
-    }
-}
-
 /// "the sewer rat" for "a sewer rat"; names stay as they are.
 pub fn the(name: &str) -> String {
     let bare = without_article(name);
@@ -143,76 +139,50 @@ pub fn the(name: &str) -> String {
     }
 }
 
-/// "punches" for "punch", "slashes" for "slash".
-fn third_person(verb: &str) -> String {
-    if ["s", "x", "z", "sh", "ch"]
-        .iter()
-        .any(|end| verb.ends_with(end))
-    {
-        format!("{verb}es")
-    } else {
-        format!("{verb}s")
-    }
+/// A technique made ready to use on the fighter's next turn: an opener that starts a fight.
+#[derive(Component, Debug, Clone)]
+pub struct Readied {
+    pub skill: String,
 }
 
-/// The chance an attack hits: the attacker's skill against the defender's evasion, as a ratio.
-pub fn hit_chance(attack: i32, defence: i32) -> f64 {
-    let (attack, defence) = (f64::from(attack.max(1)), f64::from(defence.max(1)));
-    attack / (attack + defence)
-}
-
-type Fighters<'w, 's> = Query<
-    'w,
-    's,
-    (
-        Entity,
-        &'static InRoom,
-        &'static mut Attributes,
-        &'static mut Vitals,
-        &'static mut Skills,
-        Option<&'static Fighting>,
-        Option<&'static AutoAttack>,
-        Option<&'static MaxHealth>,
-        Option<&'static mut ActionQueue>,
-        Has<Aggressive>,
-        Has<Dead>,
-        Option<&'static Player>,
-        Option<&'static Mob>,
-    ),
->;
-
-/// A fighter's name, as others say it: "Grok", "the sewer rat".
-fn name_of(player: Option<&Player>, mob: Option<&Mob>) -> String {
-    match (player, mob) {
-        (Some(player), _) => player.name.clone(),
-        (_, Some(mob)) => the(&mob.name),
-        _ => "someone".into(),
-    }
-}
-
-/// The bonuses auras give right now, by zone and mob template: every living mob holding an aura
-/// skill lends its bonus to the mobs it affects in its zone.
-pub type Auras = HashMap<(String, MobKey), Bonus>;
-
-fn auras(fighters: &Fighters, rooms: &RoomQuery, defs: &SkillDefs) -> Auras {
-    let mut auras = Auras::new();
-    for (_, in_room, _, _, skills, _, _, _, _, _, dead, _, mob) in fighters {
-        if dead || mob.is_none() {
-            continue;
-        }
-        let Ok((_, room, _)) = rooms.get(in_room.0) else {
+/// The aura each living mob fights under: every living mob holding an aura skill lends its bonus
+/// to the mobs it affects in its zone.
+fn auras(fighters: &Fighters, rooms: &RoomQuery, defs: &SkillDefs) -> HashMap<Entity, Bonus> {
+    let zone_of = |room: Entity| rooms.get(room).ok().map(|(_, key, _)| key.zone.clone());
+    let mut by_zone: HashMap<(String, MobKey), Bonus> = HashMap::new();
+    for fighter in fighters {
+        let (false, Some(_), Some(zone)) = (fighter.dead, fighter.mob, zone_of(fighter.in_room.0))
+        else {
             continue;
         };
-        for key in skills.0.keys() {
+        for key in fighter.skills.0.keys() {
             if let Some(SkillKind::Aura { affects, bonus }) =
                 defs.skills.get(key).map(|s| &s.def.kind)
             {
-                let affected = MobKey::parse(affects, &room.zone);
-                *auras.entry((room.zone.clone(), affected)).or_default() += *bonus;
+                let affected = MobKey::parse(affects, &zone);
+                *by_zone.entry((zone.clone(), affected)).or_default() += *bonus;
             }
         }
     }
-    auras
+    fighters
+        .iter()
+        .filter_map(|fighter| {
+            let zone = zone_of(fighter.in_room.0)?;
+            let bonus = by_zone.get(&(zone, fighter.mob?.key.clone()))?;
+            Some((fighter.entity, *bonus))
+        })
+        .collect()
+}
+
+/// The technique a queued `use` names, if it is one the player knows.
+fn queued_technique(queue: &ActionQueue, skills: &Skills, defs: &SkillDefs) -> Option<String> {
+    let (_, invocation) = queue.peek()?;
+    if invocation.command != "use" {
+        return None;
+    }
+    let name = invocation.args.split_whitespace().next()?;
+    let skill = defs.find_known(skills, name)?;
+    matches!(skill.def.kind, SkillKind::Technique(_)).then(|| skill.key.clone())
 }
 
 /// One round of every fight.
@@ -230,43 +200,35 @@ fn combat_round(
     mut log: ResMut<CombatLog>,
     spawned: Query<&SpawnedBy>,
     spawns: Res<Spawns>,
-    resting: Query<(), With<Resting>>,
+    resting_query: Query<Entity, With<Resting>>,
+    readied: Query<&Readied>,
     rooms: RoomQuery,
 ) {
     let now = time.elapsed_secs_f64();
     let auras = auras(&fighters, &rooms, &defs);
-    // The aura a fighter fights under, if any.
-    let aura_on = |entity: Entity, fighters: &Fighters| -> Bonus {
-        let Ok((_, in_room, .., Some(mob))) = fighters.get(entity) else {
-            return Bonus::default();
-        };
-        rooms
-            .get(in_room.0)
-            .ok()
-            .and_then(|(_, room, _)| auras.get(&(room.zone.clone(), mob.key.clone())))
-            .map_or_else(Bonus::default, |bonus: &Bonus| *bonus)
-    };
+    let resting: HashSet<Entity> = resting_query.iter().collect();
     let mut targets: HashMap<Entity, Entity> = HashMap::new();
     let mut alive_players: Vec<(Entity, Entity)> = Vec::new();
-    for (entity, in_room, _, _, _, fighting, _, _, _, _, dead, player, _) in &fighters {
-        if dead {
+    for fighter in &fighters {
+        if fighter.dead {
             continue;
         }
-        if let Some(Fighting(target)) = fighting {
-            targets.insert(entity, *target);
+        if let Some(Fighting(target)) = fighter.fighting {
+            targets.insert(fighter.entity, *target);
         }
-        if player.is_some() {
-            alive_players.push((entity, in_room.0));
+        if fighter.player.is_some() {
+            alive_players.push((fighter.entity, fighter.in_room.0));
         }
     }
 
     // Aggressive mobs pick on a player in their room, but no more of a spawn's mobs gang up on
     // one player than its `pack` allows; the rest wait their turn.
     let spawn_of = |entity: Entity| spawned.get(entity).ok().map(|s| &s.0);
-    for (entity, in_room, _, _, _, fighting, _, _, _, aggressive, dead, _, mob) in &fighters {
-        if !aggressive || dead || fighting.is_some() {
+    for fighter in &fighters {
+        if !fighter.aggressive || fighter.dead || fighter.fighting.is_some() {
             continue;
         }
+        let entity = fighter.entity;
         let pack = spawn_of(entity)
             .and_then(|key| spawns.0.get(key))
             .and_then(|def| def.pack);
@@ -281,21 +243,27 @@ fn combat_round(
         };
         let Some(&(victim, _)) = alive_players
             .iter()
-            .find(|(victim, room)| *room == in_room.0 && room_for(*victim))
+            .find(|(victim, room)| *room == fighter.in_room.0 && room_for(*victim))
         else {
             continue;
         };
         targets.insert(entity, victim);
         commands.entity(entity).insert(Fighting(victim));
-        let name = name_of(None, mob);
+        let name = name_of(None, fighter.mob);
         log.0.push(Outgoing::line(
             victim,
             format!("\x1b[1;31m{} attacks you!\x1b[0m", capitalized(&name)),
         ));
     }
 
-    // Fights end when the target is gone, dead or elsewhere; defenders fight back.
-    let place = |entity: Entity| fighters.get(entity).ok().filter(|f| !f.10).map(|f| f.1.0);
+    // Fights end when the target is gone, dead or elsewhere.
+    let place = |entity: Entity| {
+        fighters
+            .get(entity)
+            .ok()
+            .filter(|f| !f.dead)
+            .map(|f| f.in_room.0)
+    };
     let pairs: Vec<(Entity, Entity)> = targets.iter().map(|(a, t)| (*a, *t)).collect();
     for (attacker, target) in pairs {
         if place(target).is_none() || place(target) != place(attacker) {
@@ -303,6 +271,9 @@ fn combat_round(
             commands.entity(attacker).remove::<Fighting>();
         }
     }
+    // Who was fighting whom before anyone fought back, for openers.
+    let engaged = targets.clone();
+    // Defenders fight back.
     let pairs: Vec<(Entity, Entity)> = targets.iter().map(|(a, t)| (*a, *t)).collect();
     for (attacker, target) in pairs {
         if let std::collections::hash_map::Entry::Vacant(entry) = targets.entry(target) {
@@ -315,15 +286,34 @@ fn combat_round(
     let mut order: Vec<(i64, Entity)> = targets
         .keys()
         .filter_map(|entity| {
-            let (_, _, attributes, ..) = fighters.get(*entity).ok()?;
-            let luck = attributes.get(Attribute::Luck);
+            let fighter = fighters.get(*entity).ok()?;
+            let luck = fighter.attributes.get(Attribute::Luck);
             let roll = dice.range(luck, 1..=6);
-            Some((i64::from(attributes.initiative()) + roll, *entity))
+            let quick = boosts(fighter.skills, &defs).initiative;
+            Some((
+                i64::from(fighter.attributes.initiative() + quick) + roll,
+                *entity,
+            ))
         })
         .collect();
     order.sort_by(|a, b| b.cmp(a));
 
     let mut fallen: HashSet<Entity> = HashSet::new();
+    let mut round = Round {
+        fighters: &mut fighters,
+        items: &items,
+        templates: &templates,
+        defs: &defs,
+        dice: &mut dice,
+        db: &db,
+        events: &mut events,
+        log: &mut log,
+        watchers: &alive_players,
+        engaged: &engaged,
+        targets: &targets,
+        auras: &auras,
+        resting: &resting,
+    };
     for (_, attacker) in order {
         let Some(&target) = targets.get(&attacker) else {
             continue;
@@ -332,38 +322,56 @@ fn combat_round(
             continue;
         }
         // Someone caught resting spends their first turn getting up.
-        if resting.get(attacker).is_ok() {
+        if resting.contains(&attacker) {
             commands.entity(attacker).remove::<Resting>();
-            log.0.push(Outgoing::line(
+            round.log.0.push(Outgoing::line(
                 attacker,
                 "\x1b[1mYou scramble to your feet!\x1b[0m",
             ));
             continue;
         }
-        // A player's queued action takes their turn.
-        if let Ok((.., Some(mut queue), _, _, Some(_), _)) = fighters.get_mut(attacker)
-            && let Some((id, invocation)) = queue.pop()
-        {
-            queue.next_at = now + ROUND_SECS;
-            commands.run_system_with(id, invocation);
+        // Bleeding, staggers and falls come first.
+        let (acts, bled_out) = round.start_turn(attacker);
+        if bled_out {
+            fallen.insert(attacker);
+            commands.entity(attacker).insert(Dead).remove::<Fighting>();
             continue;
         }
-        let bonuses = (aura_on(attacker, &fighters), aura_on(target, &fighters));
-        if let Some(died) = attack(
-            attacker,
-            target,
-            bonuses,
-            &mut fighters,
-            &items,
-            &templates,
-            &defs,
-            &mut dice,
-            &db,
-            &mut events,
-            &mut log,
-            &alive_players,
-            resting.get(target).is_ok(),
-        ) {
+        if !acts {
+            continue;
+        }
+        // A readied opener, or a technique next in the queue, takes the turn.
+        let mut technique = readied.get(attacker).ok().map(|r| r.skill.clone());
+        if technique.is_some() {
+            commands.entity(attacker).remove::<Readied>();
+        } else if let Ok(mut fighter) = round.fighters.get_mut(attacker)
+            && fighter.player.is_some()
+            && let Some(queue) = fighter.queue.as_mut()
+        {
+            technique = queued_technique(queue, &fighter.skills, &defs);
+            if technique.is_some() {
+                queue.pop();
+                queue.next_at = now + ROUND_SECS;
+            } else if let Some((id, invocation)) = queue.pop() {
+                // Any other action takes the turn too.
+                queue.next_at = now + ROUND_SECS;
+                commands.run_system_with(id, invocation);
+                continue;
+            }
+        }
+        let moves = technique
+            .as_ref()
+            .and_then(|key| match defs.skills.get(key) {
+                Some(skill) => match &skill.def.kind {
+                    SkillKind::Technique(t) => Some(Move {
+                        key: key.as_str(),
+                        technique: t,
+                    }),
+                    _ => None,
+                },
+                None => None,
+            });
+        for died in round.strike(attacker, target, moves, false) {
             fallen.insert(died);
             commands.entity(died).insert(Dead).remove::<Fighting>();
             for (who, whom) in &targets {
@@ -375,252 +383,67 @@ fn combat_round(
     }
 }
 
-/// The attack a fighter makes this round: which skill, how much damage, and the verb.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Strike {
-    /// The skill it's made with, and practises.
-    pub skill: String,
-    pub damage: (u32, u32),
-    pub verb: String,
-    /// Extra damage from training in the weapon.
-    pub bonus: i32,
-    /// Stamina it takes.
-    pub cost: u32,
-}
-
-/// Levels of a weapon skill for each extra point of damage with that weapon.
-const LEVELS_PER_DAMAGE: i32 = 10;
-
-/// The attack a fighter makes this round: their chosen attack if they can make it now, otherwise
-/// the weapon in their hand, otherwise the basic attack.
-///
-/// A weapon does its own damage in anyone's hands. Trained in its skill, a fighter attacks with
-/// that skill and does a point more for every ten levels; untrained, they swing it with only
-/// their Brawling to guide them, and learn nothing of the weapon by it. Players must know an attack
-/// to make it; mobs fight with whatever their template gives them. An attack they haven't the
-/// stamina for falls back to the next, ending at the free basic attack.
+/// `technique <skill> [<target>]`, run by `use` for a technique outside a fight: an opener starts
+/// one, readied for the user's first turn; anything else needs a fight already going.
 #[allow(clippy::too_many_arguments)]
-fn choose_attack(
-    entity: Entity,
-    chosen: Option<&str>,
-    is_player: bool,
-    stamina: f32,
-    skills: &Skills,
-    items: &ItemQuery,
-    templates: &ItemTemplates,
-    defs: &SkillDefs,
-) -> Option<Strike> {
-    let weapon = items.iter().find_map(|(_, item, location)| {
-        (*location == ItemLocation::Held(entity))
-            .then(|| templates.0.get(&item.key)?.weapon.as_ref())
-            .flatten()
-    });
-    let strike = |key: &str| {
-        let skill = defs.skills.get(key)?;
-        let SkillKind::Attack { verb, damage, cost } = &skill.def.kind else {
-            return None;
-        };
-        if is_player && !skills.0.contains_key(key) {
-            return None;
-        }
-        let cost = match cost {
-            Cost::Free => 0,
-            Cost::Stamina(n) => *n,
-        };
-        if stamina < cost as f32 {
-            return None;
-        }
-        let level = skills.0.get(key).map_or(0, |s| s.level as i32);
-        match weapon {
-            Some(w) if w.skill == key => Some(Strike {
-                skill: key.to_string(),
-                damage: w.damage,
-                verb: w.verb.clone().unwrap_or_else(|| verb.clone()),
-                bonus: level / LEVELS_PER_DAMAGE,
-                cost,
-            }),
-            _ => damage.map(|damage| Strike {
-                skill: key.to_string(),
-                damage,
-                verb: verb.clone(),
-                bonus: 0,
-                cost,
-            }),
-        }
+fn technique(
+    In(inv): In<Invocation>,
+    mut commands: Commands,
+    mut players: PlayerQuery,
+    mobs: MobQuery,
+    keywords: Query<&Keywords>,
+    fighting: Query<&Fighting>,
+    dead: Query<(), With<Dead>>,
+    defs: Res<SkillDefs>,
+) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
     };
-    chosen
-        .and_then(strike)
-        .or_else(|| weapon.and_then(|w| strike(&w.skill)))
-        .or_else(|| {
-            let brawl = strike(BASIC_ATTACK)?;
-            Some(match weapon {
-                // Swung untrained: Brawling's aim, the weapon's damage.
-                Some(w) => Strike {
-                    damage: w.damage,
-                    verb: "hit".into(),
-                    ..brawl
-                },
-                None => brawl,
-            })
-        })
-}
-
-/// One attack. Returns who died, if anyone.
-#[allow(clippy::too_many_arguments)]
-fn attack(
-    attacker: Entity,
-    target: Entity,
-    (a_bonus, d_bonus): (Bonus, Bonus),
-    fighters: &mut Fighters,
-    items: &ItemQuery,
-    templates: &ItemTemplates,
-    defs: &SkillDefs,
-    dice: &mut Dice,
-    db: &Database,
-    events: &mut MessageWriter<GameEvent>,
-    log: &mut CombatLog,
-    watchers: &[(Entity, Entity)],
-    caught_resting: bool,
-) -> Option<Entity> {
-    let (room, a_name, a_player, chosen, a_attributes, a_skills, a_stamina) = {
-        let (_, in_room, attributes, vitals, skills, _, auto, _, _, _, _, player, mob) =
-            fighters.get(attacker).ok()?;
-        (
-            in_room.0,
-            name_of(player, mob),
-            player.map(|p| p.character_id),
-            auto.and_then(|a| a.0.clone()),
-            attributes.clone(),
-            skills.clone(),
-            vitals.stamina,
-        )
+    let (key, target) = inv.args.split_once(' ').unwrap_or((&inv.args, ""));
+    let Some(skill) = defs.skills.get(key) else {
+        return;
     };
-    let Strike {
-        skill: key,
-        damage,
-        verb,
-        bonus,
-        cost,
-    } = choose_attack(
-        attacker,
-        chosen.as_deref(),
-        a_player.is_some(),
-        a_stamina,
-        &a_skills,
-        items,
-        templates,
-        defs,
-    )?;
-    let skill = defs.skills.get(&key)?;
-    if cost > 0 {
-        if let Ok((_, _, _, mut vitals, ..)) = fighters.get_mut(attacker) {
-            vitals.stamina -= cost as f32;
-        }
-        events.write(GameEvent::StaminaSpent {
-            who: attacker,
-            amount: cost as f32,
+    let SkillKind::Technique(t) = &skill.def.kind else {
+        return;
+    };
+    let text = if fighting.get(inv.entity).is_ok() {
+        // Readied for their next turn.
+        commands.entity(inv.entity).insert(Readied {
+            skill: key.to_string(),
         });
-    }
-    let level = a_skills.0.get(&key).map_or(0, |s| s.level as i32);
-    let attack_rating = level + a_attributes.get(skill.attribute) + a_bonus.attack;
-
-    let (d_name, d_attributes, d_skills, d_mob) = {
-        let (_, _, attributes, _, skills, _, _, _, _, _, _, player, mob) =
-            fighters.get(target).ok()?;
-        (
-            name_of(player, mob),
-            attributes.clone(),
-            skills.clone(),
-            mob.map(|m| m.key.clone()),
-        )
-    };
-    let dodge = d_skills.0.get(DODGE).map_or(0, |s| s.level as i32);
-    let mut defence = d_attributes.get(Attribute::Reaction) + dodge + d_bonus.defence;
-    // Someone sitting down is much easier to hit.
-    if caught_resting {
-        defence /= 2;
-    }
-    let (a_luck, d_luck) = (
-        a_attributes.get(Attribute::Luck),
-        d_attributes.get(Attribute::Luck),
-    );
-    let hit = dice.contest(a_luck, d_luck, hit_chance(attack_rating, defence));
-
-    let mut died = None;
-    let verbs = third_person(&verb);
-    let mut lines: Vec<(Entity, String)> = Vec::new();
-    let mut room_line: String;
-    if hit {
-        let (low, high) = (damage.0.min(damage.1), damage.0.max(damage.1));
-        let rolled = dice.range(a_luck, i64::from(low)..=i64::from(high)) as i32;
-        let dealt =
-            (rolled + a_attributes.get(Attribute::Strength) / 2 + bonus - d_bonus.armour).max(1);
-        lines.push((attacker, format!("You {verb} {d_name}. ({dealt})")));
-        lines.push((
-            target,
-            format!(
-                "\x1b[31m{} {verbs} you. ({dealt})\x1b[0m",
-                capitalized(&a_name)
-            ),
-        ));
-        room_line = format!("{} {verbs} {d_name}.", capitalized(&a_name));
-        if let Ok((_, _, attributes, mut vitals, _, _, _, most, ..)) = fighters.get_mut(target) {
-            vitals.health -= dealt as f32;
-            if vitals.health <= 0.0 {
-                vitals.health = 0.0;
-                died = Some(target);
-            } else {
-                let looks = condition(vitals.health, max_health(&attributes, most));
-                lines.push((attacker, format!("{} is {looks}.", capitalized(&d_name))));
+        format!("You ready yourself to {}.", skill.def.name)
+    } else if !t.opener {
+        format!("You need to be in a fight to {}.", skill.def.name)
+    } else {
+        let candidates: Vec<_> = mobs::targets_in(actor.room, &mobs, &keywords)
+            .into_iter()
+            .filter(|(entity, _)| dead.get(*entity).is_err())
+            .collect();
+        match Target::parse(target)
+            .and_then(|t| t.find_one(inv.entity, candidates))
+            .and_then(|e| mobs.get(e).ok())
+        {
+            None if target.trim().is_empty() => format!("{} whom?", skill.def.name),
+            None => format!("You don't see {} here.", target.trim()),
+            Some((mob_entity, mob, _)) => {
+                commands
+                    .entity(inv.entity)
+                    .insert((
+                        Fighting(mob_entity),
+                        Readied {
+                            skill: key.to_string(),
+                        },
+                    ))
+                    .remove::<Resting>();
+                format!(
+                    "You slip toward {}, ready to {}.",
+                    the(&mob.name),
+                    skill.def.name
+                )
             }
         }
-    } else {
-        lines.push((attacker, format!("You miss {d_name}.")));
-        lines.push((
-            target,
-            format!("{} {verbs} at you, but misses.", capitalized(&a_name)),
-        ));
-        room_line = format!("{} misses {d_name}.", capitalized(&a_name));
-        events.write(GameEvent::Dodged { who: target });
-    }
-    if died.is_some() {
-        lines.push((attacker, format!("\x1b[1mYou have killed {d_name}!\x1b[0m")));
-        room_line += &format!(" {} falls, dead.", capitalized(&d_name));
-        events.write(GameEvent::Died {
-            who: target,
-            name: d_name.clone(),
-            room,
-            mob: d_mob,
-        });
-    }
-
-    // Players practise their attack every round they make one.
-    if let Some(character_id) = a_player
-        && let Ok((_, _, mut attributes, _, mut skills, ..)) = fighters.get_mut(attacker)
-    {
-        for line in count_use(
-            defs,
-            &mut skills,
-            &mut attributes,
-            dice,
-            db,
-            character_id,
-            &key,
-        ) {
-            lines.push((attacker, line));
-        }
-    }
-
-    for (who, line) in lines {
-        log.0.push(Outgoing::line(who, line));
-    }
-    // Everyone else in the room sees it too; the two fighters have already been told.
-    for &(player, at) in watchers {
-        if at == room && player != attacker && player != target {
-            log.0.push(Outgoing::line(player, room_line.clone()));
-        }
-    }
-    died
+    };
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
 }
 
 /// Lay out the dead: mobs leave a corpse, and players leave one with everything they carried,
@@ -631,7 +454,14 @@ fn handle_deaths(
     dead_mobs: Query<(Entity, &Mob, &InRoom), (With<Dead>, mobs::OnlyMobs)>,
     dead_players: Query<Entity, (With<Dead>, With<Player>)>,
     mut players: PlayerQuery,
-    mut sheets: Query<(&mut Vitals, &Attributes, Option<&mut ActionQueue>)>,
+    mut sheets: Query<(
+        &mut Vitals,
+        &Attributes,
+        &Skills,
+        Option<&mut ActionQueue>,
+        &mut Conditions,
+    )>,
+    defs: Res<SkillDefs>,
     mut items: ItemMutQuery,
     templates: Res<ItemTemplates>,
     rooms: RoomQuery,
@@ -727,12 +557,15 @@ fn handle_deaths(
         {
             error!("failed to save {}'s location: {err}", actor.name);
         }
-        if let Ok((mut vitals, attributes, queue)) = sheets.get_mut(entity) {
-            vitals.health = (attributes.health() as f32 / 4.0).max(1.0);
-            vitals.stamina = attributes.stamina() as f32 / 4.0;
+        if let Ok((mut vitals, attributes, skills, queue, mut conditions)) = sheets.get_mut(entity)
+        {
+            let max = Maxima::of(attributes, skills, &defs);
+            vitals.health = (max.health as f32 / 4.0).max(1.0);
+            vitals.stamina = max.stamina as f32 / 4.0;
             if let Some(mut queue) = queue {
                 queue.clear();
             }
+            conditions.clear();
         }
         commands.entity(entity).remove::<(Dead, Fighting)>();
 
@@ -856,6 +689,7 @@ fn flee(
     mut dice: ResMut<Dice>,
     db: Res<Database>,
     mut events: MessageWriter<GameEvent>,
+    conditions: Query<&Conditions>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -865,6 +699,8 @@ fn flee(
     let mut escape = None;
     let mut out = if fighting.get(inv.entity).is_err() {
         reply("You aren't fighting anyone.")
+    } else if conditions.get(inv.entity).is_ok_and(|c| !c.can_flee()) {
+        reply("You're held fast and can't break away!")
     } else if let Ok((mut vitals, attributes)) = sheets.get_mut(inv.entity) {
         if vitals.stamina < FLEE_COST {
             reply("You're too exhausted to run!")
@@ -1013,22 +849,194 @@ fn stop(In(inv): In<Invocation>, mut players: PlayerQuery, mut queues: Query<&mu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skills::{
+        Cost, Effect, Skill, SkillDef, SkillKind, SkillState, StrikeKind, Technique,
+    };
+    use crate::world::{Exits, Room, Terrain};
+    use bevy::ecs::message::Messages;
+    use bevy::ecs::system::RunSystemOnce;
+
+    fn skill(key: &str, kind: SkillKind) -> (String, Skill) {
+        let (tree, _) = key.split_once(':').unwrap();
+        let def = SkillDef {
+            name: key.into(),
+            kind,
+            max_level: 50,
+            attribute: None,
+            rarity: None,
+            difficulty: 1.0,
+            requires: None,
+        };
+        let skill = Skill {
+            key: key.into(),
+            tree: tree.into(),
+            attribute: Attribute::Strength,
+            def,
+        };
+        (key.into(), skill)
+    }
+
+    /// A world with one room and the skills these tests use: fists, a riposte with them, and a
+    /// cleave made with them.
+    fn world() -> (World, Entity) {
+        let mut world = World::new();
+        let defs = SkillDefs {
+            skills: HashMap::from([
+                skill(
+                    BASIC_ATTACK,
+                    SkillKind::Attack {
+                        verb: "punch".into(),
+                        damage: Some((2, 2)),
+                        cost: Cost::Free,
+                    },
+                ),
+                skill(
+                    "brawling:riposte",
+                    SkillKind::Passive {
+                        triggers: Vec::new(),
+                        bonuses: Vec::new(),
+                        counter: Some(BASIC_ATTACK.into()),
+                    },
+                ),
+                skill(
+                    "brawling:cleave",
+                    SkillKind::Technique(Technique {
+                        with: BASIC_ATTACK.into(),
+                        verb: "cleave".into(),
+                        cost: Cost::Free,
+                        accuracy: 0,
+                        damage: 0,
+                        strike: StrikeKind::Hit,
+                        effects: vec![Effect::Cleave],
+                        opener: false,
+                    }),
+                ),
+            ]),
+            trees: HashMap::new(),
+        };
+        world.insert_resource(defs);
+        world.insert_resource(ItemTemplates::default());
+        world.insert_resource(Dice::seeded(7));
+        world.insert_resource(Database::open(":memory:").unwrap());
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(CombatLog::default());
+        world.insert_resource(Spawns::default());
+        world.init_resource::<Messages<GameEvent>>();
+        let room = world
+            .spawn((
+                Room {
+                    name: "Arena".into(),
+                    description: String::new(),
+                    no_wander: false,
+                    indoors: true,
+                    terrain: Terrain::Paved,
+                },
+                RoomKey::parse("test:arena", ""),
+                Exits::default(),
+            ))
+            .id();
+        (world, room)
+    }
+
+    /// A mob fighter with this Strength (its punch) and Reaction (its dodge), knowing these
+    /// skills. Every other attribute is 1.
+    fn fighter(
+        world: &mut World,
+        room: Entity,
+        strength: i32,
+        reaction: i32,
+        skills: &[&str],
+    ) -> Entity {
+        let attributes = Attributes::starting(
+            |attribute| match attribute {
+                Attribute::Strength => strength,
+                Attribute::Reaction => reaction,
+                _ => 1,
+            },
+            0,
+        );
+        let vitals = Vitals {
+            health: 100.0,
+            stamina: 100.0,
+        };
+        let skills = Skills(
+            skills
+                .iter()
+                .map(|key| (key.to_string(), SkillState::new("Template")))
+                .collect(),
+        );
+        let mob = Mob {
+            key: MobKey::parse("test:mob", ""),
+            name: "a brawler".into(),
+            here: String::new(),
+            description: String::new(),
+        };
+        world
+            .spawn((
+                mob,
+                InRoom(room),
+                attributes,
+                vitals,
+                skills,
+                MaxHealth(100),
+            ))
+            .id()
+    }
+
+    fn said(world: &World, who: Entity, text: &str) -> bool {
+        world.resource::<CombatLog>().0.iter().any(|out| match out {
+            Outgoing::To(entity, line) => *entity == who && line.contains(text),
+            _ => false,
+        })
+    }
 
     #[test]
-    fn names_and_verbs_read_naturally() {
+    fn a_dodge_can_be_riposted() {
+        let (mut world, room) = world();
+        // The attacker can barely hit; the defender dodges almost everything.
+        let attacker = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let defender = fighter(
+            &mut world,
+            room,
+            1,
+            1000,
+            &[BASIC_ATTACK, "brawling:riposte"],
+        );
+        world.entity_mut(attacker).insert(Fighting(defender));
+        world.run_system_once(combat_round).unwrap();
+        assert!(said(&world, defender, "You riposte!"));
+    }
+
+    #[test]
+    fn a_cleave_carries_on_into_a_second_foe() {
+        let (mut world, room) = world();
+        // The cleaver can't miss, and hits hard.
+        let cleaver = fighter(
+            &mut world,
+            room,
+            1000,
+            1,
+            &[BASIC_ATTACK, "brawling:cleave"],
+        );
+        let first = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let second = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(cleaver).insert((
+            Fighting(first),
+            Readied {
+                skill: "brawling:cleave".into(),
+            },
+        ));
+        world.entity_mut(second).insert(Fighting(cleaver));
+        world.run_system_once(combat_round).unwrap();
+        assert!(said(&world, cleaver, "carries on into"));
+        assert!(world.get::<Vitals>(second).unwrap().health < 100.0);
+    }
+
+    #[test]
+    fn names_read_naturally() {
         assert_eq!(the("a sewer rat"), "the sewer rat");
         assert_eq!(the("an old wolf"), "the old wolf");
         assert_eq!(the("Grok"), "Grok");
         assert_eq!(the("the drill sergeant"), "the drill sergeant");
-        assert_eq!(third_person("punch"), "punches");
-        assert_eq!(third_person("bite"), "bites");
-        assert_eq!(third_person("slash"), "slashes");
-    }
-
-    #[test]
-    fn hits_follow_the_ratio_rule() {
-        assert!((hit_chance(6, 3) - 2.0 / 3.0).abs() < 1e-9);
-        assert!((hit_chance(20, 10) - hit_chance(40, 20)).abs() < 1e-9);
-        assert!(hit_chance(0, 0) > 0.0, "nothing is impossible");
     }
 }

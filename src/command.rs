@@ -168,6 +168,11 @@ impl ActionQueue {
         self.queue.pop_front()
     }
 
+    /// The next action waiting, without taking it.
+    pub fn peek(&self) -> Option<&(CommandId, Invocation)> {
+        self.queue.front()
+    }
+
     pub fn len(&self) -> usize {
         self.queue.len()
     }

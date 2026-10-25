@@ -225,12 +225,13 @@ impl Attributes {
 }
 
 /// The `score` command. `who` is what the character is, like "Troll Street Urchin", `current`
-/// their current health and stamina, and `tradition` the magic they're Awakened to, if any.
+/// and `max` their health and stamina, and `tradition` the magic they're Awakened to, if any.
 pub fn score_text(
     name: &str,
     who: &str,
     attributes: &Attributes,
     current: (i32, i32),
+    max: (i32, i32),
     tradition: Option<&str>,
 ) -> String {
     let row = |label: &str, list: &[Attribute]| {
@@ -254,9 +255,9 @@ pub fn score_text(
         row("Mental", &[Willpower, Logic, Intuition, Charisma]),
         row("Special", &[Luck, Magic]),
         current.0,
-        attributes.health(),
+        max.0,
         current.1,
-        attributes.stamina(),
+        max.1,
         attributes.initiative(),
     );
     if karma > 0 {

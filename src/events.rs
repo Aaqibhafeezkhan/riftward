@@ -41,6 +41,8 @@ pub enum GameEvent {
     StaminaSpent { who: Entity, amount: f32 },
     /// A player or mob dodged an attack.
     Dodged { who: Entity },
+    /// A player or mob took damage.
+    Damaged { who: Entity, amount: f32 },
     /// A player or mob was killed; `mob` is the template of a mob. World events listen; quests
     /// and loot will.
     #[allow(dead_code)]
@@ -95,9 +97,10 @@ fn text(event: &GameEvent) -> Option<String> {
             Way::Teleported => format!("{name} appears out of thin air."),
         },
         GameEvent::PhaseChanged(phase) => phase.arrives().into(),
-        GameEvent::StaminaSpent { .. } | GameEvent::Dodged { .. } | GameEvent::Died { .. } => {
-            return None;
-        }
+        GameEvent::StaminaSpent { .. }
+        | GameEvent::Dodged { .. }
+        | GameEvent::Damaged { .. }
+        | GameEvent::Died { .. } => return None,
     };
     Some(line + "\r\n")
 }
@@ -117,7 +120,10 @@ fn announce(mut events: MessageReader<GameEvent>, rooms: RoomQuery, mut players:
                     text,
                 });
             }
-            GameEvent::StaminaSpent { .. } | GameEvent::Dodged { .. } | GameEvent::Died { .. } => {}
+            GameEvent::StaminaSpent { .. }
+            | GameEvent::Dodged { .. }
+            | GameEvent::Damaged { .. }
+            | GameEvent::Died { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, player, in_room) in &players {
                     let outdoors = in_room

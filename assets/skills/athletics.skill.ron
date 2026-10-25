@@ -12,7 +12,17 @@
         "endurance": (
             name: "Endurance",
             attribute: Willpower,
-            kind: Passive(triggers: [StaminaSpent(per: 3)]),
+            kind: Passive(
+                triggers: [StaminaSpent(per: 3)],
+                bonuses: [(stat: MaxStamina, per: 5)],
+            ),
+        ),
+        "toughness": (
+            name: "Toughness",
+            kind: Passive(
+                triggers: [Damaged(per: 3)],
+                bonuses: [(stat: MaxHealth, per: 5)],
+            ),
         ),
     },
 )

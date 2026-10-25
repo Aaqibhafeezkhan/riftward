@@ -1,5 +1,6 @@
 // A magical tradition. Its foundation skill is what Awakens a character to it; it requires latent
-// talent (Magic 1), and is taught by the tradition's teachers in the world.
+// talent (Magic 1), and is taught by the tradition's teachers in the world. Adepts have no spells:
+// their magic is turned inward as powers, which are skills like any other.
 (
     name: "Adept",
     rarity: Uncommon,
@@ -10,6 +11,22 @@
             name: "Inner Discipline",
             kind: Passive(triggers: []),
             requires: Stat(Magic, 1),
+        ),
+        // The Adept's weapon: unarmed strikes that land like a blade.
+        "killing_hands": (
+            name: "Killing Hands",
+            attribute: Agility,
+            kind: Attack(verb: "strike", damage: (2, 4)),
+            requires: Skill("adept:foundation", 0),
+        ),
+        "quickened_reflexes": (
+            name: "Quickened Reflexes",
+            attribute: Reaction,
+            kind: Passive(
+                triggers: [Dodged],
+                bonuses: [(stat: Initiative, per: 5, base: 1), (stat: Defence, per: 10)],
+            ),
+            requires: Skill("adept:foundation", 5),
         ),
     },
 )

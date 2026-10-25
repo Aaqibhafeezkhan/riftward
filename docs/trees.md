@@ -1,6 +1,6 @@
 # Skill trees
 
-[Design summary](README.md) · Status: a plan. The basics of the weapon trees, Brawling, Athletics (Dodge, Endurance), Thievery (Lockpicking) and the four magic foundations exist; everything else here is a first pass to discuss.
+[Design summary](README.md) · Status: a plan, with step 1 built: every weapon tree to its journeyman techniques, Riposte, Toughness, the Endurance bonus, and the Adept's Killing Hands and Quickened Reflexes, on passive bonuses, conditions and techniques. The rest is a first pass to discuss.
 
 This is the plan for the game's skill trees: their shape, which trees there are, a first pass at what each holds, and what the engine needs before each can work. How skills work in general (kinds, rarity, acquiring, progression) is in [Skills](skills.md) and [Progression](progression.md).
 
@@ -129,17 +129,55 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 
 ## Proposed order
 
-1. **Combat techniques, conditions and passive bonuses together.** They're one piece of work, and they bring every weapon tree to its journeyman tier, Toughness, and the Adept's Killing Hands (which settles the Adept's weapon). The sewers get more interesting at once.
-2. **Healing and consumables:** First Aid and bandages, so fighters can patch up between fights without walking to town; herbs come with step 3.
-3. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things.
-4. **Seeing and being seen:** Stealth, and Backstab from hiding.
-5. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions.
-6. **Money and shops,** then Trade and the crafts.
+1. **Combat techniques, conditions and passive bonuses together.** *Built:* see [Step 1, as built](#step-1-as-built).
+2. **Armour:** damage reduction, at a cost to dodging (see [Armour](#armour)). Next, since every fight now runs through the code it changes.
+3. **Healing and consumables:** First Aid and bandages, so fighters can patch up between fights without walking to town; herbs come with step 3.
+4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things.
+5. **Seeing and being seen:** Stealth, and Backstab from hiding.
+6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions.
+7. **Money and shops,** then Trade and the crafts.
 
 Each step adds its trees' skills to the trainers in Riftwatch: the drill sergeant teaches weapon techniques up to journeyman, and new trainers appear for the rest (the herbalist for Herbalism and First Aid, someone in the Back Alley for Stealth and Thievery).
 
+## Step 1, as built
+
+- **Passive bonuses.** A passive skill can raise a stat by one point per so many levels, optionally only for one attack skill: `bonuses: [(stat: MaxHealth, per: 5)]`, or `(stat: Attack, per: 10, with: "swordplay:basics")` for a Bladework. Stats: max health, max stamina, attack, defence, damage, armour, initiative. Maximum health and stamina everywhere (the prompt, `score`, recovery, respawning) now include them.
+- **Conditions** on any fighter, counted in their turns: **staggered** (loses a turn), **down** (loses a turn, defends at half until then), **bleeding** (hurts each turn), **held** (can't flee, defends at half), **guarding** (defends better), **exposed** (defends at half until their next turn). Code in `src/combat/states.rs`.
+- **Techniques,** a skill kind: a special move made with an attack skill, in place of the auto-attack, through the action queue (`use cleave`). Each has a stamina cost, and can add accuracy and damage, be harmless (a grab), not strike at all (a guard), carry effects, or be an **opener** that can start a fight (`use backstab rat`) and lands easily on someone unaware. A technique without its weapon in hand, or its stamina, falls back to the auto-attack with a word why.
+
+  ```ron
+  "cleave": (name: "Cleave", requires: Skill("axes:basics", 15),
+      kind: Technique((with: "axes:basics", verb: "cleave", cost: Stamina(3), effects: [Cleave]))),
+  ```
+
+- **Counters:** a passive can answer a dodge with an immediate strike for a stamina, if the defender is fighting with the attack it counters with: Riposte.
+- **Built skills,** all taught by the drill sergeant once the tree's basics reach 15, or the ascetic for the Adept:
+
+  | Tree | Built |
+  | --- | --- |
+  | Brawling | **Kick** (+2 damage, 1 stamina), **Grapple** (a harmless grab that holds for 2 turns, 2) |
+  | Swordplay | **Lunge** (+4 accuracy, then exposed, 1), **Riposte** (counter a dodge, 1) |
+  | Knife Fighting | **Backstab** (opener, +4 damage, 2), **Open Vein** (bleeds 1 for 3 turns, 2). Open Vein comes before Throw, which waits on ranged attacks |
+  | Axe Fighting | **Cleave** (carries into a second foe, even when it kills the first, 3), **Hew** (+3 damage, −2 accuracy, 2) |
+  | Hammer Fighting | **Stagger** (target loses a turn, 4), **Crush** (ignores armour, +1, 2) |
+  | Staff Fighting | **Sweep** (knocks down, 3), **Guard** (+4 defence for 2 turns, no strike, 1) |
+  | Athletics | **Toughness** (+1 max health per 5 levels, practised by taking damage); **Endurance** now gives +1 max stamina per 5 levels |
+  | Adept | **Killing Hands** (unarmed, 2–4: the Adept's weapon), **Quickened Reflexes** (+initiative, and +defence, practised by dodging) |
+
+- **Mobs** don't use techniques yet; their templates can give them auras and passives.
+
+## Armour
+
+Planned as the next step. Armour is **damage reduction**: every hit loses its armour's rating (never below 1), the same `Armour` stat auras and passives already feed. In exchange, armour **hampers dodging**: each piece has a penalty taken off the wearer's defence, so a knight in plate shrugs off blows they can't avoid, and a scout in leather avoids blows they couldn't shrug off.
+
+- **Armour pieces are worn items** with a `armour: (reduction: n, dodge_penalty: n)`, in the existing wear slots (body, head, and new ones as needed: hands, legs), so weight and Bulk count too.
+- **Different armours trade differently:** padded cloth (little reduction, no penalty), leather, mail, plate (much reduction, a heavy penalty), shields as held armour.
+- **Skills work both sides of it:** an armoured fighting skill that reduces the dodge penalty or adds defence *in* armour (Heavy Armour, Shield Use), and passives that add defence *out* of it (the Adept's Quickened Reflexes, an unarmoured Evasion), so lightly armoured and heavily armoured fighters each have a tree to grow.
+- **Crush** already ignores armour, so it becomes the answer to plate.
+
 ## Open questions
 
+- [ ] **Leaving mid-fight:** `quit` works during a fight, which makes logging out an escape. Should quitting in a fight be refused, or leave the character fighting (and dying) for a few rounds?
 - [ ] **Is the four-tier shape right,** and are the level gates (15, 30, 45) the right spacing for a 0–50 skill?
 - [ ] **How many skills per tree** to start: the five or so above, or fewer?
 - [ ] **What stops one character learning every tree?** Still the biggest open question in [Skills](skills.md#open-questions). Trainers make it pressing: with free lessons, anyone can open every tree.

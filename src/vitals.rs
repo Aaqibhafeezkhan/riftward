@@ -9,11 +9,12 @@
 use bevy::prelude::*;
 
 use crate::attributes::Attributes;
-use crate::combat::Fighting;
+use crate::combat::{Conditions, Fighting};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
 use crate::net::{self, Connection};
 use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line, targets_online};
+use crate::skills::{SkillDefs, Skills, boosts};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::world::Player;
@@ -71,9 +72,37 @@ impl Plugin for VitalsPlugin {
     }
 }
 
+/// The most health and stamina someone can have: from their attributes (8 + Body / 2, 8 +
+/// Willpower / 2), plus what passive skills like Toughness and Endurance add.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Maxima {
+    pub health: i32,
+    pub stamina: i32,
+}
+
+impl Maxima {
+    pub fn of(attributes: &Attributes, skills: &Skills, defs: &SkillDefs) -> Self {
+        let boosts = boosts(skills, defs);
+        Self {
+            health: attributes.health() + boosts.max_health,
+            stamina: attributes.stamina() + boosts.max_stamina,
+        }
+    }
+
+    /// From attributes alone, with no skills.
+    #[cfg(test)]
+    pub fn bare(attributes: &Attributes) -> Self {
+        Self {
+            health: attributes.health(),
+            stamina: attributes.stamina(),
+        }
+    }
+}
+
 /// Current health and stamina, which can be fractional while recovering. Lives on the player
-/// entity, next to the `Attributes` that set their maximums.
+/// entity, next to the `Attributes` and `Skills` that set their maximums.
 #[derive(Component, Clone, Debug, PartialEq)]
+#[require(Conditions)]
 pub struct Vitals {
     pub health: f32,
     pub stamina: f32,
@@ -81,48 +110,48 @@ pub struct Vitals {
 
 impl Vitals {
     /// Full health and stamina.
-    pub fn full(attributes: &Attributes) -> Self {
+    pub fn full(max: Maxima) -> Self {
         Self {
-            health: attributes.health() as f32,
-            stamina: attributes.stamina() as f32,
+            health: max.health as f32,
+            stamina: max.stamina as f32,
         }
     }
 
     /// Recover for `secs` seconds at rest, never past the maximums.
-    pub fn recover(&mut self, attributes: &Attributes, secs: f32) {
-        let (max_health, max_stamina) = (attributes.health() as f32, attributes.stamina() as f32);
+    pub fn recover(&mut self, max: Maxima, secs: f32) {
+        let (max_health, max_stamina) = (max.health as f32, max.stamina as f32);
         let secs = secs.max(0.0);
         self.health = (self.health + max_health * secs / HEALTH_RECOVERY_SECS).min(max_health);
         self.stamina = (self.stamina + max_stamina * secs / STAMINA_RECOVERY_SECS).min(max_stamina);
     }
 
     /// Keep within 0 and the maximums, as after a maximum goes down.
-    pub fn clamp(&mut self, attributes: &Attributes) {
-        self.health = self.health.clamp(0.0, attributes.health() as f32);
-        self.stamina = self.stamina.clamp(0.0, attributes.stamina() as f32);
+    pub fn clamp(&mut self, max: Maxima) {
+        self.health = self.health.clamp(0.0, max.health as f32);
+        self.stamina = self.stamina.clamp(0.0, max.stamina as f32);
     }
 
     /// Vitals as saved: `health` and `stamina` at unix time `saved_at`, caught up to `now`.
     /// Missing values mean full.
     pub fn restored(
-        attributes: &Attributes,
+        max: Maxima,
         saved: Option<(f32, f32)>,
         saved_at: Option<i64>,
         now: i64,
     ) -> Self {
         let Some((health, stamina)) = saved else {
-            return Self::full(attributes);
+            return Self::full(max);
         };
         let mut vitals = Self { health, stamina };
-        vitals.clamp(attributes);
+        vitals.clamp(max);
         let away = saved_at.map_or(0, |at| now - at);
-        vitals.recover(attributes, away as f32);
+        vitals.recover(max, away as f32);
         vitals
     }
 }
 
 /// The text of a prompt, filled in from a character's vitals.
-pub fn render_prompt(format: &str, vitals: &Vitals, attributes: &Attributes) -> String {
+pub fn render_prompt(format: &str, vitals: &Vitals, max: Maxima) -> String {
     let mut text = String::new();
     let mut chars = format.chars();
     while let Some(c) = chars.next() {
@@ -132,9 +161,9 @@ pub fn render_prompt(format: &str, vitals: &Vitals, attributes: &Attributes) -> 
         }
         match chars.next() {
             Some('h') => text += &(vitals.health.floor() as i32).to_string(),
-            Some('H') => text += &attributes.health().to_string(),
+            Some('H') => text += &max.health.to_string(),
             Some('s') => text += &(vitals.stamina.floor() as i32).to_string(),
-            Some('S') => text += &attributes.stamina().to_string(),
+            Some('S') => text += &max.stamina.to_string(),
             Some('%') => text.push('%'),
             Some(other) => {
                 text.push('%');
@@ -153,6 +182,7 @@ type Recovering<'w, 's> = Query<
     (
         &'static mut Vitals,
         &'static Attributes,
+        &'static Skills,
         Has<Resting>,
         Has<Fighting>,
     ),
@@ -175,20 +205,26 @@ fn unix_now() -> i64 {
 }
 
 /// Recover everyone's vitals by the time since the last heartbeat.
-fn recover(time: Res<Time>, mut last: Local<Option<f64>>, mut players: Recovering) {
+fn recover(
+    time: Res<Time>,
+    mut last: Local<Option<f64>>,
+    mut players: Recovering,
+    defs: Res<SkillDefs>,
+) {
     let now = time.elapsed_secs_f64();
     let secs = last.map_or(0.0, |last| now - last) as f32;
     *last = Some(now);
-    for (mut vitals, attributes, resting, fighting) in &mut players {
+    for (mut vitals, attributes, skills, resting, fighting) in &mut players {
+        let max = Maxima::of(attributes, skills, &defs);
         let before = vitals.clone();
         let mut after = before.clone();
-        after.clamp(attributes);
+        after.clamp(max);
         let pace = match (fighting, resting) {
             (true, _) => 0.0,
             (false, true) => REST_SPEEDUP,
             (false, false) => 1.0,
         };
-        after.recover(attributes, secs * pace);
+        after.recover(max, secs * pace);
         if after != before {
             *vitals = after;
         }
@@ -229,9 +265,19 @@ fn save(db: &Database, player: &Player, vitals: &Vitals, at: i64) {
 }
 
 /// Give each player's connection their prompt, filled in fresh, just before output is sent.
-fn show_prompts(mut players: Query<(&mut Connection, &Vitals, &Attributes, &PromptFormat)>) {
-    for (mut conn, vitals, attributes, format) in &mut players {
-        conn.set_prompt(render_prompt(&format.0, vitals, attributes));
+fn show_prompts(
+    mut players: Query<(
+        &mut Connection,
+        &Vitals,
+        &Attributes,
+        &Skills,
+        &PromptFormat,
+    )>,
+    defs: Res<SkillDefs>,
+) {
+    for (mut conn, vitals, attributes, skills, format) in &mut players {
+        let max = Maxima::of(attributes, skills, &defs);
+        conn.set_prompt(render_prompt(&format.0, vitals, max));
     }
 }
 
@@ -324,10 +370,11 @@ fn setvitals_cmd(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
     keywords: Query<&Keywords>,
-    mut sheets: Query<(&mut Vitals, &Attributes)>,
+    mut sheets: Query<(&mut Vitals, &Attributes, &Skills)>,
+    defs: Res<SkillDefs>,
 ) {
     let mut out = Vec::new();
-    let reply = set_vitals(&inv, &players, &keywords, &mut sheets, &mut out);
+    let reply = set_vitals(&inv, &players, &keywords, &mut sheets, &defs, &mut out);
     out.insert(0, reply_line(inv.entity, reply));
     deliver(out, &mut players);
 }
@@ -336,7 +383,8 @@ fn set_vitals(
     inv: &Invocation,
     players: &PlayerQuery,
     keywords: &Query<&Keywords>,
-    sheets: &mut Query<(&mut Vitals, &Attributes)>,
+    sheets: &mut Query<(&mut Vitals, &Attributes, &Skills)>,
+    defs: &SkillDefs,
     out: &mut Vec<Outgoing>,
 ) -> Reply {
     let mut parts = inv.args.split_whitespace();
@@ -354,20 +402,21 @@ fn set_vitals(
         .find_one(inv.entity, targets_online(players, keywords))
         .and_then(|e| Actor::get(players, e))
         .ok_or_else(|| format!("No one matching {} is online.", target.describe()))?;
-    let (mut vitals, attributes) = sheets
+    let (mut vitals, attributes, skills) = sheets
         .get_mut(actor.entity)
         .map_err(|_| format!("{} has no vitals loaded.", actor.name))?;
+    let max = Maxima::of(attributes, skills, defs);
     vitals.health = health;
     if let Some(stamina) = number(stamina) {
         vitals.stamina = stamina;
     }
-    vitals.clamp(attributes);
+    vitals.clamp(max);
     let now = format!(
         "{}/{} health, {}/{} stamina",
         vitals.health.floor(),
-        attributes.health(),
+        max.health,
         vitals.stamina.floor(),
-        attributes.stamina()
+        max.stamina
     );
     if actor.entity != inv.entity {
         out.push(Outgoing::line(
@@ -398,7 +447,7 @@ mod tests {
             stamina: 0.0,
         };
         // A tenth of the way to full health, half of stamina.
-        vitals.recover(&attributes, 60.0);
+        vitals.recover(Maxima::bare(&attributes), 60.0);
         assert!((vitals.health - 1.0).abs() < 1e-4, "{vitals:?}");
         assert!((vitals.stamina - 4.5).abs() < 1e-4, "{vitals:?}");
         // Many small steps add up to one big one.
@@ -407,27 +456,37 @@ mod tests {
             stamina: 0.0,
         };
         for _ in 0..60 {
-            stepped.recover(&attributes, 1.0);
+            stepped.recover(Maxima::bare(&attributes), 1.0);
         }
         assert!((stepped.health - vitals.health).abs() < 1e-3);
         // Never past the maximum.
-        vitals.recover(&attributes, 100_000.0);
-        assert_eq!(vitals, Vitals::full(&attributes));
+        vitals.recover(Maxima::bare(&attributes), 100_000.0);
+        assert_eq!(vitals, Vitals::full(Maxima::bare(&attributes)));
     }
 
     #[test]
     fn offline_time_counts_toward_recovery() {
         let attributes = sheet();
         assert_eq!(
-            Vitals::restored(&attributes, None, None, 1000),
-            Vitals::full(&attributes)
+            Vitals::restored(Maxima::bare(&attributes), None, None, 1000),
+            Vitals::full(Maxima::bare(&attributes))
         );
-        let back = Vitals::restored(&attributes, Some((2.0, 0.0)), Some(1000), 1060);
+        let back = Vitals::restored(
+            Maxima::bare(&attributes),
+            Some((2.0, 0.0)),
+            Some(1000),
+            1060,
+        );
         assert!((back.health - 3.0).abs() < 1e-4, "{back:?}");
         assert!((back.stamina - 4.5).abs() < 1e-4, "{back:?}");
         // Saved above a maximum that has since gone down: clamped.
-        let over = Vitals::restored(&attributes, Some((50.0, 50.0)), Some(1000), 1000);
-        assert_eq!(over, Vitals::full(&attributes));
+        let over = Vitals::restored(
+            Maxima::bare(&attributes),
+            Some((50.0, 50.0)),
+            Some(1000),
+            1000,
+        );
+        assert_eq!(over, Vitals::full(Maxima::bare(&attributes)));
     }
 
     #[test]
@@ -438,11 +497,11 @@ mod tests {
             stamina: 3.2,
         };
         assert_eq!(
-            render_prompt(DEFAULT_PROMPT, &vitals, &attributes),
+            render_prompt(DEFAULT_PROMPT, &vitals, Maxima::bare(&attributes)),
             "<7/10hp 3/9st> "
         );
         assert_eq!(
-            render_prompt("HP:%h %% %x%", &vitals, &attributes),
+            render_prompt("HP:%h %% %x%", &vitals, Maxima::bare(&attributes)),
             "HP:7 % %x%"
         );
     }

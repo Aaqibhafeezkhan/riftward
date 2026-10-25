@@ -36,7 +36,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
 | `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
-| `combat.rs` | Combat rounds, attacks, death and respawn, `kill`, `flee`, `autoattack` and `stop` |
+| `combat/` | Combat: the round, death and respawn and the commands (`mod.rs`), attacks, techniques and ripostes (`strike.rs`), conditions (`states.rs`) |
 | `world_events.rs` | World flags, world events from zone files, and the admin `worldflag` |
 | `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
 | `vitals.rs` | Current health and stamina, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
@@ -136,6 +136,7 @@ Built (`src/combat.rs`). The round loop, initiative, damage, death and respawn: 
 - **Actions and the queue.** Commands marked as actions (`kill`, `flee`, `use`, `pick`, `bash`, future skills) take a round: at most one per round, and any typed sooner wait in the player's `ActionQueue` (up to 10; `stop` clears it). In a fight, a queued action takes the player's turn instead of their auto-attack. Everything else (looking, talking, inventory) happens at once.
 - **Auto-attack.** With nothing queued, a fighter makes their auto-attack: an attack chosen with `autoattack <skill>` if they can make it, otherwise the weapon in their hand, otherwise Brawling, everyone's basic attack (`autoattack default` goes back to that).
 - **Weapons** carry their damage (a short sword 2–5) and name their skill (Swordplay). Trained, a fighter attacks with that skill and does 1 more damage per 10 levels of it; untrained, they swing it with only their Brawling to guide them, still doing the weapon's damage, and learn nothing of the weapon by it. Weapon skills (Swordplay, Knife Fighting, Axe Fighting, Hammer Fighting, Staff Fighting) have no damage of their own; Brawling's fists do 1–3.
+- **Techniques and conditions:** a technique, used through the queue (`use cleave`), replaces the auto-attack for a turn; openers can start a fight. Techniques leave conditions (staggered, down, bleeding, held, guarding, exposed) that count down in the fighter's own turns. Passive skills add to stats (Toughness, Endurance, Quickened Reflexes) and can counter a dodge (Riposte). See [Step 1, as built](trees.md#step-1-as-built). The combat code is in `src/combat/`: the round in `mod.rs`, attacks in `strike.rs`, conditions in `states.rs`.
 - **Resting** (`rest`) recovers three times as fast, and nothing recovers in a fight. A resting character is caught off guard: attacks against them use half their defence, and their first turn goes on getting up.
 - **Auras:** a mob with an aura skill makes certain mobs in its zone fight better while it lives (attack, defence and armour, which takes points off each hit). The Rat King's makes the sewer rats tougher.
 - **Packs:** a spawn's `pack` caps how many of its aggressive mobs gang up on one player.
@@ -144,7 +145,7 @@ Built (`src/combat.rs`). The round loop, initiative, damage, death and respawn: 
 - **Mobs fight by the same rules,** with attributes, skills, an attack and optionally a fixed health from their templates. `aggressive: true` mobs attack players in their room; the rest only fight back. Mobs in a fight don't wander.
 - **A mob's death** leaves a corpse that rots in 5 minutes, and counts for its spawn like any death, so `AfterDeath` timers and breeding reseeds now matter.
 - **A player's death** leaves a real corpse where they fell, holding everything they carried and wore; it survives restarts and rots in 30 minutes, spilling what's left on the ground. They wake at the Wayside Shrine with a quarter of their health and stamina.
-- **Not yet:** armour and weapon stats, more combat skills (riposte, disarm), mob tactics, a death penalty beyond the walk back, PvP, and grouping. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
+- **Not yet:** armour (planned next, see [Armour](trees.md#armour)), mobs using techniques, expert and master techniques (Disarm, Whirlwind and the rest), mob tactics, a death penalty beyond the walk back, PvP, and grouping. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
 
 ## Planned features
 

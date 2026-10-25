@@ -9,5 +9,17 @@
             name: "Hammer Fighting",
             kind: Attack(verb: "smash"),
         ),
+        "stagger": (
+            name: "Stagger",
+            kind: Technique((with: "hammers:basics", verb: "slam", cost: Stamina(4),
+                effects: [Stagger])),
+            requires: Skill("hammers:basics", 15),
+        ),
+        "crush": (
+            name: "Crush",
+            kind: Technique((with: "hammers:basics", verb: "crush", cost: Stamina(2), damage: 1,
+                effects: [IgnoreArmour])),
+            requires: Skill("hammers:basics", 15),
+        ),
     },
 )

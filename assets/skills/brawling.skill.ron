@@ -8,5 +8,16 @@
             name: "Brawling",
             kind: Attack(verb: "punch", damage: (1, 3)),
         ),
+        "kick": (
+            name: "Kick",
+            kind: Technique((with: "brawling:basics", verb: "kick", cost: Stamina(1), damage: 2)),
+            requires: Skill("brawling:basics", 15),
+        ),
+        "grapple": (
+            name: "Grapple",
+            kind: Technique((with: "brawling:basics", verb: "grab", cost: Stamina(2),
+                strike: Harmless, effects: [Hold(rounds: 2)])),
+            requires: Skill("brawling:basics", 15),
+        ),
     },
 )

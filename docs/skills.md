@@ -246,6 +246,8 @@ The skill core, without combat, proved on non-combat skills first:
       kind: Aura(affects: "sewers:sewer_rat", bonus: (attack: 2, defence: 2, armour: 1))),
   ```
 
+  A **technique** is a special move made with an attack skill, in place of the auto-attack, through the action queue (`use lunge`); see [Step 1, as built](trees.md#step-1-as-built). Passives can carry stat **bonuses** that grow with level, and **counters** like Riposte.
+
   Trees so far: `brawling` (everyone's basic attack, a punch), `swordplay` (needs a blade in hand), `beast` (bites and claws, for mobs), `athletics` (Dodge, Endurance) and `thievery`.
 - **Effectiveness** is level + the skill's attribute, used in contests by the [ratio rule](attributes.md#the-ratio-rule). Lockpicking 0 with Agility 3 against a difficulty-6 lock is a 33% chance.
 - **Progression** exactly as in [Progression](progression.md), with Luck on the gain roll.

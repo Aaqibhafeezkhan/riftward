@@ -107,6 +107,6 @@ Players read them as "Magic 1 and Willpower 4", or "T'skrang".
 
 - [ ] **Racial skill details:** are the proposed racial skills right for each race?
 - [ ] **Exact skill grants** for each background, once skill trees exist.
-- [ ] **The Adept's weapon:** Adepts start with nothing to hold, so a fresh Adept brawls for 1–3. To come with the Adept tradition's own tree: an unarmed attack skill, or hand wraps used with Brawling, so they start as well armed as anyone.
+- [x] **The Adept's weapon:** settled by **Killing Hands**, unarmed strikes for 2–4, taught by the ascetic once Awakened (see [Skill trees](trees.md#step-1-as-built)).
 - [ ] **Universal starting skills:** basic attack only, or also a survival skill such as Foraging?
 - [x] **Starting equipment by background:** built; see [Backgrounds](#backgrounds).

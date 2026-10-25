@@ -9,5 +9,17 @@
             name: "Swordplay",
             kind: Attack(verb: "slash"),
         ),
+        "lunge": (
+            name: "Lunge",
+            kind: Technique((with: "swordplay:basics", verb: "lunge at", cost: Stamina(1),
+                accuracy: 4, effects: [Expose])),
+            requires: Skill("swordplay:basics", 15),
+        ),
+        // After a dodge, a free counter-strike with a sword in hand.
+        "riposte": (
+            name: "Riposte",
+            kind: Passive(counter: "swordplay:basics"),
+            requires: Skill("swordplay:basics", 15),
+        ),
     },
 )

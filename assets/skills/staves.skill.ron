@@ -9,5 +9,17 @@
             name: "Staff Fighting",
             kind: Attack(verb: "strike"),
         ),
+        "sweep": (
+            name: "Sweep",
+            kind: Technique((with: "staves:basics", verb: "sweep", cost: Stamina(3),
+                effects: [KnockDown])),
+            requires: Skill("staves:basics", 15),
+        ),
+        "guard": (
+            name: "Guard",
+            kind: Technique((with: "staves:basics", verb: "take a guarding stance",
+                cost: Stamina(1), strike: None, effects: [Guard(defence: 4, rounds: 2)])),
+            requires: Skill("staves:basics", 15),
+        ),
     },
 )

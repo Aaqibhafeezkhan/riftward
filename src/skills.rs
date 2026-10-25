@@ -145,8 +145,19 @@ pub enum SkillKind {
         #[serde(default)]
         cooldown: f64,
     },
-    /// Practised whenever one of its triggers happens.
-    Passive { triggers: Vec<Trigger> },
+    /// Practised whenever one of its triggers happens, and raising numbers as it levels.
+    Passive {
+        #[serde(default)]
+        triggers: Vec<Trigger>,
+        #[serde(default)]
+        bonuses: Vec<PassiveBonus>,
+        /// After dodging an attack while fighting with this attack skill, strike back at once:
+        /// Riposte. Practised each time it fires.
+        #[serde(default)]
+        counter: Option<String>,
+    },
+    /// A special move made with an attack skill, in place of the auto-attack: `use cleave`.
+    Technique(Technique),
     /// An attack, made every round of a fight. A weapon skill (Swordplay) has no damage of its
     /// own and needs a weapon that uses it in hand; an unarmed or natural attack (Brawling, a
     /// rat's Bite) has its own.
@@ -167,6 +178,155 @@ pub enum SkillKind {
         affects: String,
         bonus: Bonus,
     },
+}
+
+/// A number a passive skill raises as it levels: one point for every `per` levels, plus `base`.
+/// With `with`, it only counts for attacks made with that skill: Bladework's accuracy is for
+/// swords.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PassiveBonus {
+    pub stat: Stat,
+    #[serde(default = "default_per")]
+    pub per: u32,
+    #[serde(default)]
+    pub base: i32,
+    #[serde(default)]
+    pub with: Option<String>,
+}
+
+fn default_per() -> u32 {
+    5
+}
+
+/// What a passive bonus raises.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stat {
+    MaxHealth,
+    MaxStamina,
+    /// Added to attack ratings.
+    Attack,
+    /// Added to defence against attacks.
+    Defence,
+    /// Added to damage dealt.
+    Damage,
+    /// Taken off damage received (every hit still does at least 1).
+    Armour,
+    Initiative,
+}
+
+/// Everything a character's passive skills add up to.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Boosts {
+    pub max_health: i32,
+    pub max_stamina: i32,
+    pub attack: i32,
+    pub defence: i32,
+    pub damage: i32,
+    pub armour: i32,
+    pub initiative: i32,
+    /// Attack and damage that only count with one skill, by `tree:skill`.
+    pub with: HashMap<String, (i32, i32)>,
+}
+
+impl Boosts {
+    /// Attack bonus for an attack made with `skill`.
+    pub fn attack_with(&self, skill: &str) -> i32 {
+        self.attack + self.with.get(skill).map_or(0, |(attack, _)| *attack)
+    }
+
+    /// Damage bonus for an attack made with `skill`.
+    pub fn damage_with(&self, skill: &str) -> i32 {
+        self.damage + self.with.get(skill).map_or(0, |(_, damage)| *damage)
+    }
+}
+
+/// Add up what a character's passive skills give them, at their current levels.
+pub fn boosts(skills: &Skills, defs: &SkillDefs) -> Boosts {
+    let mut total = Boosts::default();
+    for (key, state) in &skills.0 {
+        let Some(SkillKind::Passive { bonuses, .. }) = defs.skills.get(key).map(|s| &s.def.kind)
+        else {
+            continue;
+        };
+        for bonus in bonuses {
+            let value = bonus.base + (state.level / bonus.per.max(1)) as i32;
+            match (&bonus.with, bonus.stat) {
+                (Some(skill), Stat::Attack) => {
+                    total.with.entry(skill.clone()).or_default().0 += value
+                }
+                (Some(skill), Stat::Damage) => {
+                    total.with.entry(skill.clone()).or_default().1 += value
+                }
+                (_, Stat::MaxHealth) => total.max_health += value,
+                (_, Stat::MaxStamina) => total.max_stamina += value,
+                (_, Stat::Attack) => total.attack += value,
+                (_, Stat::Defence) => total.defence += value,
+                (_, Stat::Damage) => total.damage += value,
+                (_, Stat::Armour) => total.armour += value,
+                (_, Stat::Initiative) => total.initiative += value,
+            }
+        }
+    }
+    total
+}
+
+/// A technique: a special move made with an attack skill, used through the action queue in a
+/// fight (or, for an opener, to start one).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Technique {
+    /// The attack skill it's made with, `tree:skill`; its weapon (or fists) must be ready.
+    pub with: String,
+    /// What it does: "kick" ("Grok kicks the rat").
+    pub verb: String,
+    #[serde(default)]
+    pub cost: Cost,
+    /// Added to the attack rating.
+    #[serde(default)]
+    pub accuracy: i32,
+    /// Added to the damage.
+    #[serde(default)]
+    pub damage: i32,
+    /// Whether it strikes at all, and whether a hit does damage.
+    #[serde(default)]
+    pub strike: StrikeKind,
+    #[serde(default)]
+    pub effects: Vec<Effect>,
+    /// Only works on someone not yet fighting back, or who is down or resting: Backstab. It can
+    /// start a fight.
+    #[serde(default)]
+    pub opener: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum StrikeKind {
+    /// Rolls to hit and does damage.
+    #[default]
+    Hit,
+    /// Rolls to hit, but a hit only applies its effects: a grab.
+    Harmless,
+    /// Doesn't strike: its effects are on the user, like raising a guard.
+    None,
+}
+
+/// What a technique does besides damage.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Effect {
+    /// The target loses their next turn.
+    Stagger,
+    /// The target loses their next turn and defends at half until then.
+    KnockDown,
+    /// The target loses `damage` health on each of their next `rounds` turns.
+    Bleed { damage: u32, rounds: u32 },
+    /// The target can't flee and defends at half for `rounds` turns.
+    Hold { rounds: u32 },
+    /// The blow carries on into a second foe fighting you.
+    Cleave,
+    /// The target's armour doesn't help.
+    IgnoreArmour,
+    /// The user defends at half until their next turn.
+    Expose,
+    /// The user defends better for `rounds` turns.
+    Guard { defence: i32, rounds: u32 },
 }
 
 /// What an aura adds to the mobs it affects.
@@ -205,6 +365,8 @@ pub enum Trigger {
     StaminaSpent { per: u32 },
     /// One use for every attack dodged.
     Dodged,
+    /// One use for every `per` damage taken.
+    Damaged { per: u32 },
 }
 
 impl Trigger {
@@ -217,6 +379,9 @@ impl Trigger {
                 Some((f64::from((*per).max(1)), f64::from(*amount)))
             }
             (Trigger::Dodged, GameEvent::Dodged { who: w }) if *w == who => Some((1.0, 1.0)),
+            (Trigger::Damaged { per }, GameEvent::Damaged { who: w, amount }) if *w == who => {
+                Some((f64::from((*per).max(1)), f64::from(*amount)))
+            }
             _ => None,
         }
     }
@@ -532,7 +697,9 @@ fn practise_passives(
     let mut out = Vec::new();
     for event in events.read() {
         let who = match event {
-            GameEvent::StaminaSpent { who, .. } | GameEvent::Dodged { who } => *who,
+            GameEvent::StaminaSpent { who, .. }
+            | GameEvent::Dodged { who }
+            | GameEvent::Damaged { who, .. } => *who,
             _ => continue,
         };
         // Only players practise; mobs fight at the levels their templates give them.
@@ -545,7 +712,7 @@ fn practise_passives(
             .0
             .keys()
             .filter_map(|key| match &defs.skills.get(key)?.def.kind {
-                SkillKind::Passive { triggers } => triggers
+                SkillKind::Passive { triggers, .. } => triggers
                     .iter()
                     .find_map(|trigger| trigger.counts(event, who))
                     .map(|(per, amount)| (key.clone(), per, amount)),
@@ -658,6 +825,7 @@ fn skills_text(
                 SkillKind::Active { .. } => "",
                 SkillKind::Passive { .. } => " (passive)",
                 SkillKind::Attack { .. } => " (attack)",
+                SkillKind::Technique(_) => " (technique)",
                 SkillKind::Aura { .. } => " (aura)",
             };
             text += &format!(
@@ -710,6 +878,23 @@ fn use_cmd(
                     "{} isn't something you use; it improves as you go.",
                     skill.def.name
                 )),
+                // Techniques belong to combat: in a fight, the round makes them on the user's
+                // turn; out of one, the `technique` command starts a fight with an opener.
+                SkillKind::Technique(_) => match registry.find("technique", actor.role) {
+                    Some((spec, id)) => {
+                        commands.run_system_with(
+                            *id,
+                            Invocation {
+                                entity: inv.entity,
+                                command: spec.name,
+                                usage: spec.usage,
+                                args: format!("{} {}", skill.key, target.trim()),
+                            },
+                        );
+                        return;
+                    }
+                    None => Err(format!("You can't put {} to use yet.", skill.def.name)),
+                },
                 SkillKind::Active { command, .. } => match registry.find(command, actor.role) {
                     Some((spec, id)) => {
                         commands.run_system_with(
@@ -952,6 +1137,53 @@ mod tests {
         // After the cooldown it can gain again.
         assert!(roll_skill_gain(&mut state, 50, 1.0, 1300, |_| true));
         assert_eq!(state.level, 2);
+    }
+
+    #[test]
+    fn passive_bonuses_grow_with_level() {
+        let tough = Skill {
+            key: "athletics:toughness".into(),
+            tree: "athletics".into(),
+            attribute: Attribute::Body,
+            def: SkillDef {
+                name: "Toughness".into(),
+                kind: SkillKind::Passive {
+                    triggers: Vec::new(),
+                    counter: None,
+                    bonuses: vec![
+                        PassiveBonus {
+                            stat: Stat::MaxHealth,
+                            per: 5,
+                            base: 0,
+                            with: None,
+                        },
+                        PassiveBonus {
+                            stat: Stat::Attack,
+                            per: 10,
+                            base: 1,
+                            with: Some("swordplay:basics".into()),
+                        },
+                    ],
+                },
+                max_level: 50,
+                attribute: None,
+                rarity: None,
+                difficulty: 1.0,
+                requires: None,
+            },
+        };
+        let defs = SkillDefs {
+            skills: HashMap::from([(tough.key.clone(), tough)]),
+            trees: HashMap::new(),
+        };
+        let mut skills = Skills::default();
+        let mut state = SkillState::new("Admin");
+        state.level = 23;
+        skills.0.insert("athletics:toughness".into(), state);
+        let boosts = boosts(&skills, &defs);
+        assert_eq!(boosts.max_health, 4);
+        assert_eq!(boosts.attack_with("swordplay:basics"), 3);
+        assert_eq!(boosts.attack_with("axes:basics"), 0);
     }
 
     #[test]

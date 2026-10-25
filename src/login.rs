@@ -21,7 +21,7 @@ use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::skills::{SkillDefs, Skills, UNIVERSAL_SKILLS, learn};
 use crate::targeting::Keywords;
-use crate::vitals::{DEFAULT_PROMPT, PromptFormat, Vitals};
+use crate::vitals::{DEFAULT_PROMPT, Maxima, PromptFormat, Vitals};
 use crate::world::{InRoom, Player, RoomIndex, RoomKey};
 use crate::world::{ItemKey, Slot};
 
@@ -873,7 +873,8 @@ fn enter_game(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or_default();
-    let vitals = Vitals::restored(&attributes, character.vitals, character.vitals_at, now);
+    let max = Maxima::of(&attributes, &skills, choices.skills);
+    let vitals = Vitals::restored(max, character.vitals, character.vitals_at, now);
     let prompt = PromptFormat(
         character
             .prompt

@@ -9,5 +9,17 @@
             name: "Axe Fighting",
             kind: Attack(verb: "hack"),
         ),
+        "cleave": (
+            name: "Cleave",
+            kind: Technique((with: "axes:basics", verb: "cleave", cost: Stamina(3),
+                effects: [Cleave])),
+            requires: Skill("axes:basics", 15),
+        ),
+        "hew": (
+            name: "Hew",
+            kind: Technique((with: "axes:basics", verb: "hew at", cost: Stamina(2), damage: 3,
+                accuracy: -2)),
+            requires: Skill("axes:basics", 15),
+        ),
     },
 )
