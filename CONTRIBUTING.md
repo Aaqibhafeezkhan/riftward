@@ -102,7 +102,7 @@ Registration takes care of the rest: `help` lists it, aliases can't shadow it, a
 
 - **All randomness goes through `Dice`,** never a random number generator of your own, so Luck applies to every roll.
 - **Contests compare ratios, never differences,** because attributes are uncapped (see [the ratio rule](docs/attributes.md#the-ratio-rule)).
-- **Designed content goes in data files** (zones now; skill trees, items and NPCs later). Things that change during play go in the database.
+- **Designed content goes in data files** (zones now; skill trees, items and mobs later). Things that change during play go in the database.
 - **Database schema:** tables are currently created with `CREATE TABLE IF NOT EXISTS`. Changing an existing table needs numbered migrations, which don't exist yet; raise it before you need one.
 
 ### Before opening a pull request

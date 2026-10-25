@@ -88,11 +88,11 @@ app.add_command(
 
 - **One dispatcher** expands aliases, hides commands a player lacks permission for (they get the same "Huh?" as a typo), and queues the command's system. The prompt is sent after the command's output, so handlers never send it.
 - **`help`** is generated from the registry, grouped by category and filtered by role; `help <command>` shows usage.
-- **Targets** are resolved by `Target::parse` and `find_one` / `find_all` over candidates with `Keywords`: a word matches the start of any keyword, `2.x` picks the second match, `all.x` every match, and `me` the player. Others are preferred; the player is the fallback when only they match. Today the candidates are players; items and NPCs join when they exist.
+- **Targets** are resolved by `Target::parse` and `find_one` / `find_all` over candidates with `Keywords`: a word matches the start of any keyword, `2.x` picks the second match, `all.x` every match, and `me` the player. Others are preferred; the player is the fallback when only they match. Today the candidates are players; items and mobs join when they exist.
 
 ### Things in the world
 
-Items and NPCs become entities, with one location component replacing `InRoom`. Items, containers, locks, persistence and decay are designed in [Items, containers and locks](items.md); spawns, resets, wandering and doors in [The living world](world.md). Builder commands will edit templates and spawns.
+Items and mobs become entities, with one location component replacing `InRoom`. Items, containers, locks, persistence and decay are designed in [Items, containers and locks](items.md); spawns, resets, wandering and doors in [The living world](world.md). Builder commands will edit templates and spawns.
 
 ### Game events
 
@@ -110,11 +110,33 @@ The round loop, initiative, damage, death and respawn: infrastructure with no ac
 
 Features that are designed but wait on other work.
 
+### Game masters and puppeting
+
+Admins, and a new **GM (game master) role**, can **puppet** any mob: take it over and play it themselves until they release it. A GM can voice the goblin king during a raid, have a town guard question a suspicious player, or walk the dragon out of its lair for an event.
+
+```
+> puppet king
+You take control of the goblin king.
+[as the goblin king] > yell Who dares enter my halls?
+[as the goblin king] > release
+You release the goblin king and return to yourself.
+```
+
+- **Commands run as the mob.** While puppeting, the GM's commands act through the mob: it moves, speaks, fights and uses its skills under its own name, with its own attributes, skills and inventory. The GM sees everything the mob would see. The prompt shows who they're playing, so it can't be forgotten.
+- **The mob's own behaviour pauses.** It stops wandering and acting on its own, and resumes when released.
+- **The GM's own character stays put,** idle where it was left. Other players can't tell anyone is puppeting; to them it's just the mob.
+- **Release** with `release`, or automatically when the mob dies or the GM disconnects. The GM returns to their own character.
+- **Limits:** only mobs, never another player's character; one puppeteer per mob at a time.
+- **Every puppeting session is logged** (who, which mob, when, and what they did), so the power is accountable.
+- **How it fits the code:** a `Puppeting(mob)` component on the GM's connection makes the command dispatcher send each `Invocation` on behalf of the mob, and routes the mob's output back to the GM. This depends on mobs using the same command systems as players, which the design already intends (mobs fight with skills, by the same rules).
+
+**Waits on mobs.** The GM role itself, and the open question of where it sits among the roles, are in [Open questions](#open-questions).
+
 ### Scripting
 
-An escape hatch for behaviour that data can't express: bespoke unique items (Angorim glowing when orcs are near), unusual skill effects, quest logic, complex NPC behaviour, odd easter eggs. Most content stays data; an item, skill, NPC or world event can name a script instead of, or alongside, its data.
+An escape hatch for behaviour that data can't express: bespoke unique items (Angorim glowing when orcs are near), unusual skill effects, quest logic, complex mob behaviour, odd easter eggs. Most content stays data; an item, skill, mob or world event can name a script instead of, or alongside, its data.
 
-- **Waits on what scripts would talk to:** the effect system, NPCs, and game events. Embedding a language before those exist would mean designing its interface in a vacuum.
+- **Waits on what scripts would talk to:** the effect system, mobs, and game events. Embedding a language before those exist would mean designing its interface in a vacuum.
 - **Language: to decide when it's built.** Candidates:
 
   | | [Steel](https://github.com/mattwparas/steel) (Scheme) | [Rhai](https://rhai.rs) | Lua ([mlua](https://github.com/mlua-rs/mlua)) |
@@ -147,8 +169,12 @@ The in-game prompt shows the character's state, such as `<14/18hp 9/10fat>`, ins
 ## Proposed build order
 
 1. ~~**Command system and targeting.**~~ Built.
-2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then NPCs that stand in rooms and can be looked at.
+2. **Things in the world, templates and resets.** [Items](items.md) first (with containers, locks and doors), then mobs that stand in rooms and can be looked at.
 3. **Game events and time.** Both small, but everything after this uses them.
 4. **The [skill core](skills.md#build-plan), with combat as its first use.** The round loop is built alongside it, and the basic attack is the first skill. Starting skills from [race and background](characters.md) arrive here too.
 
-Then teaching, epiphany, trainers and loot follow: trainers are NPCs, loot scrolls are items, and passive skills have events to trigger on.
+Then teaching, epiphany, trainers and loot follow: trainers are mobs, loot scrolls are items, and passive skills have events to trigger on.
+
+## Open questions
+
+- [ ] **Where does the GM role sit?** Roles are currently ordered (player < builder < admin), each including everything below it. A GM could slot in as player < builder < GM < admin, or be a separate permission, so a GM needn't be able to build and a builder needn't be able to puppet.

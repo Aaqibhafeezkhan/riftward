@@ -1,6 +1,6 @@
 # Riftwatch
 
-[Design summary](README.md) · Status: rooms and doors built (zones `riftwatch` and `sewers`); trainers, NPCs and the rats wait on NPCs and spawns
+[Design summary](README.md) · Status: rooms and doors built (zones `riftwatch` and `sewers`); trainers, mobs and the rats wait on mobs and spawns
 
 Riftwatch is the starting town. Every new character begins in its market square, and it's the hub players return to between ventures. It holds the Adventurers' Guild, an open-air market, the garrison, the lord's keep, and beneath it all a sewer system as large as the town itself: 25 rooms above, 22 below, joined by nine grates, hatches and doors. Room descriptions only lightly touch the setting (the barrier's shimmer from the watchtower, adventurers drawn by the rifts); change anything that doesn't fit *The Agryn's Legacy*.
 
@@ -140,7 +140,7 @@ None of the locks have keys yet; keys arrive with items.
 
 ## Where trainers go
 
-Each basic skill has a home in town, so trainers can be placed once NPCs exist. Trainers teach Common and Uncommon skills (see [Acquiring skills](skills.md#acquiring-skills)).
+Each basic skill has a home in town, so trainers can be placed once mobs exist. Trainers teach Common and Uncommon skills (see [Acquiring skills](skills.md#acquiring-skills)).
 
 | Room | Trainers (planned) |
 | --- | --- |
@@ -151,7 +151,9 @@ Each basic skill has a home in town, so trainers can be placed once NPCs exist. 
 | Wayside Shrine | Healing, and the Divine **Devotion** path |
 | Back Alley | Stealth and lockpicking, from someone who'd rather not be found |
 | Tinkers' Corner | Crafting and repair |
-| Contract Hall | Not a trainer: the guild's contract board, a home for quests and bounties |
+| Contract Hall | Not a trainer: the guild's contract board and clerk (see [Quests and the Adventurers' Guild](quests.md)) |
+
+Guild trainers beyond these can require a guild rank, such as a weaponmaster who only teaches Silver members; the ones above stay open to everyone.
 
 ## The rat problem
 

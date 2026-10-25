@@ -89,7 +89,7 @@ Skills are either active, triggered by the player, or passive, applying automati
 - **Two separate cooldowns.** An active skill's use cooldown (Riposte every 8 seconds) is combat balance. The gain cooldown limits how often any skill can level, active or passive.
 - **Spells are active skills** whose cost is Drain, resisted by Willpower plus the tradition attribute (see [Magic](magic.md)).
 - **What a skill does** (damage, bonuses, applied conditions) needs an effect system, designed together with combat.
-- **Combat is made of skills.** There is no attack outside the skill system: everyone starts with a basic attack skill, and weapon trees begin with their own. NPCs fight with skills from their templates, by the same rules as players.
+- **Combat is made of skills.** There is no attack outside the skill system: everyone starts with a basic attack skill, and weapon trees begin with their own. Mobs fight with skills from their templates, by the same rules as players.
 - **Racial abilities are skills too,** usually passive, requiring the race (see [Races](characters.md#races)).
 - **Triggers use the shared game events.** Passive triggers, hidden-skill triggers and easter-egg flags all draw on one event vocabulary (see [Architecture](architecture.md#game-events)).
 
@@ -119,7 +119,7 @@ Both trees and skills have a rarity tier. Rarity says how scarce something is, w
 
 Working tiers, pending a decision on names:
 
-| Tier | Drop rate | NPC trainers (proposed) | Shown as |
+| Tier | Drop rate | Mob trainers (proposed) | Shown as |
 | --- | --- | --- | --- |
 | Common | Frequent | In towns | Plain |
 | Uncommon | Occasional | A few, in remote places | Green |
@@ -139,7 +139,7 @@ Every skill can be taught, and every route checks the same thing: the learner mu
 
 | Route | Available for | Who or what | Notes |
 | --- | --- | --- | --- |
-| NPC trainer | `source: Trainer` | Trainers placed in rooms, each with a fixed list | Reliable; a reason to travel |
+| Mob trainer | `source: Trainer` | Trainers placed in rooms, each with a fixed list | Reliable; a reason to travel |
 | Player teacher | All skills | A player at the skill's `teach_level`, or at mastery for `Loot` skills | `teach <player> <skill>`, then the student types `accept`; both in the same room |
 | Loot | Mostly `source: Loot` | A scroll or tome item; using it teaches the skill and consumes it | Tradeable, so it feeds an economy |
 | Epiphany | Hidden skills | The character meets the unlock conditions, and the trigger if one is set | See [Hidden skills](#hidden-skills) |
@@ -208,7 +208,7 @@ flowchart LR
     core --> epiphany[Epiphany<br/>flags, hidden skills]
     core --> combat[Combat<br/>round loop, basic attack]
     core --> start[Starting skills<br/>race, background]
-    npcs[NPCs] --> trainers[NPC trainers<br/>reuse the teach flow]
+    mobs[Mobs] --> trainers[mob trainers<br/>reuse the teach flow]
     teach --> trainers
     titles[Titles<br/>not designed yet] --> conditions[Full conditions<br/>Title terms]
     epiphany --> conditions
@@ -223,7 +223,7 @@ flowchart LR
 - [ ] **Does rarity affect power or leveling speed,** or only how a skill is obtained? Leaning: power yes, leveling speed no.
 - [ ] **Do rarer skills use more of the cap?** Only relevant if there is a total cap.
 - [ ] **Tier names:** the five working tiers, or names that fit the setting.
-- [ ] **Do NPC trainers teach only the lower tiers?** The rarity table proposes Common and Uncommon only.
+- [ ] **Do mob trainers teach only the lower tiers?** The rarity table proposes Common and Uncommon only.
 - [ ] **What does teaching cost and reward?** Lesson time, gold paid by the student, and something for the teacher (reputation, or Charisma-linked teaching).
 - [ ] **Auto-attack or explicit attacks?** Proposed: once fighting, the basic attack is used automatically each round (practising as it goes), and other skills are used by command.
 - [ ] **Sustained skills?** Stances and auras that are switched on and cost a little over time. Now or later.

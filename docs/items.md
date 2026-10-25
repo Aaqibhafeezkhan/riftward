@@ -92,7 +92,7 @@ At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there'
 - **Touching makes an item real.** Getting, dropping, putting, giving or wearing an item gives it a row in an `items` table: its template, where it is, when it was dropped, and when it decays. From then on every move updates that row, and the item survives restarts wherever it ends up. Looking at or examining an item doesn't count.
 - **Startup restores real items** to their saved locations, removing any whose decay time has passed.
 - **Resets only manage their own spawns.** Once a spawned item is picked up, it is real and no longer the reset's; the next reset spawns a fresh one.
-- **NPCs stay temporary** and reset with their zone.
+- **Mobs stay temporary** and reset with their zone.
 
 ## Decay
 
@@ -211,6 +211,6 @@ trap: Some((on: Opened, find: 5, disarm: 7, effect: Damage(6))),
 - [ ] **Unique items and deleted characters:** if a character carrying a unique item is deleted, where does it go? For example, dropped where the character last stood.
 - [ ] **Default litter decay time:** about 30 minutes on the ground? Should items spawned by a reset decay at all, since the next reset replaces them?
 - [ ] **Preserving perishables:** salting, a preserving spell, or cold storage that slows or pauses decay. A good hook for skills; templates only need to allow it.
-- [ ] **Does an NPC picking up an item make it real?** Proposed: no, only players.
-- [ ] **Corpses:** are player corpses real (they survive a restart) while NPC corpses stay temporary until looted?
+- [ ] **Does a mob picking up an item make it real?** Proposed: no, only players.
+- [ ] **Corpses:** are player corpses real (they survive a restart) while mob corpses stay temporary until looted?
 - [ ] **Starting equipment:** which clothes, pouch and keyring new characters start with, likely set by background.

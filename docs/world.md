@@ -1,8 +1,8 @@
 # The living world: spawns, wandering and world events
 
-[Design summary](README.md) · Status: designed, not built. Spawns and wandering come with items and NPCs; breeding and world events need the time system and combat.
+[Design summary](README.md) · Status: designed, not built. Spawns and wandering come with items and mobs; breeding and world events need the time system and combat.
 
-The world populates itself and changes on its own. Every NPC comes from a **spawn** in a zone file, which decides how often it resets and how many it wants. NPCs can **wander**, crowded rooms push them outward, and **world events** fire when the state of the world meets their conditions. There is one spawn model for everything, from a single dragon to a sewer full of breeding rats.
+The world populates itself and changes on its own. Every mob comes from a **spawn** in a zone file, which decides how often it resets and how many it wants. Mobs can **wander**, crowded rooms push them outward, and **world events** fire when the state of the world meets their conditions. There is one spawn model for everything, from a single dragon to a sewer full of breeding rats.
 
 ## Spawns and resets
 
@@ -10,11 +10,11 @@ A zone file lists its spawns. Each says **what** it spawns and **where**, **how 
 
 ```ron
 spawns: {
-    "gate_guards": (npc: "city_guard", room: "gate",
+    "gate_guards": (mob: "city_guard", room: "gate",
         every: Hours(1), refill: Keep(4), wander: Zone(every_secs: 30..90)),
-    "red_dragon": (npc: "old_red_dragon", room: "lair",
+    "red_dragon": (mob: "old_red_dragon", room: "lair",
         every: AfterDeath(days: 30), refill: Keep(1), wander: Never),
-    "sewer_rats": (npc: "sewer_rat", room: "sewers:nest",
+    "sewer_rats": (mob: "sewer_rat", room: "sewers:nest",
         every: Minutes(20), refill: Breed(doubles_every: Hours(4), max: 200, reseed: Days(7)),
         wander: Anywhere(every_secs: 30..120)),
     "angorim": (item: "angorim", room: "lair", every: Hours(6), refill: Keep(1)),
@@ -26,18 +26,18 @@ spawns: {
 | `every` | Resets |
 | --- | --- |
 | `Minutes(n)`, `Hours(n)`, `Days(n)` | On a fixed schedule, in real time |
-| `AfterDeath(...)` | Once, that long after its last NPC dies or its item is taken. The dragon returns 30 days after it is killed |
+| `AfterDeath(...)` | Once, that long after its last mob dies or its item is taken. The dragon returns 30 days after it is killed |
 
 ### How many it wants
 
-On each reset, a spawn counts its living NPCs, works out how many it wants, and spawns the difference.
+On each reset, a spawn counts its living mobs, works out how many it wants, and spawns the difference.
 
 | `refill` | Wants after a reset |
 | --- | --- |
 | `Keep(n)` | `n`: replaces whatever died |
 | `Breed(doubles_every, max, reseed)` | The current count grown by however much is due since the last reset, at least one more while any survive, never more than `max` |
 
-**Breeding speed is set per spawn,** as how long the group takes to double. That's independent of `every`, which only sets how often new NPCs appear:
+**Breeding speed is set per spawn,** as how long the group takes to double. That's independent of `every`, which only sets how often new mobs appear:
 
 | Spawn | Doubles every | Max | Reseed |
 | --- | --- | --- | --- |
@@ -48,14 +48,14 @@ On each reset, a spawn counts its living NPCs, works out how many it wants, and 
 
 Growth slows as a spawn nears `max`, so a nearly full nest fills in gradually rather than jumping to the cap.
 
-**Last one standing.** When a breeding spawn's last NPC dies, breeding stops, and the `reseed` timer starts. When it ends, a single new NPC appears at the spawn and breeding resumes. Clearing out the sewer rats buys the city a week of peace, then one rat appears in the nest and it starts again. Without `reseed`, a breeding spawn that's wiped out stays gone.
+**Last one standing.** When a breeding spawn's last mob dies, breeding stops, and the `reseed` timer starts. When it ends, a single new mob appears at the spawn and breeding resumes. Clearing out the sewer rats buys the city a week of peace, then one rat appears in the nest and it starts again. Without `reseed`, a breeding spawn that's wiped out stays gone.
 
 ### Counting by origin
 
-Every NPC a spawn creates carries a tag naming its spawn, `SpawnedBy("sewer_rats")`. A reset counts tagged NPCs **anywhere in the world**, not just in the spawn room.
+Every mob a spawn creates carries a tag naming its spawn, `SpawnedBy("sewer_rats")`. A reset counts tagged mobs **anywhere in the world**, not just in the spawn room.
 
 - **Wanderers still count.** A guard patrolling the market counts toward the gate's spawn, so an empty gate doesn't produce extra guards.
-- **No spawn farming.** Luring NPCs away from their spawn point doesn't make it refill.
+- **No spawn farming.** Luring mobs away from their spawn point doesn't make it refill.
 - **Triggers can count a spawn** the same way, for world events (`Count("sewer_rats", ">=", 150)`).
 
 ### Items
@@ -64,7 +64,7 @@ Item spawns use the same model. A spawned item belongs to its spawn until a play
 
 ## Wandering
 
-Each spawn says how far its NPCs may roam and how often they move.
+Each spawn says how far its mobs may roam and how often they move.
 
 | `wander` | Moves |
 | --- | --- |
@@ -73,9 +73,10 @@ Each spawn says how far its NPCs may roam and how often they move.
 | `Zone(every_secs)` | Anywhere in its zone, like a city guard |
 | `Anywhere(every_secs)` | Anywhere, including other zones |
 
-- **Each NPC moves on its own random interval** from the range, so a room's goblins don't all move in the same tick. Each move picks a random allowed exit, rolled through [`Dice`](attributes.md#the-dice-service).
+- **Each mob moves on its own random interval** from the range, so a room's goblins don't all move in the same tick. Each move picks a random allowed exit, rolled through [`Dice`](attributes.md#the-dice-service).
 - **Rooms can refuse wanderers** with a `no_wander` flag: temples, shops, players' homes.
-- **Wanderers move like players.** Rooms see "A stray dog arrives." and "A city guard leaves north.", and each move fires the same `EnteredRoom` [game event](architecture.md#game-events), so triggers and passive skills see NPC movement too.
+- **A puppeted mob doesn't wander.** While a GM or admin [puppets](architecture.md#game-masters-and-puppeting) it, it only moves when they move it.
+- **Wanderers move like players.** Rooms see "A stray dog arrives." and "A city guard leaves north.", and each move fires the same `EnteredRoom` [game event](architecture.md#game-events), so triggers and passive skills see mob movement too.
 
 ## Doors
 
@@ -100,7 +101,7 @@ rooms: {
 - **Keywords** default to the words of the name without its article, so "a heavy oak door" answers to `heavy`, `oak` and `door`.
 - **A trapdoor is just a door on an `up` or `down` exit.**
 - **Doors between zones** use `zone:door` names on both sides.
-- **A closed door blocks movement** for players and wandering NPCs: `north` gives "The heavy oak door is closed." NPC templates can be allowed to open doors, such as a guard who carries the gate key.
+- **A closed door blocks movement** for players and wandering mobs: `north` gives "The heavy oak door is closed." Mob templates can be allowed to open doors, such as a guard who carries the gate key.
 - **Rooms show door state:** "Exits: west, down (closed)", and `look down` describes the door.
 - **`bash` only forces a door open.** It isn't broken; it can be closed and locked again.
 - **Doors reset with their zone,** back to their default state, so the cellar is locked again after the next reset (once resets exist). Door state isn't saved across restarts.
@@ -127,7 +128,7 @@ A door with `hidden: true` isn't in a room's exits **for each character until th
 
 ## Crowding
 
-A spawn can set how many of its NPCs one room holds comfortably (`crowd: 5`). Past that, each extra NPC is likely to move on at its next wander check, to a neighbouring room within its wander range.
+A spawn can set how many of its mobs one room holds comfortably (`crowd: 5`). Past that, each extra mob is likely to move on at its next wander check, to a neighbouring room within its wander range.
 
 Crowding plus breeding is how a neglected sewer overruns the city, with no special rule:
 
@@ -155,7 +156,7 @@ An event has a trigger and a list of actions. Triggers use the condition languag
 
 | Condition | Met when |
 | --- | --- |
-| `Count(spawn, op, n)` | A spawn's living NPCs compare to `n` |
+| `Count(spawn, op, n)` | A spawn's living mobs compare to `n` |
 | `WorldFlag(id)` | A world flag is set |
 | `WorldCounter(id, op, n)` | A world counter compares to `n` |
 | `Event(game_event)` | A [game event](architecture.md#game-events) happens, such as `Died("goblin_king")` |
@@ -166,11 +167,11 @@ Actions are a small fixed set:
 
 | Action | Does |
 | --- | --- |
-| `Spawn(npc or item, room)` | Creates something outside the normal spawns, such as a boss |
+| `Spawn(mob or item, room)` | Creates something outside the normal spawns, such as a boss |
 | `SetWorldFlag(id)`, `ClearWorldFlag(id)` | Change world state |
 | `AddToCounter(id, n)` | Change a counter |
-| `Buff(spawn, effect)`, `RemoveBuff(spawn, effect)` | Strengthen or weaken every NPC from a spawn |
-| `Cull(spawn, fraction)` | Kill off part of a spawn's NPCs |
+| `Buff(spawn, effect)`, `RemoveBuff(spawn, effect)` | Strengthen or weaken every mob from a spawn |
+| `Cull(spawn, fraction)` | Kill off part of a spawn's mobs |
 | `Announce(scope, text)` | Tell a room, a zone, or everyone |
 
 ```ron
@@ -178,7 +179,7 @@ events: {
     "goblin_king_rises": (
         when: All([Count("goblin_camp", ">=", 80), Not(WorldFlag("goblin_king_alive"))]),
         then: [
-            Spawn(npc: "goblin_king", room: "goblin_caves:throne"),
+            Spawn(mob: "goblin_king", room: "goblin_caves:throne"),
             SetWorldFlag("goblin_king_alive"),
             Buff("goblin_camp", "kings_command"),
             Announce(Zone("goblin_caves"), "War drums echo through the caves..."),
@@ -199,13 +200,13 @@ events: {
 
 - **Events are data.** New stories are new events in zone files, not new code.
 - **Re-checked only on change.** A trigger is evaluated when something it depends on changes (a spawn's count, a flag, a counter, a game event), never on a timer.
-- **The goblin king is just a spawned NPC** with a buff on its kin. Killing it is an ordinary death that another event reacts to.
+- **The goblin king is just a spawned mob** with a buff on its kin. Killing it is an ordinary death that another event reacts to.
 
 ## What survives a restart
 
 | Thing | After a restart |
 | --- | --- |
-| NPCs | Respawned fresh at their spawns, except breeding spawns, which return to their saved count |
+| Mobs | Respawned fresh at their spawns, except breeding spawns, which return to their saved count |
 | Spawn timers | Saved (`spawn_state`), so the dragon doesn't return early and the week-long reseed keeps counting |
 | World flags and counters | Saved (`world_state`) |
 | Items | [Real items](items.md#what-survives-a-restart) are restored; untouched spawned items are not |
@@ -214,7 +215,7 @@ events: {
 
 ## Build order
 
-1. **With items and NPCs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering.
+1. **With items and mobs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering.
 2. **With the time system:** `Breed` and `reseed`, crowding, `TimeOfDay`.
 3. **With combat:** world flags, counters and events, starting with `Count`, `Event(Died(...))` and the actions above.
 

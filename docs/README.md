@@ -4,6 +4,8 @@ Riftward is a classless telnet MUD built on a headless Bevy server. Characters a
 
 Each document below covers one area and can be read on its own. This page is the summary and the index.
 
+**Terminology:** a **mob** (short for *mobile*, the traditional MUD term) is any creature the game controls: monsters, animals and townsfolk alike.
+
 ## Design goals
 
 - **Builds emerge from play.** There are no classes. Combining skill trees (sword and fire, stealth and herbalism) is how players invent their own archetypes.
@@ -15,13 +17,14 @@ Each document below covers one area and can be read on its own. This page is the
 
 | Document | Covers | Status |
 | --- | --- | --- |
-| [Architecture](architecture.md) | How the server is built today, and the foundation still needed: commands, items and NPCs, events, time, combat | Partly built; foundation proposed |
+| [Architecture](architecture.md) | How the server is built today, and the foundation still needed: commands, items and mobs, events, time, combat | Partly built; foundation proposed |
 | [Skills](skills.md) | Skill trees, active and passive skills, rarity, how skills are acquired, hidden skills | Designed |
 | [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Designed |
 | [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Designed |
+| [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Designed |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds | Outlined |
 
@@ -44,7 +47,7 @@ The engine foundation comes before the skill system, because skills need things 
 
 ```mermaid
 flowchart LR
-    A[Command system<br/>and targeting] --> B[Items and NPCs<br/>templates, resets]
+    A[Command system<br/>and targeting] --> B[Items and mobs<br/>templates, resets]
     B --> C[Game events<br/>and time]
     C --> S[Skill core<br/>with combat and<br/>starting skills]
     S --> T[Teaching, epiphany,<br/>trainers, loot]
@@ -58,7 +61,11 @@ Designed, waiting on other work:
 | --- | --- | --- |
 | Status prompt (`<14/18hp 9/10fat>`), customisable per character | Current health and fatigue, from combat and time | [Architecture](architecture.md#status-prompt) |
 | Unique items that never respawn once found, like *Angorim*, and never decay | Items and resets | [Architecture](items.md#unique-items) |
-| Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, NPCs and game events | [Architecture](architecture.md#scripting) |
+| Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, mobs and game events | [Architecture](architecture.md#scripting) |
+| Game masters: admins and a new GM role can puppet any mob, playing it until they release it | Mobs | [Architecture](architecture.md#game-masters-and-puppeting) |
+| Quests and guild contracts, with guild ranks that gate trainers and rooms | Mobs, game events, combat | [Quests](quests.md) |
+| Dialogue: conversation trees for mobs, likely [Yarn Spinner](https://www.yarnspinner.dev)'s Rust port, keeping the core independent of Bevy | Mobs | To design |
+| Mob behaviour: data-driven first (wander, flee, assist, aggressive), behaviour trees ([bonsai-bt](https://github.com/Sollimann/bonsai)) only for mobs that need more | Mobs, combat | To design |
 
 ## Decisions so far
 
@@ -68,7 +75,7 @@ Designed, waiting on other work:
 | Learning | Every skill can be taught. Students need the skill's requirements, not its tree. Loot-only skills are taught only by masters |
 | Progression | Use-based gains; practice builds with use and fades with time; a level-scaled cooldown per gain |
 | Skill kinds | Active (invoked with `use <skill> <target>`) and passive (progress on trigger events, usually outcomes) |
-| Combat | Made entirely of skills. Everyone starts with a basic attack skill; NPCs fight with skills too. Built with the skill core |
+| Combat | Made entirely of skills. Everyone starts with a basic attack skill; mobs fight with skills too. Built with the skill core |
 | Starting skills | Granted by race and background, plus universal skills. Racial abilities are skills that require the race. Backgrounds can require attributes or a race |
 | Races | The eight Earthdawn races: Dwarf, Elf, Human, Obsidiman, Ork, Troll, T'skrang, Windling |
 | Hidden skills | Learned by epiphany when conditions are met, with an optional trigger |
@@ -77,10 +84,12 @@ Designed, waiting on other work:
 | Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |
 | Magic | Latent until the character knows a casting skill; knowing one is being Awakened. Four traditions; masters can teach casting skills; Awakened backgrounds grant one but require Magic 1, bought with starting Karma |
 | Commands | Players can define aliases; aliases can't shadow built-in commands |
-| Persistence | An item becomes real (saved) the moment a player touches it, and then survives restarts wherever it is. Untouched spawns and NPCs reset |
-| Spawns | One model: each spawn resets on its own timer (`every`, or `AfterDeath` for bosses) and either keeps a count or breeds, reseeding a week after being wiped out. NPCs count toward their spawn wherever they wander |
+| Persistence | An item becomes real (saved) the moment a player touches it, and then survives restarts wherever it is. Untouched spawns and mobs reset |
+| Spawns | One model: each spawn resets on its own timer (`every`, or `AfterDeath` for bosses) and either keeps a count or breeds, reseeding a week after being wiped out. Mobs count toward their spawn wherever they wander |
 | World events | Data-driven triggers and actions over world flags, counters, spawn counts and game events |
 | Item decay | Dropped items decay (litter); perishables rot even when carried; unique items never decay |
+| Quests | Data in `assets/quests/`. Never grant skill levels or Karma: they pay in coin, items, flags, titles and guild merit |
+| Adventurers' Guild | Optional. Guild rank (Bone to Platinum) is separate from character power, rises only through guild contracts, never drops, and gates some trainers, contracts, rooms and vendors |
 | Locks | Doors and containers share one lock: open, closed or locked, with keys, `pick` and `bash` (which only forces it open). Locks reset with their zone; hidden doors are found per character |
 
 ## Biggest open questions
