@@ -22,7 +22,7 @@ use crate::skills::{
     StrikeKind, Technique, Trigger, boosts, count_use, fill, tough_fight_boost,
 };
 use crate::vitals::{BaseHealth, Maxima, Vitals};
-use crate::world::{InRoom, Player};
+use crate::world::{ArmourDef, InRoom, Player};
 
 /// The skill that helps avoid attacks.
 const DODGE: &str = "athletics:dodge";
@@ -87,9 +87,64 @@ fn attack_rating(
 }
 
 /// Defence before conditions: Reaction and Dodge, plus auras and passive bonuses.
-fn defence_rating(attributes: &Attributes, skills: &Skills, aura: Bonus, boosts: &Boosts) -> i32 {
+fn defence_rating(
+    attributes: &Attributes,
+    skills: &Skills,
+    aura: Bonus,
+    boosts: &Boosts,
+    gear: ArmourDef,
+) -> Defence {
     let dodge = skills.0.get(DODGE).map_or(0, |s| s.level as i32);
-    attributes.get(Attribute::Reaction) + dodge + aura.defence + boosts.defence
+    let penalty = (gear.penalty - boosts.armour_ease).max(0);
+    Defence {
+        evasion: attributes.get(Attribute::Reaction) + dodge + aura.defence + boosts.defence
+            - penalty,
+        block: if gear.block > 0 {
+            gear.block + boosts.block
+        } else {
+            0
+        },
+    }
+}
+
+/// Defence before conditions, in its two parts: getting out of the way, and a shield in the way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Defence {
+    /// Reaction, Dodge and the rest, less what armour takes off.
+    pub evasion: i32,
+    /// A held shield's block.
+    pub block: i32,
+}
+
+impl Defence {
+    pub fn total(self) -> i32 {
+        self.evasion + self.block
+    }
+}
+
+/// Everything `who` has on as armour, added up: worn pieces count where they're worn, and a
+/// shield in hand.
+pub fn gear(who: Entity, items: &ItemQuery, templates: &ItemTemplates) -> ArmourDef {
+    let mut total = ArmourDef::default();
+    for (_, item, location) in items {
+        let Some(def) = templates.0.get(&item.key) else {
+            continue;
+        };
+        let Some(armour) = def.armour else {
+            continue;
+        };
+        let on = match (*location, def.wear) {
+            (ItemLocation::Worn(holder, _), Some(_)) => holder == who,
+            (ItemLocation::Held(holder), None) => holder == who,
+            _ => false,
+        };
+        if on {
+            total.reduction += armour.reduction;
+            total.penalty += armour.penalty;
+            total.block += armour.block;
+        }
+    }
+    total
 }
 
 /// How far each player is outmatched by the foe they fight, by the ratio rule: the foe's attack
@@ -120,7 +175,14 @@ pub fn outmatched(
         )?;
         let skill = defs.skills.get(&strike.skill)?;
         let attack = attack_rating(f.attributes, f.skills, skill, aura, &boosts);
-        let defence = defence_rating(f.attributes, f.skills, aura, &boosts);
+        let defence = defence_rating(
+            f.attributes,
+            f.skills,
+            aura,
+            &boosts,
+            gear(entity, items, templates),
+        )
+        .total();
         Some((f64::from(attack.max(1)), f64::from(defence.max(1))))
     };
     targets
@@ -250,6 +312,16 @@ fn untrained() -> SkillText {
             "{actor} swings at you, but misses.",
             "{actor} swings at {target}, but misses.",
         )),
+    }
+}
+
+/// What a shield turning a blow looks like for someone with no skill to describe it.
+fn shield_block() -> Lines {
+    Lines {
+        actor: "You get your shield in the way of {target}'s attack.".into(),
+        target: Some("{actor} gets a shield in the way of your attack.".into()),
+        room: "{actor} gets a shield in the way of {target}'s attack.".into(),
+        beyond: None,
     }
 }
 
@@ -632,9 +704,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let d_mob = d.mob.map(|m| m.key.clone());
         let d_aura = self.auras.get(&target).copied().unwrap_or_default();
         let d_boosts = boosts(&d_skills, self.defs);
-        let mut defence =
-            d.conditions
-                .defence(defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts));
+        let d_gear = gear(target, self.items, self.templates);
+        let parts = defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts, d_gear);
+        let mut defence = d.conditions.defence(parts.total());
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let opener = technique.as_ref().is_some_and(|m| m.technique.opener);
         if self.resting.contains(&target) || opener {
@@ -659,6 +731,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             .as_ref()
             .is_some_and(|m| m.technique.effects.contains(&Effect::IgnoreArmour));
         let mut dealt = 0;
+        let mut blocked = false;
         if hit {
             let (mine, theirs, seen) = told(&text.hit, &a_name, &d_name);
             if harmless {
@@ -669,10 +742,22 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             } else {
                 let (low, high) = (damage.0.min(damage.1), damage.0.max(damage.1));
                 let rolled = self.dice.range(a_luck, i64::from(low)..=i64::from(high)) as i32;
+                // Armour takes its share off, even all of it; a point can find the gaps.
+                let pierce = a_boosts.pierce_with(&key)
+                    + technique.as_ref().map_or(0, |m| {
+                        m.technique
+                            .effects
+                            .iter()
+                            .map(|e| match e {
+                                Effect::Pierce(n) => *n,
+                                _ => 0,
+                            })
+                            .sum()
+                    });
                 let armour = if ignores_armour {
                     0
                 } else {
-                    d_aura.armour + d_boosts.armour
+                    (d_aura.armour + d_boosts.armour + d_gear.reduction - pierce).max(0)
                 };
                 dealt = (rolled
                     + a_attributes.get(Attribute::Strength) / 2
@@ -680,20 +765,32 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     + a_boosts.damage_with(&key)
                     + extra
                     - armour)
-                    .max(1);
+                    .max(0);
                 tell.lines.push((attacker, format!("{mine} ({dealt})")));
                 tell.lines
                     .push((target, format!("\x1b[31m{theirs} ({dealt})\x1b[0m")));
                 tell.room.push(seen);
-                if self.wound(
-                    target,
-                    dealt,
-                    &mut tell,
-                    attacker,
-                    &d_name,
-                    room,
-                    d_mob.clone(),
-                ) {
+                if dealt == 0 {
+                    let line = format!("The blow glances off {d_name}'s armour.");
+                    tell.lines.push((attacker, line.clone()));
+                    tell.lines
+                        .push((target, "The blow glances off your armour.".into()));
+                    tell.room.push(line);
+                }
+                if d_gear.reduction > 0 {
+                    self.events.write(GameEvent::HitInArmour { who: target });
+                }
+                if dealt > 0
+                    && self.wound(
+                        target,
+                        dealt,
+                        &mut tell,
+                        attacker,
+                        &d_name,
+                        room,
+                        d_mob.clone(),
+                    )
+                {
                     died.push(target);
                 }
             }
@@ -779,19 +876,30 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 }
             }
         } else {
-            // A defender whose dodging has words for it dodges; otherwise the attack misses.
-            let dodge = d_skills.0.keys().find_map(|key| {
-                let skill = self.defs.skills.get(key)?;
-                match &skill.def.kind {
-                    SkillKind::Passive { triggers, .. } if triggers.contains(&Trigger::Dodged) => {
-                        skill.def.text.as_ref().map(|t| t.hit.clone())
+            // The miss is the shield's in proportion to its share of the defence, and otherwise
+            // a dodge. Either is told in the words of the defender's skill for it, if they have
+            // one: a shield untrained says so plainly, and a miss nobody dodged is just a miss.
+            let share = f64::from(parts.block) / f64::from(parts.total().max(1));
+            blocked = parts.block > 0 && self.dice.chance(0, share);
+            let words = |trigger: Trigger| {
+                d_skills.0.keys().find_map(|key| {
+                    let skill = self.defs.skills.get(key)?;
+                    match &skill.def.kind {
+                        SkillKind::Passive { triggers, .. } if triggers.contains(&trigger) => {
+                            skill.def.text.as_ref().map(|t| t.hit.clone())
+                        }
+                        _ => None,
                     }
-                    _ => None,
-                }
-            });
-            if let Some(dodge) = dodge {
-                // The dodger is the one using the skill.
-                let (theirs, mine, seen) = told(&dodge, &d_name, &a_name);
+                })
+            };
+            let avoided = if blocked {
+                Some(words(Trigger::Blocked).unwrap_or_else(shield_block))
+            } else {
+                words(Trigger::Dodged)
+            };
+            if let Some(avoided) = avoided {
+                // The defender is the one using the skill.
+                let (theirs, mine, seen) = told(&avoided, &d_name, &a_name);
                 tell.lines.push((attacker, mine));
                 tell.lines.push((target, theirs));
                 tell.room.push(seen);
@@ -806,7 +914,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 tell.lines.push((target, theirs));
                 tell.room.push(seen);
             }
-            self.events.write(GameEvent::Dodged { who: target });
+            self.events.write(if blocked {
+                GameEvent::Blocked { who: target }
+            } else {
+                GameEvent::Dodged { who: target }
+            });
         }
 
         for (who, line) in tell.lines {
@@ -822,7 +934,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         }
 
         // A dodge can be answered at once.
-        if !hit && !counter && !died.contains(&target) {
+        if !hit && !blocked && !counter && !died.contains(&target) {
             died.extend(self.riposte(target, attacker));
         }
         died

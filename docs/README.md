@@ -38,7 +38,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Zone files in `assets/zones`, hot-reloaded, plus in-game building: `dig`, `desc`, `link`, `zone create`, and more.
 - Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
 - Riftwatch, the starting town, and the sewers beneath it ([map](riftwatch.md#map)).
-- Items: templates with Bulk and tags, hands, wear slots, containers (backpacks, pouches, keyrings, pockets, chests) with automatic placement, encumbrance, keys, and real items that survive restarts.
+- Items: templates with Bulk and tags, hands, wear slots, weapons, armour and shields, containers (backpacks, pouches, keyrings, pockets, chests) with automatic placement, encumbrance, keys, and real items that survive restarts.
 - Mobs: templates and spawns in zone files, timed and after-death resets that count their mobs wherever they wander, breeding populations that grow toward a cap and reseed after being wiped out, crowding that pushes them outward, wandering within rooms, a zone or anywhere, equipment that they fight with and drop in their corpses, technique skills used by chance, and the builder `mob`, `spawn`, `summon` and `purge` commands. Item spawns keep rooms stocked and top up containers, and unique items are never made twice. Riftwatch has guards, a stray dog, the contract clerk, the herbalist and the drill sergeant, a signpost, practice swords and a stocked chest in the guild cellar; the sewers have rats.
 - Game time: a day and night every 3 real hours, dawn and dusk announced outdoors, `time`, and a one-second heartbeat. Movement goes through shared game events, so arrivals say where people came from.
 - Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
@@ -83,6 +83,7 @@ Designed, waiting on other work:
 | --- | --- |
 | Classes | None. Skill trees, with hybrid skills across trees |
 | Learning | Every skill can be taught. Students need the skill's requirements, not its tree. Trainers teach only entry skills; the rest is discovered through use (very rarely), taught by players, found as loot, or taught by remote trainers as quest rewards. Loot-only skills are taught only by masters |
+| Armour | Takes damage off every hit, even to nothing, and costs dodging; shields block instead. Piercing (`Pierce(n)`) and Crush answer it |
 | Tough fights | Being outmatched (by the ratio rule) multiplies the chance of skill gains and discoveries, up to double |
 | Progression | Use-based gains; practice builds with use and fades with time; a level-scaled cooldown per gain |
 | Skill kinds | Active (invoked with `use <skill> <target>`) and passive (progress on trigger events, usually outcomes) |

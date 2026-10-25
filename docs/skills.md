@@ -82,7 +82,7 @@ Every skill says, in its own file, what it looks like. Nothing about a skill's w
 
 - **Required where it shows.** Attacks and techniques that strike need `hit` and `miss`, each with a `target` line; a technique that doesn't strike (Guard) needs `hit`; a counter (Riposte) needs `hit` with a `target` line; an active skill needs `hit` and `miss`. A tree with a skill missing any of these doesn't load, and the tests check every tree file, including that each `{placeholder}` is one the game fills in.
 - **Passives may have text too,** shown when they decide a moment. **Dodge** has: when an attack misses someone who knows it, they see "You dodge the town guard's attack!" instead of a plain miss. In a dodge's text `{actor}` is the dodger and `{target}` the attacker. Passives with nothing to show (Toughness, auras) have only a description, and ones that fire constantly (Endurance) shouldn't have text.
-- **Planned: crediting a miss to a defence.** When shields and parries arrive with [armour](trees.md#armour), a miss should be credited to one of the defender's defences in proportion to how much each adds to their defence, so a big shield more often shows "Your shield turns the blow aside!" than a sidestep shows a dodge.
+- **A miss is credited to a defence,** in proportion to how much each adds to the defender's defence, so a big shield more often turns a blow ("The town guard turns your attack aside with a shield!", Block's text) than a sidestep dodges it. Someone with a shield and no Block says so plainly. Parries can join the same way later.
 - **Untrained weapons** have no skill to describe them, so the game says it plainly: "You hit the rat."
 
 ## Skill kinds
@@ -273,7 +273,7 @@ The skill core, without combat, proved on non-combat skills first:
 
   An **active** skill names the command that performs it; `use lockpicking north` runs `pick north`, so `use` stays generic and each skill's work lives with the system it acts on. The command checks the skill is known, off its use cooldown and affordable, pays the stamina, does its work, and counts the use. An active skill whose command doesn't exist yet ("You can't put Pickpocketing to use yet") can still be known and taught.
 
-  A **passive** skill lists [game event](architecture.md#game-events) triggers; `StaminaSpent(per: 3)` counts one use for every 3 stamina spent, so Endurance improves as a character exerts themselves, and `Dodged` practises Dodge.
+  A **passive** skill lists [game event](architecture.md#game-events) triggers; `StaminaSpent(per: 3)` counts one use for every 3 stamina spent, so Endurance improves as a character exerts themselves, `Dodged` practises Dodge, `Blocked` practises Block, and `HitInArmour` practises Heavy Armour.
 
   An **attack** skill is made every round of a fight once chosen with `autoattack` (see [Combat](architecture.md#combat)). It can cost stamina (`cost: Stamina(4)` for a crushing blow); one its maker can't afford falls back to the free basic attack:
 

@@ -24,8 +24,9 @@
         ),
         "backstab": (
             name: "Backstab",
-            description: "A knife in the back of someone who isn't ready for it, for 4 extra damage. It can start a fight, and lands easily on anyone unaware, down or resting.",
-            kind: Technique((with: "knives:basics", cost: Stamina(2), damage: 4, opener: true)),
+            description: "A knife in the back of someone who isn't ready for it, between the plates of any armour: 4 extra damage, ignoring 2 points of armour. It can start a fight, and lands easily on anyone unaware, down or resting.",
+            kind: Technique((with: "knives:basics", cost: Stamina(2), damage: 4, opener: true,
+                effects: [Pierce(2)])),
             requires: Skill("knives:basics", 15),
             text: (
                 hit: (

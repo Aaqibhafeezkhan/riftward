@@ -1,0 +1,25 @@
+// A skill tree. Its id is the file name: skills here are `shields:<id>`.
+(
+    name: "Shields",
+    rarity: Common,
+    attribute: Strength,
+    skills: {
+        // Shown instead of a miss when a blow is turned by this fighter's shield: {actor} is the
+        // one blocking, {target} the attacker.
+        "block": (
+            name: "Block",
+            description: "Getting your shield in the way. With a shield in hand, every blow it turns trains it, and it adds 1 to your shield's block for every 10 levels.",
+            kind: Passive(
+                triggers: [Blocked],
+                bonuses: [(stat: Block, per: 10)],
+            ),
+            text: (
+                hit: (
+                    actor: "You turn {target}'s attack aside with your shield!",
+                    target: "{actor} turns your attack aside with a shield!",
+                    room: "{actor} turns {target}'s attack aside with a shield.",
+                ),
+            ),
+        ),
+    },
+)

@@ -1350,6 +1350,21 @@ pub fn describe_item(entity: Entity, items: &ItemQuery, templates: &ItemTemplate
             weapon.damage.0, weapon.damage.1
         );
     }
+    if let Some(armour) = def.and_then(|d| d.armour) {
+        let mut parts = Vec::new();
+        if armour.reduction > 0 {
+            parts.push(format!("takes {} off every blow", armour.reduction));
+        }
+        if armour.block > 0 {
+            parts.push(format!("blocks for {} defence", armour.block));
+        }
+        if armour.penalty > 0 {
+            parts.push(format!("costs {} defence in dodging", armour.penalty));
+        }
+        if !parts.is_empty() {
+            text += &format!("\r\nArmour: {}.", parts.join(", "));
+        }
+    }
     text
 }
 

@@ -141,7 +141,7 @@ Each step adds its trees' entry skills to the trainers in Riftwatch: the drill s
 
 ## Step 1, as built
 
-- **Passive bonuses.** A passive skill can raise a stat by one point per so many levels, optionally only for one attack skill: `bonuses: [(stat: MaxHealth, per: 5)]`, or `(stat: Attack, per: 10, with: "swordplay:basics")` for a Bladework. Stats: max health, max stamina, attack, defence, damage, armour, initiative. Maximum health and stamina everywhere (the prompt, `score`, recovery, respawning) now include them.
+- **Passive bonuses.** A passive skill can raise a stat by one point per so many levels, optionally only for one attack skill: `bonuses: [(stat: MaxHealth, per: 5)]`, or `(stat: Attack, per: 10, with: "swordplay:basics")` for a Bladework. Stats: max health, max stamina, attack, defence, damage, armour, initiative, and since armour, pierce, armour ease and block. Maximum health and stamina everywhere (the prompt, `score`, recovery, respawning) now include them.
 - **Conditions** on any fighter, counted in their turns: **staggered** (loses a turn), **down** (loses a turn, defends at half until then), **bleeding** (hurts each turn), **held** (can't flee, defends at half), **guarding** (defends better), **exposed** (defends at half until their next turn). Code in `src/combat/states.rs`.
 - **Techniques,** a skill kind: a special move made with an attack skill, in place of the auto-attack, through the action queue (`use cleave`). Each has a stamina cost, and can add accuracy and damage, be harmless (a grab), not strike at all (a guard), carry effects, or be an **opener** that can start a fight (`use backstab rat`) and lands easily on someone unaware. A technique without its weapon in hand, or its stamina, falls back to the auto-attack with a word why.
 
@@ -170,12 +170,26 @@ Each step adds its trees' entry skills to the trainers in Riftwatch: the drill s
 
 ## Armour
 
-Planned as the next step. Armour is **damage reduction**: every hit loses its armour's rating (never below 1), the same `Armour` stat auras and passives already feed. In exchange, armour **hampers dodging**: each piece has a penalty taken off the wearer's defence, so a knight in plate shrugs off blows they can't avoid, and a scout in leather avoids blows they couldn't shrug off.
+Built. Armour is **damage reduction**: every hit loses its wearer's armour, **even to nothing**, so in heavy armour some blows are easy to ignore ("The blow glances off the town guard's armour."). It's the same `Armour` stat auras and passives feed. In exchange, armour **hampers dodging**: each piece has a penalty taken off the wearer's defence, so a knight in plate shrugs off blows they can't avoid, and a scout in leather avoids blows they couldn't shrug off. Mobs wear it by the same rules, from their template's `equipment`, and drop it.
 
-- **Armour pieces are worn items** with a `armour: (reduction: n, dodge_penalty: n)`, in the existing wear slots (body, head, and new ones as needed: hands, legs), so weight and Bulk count too.
-- **Different armours trade differently:** padded cloth (little reduction, no penalty), leather, mail, plate (much reduction, a heavy penalty), shields as held armour.
-- **Skills work both sides of it:** an armoured fighting skill that reduces the dodge penalty or adds defence *in* armour (Heavy Armour, Shield Use), and passives that add defence *out* of it (the Adept's Quickened Reflexes, an unarmoured Evasion), so lightly armoured and heavily armoured fighters each have a tree to grow.
-- **Crush** already ignores armour, so it becomes the answer to plate.
+- **Armour pieces are worn items** with `armour: (reduction: n, penalty: n)`, in their wear slot: head, body, hands, legs and feet (hands and legs are new). Pieces add up, and carried armour counts for nothing until it's worn. Bulk counts as for anything carried.
+- **Shields block** instead: held in a hand, `armour: (block: n, penalty: n)` adds to defence. When an attack fails against a shield-bearer, the miss is the shield's in proportion to its share of their defence ("The town guard turns your attack aside with a shield!"), and the rest are dodges. A block isn't a dodge, so it doesn't trigger Riposte or practise Dodge.
+- **The starting pieces:**
+
+  | Piece | Slot | Reduction | Penalty | Bulk |
+  | --- | --- | --- | --- | --- |
+  | padded jack, leather jerkin | body | 1 | 0 | 2 |
+  | studded leather coat | body | 2 | 1 | 2 |
+  | mail shirt | body | 3 | 2 | 3 |
+  | steel breastplate | body | 4 | 3 | 4 |
+  | leather cap / iron helm | head | 1 | 0 / 1 | L / 1 |
+  | leather gloves / iron gauntlets | hands | 0 / 1 | 0 / 1 | L / 1 |
+  | leather leggings / iron greaves | legs | 1 | 0 / 1 | 1 / 2 |
+  | buckler / round shield | held | block 2 / 4 | 0 / 1 | 1 / 2 |
+
+  The training yard keeps a padded jack, a leather cap and a buckler; the locked armory keeps mail, a helm, a round shield, gauntlets and greaves. Town guards wear studded leather and an iron helm, and carry a round shield.
+- **Skills work both sides of it.** In armour: **Heavy Armour** (the Armour tree's entry, practised by taking hits in armour; eases the penalty by 1 per 10 levels) and **Block** (the Shields tree's entry, practised by blocking; adds 1 to a shield's block per 10 levels). Out of it: the Adept's Quickened Reflexes, and an unarmoured Evasion later. Both entries are taught by the drill sergeant; their higher skills are to come.
+- **Piercing answers armour.** `Pierce(n)`, a technique effect, ignores `n` points of armour: **Lunge** has 1 (the point finds a gap), **Backstab** 2 (between the plates). A passive can add piercing too, `(stat: Pierce, per: 10, with: "knives:basics")`. **Crush** ignores armour entirely, so it's the answer to plate.
 
 ## Open questions
 

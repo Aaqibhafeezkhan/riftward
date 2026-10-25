@@ -1,0 +1,18 @@
+// A skill tree. Its id is the file name: skills here are `armour:<id>`.
+(
+    name: "Armour",
+    rarity: Common,
+    attribute: Body,
+    skills: {
+        // Fighting in armour without it hampering you. No text: it trains on every hit taken in
+        // armour, which would be too often to tell.
+        "heavy_armour": (
+            name: "Heavy Armour",
+            description: "Moving and fighting in armour as if it weighed less. Every hit you take in armour trains it, and it eases armour's penalty to your defence by 1 for every 10 levels.",
+            kind: Passive(
+                triggers: [HitInArmour],
+                bonuses: [(stat: ArmourEase, per: 10)],
+            ),
+        ),
+    },
+)

@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -21,19 +21,15 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Armour,** step 2 of the plan in [Skill trees](trees.md#armour). Decided so far:
-
-- Armour is **damage reduction** per hit (never below 1), feeding the existing `Armour` stat.
-- It carries a **dodge penalty** off the wearer's defence.
-- **Different armours** trade differently: padded, leather, mail, plate, and shields as held armour.
-- **Skills on both sides:** ones that help in armour (reducing the penalty, adding defence) and ones that help out of it (Quickened Reflexes, an Evasion).
-- Pieces are worn items with `armour: (reduction, dodge_penalty)`; more wear slots (hands, legs) as needed. **Crush** already ignores armour.
+**Healing and consumables** (First Aid, bandages), step 3 of the plan in [Skill trees](trees.md#proposed-order). Armour, step 2, is built: see [Armour](trees.md#armour).
 
 After that, in order ([Proposed order](trees.md#proposed-order)): healing and consumables (First Aid, bandages), room terrain uses and loot tables (Foraging, Herbalism, mob drops), stealth, spells (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
 
 ## Small things noticed and not yet done
 
-- Town guards drop their short swords and respawn, so they can be farmed for them. Fine while nothing is sold; worth a look once shops exist.
+- Armour's numbers are first guesses. Guards in studded leather and a helm (3 armour) shrug off most of a new character's punches.
+- The tough-fight odds count armour's penalty and a shield's block, but not its reduction, so a heavily armoured foe counts as less tough than it is.
+- Town guards drop their short swords (and now armour) and respawn, so they can be farmed for them. Fine while nothing is sold; worth a look once shops exist.
 - Discovery chance (0.1% a use) and the tough-fight cap (2×) are first guesses, untested in play.
 - Room descriptions don't show who's fighting whom.
 - A pack attacking repeats "The sewer rat attacks you!" once per rat.

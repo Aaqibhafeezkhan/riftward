@@ -238,6 +238,23 @@ pub struct ItemDef {
     /// What it does as a weapon, if it is one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weapon: Option<WeaponDef>,
+    /// What it does as armour, if it is some: worn in its slot, or held, like a shield.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub armour: Option<ArmourDef>,
+}
+
+/// Armour: worn pieces take damage off every hit and hamper dodging; a held shield blocks.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ArmourDef {
+    /// Taken off every hit, even to nothing.
+    #[serde(default)]
+    pub reduction: i32,
+    /// Taken off the wearer's defence: heavy armour is hard to dodge in.
+    #[serde(default)]
+    pub penalty: i32,
+    /// Added to the holder's defence, for a shield.
+    #[serde(default)]
+    pub block: i32,
 }
 
 /// A weapon: the damage it does, and the skill it's used with. It does its damage in anyone's
@@ -297,18 +314,22 @@ pub enum Slot {
     Head,
     Neck,
     Body,
+    Hands,
     Back,
     Belt,
+    Legs,
     Feet,
 }
 
 impl Slot {
-    pub const ALL: [Slot; 6] = [
+    pub const ALL: [Slot; 8] = [
         Slot::Head,
         Slot::Neck,
         Slot::Body,
+        Slot::Hands,
         Slot::Back,
         Slot::Belt,
+        Slot::Legs,
         Slot::Feet,
     ];
 
@@ -325,8 +346,10 @@ impl Slot {
             Slot::Head => "head",
             Slot::Neck => "neck",
             Slot::Body => "body",
+            Slot::Hands => "hands",
             Slot::Back => "back",
             Slot::Belt => "belt",
+            Slot::Legs => "legs",
             Slot::Feet => "feet",
         }
     }
@@ -387,6 +410,7 @@ impl ItemDef {
             fixed: false,
             unique: false,
             weapon: None,
+            armour: None,
         }
     }
 

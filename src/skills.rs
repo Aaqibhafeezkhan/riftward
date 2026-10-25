@@ -299,9 +299,15 @@ pub enum Stat {
     Defence,
     /// Added to damage dealt.
     Damage,
-    /// Taken off damage received (every hit still does at least 1).
+    /// Taken off damage received, even to nothing.
     Armour,
     Initiative,
+    /// Armour ignored by attacks: with `with`, only that skill's.
+    Pierce,
+    /// Taken off the penalty armour puts on defence, never below none.
+    ArmourEase,
+    /// Added to a held shield's block.
+    Block,
 }
 
 /// Everything a character's passive skills add up to.
@@ -314,19 +320,35 @@ pub struct Boosts {
     pub damage: i32,
     pub armour: i32,
     pub initiative: i32,
-    /// Attack and damage that only count with one skill, by `tree:skill`.
-    pub with: HashMap<String, (i32, i32)>,
+    pub pierce: i32,
+    pub armour_ease: i32,
+    pub block: i32,
+    /// What only counts with one skill, by `tree:skill`.
+    pub with: HashMap<String, WithSkill>,
+}
+
+/// Bonuses for attacks made with one skill.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct WithSkill {
+    pub attack: i32,
+    pub damage: i32,
+    pub pierce: i32,
 }
 
 impl Boosts {
     /// Attack bonus for an attack made with `skill`.
     pub fn attack_with(&self, skill: &str) -> i32 {
-        self.attack + self.with.get(skill).map_or(0, |(attack, _)| *attack)
+        self.attack + self.with.get(skill).map_or(0, |w| w.attack)
     }
 
     /// Damage bonus for an attack made with `skill`.
     pub fn damage_with(&self, skill: &str) -> i32 {
-        self.damage + self.with.get(skill).map_or(0, |(_, damage)| *damage)
+        self.damage + self.with.get(skill).map_or(0, |w| w.damage)
+    }
+
+    /// Armour ignored by an attack made with `skill`.
+    pub fn pierce_with(&self, skill: &str) -> i32 {
+        self.pierce + self.with.get(skill).map_or(0, |w| w.pierce)
     }
 }
 
@@ -342,10 +364,13 @@ pub fn boosts(skills: &Skills, defs: &SkillDefs) -> Boosts {
             let value = bonus.base + (state.level / bonus.per.max(1)) as i32;
             match (&bonus.with, bonus.stat) {
                 (Some(skill), Stat::Attack) => {
-                    total.with.entry(skill.clone()).or_default().0 += value
+                    total.with.entry(skill.clone()).or_default().attack += value
                 }
                 (Some(skill), Stat::Damage) => {
-                    total.with.entry(skill.clone()).or_default().1 += value
+                    total.with.entry(skill.clone()).or_default().damage += value
+                }
+                (Some(skill), Stat::Pierce) => {
+                    total.with.entry(skill.clone()).or_default().pierce += value
                 }
                 (_, Stat::MaxHealth) => total.max_health += value,
                 (_, Stat::MaxStamina) => total.max_stamina += value,
@@ -354,6 +379,9 @@ pub fn boosts(skills: &Skills, defs: &SkillDefs) -> Boosts {
                 (_, Stat::Damage) => total.damage += value,
                 (_, Stat::Armour) => total.armour += value,
                 (_, Stat::Initiative) => total.initiative += value,
+                (_, Stat::Pierce) => total.pierce += value,
+                (_, Stat::ArmourEase) => total.armour_ease += value,
+                (_, Stat::Block) => total.block += value,
             }
         }
     }
@@ -411,6 +439,8 @@ pub enum Effect {
     Cleave,
     /// The target's armour doesn't help.
     IgnoreArmour,
+    /// This much of the target's armour doesn't help: a point finding a gap.
+    Pierce(i32),
     /// The user defends at half until their next turn.
     Expose,
     /// The user defends better for `rounds` turns.
@@ -453,6 +483,10 @@ pub enum Trigger {
     StaminaSpent { per: u32 },
     /// One use for every attack dodged.
     Dodged,
+    /// One use for every attack turned aside with a shield.
+    Blocked,
+    /// One use for every hit taken in armour.
+    HitInArmour,
     /// One use for every `per` damage taken.
     Damaged { per: u32 },
     /// One use for every use of another skill in its tree: a discipline that grows with the
@@ -471,7 +505,13 @@ impl Trigger {
             {
                 Some((f64::from((*per).max(1)), f64::from(*amount)))
             }
-            (Trigger::Dodged, GameEvent::Dodged { who: w }) if *w == who => Some((1.0, 1.0)),
+            (Trigger::Dodged, GameEvent::Dodged { who: w })
+            | (Trigger::Blocked, GameEvent::Blocked { who: w })
+            | (Trigger::HitInArmour, GameEvent::HitInArmour { who: w })
+                if *w == who =>
+            {
+                Some((1.0, 1.0))
+            }
             (Trigger::Damaged { per }, GameEvent::Damaged { who: w, amount }) if *w == who => {
                 Some((f64::from((*per).max(1)), f64::from(*amount)))
             }
@@ -896,6 +936,8 @@ fn practise_passives(
         let who = match event {
             GameEvent::StaminaSpent { who, .. }
             | GameEvent::Dodged { who }
+            | GameEvent::Blocked { who }
+            | GameEvent::HitInArmour { who }
             | GameEvent::Damaged { who, .. } => *who,
             _ => continue,
         };

@@ -913,12 +913,13 @@ fn stop(In(inv): In<Invocation>, mut players: PlayerQuery, mut queues: Query<&mu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::items::Item;
     use crate::skills::{
         Cost, Effect, Lines, Skill, SkillDef, SkillKind, SkillState, SkillText, StrikeKind,
         Technique,
     };
     use crate::vitals::BaseHealth;
-    use crate::world::{Exits, Room, Terrain};
+    use crate::world::{ArmourDef, DoorState, Exits, ItemDef, ItemKey, Room, Slot, Terrain};
     use bevy::ecs::message::Messages;
     use bevy::ecs::system::RunSystemOnce;
 
@@ -1081,6 +1082,172 @@ mod tests {
         world.entity_mut(attacker).insert(Fighting(defender));
         world.run_system_once(combat_round).unwrap();
         assert!(said(&world, defender, "You riposte"));
+    }
+
+    /// Put an armour piece on `who`, at `location`.
+    fn armour(
+        world: &mut World,
+        id: &str,
+        wear: Option<Slot>,
+        armour: ArmourDef,
+        at: ItemLocation,
+    ) {
+        let key = ItemKey::parse(id, "test");
+        let def = ItemDef {
+            wear,
+            armour: Some(armour),
+            ..ItemDef::named(id)
+        };
+        world
+            .resource_mut::<ItemTemplates>()
+            .0
+            .insert(key.clone(), def);
+        world.spawn((
+            Item {
+                key,
+                name: id.into(),
+                id: None,
+                state: DoorState::Open,
+            },
+            at,
+        ));
+    }
+
+    /// Someone whose fists never miss.
+    fn sure_hands(world: &mut World, who: Entity) {
+        let mut skills = world.get_mut::<Skills>(who).unwrap();
+        skills.0.get_mut(BASIC_ATTACK).unwrap().level = 1000;
+    }
+
+    #[test]
+    fn armour_counts_where_it_belongs() {
+        let (mut world, room) = world();
+        let who = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let plate = ArmourDef {
+            reduction: 4,
+            penalty: 3,
+            block: 0,
+        };
+        let shield = ArmourDef {
+            reduction: 0,
+            penalty: 1,
+            block: 4,
+        };
+        armour(
+            &mut world,
+            "plate",
+            Some(Slot::Body),
+            plate,
+            ItemLocation::Worn(who, Slot::Body),
+        );
+        armour(&mut world, "shield", None, shield, ItemLocation::Held(who));
+        // Carried, not worn: a spare helm in hand counts for nothing.
+        let helm = ArmourDef {
+            reduction: 1,
+            penalty: 1,
+            block: 0,
+        };
+        armour(
+            &mut world,
+            "helm",
+            Some(Slot::Head),
+            helm,
+            ItemLocation::Held(who),
+        );
+        let total = world
+            .run_system_once(move |items: ItemQuery, templates: Res<ItemTemplates>| {
+                strike::gear(who, &items, &templates)
+            })
+            .unwrap();
+        assert_eq!(
+            total,
+            ArmourDef {
+                reduction: 4,
+                penalty: 4,
+                block: 4
+            }
+        );
+    }
+
+    #[test]
+    fn armour_can_turn_a_blow_to_nothing_and_a_point_can_find_the_gaps() {
+        let (mut world, room) = world();
+        world.resource_mut::<SkillDefs>().skills.extend([skill(
+            "brawling:jab",
+            SkillKind::Technique(Technique {
+                with: BASIC_ATTACK.into(),
+                cost: Cost::Free,
+                accuracy: 0,
+                damage: 0,
+                strike: StrikeKind::Hit,
+                effects: vec![Effect::Pierce(3)],
+                opener: false,
+            }),
+        )]);
+        // Fists do 2; a breastplate takes 4.
+        let attacker = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK, "brawling:jab"]);
+        let knight = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        sure_hands(&mut world, attacker);
+        let plate = ArmourDef {
+            reduction: 4,
+            penalty: 3,
+            block: 0,
+        };
+        armour(
+            &mut world,
+            "plate",
+            Some(Slot::Body),
+            plate,
+            ItemLocation::Worn(knight, Slot::Body),
+        );
+        world.entity_mut(attacker).insert(Fighting(knight));
+        world.entity_mut(knight).insert(Fighting(attacker));
+        world.get_mut::<Skills>(knight).unwrap().0.clear();
+        world.run_system_once(combat_round).unwrap();
+        assert!(said(&world, attacker, "glances off the brawler's armour"));
+        assert_eq!(world.get::<Vitals>(knight).unwrap().health, 100.0);
+        // Piercing 3 of its 4 lets 1 through.
+        world.entity_mut(attacker).insert(Readied {
+            skill: "brawling:jab".into(),
+        });
+        world.run_system_once(combat_round).unwrap();
+        assert_eq!(world.get::<Vitals>(knight).unwrap().health, 99.0);
+    }
+
+    #[test]
+    fn a_shield_takes_the_credit_for_what_it_stops() {
+        let (mut world, room) = world();
+        let attacker = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        // Reaction 1 and the shield's penalty of 1 leave no dodging at all: every miss is the
+        // shield's.
+        let defender = fighter(&mut world, room, 1, 1, &[]);
+        let shield = ArmourDef {
+            reduction: 0,
+            penalty: 1,
+            block: 50,
+        };
+        armour(
+            &mut world,
+            "shield",
+            None,
+            shield,
+            ItemLocation::Held(defender),
+        );
+        world.entity_mut(attacker).insert(Fighting(defender));
+        world.run_system_once(combat_round).unwrap();
+        assert!(said(&world, defender, "You get your shield in the way"));
+        assert!(said(
+            &world,
+            attacker,
+            "gets a shield in the way of your attack"
+        ));
+        let events = world.resource::<Messages<GameEvent>>();
+        let mut cursor = events.get_cursor();
+        let blocked = cursor
+            .read(events)
+            .filter(|e| matches!(e, GameEvent::Blocked { who } if *who == defender))
+            .count();
+        assert!(blocked >= 1);
     }
 
     #[test]

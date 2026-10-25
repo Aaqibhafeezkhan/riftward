@@ -41,6 +41,10 @@ pub enum GameEvent {
     StaminaSpent { who: Entity, amount: f32 },
     /// A player or mob dodged an attack.
     Dodged { who: Entity },
+    /// A player or mob turned an attack aside with their shield.
+    Blocked { who: Entity },
+    /// A player or mob was hit while wearing armour.
+    HitInArmour { who: Entity },
     /// A player or mob took damage.
     Damaged { who: Entity, amount: f32 },
     /// A player or mob was killed; `mob` is the template of a mob. World events listen; quests
@@ -99,6 +103,8 @@ fn text(event: &GameEvent) -> Option<String> {
         GameEvent::PhaseChanged(phase) => phase.arrives().into(),
         GameEvent::StaminaSpent { .. }
         | GameEvent::Dodged { .. }
+        | GameEvent::Blocked { .. }
+        | GameEvent::HitInArmour { .. }
         | GameEvent::Damaged { .. }
         | GameEvent::Died { .. } => return None,
     };
@@ -122,6 +128,8 @@ fn announce(mut events: MessageReader<GameEvent>, rooms: RoomQuery, mut players:
             }
             GameEvent::StaminaSpent { .. }
             | GameEvent::Dodged { .. }
+            | GameEvent::Blocked { .. }
+            | GameEvent::HitInArmour { .. }
             | GameEvent::Damaged { .. }
             | GameEvent::Died { .. } => {}
             GameEvent::PhaseChanged(_) => {

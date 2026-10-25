@@ -24,9 +24,9 @@
         ),
         "lunge": (
             name: "Lunge",
-            description: "A long, quick thrust that's hard to avoid, but leaves you open until your next turn.",
+            description: "A long, quick thrust that's hard to avoid and finds a gap in armour (it ignores 1 point of it), but leaves you open until your next turn.",
             kind: Technique((with: "swordplay:basics", cost: Stamina(1), accuracy: 4,
-                effects: [Expose])),
+                effects: [Expose, Pierce(1)])),
             requires: Skill("swordplay:basics", 15),
             text: (
                 hit: (

@@ -39,7 +39,16 @@ A template can be a weapon:
     weapon: (skill: "knives:basics", damage: (1, 4))),   // what a blow looks like is its skill's text
 ```
 
-Held in hand, it's what its holder fights with (see [Combat](architecture.md#combat)): its damage in anyone's hands, and better aim and more damage for those trained in its skill. `examine` shows a weapon's damage and skill. Armour comes later.
+Held in hand, it's what its holder fights with (see [Combat](architecture.md#combat)): its damage in anyone's hands, and better aim and more damage for those trained in its skill. `examine` shows a weapon's damage and skill.
+
+## Armour
+
+A template can be armour: worn pieces take damage off every hit and cost some dodging, and a shield held in hand blocks. `examine` shows what a piece does. See [Armour](trees.md#armour) for how it fights.
+
+```ron
+"mail_shirt": (name: "a mail shirt", bulk: Bulk(3), wear: Body, armour: (reduction: 3, penalty: 2)),
+"round_shield": (name: "a round shield", bulk: Bulk(2), armour: (penalty: 1, block: 4)),
+```
 
 ## Bulk
 
