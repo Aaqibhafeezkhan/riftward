@@ -4,6 +4,8 @@ Riftward is a classless telnet MUD built on a headless Bevy server. Characters a
 
 Each document below covers one area and can be read on its own. This page is the summary and the index.
 
+**Picking the work back up?** Start with [Where we are](STATUS.md): what's built, what's next, and what's waiting on a decision.
+
 **Terminology:** a **mob** (short for *mobile*, the traditional MUD term) is any creature the game controls: monsters, animals and townsfolk alike.
 
 ## Design goals

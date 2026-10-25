@@ -144,6 +144,7 @@ Built (`src/combat.rs`). The round loop, initiative, damage, death and respawn: 
 - **Starting and ending fights:** `kill <mob>` (players can't fight each other yet). The target fights back. A fight ends when either side dies, leaves (`flee`: a random open exit, 60% before Luck, 2 stamina), or logs out. Walking away isn't possible mid-fight.
 - **Mobs fight by the same rules,** with attributes, skills, an attack and optionally a fixed health from their templates. `aggressive: true` mobs attack players in their room; the rest only fight back. Mobs in a fight don't wander.
 - **A mob's death** leaves a corpse that rots in 5 minutes, and counts for its spawn like any death, so `AfterDeath` timers and breeding reseeds now matter.
+- **Leaving a fight is fatal.** A player who quits or disconnects while fighting is cut down as they go ("tries to slip away from the fight, and is cut down!"), and dies like anyone else, so logging out is never an escape.
 - **A player's death** leaves a real corpse where they fell, holding everything they carried and wore; it survives restarts and rots in 30 minutes, spilling what's left on the ground. They wake at the Wayside Shrine with a quarter of their health and stamina.
 - **Not yet:** armour (planned next, see [Armour](trees.md#armour)), mobs using techniques, expert and master techniques (Disarm, Whirlwind and the rest), mob tactics, a death penalty beyond the walk back, PvP, and grouping. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
 

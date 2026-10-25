@@ -177,7 +177,6 @@ Planned as the next step. Armour is **damage reduction**: every hit loses its ar
 
 ## Open questions
 
-- [ ] **Leaving mid-fight:** `quit` works during a fight, which makes logging out an escape. Should quitting in a fight be refused, or leave the character fighting (and dying) for a few rounds?
 - [ ] **Is the four-tier shape right,** and are the level gates (15, 30, 45) the right spacing for a 0–50 skill?
 - [ ] **How many skills per tree** to start: the five or so above, or fewer?
 - [ ] **What stops one character learning every tree?** Still the biggest open question in [Skills](skills.md#open-questions). Trainers make it pressing: with free lessons, anyone can open every tree.

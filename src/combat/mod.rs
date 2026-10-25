@@ -24,7 +24,9 @@ use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::command::{ActionQueue, AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
+use crate::command::{
+    self, ActionQueue, AddCommand, Category, CommandRegistry, CommandSpec, Invocation,
+};
 use crate::commands::movement::{View, travel};
 use crate::db::{Database, ItemPlace};
 use crate::dice::Dice;
@@ -34,6 +36,7 @@ use crate::items::{
     PLAYER_CORPSE_SECS, capitalized,
 };
 use crate::mobs::{self, Mob, MobQuery};
+use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::skills::{Bonus, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
@@ -64,10 +67,12 @@ impl Plugin for CombatPlugin {
                 Update,
                 (
                     combat_round.run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
+                    abandon_fights,
                     handle_deaths,
                     deliver_log,
                 )
-                    .chain(),
+                    .chain()
+                    .after(command::dispatch),
             )
             .add_command(
                 CommandSpec::new("kill", Category::Interaction)
@@ -444,6 +449,38 @@ fn technique(
         }
     };
     deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+}
+
+/// Fighters who haven't fallen yet.
+type StillFighting = (With<Fighting>, Without<Dead>);
+
+/// Anyone who quits or disconnects in the middle of a fight is cut down as they go: no one
+/// escapes a fight by leaving the game. They die like anyone else, so their gear stays on their
+/// corpse and they wake at the shrine next time.
+fn abandon_fights(
+    mut commands: Commands,
+    leaving: Query<(Entity, &Connection, &Player, &InRoom), StillFighting>,
+    mut log: ResMut<CombatLog>,
+) {
+    for (entity, conn, player, in_room) in &leaving {
+        if !conn.closing {
+            continue;
+        }
+        commands.entity(entity).insert(Dead).remove::<Fighting>();
+        log.0.push(Outgoing::line(
+            entity,
+            "\x1b[1;31mYou turn to flee the fight, and are cut down as you go.\x1b[0m",
+        ));
+        log.0.push(Outgoing::Room {
+            room: in_room.0,
+            except: entity,
+            text: format!(
+                "{} tries to slip away from the fight, and is cut down!\r\n",
+                player.name
+            ),
+        });
+        info!("{} left in the middle of a fight, and died", player.name);
+    }
 }
 
 /// Lay out the dead: mobs leave a corpse, and players leave one with everything they carried,
