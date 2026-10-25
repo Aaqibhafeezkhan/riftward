@@ -1,0 +1,67 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+Riftward is a classless telnet MUD on a headless Bevy 0.20 server (Rust 2024 edition). Characters are defined by skills they learn and use; the world is built mostly from inside the game.
+
+**Picking the work back up?** Read `docs/STATUS.md` first (what's built, what's next, open decisions), then `docs/README.md` (design summary and index) and `docs/architecture.md` (modules, the tick, where data lives).
+
+## Commands
+
+```sh
+cargo fmt
+cargo clippy --all-targets            # must report no warnings
+cargo test                            # all tests (unit tests live in #[cfg(test)] modules in src/)
+cargo test combat::                   # tests in one module
+cargo test <test_name>                # a single test by name substring
+
+cargo run                             # 0.0.0.0:4000, database ./mud.db
+MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for live testing
+```
+
+- Always `cargo run` from the project root: that's how Bevy finds `assets/`.
+- `fmt`, `clippy --all-targets` and `test` must all be clean before a change is done.
+
+### Testing live
+
+- Never test against the real `mud.db`; use a scratch `MUD_DB`. The first account created on a fresh database becomes an admin.
+- Script sessions with `nc` (end with `quit`, or `nc` waits forever):
+  `( printf 'acct\r\npass\r\n'; sleep 1; printf '1\r\nlook\r\nquit\r\n'; sleep 1 ) | nc 127.0.0.1 4001`
+  Use a small Python socket client for things `nc` can't do (e.g. dropping the connection mid-fight).
+- **Builder/admin commands rewrite zone files in `assets/zones/`.** Back the folder up before a test that uses them and restore it after.
+- Stop a test server by the process on its port (`lsof -t -iTCP:4001 -sTCP:LISTEN`), never by name, so a real server on 4000 is left alone.
+- Admin testing commands: `grantskill`, `setattr`, `setvitals`, `worldflag`, `summon`, `purge`, `goto`, `create`. `create`/`summon` resolve templates in the current zone unless given `zone:id`.
+- Prefer deterministic tests over chasing dice live: combat tests build a tiny world and run one `combat_round` (see tests in `src/combat/mod.rs`).
+
+## Architecture
+
+`src/main.rs` assembles a 30 Hz `MinimalPlugins` app with asset hot-reload, then one Bevy plugin per module (engine plugins, then game plugins). `docs/architecture.md` has the full module table.
+
+**One tick:** `net.rs` accepts connections and queues each client's lines, emitting at most **one `PlayerInput` per player per tick** (keeps commands in typed order across systems) → `command.rs` dispatches (alias expansion, permission hiding, unknown → "Huh?") and runs that command's system → output is queued on each `Connection` and flushed once in `PostUpdate`.
+
+**Commands** are Bevy systems registered with `app.add_command(CommandSpec::new(..).usage(..).summary(..), system)`. The system takes `In<Invocation>` plus whatever queries/resources it needs; `help` is generated from the registry, and `.permission(Permission::Build)` hides it from lower roles. Player commands live in `src/commands/` and topic modules (`items.rs`, `combat/`, `skills.rs`…); builder/admin commands in `build.rs`. See `CONTRIBUTING.md` for a worked example.
+
+- **Never write prompts from a command.** The connection appends exactly one prompt after each batch of output; `vitals.rs` computes the prompt text just before flush.
+- Build output as `Vec<Outgoing>` and send it with `deliver` (`output.rs`), which also holds `Actor` and the common queries.
+- Resolve target words with `Target::parse` + `find_one`/`find_all` (`targeting.rs`) so `2.goblin`, `all.coin` and `me` work everywhere.
+- Mobs share players' `InRoom`; queries meant for players only filter on `Connection`.
+- **Action commands** (`kill`, `flee`, `use`, `pick`, `bash`, techniques) go through the per-player `ActionQueue` and take a 3-second combat round; everything else is instant.
+- **Game events:** systems that make something happen write a `GameEvent` (`events.rs`); announcements, passive-skill triggers and world events listen to it. Add events rather than special cases.
+- **Time:** a one-second heartbeat drives spawns, wandering, recovery, the clock. Heartbeat systems must work from elapsed time and timestamps, never by counting beats.
+
+**Data split:** designed content is RON in `assets/` (zones with rooms/doors/item & mob templates/spawns/world events in `assets/zones/`, skill trees in `assets/skills/*.skill.ron`, `races.ron`, `backgrounds.ron`), hot-reloaded; `world.rs::sync_world` applies zone changes live. Anything that changes during play is in SQLite (`db.rs`). Items become "real" (persisted) the moment a player touches them; untouched spawns and mobs reset.
+
+## House rules
+
+- **All randomness goes through `Dice`** (`dice.rs`), never your own RNG, so Luck applies to every roll.
+- **Contests compare ratios, never differences**: attributes are uncapped (`docs/attributes.md#the-ratio-rule`).
+- **Designed content goes in data files**, not code.
+- **Schema:** tables use `CREATE TABLE IF NOT EXISTS`; there are no migrations yet. Changing an existing table needs numbered migrations (`PRAGMA user_version`); raise it before doing so.
+- **Zone files:** room ids are local to their zone (cross-zone links use `zone:room`), and comments in a zone file are lost the next time a builder command saves it.
+- **Design docs are the record of decisions.** A change that alters a design updates its doc in `docs/` in the same change; keep `docs/README.md` ("What exists today") and `docs/STATUS.md` current.
+
+## Git
+
+- Commit only when asked. Work on a branch and open a PR against `main`; don't commit straight to the main branch.
+- Commit messages: short imperative summary ("Add item decay"), then a body explaining what and why.
+- Commit zone files and docs; never `mud.db` or `target/`.
