@@ -83,6 +83,80 @@ pub struct RoomDef {
     /// Under a roof or underground: the sky can't be seen, so dawn and dusk pass unnoticed.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub indoors: bool,
+    /// What the ground is like, and so how tiring it is to walk into.
+    #[serde(default, skip_serializing_if = "Terrain::is_paved")]
+    pub terrain: Terrain,
+}
+
+/// What a room's ground is like. Walking into a room costs its terrain's stamina, doubled for
+/// someone carrying too much; with too little, they can't go on.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Terrain {
+    /// Streets and floors.
+    #[default]
+    Paved,
+    Road,
+    /// Sewer walkways, forest tracks, rough grass.
+    Uneven,
+    /// Rubble, scree, steep slopes.
+    Rough,
+    Mud,
+    /// Water up to the waist.
+    Wading,
+}
+
+impl Terrain {
+    pub const ALL: [Terrain; 6] = [
+        Terrain::Paved,
+        Terrain::Road,
+        Terrain::Uneven,
+        Terrain::Rough,
+        Terrain::Mud,
+        Terrain::Wading,
+    ];
+
+    fn is_paved(&self) -> bool {
+        *self == Terrain::Paved
+    }
+
+    /// Stamina it takes to walk into a room of this terrain.
+    pub fn cost(self) -> f32 {
+        match self {
+            Terrain::Paved | Terrain::Road => 0.0,
+            Terrain::Uneven => 0.5,
+            Terrain::Rough => 1.0,
+            Terrain::Mud => 1.5,
+            Terrain::Wading => 2.0,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Terrain::Paved => "paved",
+            Terrain::Road => "road",
+            Terrain::Uneven => "uneven",
+            Terrain::Rough => "rough",
+            Terrain::Mud => "mud",
+            Terrain::Wading => "wading",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Terrain::ALL
+            .into_iter()
+            .find(|t| t.name() == s.to_ascii_lowercase())
+    }
+
+    /// The end of "You're too exhausted ...", for walking into it.
+    pub fn too_tired(self) -> &'static str {
+        match self {
+            Terrain::Paved | Terrain::Road => "to go on",
+            Terrain::Uneven => "to pick your way onward",
+            Terrain::Rough => "to climb over the rubble",
+            Terrain::Mud => "to trudge into the mud",
+            Terrain::Wading => "to wade in",
+        }
+    }
 }
 
 /// Where an exit leads: a room id in this zone, or `zone:room` for another zone. Plain exits are
@@ -699,6 +773,7 @@ impl ZoneDef {
             exits: BTreeMap::new(),
             no_wander: false,
             indoors: false,
+            terrain: Terrain::Paved,
         };
         Self {
             id: id.into(),
@@ -833,6 +908,7 @@ pub struct Room {
     pub no_wander: bool,
     /// The sky can't be seen from here.
     pub indoors: bool,
+    pub terrain: Terrain,
 }
 
 /// Direction name -> where that exit leads.
@@ -1082,6 +1158,7 @@ fn sync_world(
                 }
                 room.no_wander = def.no_wander;
                 room.indoors = def.indoors;
+                room.terrain = def.terrain;
             }
             None => {
                 let entity = commands
@@ -1091,6 +1168,7 @@ fn sync_world(
                             description: def.description.clone(),
                             no_wander: def.no_wander,
                             indoors: def.indoors,
+                            terrain: def.terrain,
                         },
                         key.clone(),
                         Exits::default(),

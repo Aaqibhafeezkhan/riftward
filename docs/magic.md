@@ -6,7 +6,8 @@ Every character starts at Magic 0 and can raise it with Karma from creation onwa
 
 - **Awakening is part of the skill system.** There is no separate Awakened state: a character is Awakened when they know a foundation skill, so the usual routes for acquiring skills (starting skills, teaching, epiphany) are the routes to Awakening.
 - **Foundation skills require Magic 1 or more.** Latent talent is what makes a character eligible to Awaken later; spending Karma on Magic before Awakening is an investment, not a waste.
-- **Other magic skills require the tradition's foundation skill.** A spell's effectiveness is its skill level plus Magic (see [Karma](attributes.md#karma) for raising Magic).
+- **A tradition's other skills are its schools,** which require its foundation. Schools level by use like any skill.
+- **Spells are not skills.** A spell is something a caster *knows*, learned once and cast through a school; see [Spells](#spells).
 - **Casting has a cost, Drain,** resisted by Willpower plus the tradition's attribute.
 
 ## How to Awaken
@@ -37,11 +38,44 @@ Being Awakened shows in `score` ("Magic 1 (Awakened: Divine)"). The foundation s
 | Divine | Cleric | **Devotion:** high Willpower and prayer at shrines until a power answers | Intuition |
 | Adept | Monk, warrior-mystic | **Discipline:** high Willpower and Body, and pushing a physical skill to its limit | Body |
 
-The tradition decides which magic trees open: adepts get physical-magic trees (enhanced reflexes, killing hands), while hermetics, shamans and clerics get spellcasting trees with different flavours. Self-taught paths can also test latent Magic, for example Study requiring Magic 2, so early investment makes Awakening easier.
+The tradition decides which magic opens: hermetics, shamans and clerics get schools and spells with different flavours, while adepts turn magic inward and have **powers** instead of spells, which are ordinary skills in their tree (Killing Hands, Quickened Reflexes). Self-taught paths can also test latent Magic, for example Study requiring Magic 2, so early investment makes Awakening easier.
 
 ## Which paths are known
 
 **Teachers are the open door; self-taught paths are rumours.** Anyone with talent who finds a teacher can Awaken, so no one who wants to play a magic user is locked out; the hedge-shaman takes a walk into the Darkwood to find. Study at the Guild Archive is the best known self-taught path; the others are hidden epiphanies that players piece together.
+
+## Spells
+
+Spells are their own category, separate from skills. **Schools are what improve; spells are what you know.**
+
+- **Schools are skills.** Each casting tradition has a few schools, ordinary skills in its tree that level by use. The foundation is the first school; others open later, each requiring the foundation. A first pass:
+
+  | Tradition | Schools |
+  | --- | --- |
+  | Divine | **Faith** (the foundation: blessings and mending), **Wrath** (smiting), **Warding** |
+  | Hermetic | **Hermetic Principles** (the foundation: force and light), **Evocation**, **Abjuration**, **Divination** |
+  | Shamanic | **Spirit Sight** (the foundation: speaking with spirits), **Beasts**, **Elements**, **Ancestors** |
+
+- **The rest of a tradition's tree is the craft of casting:** Drain resistance, shaping, countering, sustaining, summoning, rituals and a capstone, all skills worth improving. See [Skill trees](trees.md#magic) for each tradition's.
+
+- **A spell belongs to a school** and has a minimum school level, a Drain cost, a target and an effect. It never levels.
+- **Learning a spell** happens once: from a tradition's teacher, a scroll (used up) or a grimoire (studied, kept). Finding a new spell should feel like gaining a new option, not starting a new climb from level 0.
+- **Casting** is an action like any other: `cast <spell> [<target>]` takes a round. Its power is **school level + Magic**, contested by the ratio rule like everything else, and casting practises the school. Every spell in a school grows stronger together, so a caster's progress isn't split between a dozen spells.
+- **Drain** is what a spell costs: stamina (and, for great spells, health), resisted by Willpower plus the tradition's attribute. A failed resistance costs more.
+- **Spells don't add to character level or Karma.** Only skills do, so casters don't out-level fighters by knowing more.
+- **How many spells a caster can hold** is limited, so they choose a repertoire rather than collecting everything (an open question below).
+- **Data:** spells live in `assets/spells/<tradition>.spells.ron`; each character's known spells in a `character_spells` table. `spells` lists what a character knows.
+
+```ron
+"mend": (
+    name: "Mend",
+    school: "divine:foundation",
+    min_level: 0,
+    drain: Stamina(2),
+    target: Touch,                  // self or someone here
+    effect: Heal(dice: (2, 5)),     // plus a share of school level + Magic
+),
+```
 
 ## Possible later additions
 
@@ -52,3 +86,5 @@ The tradition decides which magic trees open: adepts get physical-magic trees (e
 
 - [ ] **Are the four traditions right?** Hermetic, Shamanic, Divine and Adept.
 - [ ] **Can a character know more than one foundation skill?** That would mean belonging to two traditions.
+- [ ] **How many spells can a caster hold?** Options: a number from school levels (say one per 10 levels in each school), from an attribute (Logic for Hermetics, Intuition for Shamans), or a grimoire that holds them and must be carried.
+- [ ] **Do spells cost Karma to learn,** as in Shadowrun, or only the effort of finding them?

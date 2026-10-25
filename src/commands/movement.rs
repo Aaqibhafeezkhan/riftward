@@ -3,6 +3,7 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
+use crate::attributes::{Attribute, Attributes};
 use crate::characters::{Races, article};
 use crate::combat::Fighting;
 use crate::command::Invocation;
@@ -12,10 +13,11 @@ use crate::events::{GameEvent, Way, way_back};
 use crate::items::{
     ItemLocation, ItemQuery, ItemTemplates, capitalized, counted, describe_item, find_item,
 };
+use crate::items::{Snapshot, bulk_limits};
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::targeting::{Keywords, Target};
-use crate::vitals::Resting;
+use crate::vitals::{Resting, Vitals};
 use crate::world::{Door, DoorState, Player};
 
 /// Everything a room shows a player besides other players: the room itself, its doors, and the
@@ -107,6 +109,7 @@ pub fn look(
 }
 
 /// `go <direction>`.
+#[allow(clippy::too_many_arguments)]
 pub fn go(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
@@ -115,6 +118,7 @@ pub fn go(
     mut events: MessageWriter<GameEvent>,
     fighting: Query<(), With<Fighting>>,
     mut commands: Commands,
+    mut sheets: Query<(&mut Vitals, &Attributes)>,
 ) {
     commands.entity(inv.entity).remove::<Resting>();
     let out = if inv.args.is_empty() {
@@ -122,12 +126,22 @@ pub fn go(
     } else if fighting.get(inv.entity).is_ok() {
         vec![Outgoing::line(inv.entity, IN_A_FIGHT)]
     } else {
-        travel(inv.entity, &inv.args, &mut players, &view, &db, &mut events)
+        travel(
+            inv.entity,
+            &inv.args,
+            &mut players,
+            &view,
+            &db,
+            &mut events,
+            &mut sheets,
+            true,
+        )
     };
     deliver(out, &mut players);
 }
 
 /// `north`, `south`, ... and their short forms: the command's name is the direction.
+#[allow(clippy::too_many_arguments)]
 pub fn walk(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
@@ -136,6 +150,7 @@ pub fn walk(
     mut events: MessageWriter<GameEvent>,
     fighting: Query<(), With<Fighting>>,
     mut commands: Commands,
+    mut sheets: Query<(&mut Vitals, &Attributes)>,
 ) {
     commands.entity(inv.entity).remove::<Resting>();
     if fighting.get(inv.entity).is_ok() {
@@ -149,6 +164,8 @@ pub fn walk(
         &view,
         &db,
         &mut events,
+        &mut sheets,
+        true,
     );
     deliver(out, &mut players);
 }
@@ -157,6 +174,10 @@ pub fn walk(
 const IN_A_FIGHT: &str = "You're fighting for your life! Type 'flee' to try to escape.";
 
 /// Move someone through the exit in direction `dir`, telling both rooms.
+/// Move someone through the exit in direction `dir`, telling both rooms. Walking into a room costs
+/// the stamina its terrain asks (doubled, and never free, for someone carrying too much); without
+/// it they can't go. `pay` is false when something else has already paid, as fleeing does.
+#[allow(clippy::too_many_arguments)]
 pub fn travel(
     entity: Entity,
     dir: &str,
@@ -164,6 +185,8 @@ pub fn travel(
     view: &View,
     db: &Database,
     events: &mut MessageWriter<GameEvent>,
+    sheets: &mut Query<(&mut Vitals, &Attributes)>,
+    pay: bool,
 ) -> Vec<Outgoing> {
     let mut out = Vec::new();
     let Some(actor) = Actor::get(players, entity) else {
@@ -189,6 +212,38 @@ pub fn travel(
         return out;
     }
     let to = exit.to;
+
+    if pay
+        && let Ok(terrain) = view.rooms.get(to).map(|(room, _, _)| room.terrain)
+        && let Ok((mut vitals, attributes)) = sheets.get_mut(entity)
+    {
+        let snapshot = Snapshot::new(
+            view.items.iter().map(|(e, i, l)| (e, i, *l)),
+            &view.templates,
+        );
+        let (encumbered_at, _) = bulk_limits(attributes.get(Attribute::Strength));
+        let mut cost = terrain.cost();
+        if snapshot.burden(entity) > encumbered_at {
+            cost = (cost * 2.0).max(0.5);
+        }
+        if cost > 0.0 {
+            if vitals.stamina < cost {
+                out.push(Outgoing::line(
+                    entity,
+                    format!(
+                        "You're too exhausted {}. Rest a while.",
+                        terrain.too_tired()
+                    ),
+                ));
+                return out;
+            }
+            vitals.stamina -= cost;
+            events.write(GameEvent::StaminaSpent {
+                who: entity,
+                amount: cost,
+            });
+        }
+    }
 
     events.write(GameEvent::Left {
         who: entity,

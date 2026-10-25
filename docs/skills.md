@@ -87,7 +87,7 @@ Skills are either active, triggered by the player, or passive, applying automati
 - **Outcome triggers reward doing, not just being there.** Dodge Mastery improves when dodges succeed, not every time the character is attacked.
 - **Amount triggers scale with the amount.** `ManaSpent(per: 10)` counts one use per 10 mana, so one large spell counts for more than a trivial one.
 - **Two separate cooldowns.** An active skill's use cooldown (Riposte every 8 seconds) is combat balance. The gain cooldown limits how often any skill can level, active or passive.
-- **Spells are active skills** whose cost is Drain, resisted by Willpower plus the tradition attribute (see [Magic](magic.md)).
+- **Spells are not skills.** They're known, not levelled, and cast through a magic school, which is a skill (see [Spells](magic.md#spells)). Everything else a character can do, including weapon techniques like Riposte and Cleave, is a skill.
 - **What a skill does** (damage, bonuses, applied conditions) needs an effect system, designed together with combat.
 - **Combat is made of skills.** There is no attack outside the skill system: everyone starts with a basic attack skill, and weapon trees begin with their own. Mobs fight with skills from their templates, by the same rules as players.
 - **Racial abilities are skills too,** usually passive, requiring the race (see [Races](characters.md#races)).
@@ -233,7 +233,7 @@ The skill core, without combat, proved on non-combat skills first:
 
   A **passive** skill lists [game event](architecture.md#game-events) triggers; `StaminaSpent(per: 3)` counts one use for every 3 stamina spent, so Endurance improves as a character exerts themselves, and `Dodged` practises Dodge.
 
-  An **attack** skill is made every round of a fight once chosen with `autoattack` (see [Combat](architecture.md#combat)):
+  An **attack** skill is made every round of a fight once chosen with `autoattack` (see [Combat](architecture.md#combat)). It can cost stamina (`cost: Stamina(4)` for a crushing blow); one its maker can't afford falls back to the free basic attack:
 
   ```ron
   "basics": (name: "Swordplay", kind: Attack(verb: "slash", damage: (2, 5), weapon: "blade")),

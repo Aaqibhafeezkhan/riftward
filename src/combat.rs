@@ -32,7 +32,7 @@ use crate::items::{
 };
 use crate::mobs::{self, Mob, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
-use crate::skills::{Bonus, SkillDefs, SkillKind, Skills, count_use};
+use crate::skills::{Bonus, Cost, SkillDefs, SkillKind, Skills, count_use};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::{Resting, Vitals};
@@ -384,6 +384,8 @@ pub struct Strike {
     pub verb: String,
     /// Extra damage from training in the weapon.
     pub bonus: i32,
+    /// Stamina it takes.
+    pub cost: u32,
 }
 
 /// Levels of a weapon skill for each extra point of damage with that weapon.
@@ -395,11 +397,14 @@ const LEVELS_PER_DAMAGE: i32 = 10;
 /// A weapon does its own damage in anyone's hands. Trained in its skill, a fighter attacks with
 /// that skill and does a point more for every ten levels; untrained, they swing it with only
 /// their Brawling to guide them, and learn nothing of the weapon by it. Players must know an attack
-/// to make it; mobs fight with whatever their template gives them.
+/// to make it; mobs fight with whatever their template gives them. An attack they haven't the
+/// stamina for falls back to the next, ending at the free basic attack.
+#[allow(clippy::too_many_arguments)]
 fn choose_attack(
     entity: Entity,
     chosen: Option<&str>,
     is_player: bool,
+    stamina: f32,
     skills: &Skills,
     items: &ItemQuery,
     templates: &ItemTemplates,
@@ -412,10 +417,17 @@ fn choose_attack(
     });
     let strike = |key: &str| {
         let skill = defs.skills.get(key)?;
-        let SkillKind::Attack { verb, damage } = &skill.def.kind else {
+        let SkillKind::Attack { verb, damage, cost } = &skill.def.kind else {
             return None;
         };
         if is_player && !skills.0.contains_key(key) {
+            return None;
+        }
+        let cost = match cost {
+            Cost::Free => 0,
+            Cost::Stamina(n) => *n,
+        };
+        if stamina < cost as f32 {
             return None;
         }
         let level = skills.0.get(key).map_or(0, |s| s.level as i32);
@@ -425,12 +437,14 @@ fn choose_attack(
                 damage: w.damage,
                 verb: w.verb.clone().unwrap_or_else(|| verb.clone()),
                 bonus: level / LEVELS_PER_DAMAGE,
+                cost,
             }),
             _ => damage.map(|damage| Strike {
                 skill: key.to_string(),
                 damage,
                 verb: verb.clone(),
                 bonus: 0,
+                cost,
             }),
         }
     };
@@ -468,8 +482,8 @@ fn attack(
     watchers: &[(Entity, Entity)],
     caught_resting: bool,
 ) -> Option<Entity> {
-    let (room, a_name, a_player, chosen, a_attributes, a_skills) = {
-        let (_, in_room, attributes, _, skills, _, auto, _, _, _, _, player, mob) =
+    let (room, a_name, a_player, chosen, a_attributes, a_skills, a_stamina) = {
+        let (_, in_room, attributes, vitals, skills, _, auto, _, _, _, _, player, mob) =
             fighters.get(attacker).ok()?;
         (
             in_room.0,
@@ -478,6 +492,7 @@ fn attack(
             auto.and_then(|a| a.0.clone()),
             attributes.clone(),
             skills.clone(),
+            vitals.stamina,
         )
     };
     let Strike {
@@ -485,16 +500,27 @@ fn attack(
         damage,
         verb,
         bonus,
+        cost,
     } = choose_attack(
         attacker,
         chosen.as_deref(),
         a_player.is_some(),
+        a_stamina,
         &a_skills,
         items,
         templates,
         defs,
     )?;
     let skill = defs.skills.get(&key)?;
+    if cost > 0 {
+        if let Ok((_, _, _, mut vitals, ..)) = fighters.get_mut(attacker) {
+            vitals.stamina -= cost as f32;
+        }
+        events.write(GameEvent::StaminaSpent {
+            who: attacker,
+            amount: cost as f32,
+        });
+    }
     let level = a_skills.0.get(&key).map_or(0, |s| s.level as i32);
     let attack_rating = level + a_attributes.get(skill.attribute) + a_bonus.attack;
 
@@ -835,7 +861,9 @@ fn flee(
         return;
     };
     let reply = |text: &str| vec![Outgoing::line(inv.entity, text)];
-    let out = if fighting.get(inv.entity).is_err() {
+    // Where they run, once they've paid for it and broken away.
+    let mut escape = None;
+    let mut out = if fighting.get(inv.entity).is_err() {
         reply("You aren't fighting anyone.")
     } else if let Ok((mut vitals, attributes)) = sheets.get_mut(inv.entity) {
         if vitals.stamina < FLEE_COST {
@@ -844,7 +872,7 @@ fn flee(
             vitals.stamina -= FLEE_COST;
             events.write(GameEvent::StaminaSpent {
                 who: inv.entity,
-                amount: FLEE_COST as u32,
+                amount: FLEE_COST,
             });
             let exits: Vec<String> = view
                 .rooms
@@ -876,21 +904,26 @@ fn flee(
             } else {
                 let pick = dice.range(0, 0..=(exits.len() as i64 - 1)) as usize;
                 commands.entity(inv.entity).remove::<Fighting>();
-                let mut out = reply("You flee in a panic!");
-                out.extend(travel(
-                    inv.entity,
-                    &exits[pick],
-                    &mut players,
-                    &view,
-                    &db,
-                    &mut events,
-                ));
-                out
+                escape = Some(exits[pick].clone());
+                reply("You flee in a panic!")
             }
         }
     } else {
         Vec::new()
     };
+    // Fleeing has already paid its way.
+    if let Some(dir) = escape {
+        out.extend(travel(
+            inv.entity,
+            &dir,
+            &mut players,
+            &view,
+            &db,
+            &mut events,
+            &mut sheets,
+            false,
+        ));
+    }
     deliver(out, &mut players);
 }
 

@@ -76,7 +76,7 @@ Otherwise: "You have nowhere to put the iron key." The reply always says where a
 
 Everything held, worn and inside carried containers counts toward your total Bulk.
 
-- **Encumbered** past 5 + Strength / 2 Bulk. For now this only shows in `inventory`; its effects arrive with stamina.
+- **Encumbered** past 5 + Strength / 2 Bulk: walking costs twice the terrain's stamina, and even paved ground costs ½ (see [Terrain](world.md#terrain)).
 - **Can't carry more** past 10 + Strength / 2 Bulk: you can't pick up, take or be given anything that would push you past it.
 
 At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there's no backpack discount.

@@ -23,7 +23,7 @@ use crate::targeting::{Keywords, Target};
 use crate::world::{
     Bulk, Capacity, ContainerDef, DoorDef, DoorKey, DoorState, Every, ExitDef, ItemDef, ItemKey,
     LockDef, MobDef, MobKey, Refill, RoomDef, RoomIndex, RoomKey, Slot, SpawnDef, SpawnKey,
-    Spawned, Wander, ZONE_ENTRANCE, ZoneDef, format_bulk, without_article,
+    Spawned, Terrain, Wander, ZONE_ENTRANCE, ZoneDef, format_bulk, without_article,
 };
 
 pub struct BuildPlugin;
@@ -83,6 +83,14 @@ impl Plugin for BuildPlugin {
                     "show this room's flags, or set one: indoors (no sky), no_wander (mobs keep out)",
                 ),
                 flag_cmd,
+            )
+            .add_command(
+                build(
+                    "terrain",
+                    "terrain [paved | road | uneven | rough | mud | wading]",
+                    "show or set what this room's ground is like, and so how tiring it is to enter",
+                ),
+                terrain_cmd,
             )
             .add_command(
                 build(
@@ -242,6 +250,7 @@ zone_edit_command!(dig_cmd, dig);
 zone_edit_command!(rename_cmd, rename);
 zone_edit_command!(desc_cmd, describe);
 zone_edit_command!(flag_cmd, room_flag);
+zone_edit_command!(terrain_cmd, room_terrain);
 zone_edit_command!(unlink_cmd, unlink);
 
 fn link_cmd(
@@ -497,6 +506,7 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
                 exits,
                 no_wander: false,
                 indoors: false,
+                terrain: Terrain::Paved,
             },
         );
         room_mut(zone, here)?
@@ -568,6 +578,31 @@ fn room_flag(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> R
             _ => room.no_wander = on,
         }
         Ok(show(room))
+    })
+}
+
+/// `terrain [<kind>]`: show or set the current room's terrain.
+fn room_terrain(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    let show = |terrain: Terrain| {
+        format!(
+            "[{here}] is {} ground: {} stamina to walk in.",
+            terrain.name(),
+            terrain.cost()
+        )
+    };
+    let wanted = inv.args.trim();
+    if wanted.is_empty() {
+        let zone = zone_def(zones, &here.zone)?;
+        let room = zone
+            .rooms
+            .get(&here.room)
+            .ok_or("This room no longer exists in its zone file.")?;
+        return Ok(show(room.terrain));
+    }
+    let terrain = Terrain::parse(wanted).ok_or_else(|| inv.usage_error())?;
+    edit_zone(zones, &here.zone, |zone| {
+        room_mut(zone, here)?.terrain = terrain;
+        Ok(show(terrain))
     })
 }
 

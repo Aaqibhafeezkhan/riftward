@@ -146,6 +146,30 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
 
 Rooms can be flagged with `flag <indoors|no_wander> <on|off>`, or in the zone file. `no_wander` turns wanderers away; Riftwatch marks its shops, the shrine and the guild's quieter rooms. `indoors` hides the sky, so dawn and dusk pass unannounced; the sewers and the town's halls are indoors.
 
+## Terrain
+
+Every room has a `terrain` saying what its ground is like, and walking into a room costs that terrain's stamina:
+
+| Terrain | Stamina | For |
+| --- | --- | --- |
+| `Paved` (the default) | 0 | Streets and floors |
+| `Road` | 0 | Roads |
+| `Uneven` | ½ | Sewer walkways, forest tracks, rough grass |
+| `Rough` | 1 | Rubble, scree, steep slopes |
+| `Mud` | 1½ | Mud |
+| `Wading` | 2 | Water up to the waist |
+
+- **Carrying too much doubles it,** and makes even paved ground cost ½: being encumbered is now felt on every step.
+- **Without the stamina, you can't go:** "You're too exhausted to wade in. Rest a while." Paved ground and roads are free, so no one is ever stranded in a town.
+- **Fleeing pays its own way** (2 stamina, see [Combat](architecture.md#combat)) rather than the terrain's, so a fight can always be escaped while there's stamina for it.
+- **Walking practises Endurance,** like any stamina spent, so long treks build it.
+- **Builders** set it with `terrain <kind>`, or in the zone file. The sewers are uneven, with rough rubble in the Collapsed Gallery and the Warren and waist-deep water in the Flooded Tunnel, Overflow Chamber and Drowned Stair; the Darkwood's roads are roads, and the track to the Hermit's Clearing is uneven.
+- **Terrain will also feed** foraging, tracking, climbing and swimming (see [Skill trees](trees.md#what-the-engine-needs)).
+
+### Weather (planned)
+
+Weather, with the time system, will change the ground. A room can say what it becomes when wet, `when_wet: Mud`, so a dirt road turns to mud in the rain and is exhausting to trudge through until it dries. Rain would come and go by zone, announced to everyone outdoors like dawn and dusk, and dry out over some game hours afterwards.
+
 ## Doors
 
 Status: built, except hidden doors, keys and resets. Doors are open, close, lock, unlock and bash-able today.

@@ -19,6 +19,7 @@ Each document below covers one area and can be read on its own. This page is the
 | --- | --- | --- |
 | [Architecture](architecture.md) | How the server is built today, and the foundation still needed: commands, items and mobs, events, time, combat | Partly built; events and time started |
 | [Skills](skills.md) | Skill trees, active and passive skills, rarity, how skills are acquired, hidden skills | Core built |
+| [Skill trees](trees.md) | The shape every tree shares, the canonical tree list with a first pass at each tree's skills, what the engine needs for them, and the build order | Plan |
 | [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Built |
 | [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, vitals, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
@@ -90,6 +91,7 @@ Designed, waiting on other work:
 | Formulas | Contests compare ratios, never differences, because attributes are uncapped |
 | Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |
 | Magic | Latent until the character knows a tradition's foundation skill; knowing one is being Awakened. Four traditions, each with a teacher in the world who Awakens anyone with Magic 1 (bought with Karma). Everyone starts mundane |
+| Spells | Their own category, not skills: known, never levelled, cast through a school (a skill) whose level plus Magic is their power. They don't add to character level. Adepts have powers (skills) instead. Everything else, weapon techniques included, is a skill |
 | Commands | Players can define aliases; aliases can't shadow built-in commands |
 | Persistence | An item becomes real (saved) the moment a player touches it, and then survives restarts wherever it is. Untouched spawns and mobs reset |
 | Time | A day and night every 3 real hours. No global tick: a one-second heartbeat, and systems that work from elapsed time and timestamps |

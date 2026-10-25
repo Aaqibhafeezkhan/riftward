@@ -23,6 +23,7 @@
         "clearing": (
             name: "Hermit's Clearing",
             description: "The trees draw back around a ring of standing stones, each daubed with faded ochre spirals. A low hut of woven branches leans against the largest stone, and a thin thread of smoke rises from a fire that never quite goes out.",
+            terrain: Uneven,
             exits: {
                 "south": "north_road",
             },
@@ -30,6 +31,7 @@
         "bend": (
             name: "bend",
             description: "The road continues along until it reaches a fork.",
+            terrain: Road,
             exits: {
                 "east": "east_road",
                 "north": "north_road",
@@ -39,6 +41,7 @@
         "east_road": (
             name: "east road",
             description: "An unfinished room. (Use \'desc\' to describe it.)",
+            terrain: Road,
             exits: {
                 "west": "bend",
             },
@@ -46,6 +49,7 @@
         "north_road": (
             name: "North Road",
             description: "The road narrows to a deer track between dark, crowding trees. Somewhere ahead, a thread of woodsmoke hangs in the still air.",
+            terrain: Uneven,
             exits: {
                 "north": "clearing",
                 "south": "bend",
@@ -54,6 +58,7 @@
         "road": (
             name: "Forest Road",
             description: "Twisted trees crowd the path. Something rustles in the undergrowth.",
+            terrain: Road,
             exits: {
                 "north": "bend",
                 "south": "riftwatch:north_gate",

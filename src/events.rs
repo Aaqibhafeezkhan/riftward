@@ -38,7 +38,7 @@ pub enum GameEvent {
     /// A new part of the day began.
     PhaseChanged(Phase),
     /// A character spent stamina, as on an active skill.
-    StaminaSpent { who: Entity, amount: u32 },
+    StaminaSpent { who: Entity, amount: f32 },
     /// A player or mob dodged an attack.
     Dodged { who: Entity },
     /// A player or mob was killed; `mob` is the template of a mob. World events listen; quests

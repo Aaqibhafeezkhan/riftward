@@ -156,6 +156,9 @@ pub enum SkillKind {
         /// Damage before the Strength bonus, low to high, for attacks made without a weapon.
         #[serde(default)]
         damage: Option<(u32, u32)>,
+        /// What each use takes out of the attacker. Basic attacks are free; heavy blows aren't.
+        #[serde(default)]
+        cost: Cost,
     },
     /// While its holder is alive, mobs made from the `affects` template in the same zone fight
     /// better: the Rat King's command over his rats.
@@ -415,8 +418,10 @@ impl Practice<'_, '_> {
                 return Err("You're too tired. Rest a little first.".into());
             }
             vitals.stamina -= n as f32;
-            self.events
-                .write(GameEvent::StaminaSpent { who, amount: n });
+            self.events.write(GameEvent::StaminaSpent {
+                who,
+                amount: n as f32,
+            });
         }
         state.ready_at = elapsed + cooldown;
         Ok(Ready {
