@@ -2,7 +2,31 @@
 // This file is rewritten by in-game builder commands, so comments other than this header are lost.
 (
     name: "Darkwood Forest",
+    mobs: {
+        "hedge_shaman": (
+            name: "the hedge-shaman",
+            keywords: ["hedge", "shaman", "hermit"],
+            here: "The hedge-shaman crouches by a smoking fire, talking quietly to no one you can see.",
+            description: "A wiry figure in layers of moss-dyed cloth, hung with feathers, bones and tiny clay charms. Their eyes are bright and a little wild, and they answer questions you haven't asked aloud.",
+            teaches: ["shamanic:foundation"],
+        ),
+    },
+    spawns: {
+        "hedge_shaman": (
+            mob: "hedge_shaman",
+            room: "clearing",
+            every: Minutes(10),
+            refill: Keep(1),
+        ),
+    },
     rooms: {
+        "clearing": (
+            name: "Hermit's Clearing",
+            description: "The trees draw back around a ring of standing stones, each daubed with faded ochre spirals. A low hut of woven branches leans against the largest stone, and a thin thread of smoke rises from a fire that never quite goes out.",
+            exits: {
+                "south": "north_road",
+            },
+        ),
         "bend": (
             name: "bend",
             description: "The road continues along until it reaches a fork.",
@@ -20,9 +44,10 @@
             },
         ),
         "north_road": (
-            name: "north road",
-            description: "An unfinished room. (Use \'desc\' to describe it.)",
+            name: "North Road",
+            description: "The road narrows to a deer track between dark, crowding trees. Somewhere ahead, a thread of woodsmoke hangs in the still air.",
             exits: {
+                "north": "clearing",
                 "south": "bend",
             },
         ),

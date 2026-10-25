@@ -2,8 +2,9 @@
 //!
 //! Both are data, in `assets/races.ron` and `assets/backgrounds.ron`, read at startup. A race shifts
 //! the base attributes, Earthdawn-style, and grants racial skills; humans get extra Karma instead
-//! of attribute shifts. A background grants a few starting skills, and can be gated by a
-//! [`Condition`]. Skills don't exist yet, so the grants are recorded for when they do.
+//! of attribute shifts. A background is what a character did before they were an adventurer: a
+//! little practice in everyday skills, and the tools of that life, but never fighting or magic.
+//! It can be gated by a [`Condition`]. Skills not yet written as data are granted once they are.
 
 use std::collections::BTreeMap;
 
@@ -233,7 +234,11 @@ pub fn background_menu(
     race: &str,
     attributes: &Attributes,
 ) -> String {
-    let facts = Facts { attributes, race };
+    let facts = Facts {
+        attributes,
+        race,
+        skills: None,
+    };
     let mut text = String::from("\r\nChoose your background, the life you led before:\r\n");
     for (i, background) in backgrounds.0.iter().enumerate() {
         let open = background.requires.as_ref().is_none_or(|c| c.met(&facts));
@@ -266,7 +271,11 @@ pub fn background_refusal(
     race: &str,
     attributes: &Attributes,
 ) -> Option<String> {
-    let facts = Facts { attributes, race };
+    let facts = Facts {
+        attributes,
+        race,
+        skills: None,
+    };
     let requires = background.requires.as_ref()?;
     (!requires.met(&facts)).then(|| {
         format!(
@@ -344,6 +353,7 @@ mod tests {
                 let facts = Facts {
                     attributes: &attributes,
                     race: &race.id,
+                    skills: None,
                 };
                 needs.is_none_or(|c| c.met(&facts))
             });
@@ -357,11 +367,19 @@ mod tests {
         assert!(problems.is_empty(), "problems:\n{}", problems.join("\n"));
     }
 
-    /// Every starting item is a real item template, and a background's weapon comes with the
-    /// skill to use it.
+    /// Every starting item is a real item template.
     #[test]
     fn starting_kits_are_real_and_usable() {
         use crate::world::{ItemDef, ItemKey, ZoneDef};
+        // Backgrounds teach no fighting or magic; those come from trainers.
+        let forbidden = [
+            "swordplay",
+            "knives",
+            "axes",
+            "hammers",
+            "staves",
+            "brawling",
+        ];
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/zones");
         let mut items: std::collections::HashMap<ItemKey, ItemDef> = Default::default();
         for entry in std::fs::read_dir(&dir).unwrap() {
@@ -382,19 +400,15 @@ mod tests {
             }
         }
         for background in &backgrounds {
+            for skill in &background.skills {
+                let tree = skill.split_once(':').map_or(skill.as_str(), |(t, _)| t);
+                if forbidden.contains(&tree) || crate::trainers::tradition_of(skill).is_some() {
+                    problems.push(format!("{}: grants {skill}", background.id));
+                }
+            }
             for template in &background.items {
-                match items.get(&ItemKey::parse(template, "")) {
-                    None => problems.push(format!("{}: no item {template}", background.id)),
-                    Some(def) => {
-                        if let Some(weapon) = &def.weapon
-                            && !background.skills.contains(&weapon.skill)
-                        {
-                            problems.push(format!(
-                                "{}: {template} needs {}, which it doesn't grant",
-                                background.id, weapon.skill
-                            ));
-                        }
-                    }
+                if !items.contains_key(&ItemKey::parse(template, "")) {
+                    problems.push(format!("{}: no item {template}", background.id));
                 }
             }
         }

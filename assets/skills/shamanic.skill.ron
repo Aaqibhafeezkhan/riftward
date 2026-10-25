@@ -1,0 +1,15 @@
+// A magical tradition. Its foundation skill is what Awakens a character to it; it requires latent
+// talent (Magic 1), and is taught by the tradition's teachers in the world.
+(
+    name: "Shamanic",
+    rarity: Uncommon,
+    attribute: Charisma,
+    skills: {
+        // The world of spirits, seen and spoken to: the root of all Shamanic magic.
+        "foundation": (
+            name: "Spirit Sight",
+            kind: Passive(triggers: []),
+            requires: Stat(Magic, 1),
+        ),
+    },
+)

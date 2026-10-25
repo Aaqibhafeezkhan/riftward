@@ -356,6 +356,9 @@ pub struct MobDef {
     /// Attacks players who come near, instead of only fighting back.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub aggressive: bool,
+    /// Skills it teaches (`tree:skill`), to students who meet their requirements.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub teaches: Vec<String>,
 }
 
 impl MobDef {
@@ -371,6 +374,7 @@ impl MobDef {
             attack: None,
             health: None,
             aggressive: false,
+            teaches: Vec::new(),
         }
     }
 

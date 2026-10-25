@@ -1,16 +1,19 @@
-// Backgrounds, in the order the creation menu shows them: the life a character led before play.
-// Each grants starting skills once skills exist, and can require a condition (the same language
-// as skills: Stat, Race, All, Any, Not). Attributes start at 3, so a gate of 4 is one point bought
-// with Karma, unless the character's race already gives it. Each gives its kit of `items` (zone:item)
-// on top of everyone's plain clothes and belt pouch; a background's weapon comes with its skill,
-// since an untrained weapon is no better than fists.
+// Backgrounds, in the order the creation menu shows them: what a character did before they were
+// an adventurer. A background gives a little practice in everyday skills from that life (anyone
+// can learn them later) and the tools of that life, but never fighting or magic: every adventurer
+// learns those the same way, from trainers. Skills that don't exist as data yet are granted once
+// they do.
+//
+// `requires` uses the condition language (Stat, Race, Skill, All, Any, Not). Attributes start at
+// 3, so a gate of 4 is one point bought with Karma, unless the character's race already gives it.
+// `items` (zone:item) come on top of everyone's plain clothes and belt pouch.
 [
     (
         id: "soldier",
         name: "Soldier",
-        summary: "You drilled, marched and fought in someone's army.",
+        summary: "You drilled, marched and stood your watch in someone's army.",
         requires: Stat(Body, 4),
-        skills: ["swordplay:basics", "endurance:toughness"],
+        skills: ["athletics:toughness", "healing:first_aid"],
         items: ["riftwatch:short_sword"],
     ),
     (
@@ -18,21 +21,21 @@
         name: "Poacher",
         summary: "You hunted where you weren't allowed to.",
         requires: Stat(Agility, 4),
-        skills: ["archery:basics", "stealth:basics", "knives:basics"],
+        skills: ["stealth:basics", "survival:tracking"],
         items: ["riftwatch:knife"],
     ),
     (
         id: "urchin",
         name: "Street Urchin",
         summary: "You grew up on the streets, living on what you could take.",
-        skills: ["stealth:basics", "thievery:pickpocketing", "thievery:lockpicking", "knives:basics"],
+        skills: ["thievery:lockpicking", "thievery:pickpocketing", "stealth:basics"],
         items: ["riftwatch:knife", "riftwatch:lockpicks"],
     ),
     (
         id: "farmhand",
         name: "Farmhand",
         summary: "Fields, beasts and long days of honest work.",
-        skills: ["survival:foraging", "brawling:basics", "animals:handling", "axes:basics"],
+        skills: ["survival:foraging", "animals:handling"],
         items: ["riftwatch:hatchet"],
     ),
     (
@@ -40,7 +43,7 @@
         name: "Sailor",
         summary: "You worked the decks of riverboats and ships.",
         requires: Stat(Strength, 4),
-        skills: ["athletics:swimming", "athletics:climbing", "knives:basics"],
+        skills: ["athletics:swimming", "athletics:climbing"],
         items: ["riftwatch:knife"],
     ),
     (
@@ -48,15 +51,15 @@
         name: "Merchant's Child",
         summary: "You grew up behind a counter, learning the worth of things.",
         requires: Stat(Charisma, 4),
-        skills: ["trade:haggling", "trade:appraisal", "staves:basics"],
-        items: ["riftwatch:quarterstaff"],
+        skills: ["trade:haggling", "trade:appraisal"],
+        items: ["riftwatch:knife"],
     ),
     (
         id: "smith",
         name: "Smith's Apprentice",
         summary: "Years at the forge, hammering iron into shape.",
         requires: Stat(Strength, 4),
-        skills: ["crafting:smithing", "hammers:basics"],
+        skills: ["crafting:smithing"],
         items: ["riftwatch:smiths_hammer"],
     ),
     (
@@ -64,7 +67,7 @@
         name: "Herbalist's Apprentice",
         summary: "You gathered, dried and brewed under a healer's eye.",
         requires: Stat(Intuition, 4),
-        skills: ["nature:herbalism", "healing:first_aid", "knives:basics"],
+        skills: ["nature:herbalism", "healing:first_aid"],
         items: ["riftwatch:knife"],
     ),
     (
@@ -72,7 +75,7 @@
         name: "Minstrel",
         summary: "You sang for your supper from town to town.",
         requires: Stat(Charisma, 4),
-        skills: ["performance:basics", "lore:basics", "knives:basics"],
+        skills: ["performance:basics", "lore:basics"],
         items: ["riftwatch:knife"],
     ),
     (
@@ -80,7 +83,7 @@
         name: "Scholar",
         summary: "You studied old books under older teachers.",
         requires: Stat(Logic, 4),
-        skills: ["lore:basics", "crafting:scribing", "staves:basics"],
+        skills: ["lore:basics", "crafting:scribing"],
         items: ["riftwatch:quarterstaff"],
     ),
     (
@@ -88,39 +91,7 @@
         name: "River Pilot",
         summary: "You steered boats down the great rivers, as your clan always has.",
         requires: Race("tskrang"),
-        skills: ["sailing:basics", "athletics:swimming", "knives:basics"],
+        skills: ["sailing:basics", "athletics:swimming"],
         items: ["riftwatch:knife"],
-    ),
-    (
-        id: "acolyte",
-        name: "Acolyte",
-        summary: "You served a temple, and your faith answered. (Awakened: Divine)",
-        requires: All([Stat(Magic, 1), Stat(Willpower, 4)]),
-        skills: ["divine:foundation", "staves:basics"],
-        items: ["riftwatch:quarterstaff"],
-    ),
-    (
-        id: "mystic",
-        name: "Mystic",
-        summary: "Spirits spoke to you before you could speak. (Awakened: Shamanic)",
-        requires: All([Stat(Magic, 1), Stat(Intuition, 4)]),
-        skills: ["shamanic:foundation", "staves:basics"],
-        items: ["riftwatch:quarterstaff"],
-    ),
-    (
-        id: "apprentice",
-        name: "Apprentice",
-        summary: "You studied magic as a discipline under a master. (Awakened: Hermetic)",
-        requires: All([Stat(Magic, 1), Stat(Logic, 4)]),
-        skills: ["hermetic:foundation", "staves:basics"],
-        items: ["riftwatch:quarterstaff"],
-    ),
-    (
-        id: "adept",
-        name: "Adept",
-        summary: "Your magic flows through your own body. (Awakened: Adept)",
-        requires: All([Stat(Magic, 1), Stat(Body, 4)]),
-        skills: ["adept:foundation"],
-        items: [], // adepts fight with their bodies
     ),
 ]

@@ -1,0 +1,15 @@
+// A magical tradition. Its foundation skill is what Awakens a character to it; it requires latent
+// talent (Magic 1), and is taught by the tradition's teachers in the world.
+(
+    name: "Adept",
+    rarity: Uncommon,
+    attribute: Body,
+    skills: {
+        // Magic turned inward, through breath and body: the root of all Adept powers.
+        "foundation": (
+            name: "Inner Discipline",
+            kind: Passive(triggers: []),
+            requires: Stat(Magic, 1),
+        ),
+    },
+)

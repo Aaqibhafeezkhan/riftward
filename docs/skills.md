@@ -139,11 +139,11 @@ Every skill can be taught, and every route checks the same thing: the learner mu
 
 | Route | Available for | Who or what | Notes |
 | --- | --- | --- | --- |
-| Mob trainer | `source: Trainer` | Trainers placed in rooms, each with a fixed list | Reliable; a reason to travel |
+| Mob trainer | `source: Trainer` | Trainers placed in rooms, each with a fixed list (`teaches` on the mob template) | Reliable; a reason to travel. *Built:* `learn` lists a trainer's lessons and `learn <skill>` takes one, checking the skill's `requires`. Free until there's money. The drill sergeant teaches every weapon's basics; each magic tradition's teacher Awakens students with Magic 1 |
 | Player teacher | All skills | A player at the skill's `teach_level`, or at mastery for `Loot` skills | `teach <player> <skill>`, then the student types `accept`; both in the same room |
 | Loot | Mostly `source: Loot` | A scroll or tome item; using it teaches the skill and consumes it | Tradeable, so it feeds an economy |
 | Epiphany | Hidden skills | The character meets the unlock conditions, and the trigger if one is set | See [Hidden skills](#hidden-skills) |
-| Starting | Universal, racial and background skills | Granted at character creation | See [Races and backgrounds](characters.md) |
+| Starting | Universal, racial and background skills | Granted at character creation | Backgrounds give everyday skills only, never fighting or magic; see [Races and backgrounds](characters.md) |
 
 **Loot skills spread through masters.** A `Loot` skill enters the world only as a drop. The first owner must reach mastery, through the longest gain cooldowns, before anyone can learn it from them. New loot skills therefore stay scarce for a long time, and their first masters become well known.
 

@@ -1,0 +1,15 @@
+// A magical tradition. Its foundation skill is what Awakens a character to it; it requires latent
+// talent (Magic 1), and is taught by the tradition's teachers in the world.
+(
+    name: "Hermetic",
+    rarity: Uncommon,
+    attribute: Logic,
+    skills: {
+        // Magic as a discipline: the formulae and correspondences at the root of all Hermetic magic.
+        "foundation": (
+            name: "Hermetic Principles",
+            kind: Passive(triggers: []),
+            requires: Stat(Magic, 1),
+        ),
+    },
+)

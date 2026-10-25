@@ -23,6 +23,7 @@ mod spawns;
 mod targeting;
 mod telnet;
 mod time;
+mod trainers;
 mod vitals;
 mod world;
 mod world_events;
@@ -72,6 +73,7 @@ fn main() {
             skills::SkillsPlugin,
             combat::CombatPlugin,
             world_events::WorldEventsPlugin,
+            trainers::TrainersPlugin,
         ))
         .run();
 }

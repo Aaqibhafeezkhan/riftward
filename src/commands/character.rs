@@ -8,6 +8,8 @@ use crate::characters::{Backgrounds, Races};
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
 use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line};
+use crate::skills::Skills;
+use crate::trainers;
 use crate::vitals::Vitals;
 
 /// The longest description a character can have.
@@ -16,11 +18,11 @@ const MAX_DESCRIPTION_LEN: usize = 600;
 pub fn score(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
-    sheets: Query<(&Attributes, &Vitals)>,
+    sheets: Query<(&Attributes, &Vitals, &Skills)>,
     races: Res<Races>,
     backgrounds: Res<Backgrounds>,
 ) {
-    let (Ok((_, _, Some(player), _)), Ok((attributes, vitals))) =
+    let (Ok((_, _, Some(player), _)), Ok((attributes, vitals, skills))) =
         (players.get(inv.entity), sheets.get(inv.entity))
     else {
         return;
@@ -30,7 +32,8 @@ pub fn score(
         .map_or(player.background.clone(), |b| b.name.clone());
     let who = format!("{} {background}", races.name(&player.race));
     let current = (vitals.health.floor() as i32, vitals.stamina.floor() as i32);
-    let text = attributes::score_text(&player.name, who.trim(), attributes, current);
+    let tradition = trainers::awakened(skills);
+    let text = attributes::score_text(&player.name, who.trim(), attributes, current, tradition);
     deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
 }
 

@@ -168,11 +168,11 @@ Each basic skill has a home in town, so trainers can be placed once mobs exist. 
 
 | Room | Trainers (planned) |
 | --- | --- |
-| Training Yard | Basic combat: swordplay, brawling, shields |
+| Training Yard | The drill sergeant: the basics of every weapon (Swordplay, Knife, Axe, Hammer and Staff Fighting). *Built* |
 | Archery Butts | Archery |
-| Guild Archive | Lore, and the public Hermetic **Study** path to Awakening (the grimoire library in [Magic](magic.md#which-paths-are-known)) |
+| Guild Archive | The magister, who Awakens Hermetic students (*built*); later Lore, and the self-taught **Study** path |
 | Herbalist's Stall | Herbalism, foraging |
-| Wayside Shrine | Healing, and the Divine **Devotion** path |
+| Wayside Shrine | The keeper of the shrine, who Awakens Divine students (*built*); later Healing, and the **Devotion** path |
 | Back Alley | Stealth and lockpicking, from someone who'd rather not be found |
 | Tinkers' Corner | Crafting and repair |
 | Contract Hall | Not a trainer: the guild's contract board and clerk (see [Quests and the Adventurers' Guild](quests.md)) |

@@ -56,41 +56,40 @@ Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to b
 
 ## Backgrounds
 
-A background is a life before play: a few starting skills and, for some, a magical tradition. They're in `assets/backgrounds.ron`, in menu order. Any background can be gated by a `requires` condition, in the shared [condition language](#conditions). With attributes starting at 3, a gate of 4 is one point bought with Karma, unless the character's race already gives it.
+A background is **what a character did before they were an adventurer**: a little practice in the everyday skills of that life, and its tools. It never teaches fighting or magic. Every adventurer learns those the same way, from [trainers](skills.md#acquiring-skills) in the world, so a farmhand can become a swordsman and a soldier a shaman; the past colours a character without deciding what they become. That keeps backgrounds from turning into classes.
 
-| Background | Requires | Starting skills (names to tune) |
-| --- | --- | --- |
-| Soldier | Body 4 | Swordplay basics, Toughness |
-| Poacher | Agility 4 | Archery basics, Stealth basics |
-| Street Urchin | Nothing | Stealth basics, Pickpocketing, Lockpicking |
-| Farmhand | Nothing | Foraging, Brawling basics, Animal handling |
-| Sailor | Strength 4 | Swimming, Climbing, Knife basics |
-| Merchant's Child | Charisma 4 | Haggling, Appraisal |
-| Smith's Apprentice | Strength 4 | Smithing, Hammer basics |
-| Herbalist's Apprentice | Intuition 4 | Herbalism, First aid |
-| Minstrel | Charisma 4 | Performance, Lore |
-| Scholar | Logic 4 | Lore, Scribing |
-| River Pilot | T'skrang | Sailing, Swimming |
-| Acolyte (Awakened: Divine) | Magic 1 and Willpower 4 | The Divine foundation skill |
-| Mystic (Awakened: Shamanic) | Magic 1 and Intuition 4 | The Shamanic foundation skill |
-| Apprentice (Awakened: Hermetic) | Magic 1 and Logic 4 | The Hermetic foundation skill |
-| Adept (Awakened: Adept) | Magic 1 and Body 4 | The Adept foundation skill |
+They're in `assets/backgrounds.ron`, in menu order. Any background can be gated by a `requires` condition, in the shared [condition language](#conditions). With attributes starting at 3, a gate of 4 is one point bought with Karma, unless the character's race already gives it.
+
+| Background | Requires | Everyday skills | Kit |
+| --- | --- | --- | --- |
+| Soldier | Body 4 | Toughness, First Aid | A short sword |
+| Poacher | Agility 4 | Stealth, Tracking | A knife |
+| Street Urchin | Nothing | Lockpicking, Pickpocketing, Stealth | A knife, lockpicks |
+| Farmhand | Nothing | Foraging, Animal Handling | A hatchet |
+| Sailor | Strength 4 | Swimming, Climbing | A knife |
+| Merchant's Child | Charisma 4 | Haggling, Appraisal | A knife |
+| Smith's Apprentice | Strength 4 | Smithing | A smith's hammer |
+| Herbalist's Apprentice | Intuition 4 | Herbalism, First Aid | A knife |
+| Minstrel | Charisma 4 | Performance, Lore | A knife |
+| Scholar | Logic 4 | Lore, Scribing | A quarterstaff |
+| River Pilot | T'skrang | Sailing, Swimming | A knife |
 
 ```ron
 (
-    id: "acolyte",
-    name: "Acolyte",
-    summary: "You served a temple, and your faith answered. (Awakened: Divine)",
-    requires: All([Stat(Magic, 1), Stat(Willpower, 4)]),
-    skills: ["divine:foundation"],
+    id: "urchin",
+    name: "Street Urchin",
+    summary: "You grew up on the streets, living on what you could take.",
+    skills: ["thievery:lockpicking", "thievery:pickpocketing", "stealth:basics"],
+    items: ["riftwatch:knife", "riftwatch:lockpicks"],
 ),
 ```
 
-- **Gates follow what a background implies,** and must be affordable from starting Karma. A test checks that every background is open to at least one race spending its starting Karma on the gate.
+- **Everyday skills, a head start.** They're skills anyone can learn later; a background only means starting with them. Ones not yet written as data are granted when they are. A test checks no background grants a weapon skill or a tradition's foundation.
+- **The kit is the tools of that life,** on top of everyone's plain clothes and belt pouch. A weapon in the kit is usable untrained, with Brawling's aim and the weapon's damage (see [Combat](architecture.md#combat)), until its owner takes a lesson. The kit is given once, when a character is first made: worn if it's worn, in hand while hands are free, otherwise in the belt pouch.
+- **Gates follow what a background implies,** and must be affordable from starting Karma. A test checks every background is open to at least one race spending its starting Karma on the gate.
 - **Two backgrounds have no gate,** Street Urchin and Farmhand, so every build has somewhere to start.
-- **Every background has a starting kit** (`items`), on top of everyone's plain clothes and belt pouch: a Soldier's short sword, an Urchin's knife and lockpicks, a Farmhand's hatchet, a Smith's hammer, a Scholar's or Awakened caster's quarterstaff, a knife for most others, and nothing for the Adept, who fights with their body. A background's weapon comes with its skill (a test checks this), since an untrained weapon fights no better than its holder's Brawling. The kit is given once, when a character is first made: worn if it's worn, in hand while hands are free, otherwise in the belt pouch.
 - **Race gates allow cultural backgrounds,** such as the t'skrang River Pilot.
-- **Awakened backgrounds** require Magic 1 and grant the tradition's foundation casting skill, which is what Awakens the character. They grant no Magic themselves: a would-be caster pays for their talent with starting Karma, and starts with their faith or craft rather than a sword.
+- **No background is magical.** Everyone starts mundane; Magic bought at creation is latent talent, and a character is Awakened in play by finding a tradition's teacher (see [Magic](magic.md#how-to-awaken)).
 
 ## Conditions
 
@@ -108,6 +107,6 @@ Players read them as "Magic 1 and Willpower 4", or "T'skrang".
 
 - [ ] **Racial skill details:** are the proposed racial skills right for each race?
 - [ ] **Exact skill grants** for each background, once skill trees exist.
-- [ ] **Are Awakened backgrounds balanced?** They cost at least 1 starting Karma (for Magic 1) and grant fewer practical skills.
+- [ ] **The Adept's weapon:** Adepts start with nothing to hold, so a fresh Adept brawls for 1–3. To come with the Adept tradition's own tree: an unarmed attack skill, or hand wraps used with Brawling, so they start as well armed as anyone.
 - [ ] **Universal starting skills:** basic attack only, or also a survival skill such as Foraging?
 - [x] **Starting equipment by background:** built; see [Backgrounds](#backgrounds).

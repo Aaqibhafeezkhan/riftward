@@ -1,6 +1,6 @@
 # Magic and Awakening
 
-[Design summary](README.md) · Status: designed; Magic can be raised as latent talent, casting skills are not built
+[Design summary](README.md) · Status: Awakening is built (Magic as latent talent, a teacher for each tradition, foundation skills); casting is not
 
 Every character starts at Magic 0 and can raise it with Karma from creation onward. On its own, Magic is **latent talent**: it does nothing until the character knows a **casting skill**, a tradition's foundation skill. Knowing one is what it means to be Awakened, and which one decides the character's tradition.
 
@@ -11,10 +11,22 @@ Every character starts at Magic 0 and can raise it with Karma from creation onwa
 
 ## How to Awaken
 
-1. **At character creation,** through an Awakened background such as Acolyte or Mystic. These backgrounds require Magic 1 or more, bought with starting Karma, and grant the tradition's foundation skill (see [Backgrounds](characters.md#backgrounds)). Without one, any Magic bought at creation stays latent.
-2. **A tradition's self-taught path:** the foundation skill is a [hidden skill](skills.md#hidden-skills) learned by epiphany when the path's conditions are met. See the table below.
-3. **Apprenticeship:** a master teaches the foundation skill. They must have mastered it, the same rule as teaching a loot skill. The apprentice needs only the skill's requirements, starting with Magic 1. There is no limit on apprentices: the time it takes to reach mastery is the limit.
+Every character starts mundane. Awakening happens in play, like learning a sword:
+
+1. **Find a tradition's teacher.** Each tradition has one in the world, who teaches its foundation skill to anyone with latent talent (Magic 1 or more), the same way the drill sergeant teaches Swordplay (`learn`, see [Trainers](skills.md#acquiring-skills)). *Built:*
+
+   | Tradition | Teacher | Where |
+   | --- | --- | --- |
+   | Divine | The keeper of the shrine | Riftwatch, the Wayside Shrine |
+   | Hermetic | The magister | Riftwatch, the Guild Archive |
+   | Shamanic | The hedge-shaman | The Darkwood, the Hermit's Clearing north of the North Road |
+   | Adept | An old ascetic | Riftwatch, the Watchtower |
+
+2. **A tradition's self-taught path:** the foundation skill is a [hidden skill](skills.md#hidden-skills) learned by epiphany when the path's conditions are met. See the table below. Rarer and slower, for those who find it.
+3. **Apprenticeship to a player:** a master teaches the foundation skill. They must have mastered it, the same rule as teaching a loot skill. The apprentice needs only the skill's requirements, starting with Magic 1.
 4. **Ordeal:** surviving a near-death event with high Willpower and latent Magic. The epiphany grants the foundation skill of the tradition matching the character's strongest tradition attribute.
+
+Being Awakened shows in `score` ("Magic 1 (Awakened: Divine)"). The foundation skills exist and Awaken; casting, Drain and spells are still to come.
 
 ## Traditions
 
@@ -29,7 +41,7 @@ The tradition decides which magic trees open: adepts get physical-magic trees (e
 
 ## Which paths are known
 
-**Study is public; the rest are rumours.** The library and its grimoire are a known quest, slow but certain, so no one who wants to play a magic user is locked out. The other self-taught paths are hidden epiphanies that players piece together.
+**Teachers are the open door; self-taught paths are rumours.** Anyone with talent who finds a teacher can Awaken, so no one who wants to play a magic user is locked out; the hedge-shaman takes a walk into the Darkwood to find. Study at the Guild Archive is the best known self-taught path; the others are hidden epiphanies that players piece together.
 
 ## Possible later additions
 

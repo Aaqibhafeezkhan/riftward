@@ -224,9 +224,15 @@ impl Attributes {
     }
 }
 
-/// The `score` command. `who` is what the character is, like "Troll Street Urchin", and `current`
-/// their current health and stamina.
-pub fn score_text(name: &str, who: &str, attributes: &Attributes, current: (i32, i32)) -> String {
+/// The `score` command. `who` is what the character is, like "Troll Street Urchin", `current`
+/// their current health and stamina, and `tradition` the magic they're Awakened to, if any.
+pub fn score_text(
+    name: &str,
+    who: &str,
+    attributes: &Attributes,
+    current: (i32, i32),
+    tradition: Option<&str>,
+) -> String {
     let row = |label: &str, list: &[Attribute]| {
         let cells: Vec<_> = list
             .iter()
@@ -235,11 +241,11 @@ pub fn score_text(name: &str, who: &str, attributes: &Attributes, current: (i32,
         format!("  {label:<10}{}", cells.join("    "))
     };
     use Attribute::*;
-    // Casting skills don't exist yet, so any Magic is still latent.
-    let magic = if attributes.get(Magic) > 0 {
-        "  (latent: no casting skill)"
-    } else {
-        ""
+    // Magic does nothing until a tradition's teacher Awakens it.
+    let magic = match (tradition, attributes.get(Magic) > 0) {
+        (Some(tradition), _) => format!("  (Awakened: {tradition})"),
+        (None, true) => "  (latent: not yet Awakened)".to_string(),
+        (None, false) => String::new(),
     };
     let karma = attributes.karma_unspent();
     let mut text = format!(

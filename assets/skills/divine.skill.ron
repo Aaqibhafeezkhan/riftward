@@ -1,0 +1,15 @@
+// A magical tradition. Its foundation skill is what Awakens a character to it; it requires latent
+// talent (Magic 1), and is taught by the tradition's teachers in the world.
+(
+    name: "Divine",
+    rarity: Uncommon,
+    attribute: Intuition,
+    skills: {
+        // A god's answer to your devotion: the root of all Divine magic.
+        "foundation": (
+            name: "Faith",
+            kind: Passive(triggers: []),
+            requires: Stat(Magic, 1),
+        ),
+    },
+)

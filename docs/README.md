@@ -26,7 +26,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Designed |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
-| [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds, Awakened backgrounds, conditions | Built |
+| [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds as past lives, conditions | Built |
 
 ## What exists today
 
@@ -41,7 +41,8 @@ Each document below covers one area and can be read on its own. This page is the
 - Doors and trapdoors: `open`, `close`, `lock`, `unlock`, `bash`, by direction or name, and the builder `door` command.
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.
-- Character creation: race, starting Karma, background (15, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
+- Character creation: race, starting Karma, background (11 past lives, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
+- Trainers: `learn` from mobs who teach. The drill sergeant teaches every weapon; a teacher for each magic tradition Awakens those with latent talent.
 - Attributes, starting Karma, `raise`, `score`, `describe`, and the Luck-aware `Dice` service.
 - Skills: trees as data, use-based progression with practice and cooldowns, active skills (`use`, `pick` for Lockpicking) and passive ones (Endurance), starting skills, character levels that earn Karma, `skills`.
 - World events: saved world flags, and events in zone files that react to mobs entering zones and dying. A rat breakout raises the Rat King, whose aura toughens every sewer rat until he dies.
@@ -82,13 +83,13 @@ Designed, waiting on other work:
 | Skill kinds | Active (invoked with `use <skill> <target>`) and passive (progress on trigger events, usually outcomes) |
 | Death | A player's corpse keeps everything they carried, where they fell, for 30 minutes (surviving restarts); they wake at the Wayside Shrine, hurt. No PvP yet |
 | Combat | Made entirely of skills. Everyone starts with a basic attack skill; mobs fight with skills too. Each round a fighter's auto-attack fires on its own: the most basic attack they know, unless they've chosen another. Other skills are used by command |
-| Starting skills | Granted by race and background, plus universal skills. Racial abilities are skills that require the race. Backgrounds can require attributes or a race |
+| Starting skills | Granted by race and background, plus universal skills (Brawling, Dodge, Endurance). Racial abilities are skills that require the race. Backgrounds are past lives: everyday skills and tools, never fighting or magic, which everyone learns from trainers. Backgrounds can require attributes or a race |
 | Races | The eight Earthdawn races: Dwarf, Elf, Human, Obsidiman, Ork, Troll, T'skrang, Windling. Earthdawn-style attribute shifts that total +3 for every race; humans get +3 Karma instead |
 | Hidden skills | Learned by epiphany when conditions are met, with an optional trigger |
 | Attributes | Ten, uncapped, Shadowrun and Earthdawn flavoured. Base 3 (Luck 1, Magic 0), shifted by race, with 10 Karma to spend, which can go on Magic as latent talent |
 | Formulas | Contests compare ratios, never differences, because attributes are uncapped |
 | Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |
-| Magic | Latent until the character knows a casting skill; knowing one is being Awakened. Four traditions; masters can teach casting skills; Awakened backgrounds grant one but require Magic 1, bought with starting Karma |
+| Magic | Latent until the character knows a tradition's foundation skill; knowing one is being Awakened. Four traditions, each with a teacher in the world who Awakens anyone with Magic 1 (bought with Karma). Everyone starts mundane |
 | Commands | Players can define aliases; aliases can't shadow built-in commands |
 | Persistence | An item becomes real (saved) the moment a player touches it, and then survives restarts wherever it is. Untouched spawns and mobs reset |
 | Time | A day and night every 3 real hours. No global tick: a one-second heartbeat, and systems that work from elapsed time and timestamps |
@@ -104,4 +105,4 @@ Designed, waiting on other work:
 Each document lists its own open questions. These are the ones that shape the most:
 
 1. **What stops one character learning every tree?** A total cap on skill levels, skill slots, or rising costs. See [Skills](skills.md#open-questions).
-2. **Are Awakened backgrounds balanced,** and what exactly does each background grant? See [Races and backgrounds](characters.md#open-questions).
+2. **What exactly does each background grant,** and what does each tree hold? See [Races and backgrounds](characters.md#open-questions).
