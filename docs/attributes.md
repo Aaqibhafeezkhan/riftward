@@ -20,7 +20,7 @@ Characters have ten uncapped attributes, raised with Karma. Skills say what a ch
 | Special | Magic | Starts at 0; latent until the character knows a casting skill (see [Magic](magic.md)) |
 
 - **Starting values:** attributes start from a base of 3 (Luck 1, Magic 0), shifted by race (see [Races](characters.md#races)), and every character starts with 10 Karma to spend (humans 13). Karma can go on Magic too, as latent talent.
-- **Derived values:** health 8 + Body / 2, stamina 8 + Willpower / 2, initiative Reaction + Intuition, carrying capacity from Strength + Body.
+- **Derived values:** health 8 + Body / 2, stamina 8 + Willpower / 2, initiative Reaction + Intuition, carrying capacity from Strength + Body. Health and stamina are maximums; see [Vitals](#vitals) for the current values.
 - **Attributes never go down** and Karma is never refunded, except through rare in-world events.
 
 Players see their attributes with `score` and spend Karma with `raise <attribute>`, which accepts any unambiguous prefix (`raise agi`). Admins can set an online player's attribute with `setattr <player> <attribute> <rating>`, which ignores Karma and is meant for testing.
@@ -69,11 +69,24 @@ dice.pick(luck, &loot_table)         // weighted table, worst to best
 dice.contest(luck_a, luck_b, p)      // both sides' Luck
 ```
 
+## Vitals
+
+Each character has **current** health and stamina, below or at the maximums above (`src/vitals.rs`).
+
+- **Recovery** happens on the one-second heartbeat, worked out from elapsed time: health refills from empty in 10 minutes, stamina in 2. Both are tuning values, and will later depend on resting, food and skills.
+- **It continues offline.** Vitals are saved with the time they were saved (at logout, and every minute), and caught up at the next login, so a player who logs out hurt comes back rested.
+- **Fractions count.** Current values are kept as fractions and shown rounded down, so slow recovery still adds up.
+- **A maximum that goes down** (should one ever) clamps the current value to it.
+- **Seen in** `score` (`Health 7/10`) and the status prompt, `<7/10hp 9/9st>`. `prompt <format>` changes it, with `%h`/`%H` for current and maximum health, `%s`/`%S` for stamina and `%%` for a percent sign; `prompt` alone goes back to the default.
+- **Admins** can set someone's current vitals with `setvitals <player> <health> [<stamina>]`, for testing until combat can do it.
+- **Not yet:** what spends stamina (active skills, running, carrying too much) and what happens at 0 health; both arrive with combat.
+
 ## Data
 
 | Table | Columns | Notes |
 | --- | --- | --- |
 | `character_attributes` | `character_id`, `attribute`, `rating` | Every rating, written when creation finishes; attributes without a row are at their race's start |
+| `characters` | `health`, `stamina`, `vitals_at`, `prompt` | Current vitals when saved, and when (`NULL` means full); their prompt format (`NULL` means the default) |
 
 An `Attributes` component on each player entity, loaded at login, holds the ratings in memory.
 

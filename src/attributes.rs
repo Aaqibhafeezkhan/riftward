@@ -216,8 +216,9 @@ impl Attributes {
     }
 }
 
-/// The `score` command. `who` is what the character is, like "Troll Street Urchin".
-pub fn score_text(name: &str, who: &str, attributes: &Attributes) -> String {
+/// The `score` command. `who` is what the character is, like "Troll Street Urchin", and `current`
+/// their current health and stamina.
+pub fn score_text(name: &str, who: &str, attributes: &Attributes, current: (i32, i32)) -> String {
     let row = |label: &str, list: &[Attribute]| {
         let cells: Vec<_> = list
             .iter()
@@ -234,11 +235,13 @@ pub fn score_text(name: &str, who: &str, attributes: &Attributes) -> String {
     };
     let karma = attributes.karma_unspent();
     let mut text = format!(
-        "\x1b[1m{name}\x1b[0m, {who}\r\n{}\r\n{}\r\n{}{magic}\r\n\r\n  Health {}    Stamina {}    Initiative {}\r\n  Karma: {karma} unspent",
+        "\x1b[1m{name}\x1b[0m, {who}\r\n{}\r\n{}\r\n{}{magic}\r\n\r\n  Health {}/{}    Stamina {}/{}    Initiative {}\r\n  Karma: {karma} unspent",
         row("Physical", &[Body, Agility, Reaction, Strength]),
         row("Mental", &[Willpower, Logic, Intuition, Charisma]),
         row("Special", &[Luck, Magic]),
+        current.0,
         attributes.health(),
+        current.1,
         attributes.stamina(),
         attributes.initiative(),
     );

@@ -35,6 +35,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
 | `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
+| `vitals.rs` | Current health and stamina, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
@@ -119,7 +120,8 @@ Started.
 - **The game clock** runs eight times faster than real time: a full day and night every **3 real hours**, a game hour every 7½ real minutes. It's worked out from the real time, so it needs no saving and a restart doesn't move it.
 - **Parts of the day:** dawn from 5, day from 7, dusk from 19, night from 21. Each begins with a message to everyone outdoors; rooms flagged `indoors` (the sewers, the guildhall, the keep's halls) don't see it. `time` shows the hour, read from the sky or guessed indoors.
 - **One heartbeat, once a second,** for systems that don't need every frame: spawns, wandering and the clock today; regeneration and cooldowns later. Heartbeat systems work from elapsed time and timestamps, never by counting beats, so the rate is a performance setting rather than a game rule, and a stalled server doesn't change the game. There's no old-style global tick to wait for.
-- **Still to come:** regeneration (once there's current health and stamina), combat rounds (2-3 seconds, with combat), and actions that take time to finish (lessons, rituals, casting).
+- **Recovery** of health and stamina runs on the heartbeat (see [Vitals](attributes.md#vitals)).
+- **Still to come:** combat rounds (2-3 seconds, with combat), and actions that take time to finish (lessons, rituals, casting).
 - **Open:** a calendar (days, months, seasons) from *The Agryn's Legacy*, and whether night changes anything beyond the messages, such as needing light outdoors.
 
 ### Combat
@@ -172,7 +174,7 @@ An escape hatch for behaviour that data can't express: bespoke unique items (Ang
 
 ### Status prompt
 
-The in-game prompt shows the character's state, such as `<14/18hp 9/10st>`, instead of a bare `> `.
+Built, except the IAC GA marker. The in-game prompt shows the character's state, such as `<14/18hp 9/10st>`, instead of a bare `> `.
 
 - **Always current.** The connection writes the prompt once at the end of each tick (see [One tick](#one-tick)), so it is built fresh from the character's state every time, including damage taken between the player's own commands.
 - **Built by the game, shown by the connection.** A system just before output is flushed computes each player's prompt text and hands it to their `Connection`. `net.rs` only knows how to show "the current prompt", never game rules.
@@ -184,7 +186,7 @@ The in-game prompt shows the character's state, such as `<14/18hp 9/10st>`, inst
   ```
 
 - **Recognisable by MUD clients.** Marking the prompt with telnet IAC GA lets clients like Mudlet and TinTin++ draw gauges or pin the prompt. Raw `nc` would show stray characters, so it is sent only to clients that ask for it.
-- **Waits on current health and stamina.** Only the maximums exist today (from Body and Willpower); current values arrive with combat and the time system (damage and regeneration).
+- **Built on [vitals](attributes.md#vitals):** `vitals.rs` fills in each player's prompt just before output is flushed, and `Connection` only shows whatever it was given. `%%` is a literal percent sign; a space is kept after the prompt so typing doesn't run into it.
 
 ## Proposed build order
 

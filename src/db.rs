@@ -38,7 +38,13 @@ const SCHEMA: &str = "
         race        TEXT,
         background  TEXT,
         -- What others see when they look at them.
-        description TEXT NOT NULL DEFAULT ''
+        description TEXT NOT NULL DEFAULT '',
+        -- Current vitals and when they were saved; NULL means full.
+        health      REAL,
+        stamina     REAL,
+        vitals_at   INTEGER,
+        -- Their prompt format; NULL means the default.
+        prompt      TEXT
     );
 
     CREATE TABLE IF NOT EXISTS character_aliases (
@@ -210,6 +216,11 @@ pub struct CharacterRecord {
     pub race: Option<String>,
     pub background: Option<String>,
     pub description: String,
+    /// Health and stamina when last saved, and when; `None` means full.
+    pub vitals: Option<(f32, f32)>,
+    pub vitals_at: Option<i64>,
+    /// Their own prompt format, if they've set one.
+    pub prompt: Option<String>,
 }
 
 /// SQLite connection. Queries run synchronously on the main thread; they're small and local,
@@ -228,6 +239,10 @@ impl Database {
             ("characters", "race", "TEXT"),
             ("characters", "background", "TEXT"),
             ("characters", "description", "TEXT NOT NULL DEFAULT ''"),
+            ("characters", "health", "REAL"),
+            ("characters", "stamina", "REAL"),
+            ("characters", "vitals_at", "INTEGER"),
+            ("characters", "prompt", "TEXT"),
         ] {
             let exists: bool = conn.query_row(
                 &format!(
@@ -303,8 +318,8 @@ impl Database {
     pub fn characters(&self, account_id: i64) -> DbResult<Vec<CharacterRecord>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, name, room, race, background, description FROM characters
-                 WHERE account_id = ?1 ORDER BY id",
+            "SELECT id, name, room, race, background, description, health, stamina, vitals_at,
+                 prompt FROM characters WHERE account_id = ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([account_id], |row| {
             Ok(CharacterRecord {
@@ -314,6 +329,12 @@ impl Database {
                 race: row.get(3)?,
                 background: row.get(4)?,
                 description: row.get(5)?,
+                vitals: match (row.get::<_, Option<f64>>(6)?, row.get::<_, Option<f64>>(7)?) {
+                    (Some(health), Some(stamina)) => Some((health as f32, stamina as f32)),
+                    _ => None,
+                },
+                vitals_at: row.get(8)?,
+                prompt: row.get(9)?,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -340,7 +361,33 @@ impl Database {
             race: None,
             background: None,
             description: String::new(),
+            vitals: None,
+            vitals_at: None,
+            prompt: None,
         })
+    }
+
+    pub fn save_vitals(
+        &self,
+        character_id: i64,
+        health: f32,
+        stamina: f32,
+        at: i64,
+    ) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE characters SET health = ?1, stamina = ?2, vitals_at = ?3 WHERE id = ?4",
+            params![f64::from(health), f64::from(stamina), at, character_id],
+        )?;
+        Ok(())
+    }
+
+    /// Save a prompt format, or `None` for the default.
+    pub fn set_prompt(&self, character_id: i64, prompt: Option<&str>) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE characters SET prompt = ?1 WHERE id = ?2",
+            params![prompt, character_id],
+        )?;
+        Ok(())
     }
 
     /// Save the choices that finish character creation, replacing any attributes saved before.

@@ -20,7 +20,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Architecture](architecture.md) | How the server is built today, and the foundation still needed: commands, items and mobs, events, time, combat | Partly built; events and time started |
 | [Skills](skills.md) | Skill trees, active and passive skills, rarity, how skills are acquired, hidden skills | Designed |
 | [Progression](progression.md) | How skills level through use: practice, gain chance, gain cooldowns | Designed |
-| [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
+| [Attributes, Karma and Luck](attributes.md) | The ten attributes, Karma, vitals, the ratio rule, Luck and the `Dice` service | Built (Karma earning waits on skills) |
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Designed |
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
@@ -43,6 +43,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Per-character aliases.
 - Character creation: race, starting Karma, background (15, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
 - Attributes, starting Karma, `raise`, `score`, `describe`, and the Luck-aware `Dice` service.
+- Vitals: current health and stamina that recover over time (offline too), and a customisable status prompt, `<7/10hp 9/9st>`.
 
 ## Roadmap
 
@@ -62,7 +63,6 @@ Designed, waiting on other work:
 
 | Feature | Waits on | Details |
 | --- | --- | --- |
-| Status prompt (`<14/18hp 9/10st>`), customisable per character | Current health and stamina, from combat and time | [Architecture](architecture.md#status-prompt) |
 | Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, mobs and game events | [Architecture](architecture.md#scripting) |
 | Game masters: admins and a new GM role can puppet any mob, playing it until they release it | Mobs | [Architecture](architecture.md#game-masters-and-puppeting) |
 | Quests and guild contracts, with guild ranks that gate trainers and rooms | Mobs, game events, combat | [Quests](quests.md) |

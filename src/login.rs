@@ -18,6 +18,7 @@ use crate::db::{Account, CharacterRecord, Database, Permission, Role};
 use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::targeting::Keywords;
+use crate::vitals::{DEFAULT_PROMPT, PromptFormat, Vitals};
 use crate::world::{InRoom, Player, RoomIndex, RoomKey};
 
 pub struct LoginPlugin;
@@ -763,11 +764,24 @@ fn enter_game(
         Vec::new()
     }));
     let karma = attributes.karma_unspent();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_default();
+    let vitals = Vitals::restored(&attributes, character.vitals, character.vitals_at, now);
+    let prompt = PromptFormat(
+        character
+            .prompt
+            .clone()
+            .unwrap_or_else(|| DEFAULT_PROMPT.into()),
+    );
 
     let name = character.name.clone();
     commands.entity(entity).remove::<LoginState>().insert((
         Aliases(aliases),
         attributes,
+        vitals,
+        prompt,
         Keywords::from_name(&character.name),
         Player {
             name: name.clone(),

@@ -46,9 +46,11 @@ pub struct Connection {
     outbox: Vec<u8>,
     /// Set when the client should be dropped at the end of the frame.
     pub closing: bool,
-    /// In game, the connection shows a `> ` prompt after each batch of output. Off during login,
+    /// In game, the connection shows a prompt after each batch of output. Off during login,
     /// which writes its own prompts ("Password: ").
     prompt: bool,
+    /// The prompt to show, kept current by the game (see `vitals::show_prompts`).
+    prompt_text: String,
     /// The prompt is the last thing written, so the cursor sits after it.
     at_prompt: bool,
     /// The player sent a line this tick, so they get a prompt even if nothing else was written.
@@ -70,6 +72,11 @@ impl Connection {
             self.at_prompt = false;
         }
         self.outbox.extend_from_slice(text.as_ref().as_bytes());
+    }
+
+    /// What the prompt says from now on.
+    pub fn set_prompt(&mut self, text: String) {
+        self.prompt_text = text;
     }
 
     /// Start showing the in-game prompt, once the player has entered the game.
@@ -120,6 +127,7 @@ fn accept_connections(mut commands: Commands, listener: Res<Listener>) {
                         outbox: Vec::new(),
                         closing: false,
                         prompt: false,
+                        prompt_text: "> ".into(),
                         at_prompt: false,
                         wants_prompt: false,
                     },
@@ -195,7 +203,8 @@ pub fn flush_output(mut connections: Query<&mut Connection>) {
     for mut conn in &mut connections {
         let wants_prompt = std::mem::take(&mut conn.wants_prompt);
         if conn.prompt && !conn.closing && (wants_prompt || !conn.outbox.is_empty()) {
-            conn.send_raw("> ");
+            let prompt = conn.prompt_text.clone();
+            conn.send_raw(prompt);
             conn.at_prompt = true;
         }
         if conn.outbox.is_empty() {

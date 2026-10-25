@@ -20,6 +20,7 @@ mod output;
 mod spawns;
 mod targeting;
 mod time;
+mod vitals;
 mod world;
 
 use std::time::Duration;
@@ -59,6 +60,7 @@ fn main() {
             spawns::SpawnsPlugin,
             events::EventsPlugin,
             time::TimePlugin,
+            vitals::VitalsPlugin,
         ))
         .run();
 }
