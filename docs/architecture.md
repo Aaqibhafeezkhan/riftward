@@ -22,7 +22,8 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | Module | Responsibility |
 | --- | --- |
 | `main.rs` | Builds the app: a 30 Hz loop, logging, asset loading with file watching, and the plugins below |
-| `net.rs` | TCP listener; one entity per connection with a `Connection` component; queues each client's lines and hands out one per tick as a `PlayerInput` message; flushes output at the end of the frame |
+| `net.rs` | TCP listener; one entity per connection with a `Connection` component; queues each client's lines and hands out one per tick as a `PlayerInput` message; flushes output at the end of the frame, marking prompts for clients that want it |
+| `telnet.rs` | The telnet protocol: a parser that separates commands from text, and the options negotiated (echo for passwords, end-of-record for prompts) |
 | `login.rs` | Login state machine: account, password (hidden with telnet echo control), new accounts, character choice, and character creation (race, Karma, background, description) |
 | `command.rs` | The command system: `CommandSpec` registry, the dispatcher (alias expansion, permission hiding, unknown commands), generated `help`, and prompts |
 | `commands/` | Player commands, one system each: `movement` (look, go, directions), `communication` (say, whisper, yell, gossip, who), `character` (score, raise, alias, unalias, quit) |
@@ -191,7 +192,7 @@ An escape hatch for behaviour that data can't express: bespoke unique items (Ang
 
 ### Status prompt
 
-Built, except the IAC GA marker. The in-game prompt shows the character's state, such as `<14/18hp 9/10st>`, instead of a bare `> `.
+Built. The in-game prompt shows the character's state, such as `<14/18hp 9/10st>`, instead of a bare `> `.
 
 - **Always current.** The connection writes the prompt once at the end of each tick (see [One tick](#one-tick)), so it is built fresh from the character's state every time, including damage taken between the player's own commands.
 - **Built by the game, shown by the connection.** A system just before output is flushed computes each player's prompt text and hands it to their `Connection`. `net.rs` only knows how to show "the current prompt", never game rules.
@@ -202,7 +203,7 @@ Built, except the IAC GA marker. The in-game prompt shows the character's state,
   prompt                          ->   back to the default
   ```
 
-- **Recognisable by MUD clients.** Marking the prompt with telnet IAC GA lets clients like Mudlet and TinTin++ draw gauges or pin the prompt. Raw `nc` would show stray characters, so it is sent only to clients that ask for it.
+- **Recognisable by MUD clients.** Every prompt is marked as a prompt, so clients like Mudlet and TinTin++ can show it at once (it has no newline), pin it, or draw gauges from it. On connect the server offers end-of-record (`IAC WILL EOR`); clients that accept (`IAC DO EOR`) get `IAC EOR` after each prompt, and other clients that speak telnet get the classic `IAC GA`. A raw client like `nc`, which never sends a telnet command, gets neither, though it shows a couple of stray characters for the offer at connect, as it already does around password entry. Telnet itself (separating commands from text across reads, declining options Riftward doesn't use) is in `src/telnet.rs`.
 - **Built on [vitals](attributes.md#vitals):** `vitals.rs` fills in each player's prompt just before output is flushed, and `Connection` only shows whatever it was given. `%%` is a literal percent sign; a space is kept after the prompt so typing doesn't run into it.
 
 ## Proposed build order

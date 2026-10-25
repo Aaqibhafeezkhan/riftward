@@ -1,11 +1,14 @@
 //! Networking: accepts telnet connections and turns lines of input into `PlayerInput` messages.
-//! Each connected client is an entity with a `Connection` component.
+//! Each connected client is an entity with a `Connection` component. The telnet protocol itself is
+//! in `telnet.rs`.
 
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
 use bevy::prelude::*;
+
+use crate::telnet::{self, Command, IAC};
 
 /// Address to listen on, unless overridden by the `MUD_ADDR` environment variable.
 pub const DEFAULT_ADDRESS: &str = "0.0.0.0:4000";
@@ -55,6 +58,14 @@ pub struct Connection {
     at_prompt: bool,
     /// The player sent a line this tick, so they get a prompt even if nothing else was written.
     wants_prompt: bool,
+    /// Separates telnet commands from what they type.
+    telnet: telnet::Parser,
+    /// They've sent a telnet command, so they speak telnet: prompts end with IAC GA.
+    speaks_telnet: bool,
+    /// They agreed to end-of-record: prompts end with IAC EOR instead.
+    eor: bool,
+    /// Options they asked about that we've already refused, so we answer each only once.
+    refused: Vec<(u8, u8)>,
 }
 
 impl Connection {
@@ -88,13 +99,46 @@ impl Connection {
     /// Ask the client to stop (or resume) echoing what the user types, for password entry.
     /// Telnet clients honor this; raw clients like `nc` will show a couple of stray characters.
     pub fn set_echo(&mut self, echo: bool) {
-        const IAC: u8 = 255;
-        const WILL: u8 = 251;
-        const WONT: u8 = 252;
-        const ECHO: u8 = 1;
         // The server "will echo" means the client stops echoing locally.
-        let verb = if echo { WONT } else { WILL };
-        self.outbox.extend_from_slice(&[IAC, verb, ECHO]);
+        let verb = if echo { telnet::WONT } else { telnet::WILL };
+        self.outbox
+            .extend_from_slice(&[IAC, verb, telnet::OPT_ECHO]);
+    }
+
+    /// Act on a telnet command from the client.
+    fn negotiate(&mut self, command: Command) {
+        self.speaks_telnet = true;
+        let refuse = match command {
+            Command::Do(telnet::OPT_EOR) => {
+                self.eor = true;
+                None
+            }
+            Command::Dont(telnet::OPT_EOR) => {
+                self.eor = false;
+                None
+            }
+            // Replies to our own offers of echo.
+            Command::Do(telnet::OPT_ECHO) | Command::Dont(telnet::OPT_ECHO) => None,
+            // Anything else they'd like us or them to do, we politely decline.
+            Command::Do(option) => Some((telnet::WONT, option)),
+            Command::Will(option) => Some((telnet::DONT, option)),
+            Command::Dont(_) | Command::Wont(_) | Command::Other => None,
+        };
+        if let Some((verb, option)) = refuse
+            && !self.refused.contains(&(verb, option))
+        {
+            self.refused.push((verb, option));
+            self.outbox.extend_from_slice(&[IAC, verb, option]);
+        }
+    }
+
+    /// What ends a prompt for this client, so it can tell the prompt apart from text.
+    fn prompt_marker(&self) -> &'static [u8] {
+        match (self.eor, self.speaks_telnet) {
+            (true, _) => &[IAC, telnet::EOR],
+            (false, true) => &[IAC, telnet::GA],
+            (false, false) => &[],
+        }
     }
 }
 
@@ -124,12 +168,17 @@ fn accept_connections(mut commands: Commands, listener: Res<Listener>) {
                         pending: Vec::new(),
                         lines: VecDeque::new(),
                         eof: false,
-                        outbox: Vec::new(),
+                        // Offer end-of-record prompts; MUD clients accept, others ignore it.
+                        outbox: vec![IAC, telnet::WILL, telnet::OPT_EOR],
                         closing: false,
                         prompt: false,
                         prompt_text: "> ".into(),
                         at_prompt: false,
                         wants_prompt: false,
+                        telnet: telnet::Parser::default(),
+                        speaks_telnet: false,
+                        eor: false,
+                        refused: Vec::new(),
                     },
                     JustConnected,
                 ));
@@ -155,7 +204,14 @@ fn read_input(
                     conn.eof = true;
                     break;
                 }
-                Ok(n) => conn.pending.extend_from_slice(&buf[..n]),
+                Ok(n) => {
+                    let mut text = Vec::new();
+                    let commands = conn.telnet.feed(&buf[..n], &mut text);
+                    conn.pending.extend_from_slice(&text);
+                    for command in commands {
+                        conn.negotiate(command);
+                    }
+                }
                 Err(err) if err.kind() == ErrorKind::WouldBlock => break,
                 Err(_) => {
                     conn.closing = true;
@@ -166,9 +222,7 @@ fn read_input(
 
         while let Some(pos) = conn.pending.iter().position(|&b| b == b'\n') {
             let raw: Vec<u8> = conn.pending.drain(..=pos).collect();
-            let line = String::from_utf8_lossy(&strip_telnet(&raw))
-                .trim()
-                .to_string();
+            let line = String::from_utf8_lossy(&raw).trim().to_string();
             conn.lines.push_back(line);
         }
         if let Some(line) = conn.lines.pop_front() {
@@ -182,22 +236,6 @@ fn read_input(
     }
 }
 
-/// Remove telnet IAC negotiation sequences so they don't show up as garbage in commands.
-fn strip_telnet(raw: &[u8]) -> Vec<u8> {
-    const IAC: u8 = 255;
-    let mut out = Vec::with_capacity(raw.len());
-    let mut i = 0;
-    while i < raw.len() {
-        if raw[i] == IAC {
-            i += 3;
-        } else {
-            out.push(raw[i]);
-            i += 1;
-        }
-    }
-    out
-}
-
 /// Write each connection's queued output, ending every batch with exactly one prompt.
 pub fn flush_output(mut connections: Query<&mut Connection>) {
     for mut conn in &mut connections {
@@ -205,6 +243,8 @@ pub fn flush_output(mut connections: Query<&mut Connection>) {
         if conn.prompt && !conn.closing && (wants_prompt || !conn.outbox.is_empty()) {
             let prompt = conn.prompt_text.clone();
             conn.send_raw(prompt);
+            let marker = conn.prompt_marker();
+            conn.outbox.extend_from_slice(marker);
             conn.at_prompt = true;
         }
         if conn.outbox.is_empty() {

@@ -21,6 +21,7 @@ mod output;
 mod skills;
 mod spawns;
 mod targeting;
+mod telnet;
 mod time;
 mod vitals;
 mod world;
