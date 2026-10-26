@@ -57,6 +57,8 @@ const RESPAWN_ROOM: &str = "riftwatch:shrine";
 const FLEE_COST: f32 = 2.0;
 /// The chance of getting away, before Luck.
 const FLEE_CHANCE: f64 = 0.6;
+/// Experience for a victory against impossible odds; an even fight gives half.
+const VICTORY_EXPERIENCE: f64 = 100.0;
 
 pub struct CombatPlugin;
 
@@ -413,6 +415,38 @@ fn combat_round(
             }
         }
     }
+
+    // Experience for every player who fought a fallen foe: the risk they overcame.
+    for &died in &fallen {
+        let Some(name) = fighters
+            .get(died)
+            .ok()
+            .and_then(|f| f.mob.map(|m| the(&m.name)))
+        else {
+            continue;
+        };
+        for (&who, &whom) in &targets {
+            let Ok(mut fighter) = fighters.get_mut(who) else {
+                continue;
+            };
+            let (true, Some(character_id)) = (whom == died, fighter.player.map(|p| p.character_id))
+            else {
+                continue;
+            };
+            let points = victory_experience(outmatched.get(&who).copied().unwrap_or(1.0));
+            let deed = format!("for defeating {name}");
+            for line in fighter.attributes.earn(points, &deed, character_id, &db) {
+                log.0.push(Outgoing::line(who, line));
+            }
+        }
+    }
+}
+
+/// Experience for a victory: 100 times the chance of having lost, from how outmatched the victor
+/// was (see `strike::outmatched`). An even fight gives 50; a foe you'd never lose to, nothing.
+pub fn victory_experience(outmatched: f64) -> u64 {
+    let odds = outmatched.max(0.0).powf(crate::dice::STEEPNESS);
+    (VICTORY_EXPERIENCE * odds / (1.0 + odds)).round() as u64
 }
 
 /// `technique <skill> [<target>]`, run by `use` for a technique outside a fight: an opener starts
@@ -979,7 +1013,7 @@ mod tests {
                 hit: lines(id),
                 miss: Some(lines(&format!("miss with a {id} at"))),
             }),
-            max_level: 50,
+            mastery: 50,
             attribute: None,
             rarity: None,
             difficulty: 1.0,
@@ -1369,6 +1403,14 @@ mod tests {
         assert_eq!(crate::skills::tough_fight_boost(odds(player)), 2.0);
         assert_eq!(crate::skills::tough_fight_boost(odds(challenger)), 1.0);
         assert_eq!(crate::skills::tough_fight_boost(Some(0.5)), 1.0);
+    }
+
+    #[test]
+    fn victories_are_worth_the_risk_overcome() {
+        assert_eq!(victory_experience(1.0), 50);
+        assert_eq!(victory_experience(2.0), 89);
+        assert_eq!(victory_experience(0.1), 0);
+        assert!(victory_experience(100.0) <= 100);
     }
 
     #[test]

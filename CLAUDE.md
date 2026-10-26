@@ -54,7 +54,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 ## House rules
 
 - **All randomness goes through `Dice`** (`dice.rs`), never your own RNG, so Luck applies to every roll.
-- **Contests compare ratios, never differences**: attributes are uncapped (`docs/attributes.md#the-ratio-rule`).
+- **Contests are opposed rolls by the ratio rule**: `Dice::opposed` (or `Practice::opposed`), never a hand-made chance or a difference, since ratings are uncapped (`docs/attributes.md#the-ratio-rule`). Fixed difficulties roll too, with no Luck.
 - **Designed content goes in data files**, not code.
 - **A skill's wording lives in its `.skill.ron`, never in code.** Every skill needs a `description`; attacks, techniques, counters and active skills need `text` templates (`{actor}`, `{target}`) for each viewpoint, on hit and miss. `SkillDef::check` enforces this at load and the tree-file test runs it (`docs/skills.md#skill-text`). Code that shows a skill being used fills in its templates with `skills::fill`.
 - **Schema:** tables use `CREATE TABLE IF NOT EXISTS`; there are no migrations yet. Changing an existing table needs numbered migrations (`PRAGMA user_version`); raise it before doing so.

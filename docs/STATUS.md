@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -13,7 +13,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Items:** templates, Bulk and encumbrance, hands and wear slots, containers and automatic placement, weapons, corpses that rot, real items that survive restarts, item spawns, unique items.
 - **Mobs:** templates and spawns (keeping a count, breeding, after-death and reseed timers, gated by world flags), wandering and crowding, pack limits, aggression, auras, the players' vitals, technique skills used by chance, and equipment they fight with and drop.
 - **Characters:** creation (race with Earthdawn-style shifts, starting Karma, a background as a past life, a description), vitals that recover (faster resting, offline too, never in a fight), `score`, `describe`, aliases, a custom prompt.
-- **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, character levels that earn Karma, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`, entry skills only), discovery of a tree's other skills through use, a tough-fight boost to learning, Awakening to the four magic traditions.
+- **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, uncapped levels with a soft cap from character level, experience and character levels that earn Karma, opposed-roll contests, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`, entry skills only), discovery of a tree's other skills through use, a tough-fight boost to learning, Awakening to the four magic traditions.
 - **Combat:** rounds in initiative order, auto-attacks, weapons (trained and untrained), techniques for every weapon tree's journeyman tier, conditions (staggered, down, bleeding, held, guarding, exposed), stamina costs, fleeing, death and respawn at the shrine, corpses that keep a player's gear, and death for anyone who quits or disconnects mid-fight.
 - **World events:** saved world flags and data-driven events. A rat breakout into the city raises the Rat King, whose aura toughens the rats until he dies.
 
@@ -27,10 +27,13 @@ After that, in order ([Proposed order](trees.md#proposed-order)): spells (their 
 
 ## Small things noticed and not yet done
 
+- Contests return a margin, but nothing uses it yet: glancing and crushing blows, critical Backstabs (later Stealth and Knife skills could add Backstab damage or a crit), quiet picks.
+- Unarmed attacks gain no damage from their own level; a margin-based damage rule would fix that across all attacks.
+- Experience and level numbers are first guesses: 50 for an even fight, 100 × 1.25ⁿ per level.
 - The silver locket from the Sunken Hall has no use until shops.
-- Climb and swim difficulties (6) are first guesses: about one try in three succeeds untrained.
+- Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
 - Herbs have no use until Brewing; rat tails and the Rat King's tooth have none until quests or shops.
-- Foraging's numbers are first guesses: difficulty 5, three finds a room, one back every 10 minutes.
+- Foraging's patch numbers are first guesses: three finds a room, one back every 10 minutes.
 - First Aid's numbers are first guesses too: a novice (Intuition 3) heals 2 to 4, and treats a badly hurt patient about a third of the time.
 - Waterskins can't be drunk from; they need refilling, so they wait for wells and rivers.
 - Armour's numbers are first guesses. Guards in studded leather and a helm (3 armour) shrug off most of a new character's punches.

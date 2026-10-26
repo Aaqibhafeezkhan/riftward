@@ -98,7 +98,7 @@
             description: "The road runs along the lip of a steep ravine. Below, through a tangle of roots and ferns, something pale glimmers among the rocks. The way down is a hard climb.",
             terrain: Road,
             exits: {
-                "down": (to: "ravine", needs: Climb(6)),
+                "down": (to: "ravine", needs: Climb(4)),
                 "west": "bend",
             },
             environment: Forest,
@@ -108,7 +108,7 @@
             description: "Moss-slick boulders crowd the bottom of the ravine, where little light reaches. Pale moonpetal grows thick in the damp between the stones, untouched by anyone unwilling to make the climb.",
             terrain: Rough,
             exits: {
-                "up": (to: "east_road", needs: Climb(6)),
+                "up": (to: "east_road", needs: Climb(4)),
             },
             environment: Forest,
             finds: (

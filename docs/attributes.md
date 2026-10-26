@@ -27,14 +27,31 @@ Players see their attributes with `score` and spend Karma with `raise <attribute
 
 ## Karma
 
-- **Earning:** character level is total skill levels divided by 5, rounded down, and each character level grants 1 Karma. Karma is therefore scarce and every point is a small event; it arrives the moment the gain that earns it happens.
+- **Earning:** each [character level](progression.md#character-level-and-experience) grants 2 Karma, the moment it's reached. Character level comes from experience, earned by deeds, not from skill levels, so Karma is scarce and every point is a small event.
 - **Cost:** raising an attribute from r to r + 1 costs 1 + floor(r / 5): 1 Karma up to 5, then 2, 3, 4 per point for each further band of five. Concentrating is possible; spreading goes further.
 - **Estimates, to be checked by simulation:** about 10 Karma after a first week, 60 after a few months, 200 or more for long-term veterans.
 - **Karma spent is not stored.** It is worked out from current ratings and the race's starting ratings, so it can never drift out of sync, and points a race gives aren't counted as spent.
 
 ## The ratio rule
 
-Because attributes are uncapped, every contest compares ratios, never differences. A hit chance of attack / (attack + defence) gives 20 against 10 the same 67% as 40 against 20, so veterans win more often without winning automatically. Combat and every other contest must follow this rule.
+Every contest is an **opposed roll**: each side rolls a performance around their rating, the higher wins, and how far ahead the winner finished is the **margin**. A contest against a fixed difficulty (a lock, a climb) is the same, with the difficulty rolling as a rating and no Luck.
+
+- **Ratios, never differences.** Ratings have no cap, so a gap is measured as a ratio: 5 against 10 is the same contest as 50 against 100. Early levels count for a lot; a five-level edge between masters counts for little.
+- **Steep, k = 3.** The weaker side wins (weaker / stronger)³ as often as the stronger, so being twice as good wins 8 times in 9:
+
+  | Contest | Weaker side wins |
+  | --- | --- |
+  | Even | 50% |
+  | Masters, 48 against 53 | 43% |
+  | Novices, 5 against 10 | 11% |
+  | A novice lockpicker (3) on an ordinary lock (4) | 30% |
+  | A fresh fighter (3) against a veteran guard (25) | 0.2%, effectively never |
+  | A sewer rat (2) against a level-20 fighter (25) | 0.05% |
+  | A master (55) on an ordinary lock (4) | fails 0.04% |
+
+- **Always rolled.** Nothing is decided without a roll, so even a one-sided fight plays out; a huge gap just makes the upset effectively never. Upsets that matter (fate, surpassing limits) come from the story, not the dice.
+- **How it's rolled:** each side's performance is its rating times a random factor (k·ln rating plus a Gumbel draw, which makes the odds exactly the curve above), and a side with Luck rolls twice and keeps the better. The margin is the winner's performance over the loser's: 1.1 is a near thing, 2 a decisive win. Margins are there for degrees of success: glancing and crushing blows, critical Backstabs, picks that leave no trace. *Built:* `Dice::opposed`; no rule reads the margin yet.
+- **Combat and every other contest must follow this rule.** Plain chances that aren't contests (fleeing, a skill's gain roll) stay plain chances.
 
 ## Luck
 

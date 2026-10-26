@@ -17,6 +17,9 @@ use crate::mobs::{MobQuery, MobTemplates};
 use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::skills::{Skill, SkillDefs, Skills, learn};
 
+/// Experience for Awakening to a magical tradition.
+const AWAKENING_EXPERIENCE: u64 = 100;
+
 pub struct TrainersPlugin;
 
 impl Plugin for TrainersPlugin {
@@ -61,7 +64,7 @@ fn learn_cmd(
     mobs: MobQuery,
     templates: Res<MobTemplates>,
     defs: Res<SkillDefs>,
-    mut sheets: Query<(&mut Skills, &Attributes)>,
+    mut sheets: Query<(&mut Skills, &mut Attributes)>,
     db: Res<Database>,
 ) {
     let Ok((_, _, Some(player), Some(in_room))) = players.get(inv.entity) else {
@@ -73,7 +76,7 @@ fn learn_cmd(
         player.name.clone(),
         player.character_id,
     );
-    let Ok((mut skills, attributes)) = sheets.get_mut(inv.entity) else {
+    let Ok((mut skills, mut attributes)) = sheets.get_mut(inv.entity) else {
         return;
     };
 
@@ -93,7 +96,7 @@ fn learn_cmd(
     trainers.sort_by_key(|(entity, _, _)| *entity);
 
     let facts = Facts {
-        attributes,
+        attributes: &attributes,
         race: &race,
         skills: Some(&skills),
     };
@@ -170,6 +173,11 @@ fn learn_cmd(
                             "\r\n\x1b[1;35mSomething long asleep in you wakes. You are Awakened to \
                              the {tradition} tradition.\x1b[0m"
                         );
+                        let deed = format!("for Awakening to the {tradition} tradition");
+                        for line in attributes.earn(AWAKENING_EXPERIENCE, &deed, character_id, &db)
+                        {
+                            text += &format!("\r\n{line}");
+                        }
                     }
                     out.push(Outgoing::Room {
                         room,

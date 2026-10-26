@@ -358,10 +358,15 @@ pub fn bash(
         let Some(sturdiness) = it.lock.as_ref().and_then(|lock| lock.bash) else {
             return Err("It's far too sturdy to force.".into());
         };
-        let strength = f64::from(strength.max(1));
-        let chance = strength / (strength + f64::from(sturdiness.max(1)));
         let the = it.the();
-        if dice.chance(luck, chance) {
+        // Strength against the lock's sturdiness, by opposed roll.
+        let forced = dice.opposed(
+            f64::from(strength.max(1)),
+            luck,
+            f64::from(sturdiness.max(1)),
+            0,
+        );
+        if forced.won {
             Ok((
                 DoorState::Open,
                 it.announce(
@@ -406,8 +411,9 @@ pub fn pick(
         };
         let ready = practice.begin(it.actor.entity, LOCKPICKING)?;
         let skill = f64::from(ready.effectiveness.max(1));
-        let chance = skill / (skill + f64::from(difficulty.max(1)));
-        let picked = practice.chance(ready.luck, chance);
+        let picked = practice
+            .opposed(skill, ready.luck, f64::from(difficulty.max(1)), 0)
+            .won;
         let learner = Learner {
             character_id: it.actor.character_id,
             race: &it.actor.race,

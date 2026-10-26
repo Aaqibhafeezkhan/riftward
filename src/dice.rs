@@ -93,18 +93,49 @@ impl Dice {
         None
     }
 
-    /// A contested roll: `a` wins with base probability `p`. Each side gets its own lucky
-    /// chance; if both are lucky they cancel and the plain roll stands.
-    pub fn contest(&mut self, luck_a: i32, luck_b: i32, p: f64) -> bool {
-        let p = p.clamp(0.0, 1.0);
-        let (a, b) = (self.lucky(luck_a), self.lucky(luck_b));
-        let first = self.rng.random_bool(p);
-        match (a, b) {
-            (true, false) => first || self.rng.random_bool(p),
-            (false, true) => first && self.rng.random_bool(p),
-            _ => first,
+    /// An opposed roll, `a` against `b`: each side rolls a performance around its rating, and
+    /// the higher wins. The weaker side wins (weaker / stronger)^STEEPNESS as often as the
+    /// stronger, whatever the scale, so 5 against 10 is the same contest as 50 against 100. A
+    /// side with Luck rolls twice and keeps the better. A fixed difficulty rolls with no Luck.
+    pub fn opposed(&mut self, a: f64, luck_a: i32, b: f64, luck_b: i32) -> Contest {
+        let (a, b) = (self.perform(a, luck_a), self.perform(b, luck_b));
+        Contest {
+            won: a > b,
+            margin: ((a - b).abs() / STEEPNESS).exp(),
         }
     }
+
+    /// A performance: STEEPNESS times the log of the rating, plus a Gumbel draw. The difference
+    /// of two Gumbel draws is logistic, which makes the odds exactly a^k / (a^k + b^k).
+    fn perform(&mut self, rating: f64, luck: i32) -> f64 {
+        let base = STEEPNESS * rating.max(0.1).ln();
+        let first = self.gumbel();
+        let roll = if self.lucky(luck) {
+            first.max(self.gumbel())
+        } else {
+            first
+        };
+        base + roll
+    }
+
+    /// A standard Gumbel draw.
+    fn gumbel(&mut self) -> f64 {
+        -(-self.rng.random_range(f64::EPSILON..1.0).ln()).ln()
+    }
+}
+
+/// How steep contests are: the weaker side wins (weaker / stronger)^STEEPNESS as often as the
+/// stronger. See the ratio rule in `docs/attributes.md`.
+pub const STEEPNESS: f64 = 3.0;
+
+/// How an opposed roll came out.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Contest {
+    /// Whether the first side won.
+    pub won: bool,
+    /// How far ahead the winner finished, as a ratio of performances: 1.1 is a near thing, 2 a
+    /// decisive win. Always at least 1.
+    pub margin: f64,
 }
 
 #[cfg(test)]
@@ -181,11 +212,46 @@ mod tests {
         assert!(mean(&mut dice, 50) > 5.9);
     }
 
+    /// The weaker side's share of wins: (a / b)^k against 1.
+    fn curve(a: f64, b: f64) -> f64 {
+        let (a, b) = (a.powf(STEEPNESS), b.powf(STEEPNESS));
+        a / (a + b)
+    }
+
     #[test]
-    fn equal_luck_cancels_in_contests() {
+    fn opposed_rolls_follow_the_curve_at_any_scale() {
         let mut dice = Dice::seeded(7);
-        assert_near(rate(|| dice.contest(30, 30, 0.6)), 0.6);
-        assert!(rate(|| dice.contest(100, 0, 0.5)) > 0.55);
-        assert!(rate(|| dice.contest(0, 100, 0.5)) < 0.45);
+        assert_near(rate(|| dice.opposed(10.0, 0, 10.0, 0).won), 0.5);
+        assert_near(rate(|| dice.opposed(5.0, 0, 10.0, 0).won), curve(5.0, 10.0));
+        assert_near(
+            rate(|| dice.opposed(50.0, 0, 100.0, 0).won),
+            curve(5.0, 10.0),
+        );
+        assert_near(
+            rate(|| dice.opposed(48.0, 0, 53.0, 0).won),
+            curve(48.0, 53.0),
+        );
+        // A huge gap is effectively never, but still rolled.
+        assert!(rate(|| dice.opposed(3.0, 0, 25.0, 0).won) < 0.005);
+    }
+
+    #[test]
+    fn luck_helps_and_equal_luck_cancels_in_contests() {
+        let mut dice = Dice::seeded(8);
+        assert_near(rate(|| dice.opposed(10.0, 30, 10.0, 30).won), 0.5);
+        assert!(rate(|| dice.opposed(10.0, 100, 10.0, 0).won) > 0.55);
+        assert!(rate(|| dice.opposed(10.0, 0, 10.0, 100).won) < 0.45);
+    }
+
+    #[test]
+    fn margins_measure_how_decisive_a_win_was() {
+        let mut dice = Dice::seeded(9);
+        let margins: Vec<f64> = (0..10_000)
+            .map(|_| dice.opposed(30.0, 0, 10.0, 0).margin)
+            .collect();
+        assert!(margins.iter().all(|m| *m >= 1.0));
+        // Three times the rating wins by about three times, on average, in performance.
+        let mean = margins.iter().sum::<f64>() / margins.len() as f64;
+        assert!(mean > 2.0, "{mean}");
     }
 }

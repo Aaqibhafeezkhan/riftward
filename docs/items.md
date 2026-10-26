@@ -169,7 +169,7 @@ A container is an item with a `container` section. Worn containers carry your th
     container: (capacity: Count(2), max_item: Light)),         // pockets
 "oak_chest": (name: "an old oak chest", fixed: true,
     container: (capacity: Bulk(10), state: Locked,
-        lock: Some((key: Some("chest_key"), pick: Some(6), bash: Some(15))))),
+        lock: Some((key: Some("chest_key"), pick: Some(4), bash: Some(5))))),
 ```
 
 | Field | Default | Meaning |
@@ -201,7 +201,7 @@ state: Locked,                        // where it starts, and returns to on a re
 lock: Some((
     key: Some("town:cellar_key"),     // an item template; any copy of it opens the lock
     pick: Some(4),                    // lockpicking difficulty; None = can't be picked
-    bash: Some(12),                   // sturdiness against forcing; None = can't be forced
+    bash: Some(6),                    // sturdiness against forcing; None = can't be forced
 )),
 ```
 

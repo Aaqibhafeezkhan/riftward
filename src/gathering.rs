@@ -1,8 +1,7 @@
 //! Gathering: what a room's ground yields. `forage` (Foraging) finds food and `gather`
 //! (Herbalism) finds herbs, from the room's finds: its own, or its zone's for its environment.
 //!
-//! The chance of finding anything is the gatherer's skill against a fixed difficulty, by the
-//! ratio rule; what's found is picked from the room's table with Luck. Each room holds only a few
+//! Finding anything is the gatherer's skill against a fixed difficulty, by opposed roll; what's found is picked from the room's table with Luck. Each room holds only a few
 //! finds of each kind, growing back one at a time, so no one strips one bush forever.
 
 use std::collections::HashMap;
@@ -21,7 +20,7 @@ const FORAGING: &str = "survival:foraging";
 /// The skill `gather` uses.
 const HERBALISM: &str = "nature:herbalism";
 /// How hard anything is to find, against a gatherer's skill (level plus attribute).
-const DIFFICULTY: f64 = 5.0;
+const DIFFICULTY: f64 = 3.0;
 /// How many finds of each kind a room holds when fully grown.
 const PATCH_SIZE: u32 = 3;
 /// Seconds for one find to grow back.
@@ -153,7 +152,7 @@ fn gather_from(inv: Invocation, kind: Kind, mut g: Gatherer) {
         }
         let ready = g.practice.begin(actor.entity, kind.skill())?;
         let skill = f64::from(ready.effectiveness.max(1));
-        let found = if g.practice.chance(ready.luck, skill / (skill + DIFFICULTY)) {
+        let found = if g.practice.opposed(skill, ready.luck, DIFFICULTY, 0).won {
             g.practice
                 .pick(ready.luck, kind.table(finds))
                 .cloned()

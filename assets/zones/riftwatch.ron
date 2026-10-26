@@ -12,19 +12,19 @@
             name: "a reinforced armory door",
             keywords: ["door", "armory", "reinforced"],
             state: Locked,
-            lock: Some((key: Some("armory_key"), pick: Some(8), bash: Some(20))),
+            lock: Some((key: Some("armory_key"), pick: Some(6), bash: Some(6))),
         ),
         "keep_gates": (
             name: "an iron-studded gate",
             keywords: ["gate", "gates", "keep", "iron"],
             state: Open,
-            lock: Some((bash: Some(40))),
+            lock: Some((bash: Some(12))),
         ),
         "solar_door": (
             name: "a carved oak door",
             keywords: ["door", "oak", "carved"],
             state: Locked,
-            lock: Some((key: Some("solar_key"), pick: Some(10), bash: Some(25))),
+            lock: Some((key: Some("solar_key"), pick: Some(8), bash: Some(8))),
         ),
         "sewer_grate": (
             name: "a rusted sewer grate",
@@ -60,19 +60,19 @@
             name: "an iron hatch",
             keywords: ["hatch", "iron"],
             state: Locked,
-            lock: Some((key: Some("cellar_key"), pick: Some(6), bash: Some(15))),
+            lock: Some((key: Some("cellar_key"), pick: Some(4), bash: Some(5))),
         ),
         "garrison_grate": (
             name: "a barred drain grate",
             keywords: ["grate", "drain", "barred"],
             state: Locked,
-            lock: Some((key: Some("armory_key"), pick: Some(6), bash: Some(20))),
+            lock: Some((key: Some("armory_key"), pick: Some(4), bash: Some(6))),
         ),
         "dungeon_door": (
             name: "a rusted iron door",
             keywords: ["door", "iron", "rusted"],
             state: Locked,
-            lock: Some((key: Some("dungeon_key"), pick: Some(12), bash: Some(40))),
+            lock: Some((key: Some("dungeon_key"), pick: Some(10), bash: Some(12))),
         ),
     },
     items: {
@@ -383,7 +383,7 @@
             container: (
                 capacity: Bulk(10),
                 state: Locked,
-                lock: Some((key: Some("chest_key"), pick: Some(6), bash: Some(15))),
+                lock: Some((key: Some("chest_key"), pick: Some(4), bash: Some(5))),
             ),
         ),
         "market_signpost": (

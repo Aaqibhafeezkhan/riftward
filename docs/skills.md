@@ -8,7 +8,7 @@ Characters have no class. What a character can do is the set of skills they have
 
 A tree is a themed set of skills, and a character has "opened" a tree once they know any skill in it. There is no separate unlock step.
 
-- **Levels.** Each skill has a level from 0 up to its `max_level`. Reaching `max_level` is **mastery**. Levels are permanent and never decay.
+- **Levels.** Each skill has a level from 0, with no cap, each harder to reach than the last (see [Progression](progression.md#skill-levels-have-no-cap)). Reaching its `mastery` level (50 by default) is **mastery**, a milestone. Levels are permanent and never decay.
 - **Requirements.** A skill lists the conditions a learner must meet, usually `Skill(id, level)`. They can point into other trees, which is how hybrid skills work. Requirements use the same [condition language](#hidden-skills) as hidden skills, so a skill can also require an attribute, such as Magic 1 for a tradition's foundation casting skill.
 - **Requirements make a skill eligible, not learned.** Meeting them only means the character may acquire the skill, through teaching, loot or epiphany.
 - **Skill ids** follow the zone convention: `basics` inside its own tree, `fire:basics` from another tree.
@@ -25,7 +25,7 @@ Trees live in data files, one per tree, hot-reloaded like zones. The files end i
     skills: {
         "basics": (
             name: "Basic Swordplay",
-            max_level: 50,
+            mastery: 50,
             teach_level: 10,
         ),
         "riposte": (
@@ -49,12 +49,12 @@ Trees live in data files, one per tree, hot-reloaded like zones. The files end i
 | `name` | required | Display name |
 | `description` | required | What players read about it, with `skills <skill>` |
 | `text` | required for attacks, techniques, counters and active skills | What everyone sees when it's used; see [Skill text](#skill-text) |
-| `max_level` | 50 | Level at which the skill is mastered |
+| `mastery` | 50 | Level at which the skill is mastered: a milestone, not a cap (`max_level` is still read) |
 | `requires` | none | Conditions the learner must meet |
 | `attribute` | the tree's | The attribute added to the skill's level |
 | `rarity` | the tree's | Common to Legendary; may be higher than the tree's, never lower |
 | `source` | `Trainer` | `Trainer` or `Loot`; see [Acquiring skills](#acquiring-skills) |
-| `teach_level` | `max_level` | Level a teacher needs; ignored for `Loot` skills, which always need mastery |
+| `teach_level` | `mastery` | Level a teacher needs; ignored for `Loot` skills, which always need mastery |
 | `kind` | required | `Active(...)` or `Passive(...)`; see [Skill kinds](#skill-kinds) |
 | `difficulty` | 1.0 | Multiplier on the gain chance |
 | `hidden`, `unlock`, `trigger`, `hint` | off | See [Hidden skills](#hidden-skills) |
@@ -291,9 +291,9 @@ The skill core, without combat, proved on non-combat skills first:
   A **technique** is a special move made with an attack skill, in place of the auto-attack, through the action queue (`use lunge`); see [Step 1, as built](trees.md#step-1-as-built). Passives can carry stat **bonuses** that grow with level, and **counters** like Riposte.
 
   Trees so far: `brawling` (everyone's basic attack, a punch), `swordplay` (needs a blade in hand), `beast` (bites and claws, for mobs), `athletics` (Dodge, Endurance) and `thievery`.
-- **Effectiveness** is level + the skill's attribute, used in contests by the [ratio rule](attributes.md#the-ratio-rule). Lockpicking 0 with Agility 3 against a difficulty-6 lock is a 33% chance.
+- **Effectiveness** is level + the skill's attribute, used in opposed rolls by the [ratio rule](attributes.md#the-ratio-rule). Lockpicking 0 with Agility 3 against an ordinary lock (4) is a 30% chance.
 - **Progression** exactly as in [Progression](progression.md), with Luck on the gain roll.
-- **Character level and Karma:** each gain that takes total skill levels past a multiple of 5 earns a point of Karma, at once.
+- **Character level and Karma** come from experience, not skill levels (see [Character level and experience](progression.md#character-level-and-experience)). Character level sets each skill's soft cap.
 - **Starting skills** from race, background, and the universal list (Brawling, Dodge and Endurance) are granted at login if the character lacks them, so skills added to the data later reach existing characters. Starting skills that don't exist as data yet are skipped.
 - **`skills`** lists what a character knows by tree: level, how warmed up it is (cold, warming, warm, hot), its attribute, and how long until it can improve again. Skills whose tree file is gone are listed as forgotten for now, and come back with it.
 - **Admins:** `grantskill <player> <tree:skill> [<level>]`.
@@ -301,9 +301,9 @@ The skill core, without combat, proved on non-combat skills first:
 
 ## Open questions
 
-- [ ] **What stops one character learning every tree?** Options: a total cap on levels across all skills, a fixed number of skill slots, or each new tree costing more. Leaning: a total cap. A cap would also put a lifetime limit on Karma.
+- [x] **What stops one character learning every tree?** Character level, from deeds, sets a soft cap on every skill, and skills no longer earn Karma: a wide build is possible but slow, since spreading skills doesn't grow the character (see [The soft cap](progression.md#the-soft-cap-skills-and-the-character)).
 - [ ] **Does rarity affect power or leveling speed,** or only how a skill is obtained? Leaning: power yes, leveling speed no.
-- [ ] **Do rarer skills use more of the cap?** Only relevant if there is a total cap.
+- [ ] **Do rarer skills use more of the cap?** Perhaps a lower soft cap for rarer skills.
 - [ ] **Tier names:** the five working tiers, or names that fit the setting.
 - [x] **Do mob trainers teach only the lower tiers?** Only the entry tier. Everything above it is discovered through use, taught by players, found as loot, or taught by remote trainers as a quest reward.
 - [ ] **What does teaching cost and reward?** Lesson time, gold paid by the student, and something for the teacher (reputation, or Charisma-linked teaching).

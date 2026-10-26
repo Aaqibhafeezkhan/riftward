@@ -199,12 +199,6 @@ pub fn outmatched(
         .collect()
 }
 
-/// The chance an attack hits: the attacker's skill against the defender's evasion, as a ratio.
-pub fn hit_chance(attack: i32, defence: i32) -> f64 {
-    let (attack, defence) = (f64::from(attack.max(1)), f64::from(defence.max(1)));
-    attack / (attack + defence)
-}
-
 /// The attack a fighter makes this round: which skill, how much damage, and what it looks like.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Strike {
@@ -716,9 +710,16 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             a_attributes.get(Attribute::Luck),
             d_attributes.get(Attribute::Luck),
         );
+        // The attacker's skill against the defender's evasion, by opposed roll.
         let hit = self
             .dice
-            .contest(a_luck, d_luck, hit_chance(attack_rating, defence));
+            .opposed(
+                f64::from(attack_rating.max(1)),
+                a_luck,
+                f64::from(defence.max(1)),
+                d_luck,
+            )
+            .won;
 
         let mut tell = Telling {
             lines: Vec::new(),
@@ -1034,17 +1035,5 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         }
         self.practise(defender, &counter);
         self.strike(defender, attacker, None, true)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hits_follow_the_ratio_rule() {
-        assert!((hit_chance(6, 3) - 2.0 / 3.0).abs() < 1e-9);
-        assert!((hit_chance(20, 10) - hit_chance(40, 20)).abs() < 1e-9);
-        assert!(hit_chance(0, 0) > 0.0, "nothing is impossible");
     }
 }

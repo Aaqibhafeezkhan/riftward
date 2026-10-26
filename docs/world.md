@@ -175,13 +175,13 @@ Every room has a `terrain` saying what its ground is like, and walking into a ro
 
 ### Climbing and swimming
 
-An exit can need a climb or a swim, written in its long form: `"down": (to: "ravine", needs: Climb(6))`, alone or with a door.
+An exit can need a climb or a swim, written in its long form: `"down": (to: "ravine", needs: Climb(4))`, alone or with a door.
 
-- **Crossing is a roll:** Climbing plus Strength, or Swimming plus Body, against the exit's difficulty, by the ratio rule, with Luck. Anyone can try on their attribute alone; only the trained practise.
+- **Crossing is a roll:** Climbing plus Strength, or Swimming plus Body, against the exit's difficulty, by opposed roll (the [ratio rule](attributes.md#the-ratio-rule)), with Luck. Anyone can try on their attribute alone; only the trained practise.
 - **Failing keeps you where you are.** A failed climb is a fall, hurting 1 to half the difficulty, but never to death; a failed swim costs half the difficulty in stamina. The room sees it ("Grok tries to climb down, and falls.").
 - **Mobs never wander, and no one flees,** through an exit that needs a climb or a swim.
 - **The wording** is the skills' own (see [Skill text](skills.md#skill-text)): `{direction}` is the exit.
-- **Places today:** the Darkwood's East Road climbs down to the Ravine Floor, where moonpetal grows thick (Climb 6, each way); the sewers' Drowned Stair swims down to the Sunken Hall, under the city, where a silver locket and a healing draught wait (Swim 6, each way).
+- **Places today:** the Darkwood's East Road climbs down to the Ravine Floor, where moonpetal grows thick (Climb 4, each way); the sewers' Drowned Stair swims down to the Sunken Hall, under the city, where a silver locket and a healing draught wait (Swim 4, each way).
 
 ### Tracking
 
@@ -228,7 +228,7 @@ Exits keep their short form, `"west": "square"`. A longer form adds a door, defi
 ```ron
 doors: {
     "cellar_door": (name: "a heavy oak door", state: Locked,
-        lock: Some((key: Some("cellar_key"), pick: Some(4), bash: Some(12)))),
+        lock: Some((key: Some("cellar_key"), pick: Some(4), bash: Some(5)))),
     "trapdoor": (name: "a trapdoor"),                     // closed, no lock
     "bookcase": (name: "a bookcase", keywords: ["bookcase", "shelves"], hidden: true),
 },

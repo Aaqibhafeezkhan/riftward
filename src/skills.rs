@@ -4,8 +4,9 @@
 //! extension keeps Bevy from mistaking them for zone files), hot-reloaded like zones. A skill is
 //! active (used with a command, costing stamina, with a cooldown) or passive (practised whenever
 //! a game event it listens for happens). Every use builds practice and may roll for a level; see
-//! `docs/progression.md` for the formulas. Each five skill levels a character has in total is a
-//! character level, and each character level earns a point of Karma.
+//! `docs/progression.md` for the formulas. Levels have no cap, but each is harder to reach than
+//! the last, and a skill well above its soft cap (set by the character's level, which comes from
+//! experience, not skills) grows slowly.
 //!
 //! An active skill names the command that performs it, like `pick` for Lockpicking: that command
 //! does the work and calls [`Practice`] to check, charge for and count the use, and `use <skill>`
@@ -29,7 +30,7 @@ use crate::combat::{Fighting, Outmatched};
 use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
 use crate::conditions::{Condition, Facts};
 use crate::db::{Database, Permission};
-use crate::dice::Dice;
+use crate::dice::{Contest, Dice};
 use crate::events::GameEvent;
 use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line, targets_online};
 use crate::targeting::{Keywords, Target};
@@ -45,15 +46,22 @@ const SKILL_EXTENSION: &str = "skill.ron";
 const PRACTICE_HALF_LIFE: f64 = 30.0 * 60.0;
 /// The gain chance of an untouched skill at level 0, before practice and difficulty.
 const BASE_GAIN_CHANCE: f64 = 0.25;
+/// The level at which the gain chance is half its first: it's 25 / (25 + level) of it.
+const LEVEL_EASE: f64 = 25.0;
+/// The soft cap: a skill grows at full speed up to 10 + 2 × character level...
+const SOFT_CAP_BASE: u32 = 10;
+const SOFT_CAP_PER_LEVEL: u32 = 2;
+/// ...and past it, its gain chance halves for every 5 levels over.
+const SOFT_CAP_HALVING: f64 = 5.0;
 /// The cooldown after a gain at level 0, in seconds; each level multiplies it by `COOLDOWN_GROWTH`.
 const BASE_COOLDOWN: f64 = 5.0 * 60.0;
 const COOLDOWN_GROWTH: f64 = 1.1;
 /// The chance, per use of a skill, of discovering another in its tree, before Luck.
 const DISCOVERY_CHANCE: f64 = 0.001;
+/// Experience for discovering a skill through use.
+const DISCOVERY_EXPERIENCE: u64 = 50;
 /// The most a tough fight multiplies the chances of a gain or a discovery.
 const TOUGH_FIGHT_MAX_BOOST: f64 = 2.0;
-/// Skill levels per character level.
-pub const LEVELS_PER_CHARACTER_LEVEL: u32 = 5;
 /// Skills every character starts with, whatever their race and background: a basic attack, and
 /// the passives everyone practises by living.
 pub const UNIVERSAL_SKILLS: &[&str] =
@@ -125,9 +133,9 @@ pub struct SkillDef {
     /// (attacks, techniques, counters and active skills); see [`SkillDef::check`].
     #[serde(default)]
     pub text: Option<SkillText>,
-    /// The level at which it's mastered.
-    #[serde(default = "default_max_level")]
-    pub max_level: u32,
+    /// The level at which it's mastered: a milestone, not a cap. Levels go on, ever harder.
+    #[serde(default = "default_mastery", alias = "max_level")]
+    pub mastery: u32,
     /// Overrides the tree's attribute.
     #[serde(default)]
     pub attribute: Option<Attribute>,
@@ -217,7 +225,7 @@ pub fn fill(template: &str, with: &[(&str, &str)]) -> String {
     }
 }
 
-fn default_max_level() -> u32 {
+fn default_mastery() -> u32 {
     50
 }
 
@@ -617,25 +625,25 @@ impl SkillState {
 #[derive(Component, Clone, Debug, Default)]
 pub struct Skills(pub BTreeMap<String, SkillState>);
 
-impl Skills {
-    /// Total skill levels / 5: each character level earns a point of Karma.
-    pub fn character_level(&self) -> u32 {
-        self.0.values().map(|s| s.level).sum::<u32>() / LEVELS_PER_CHARACTER_LEVEL
-    }
-}
-
 /// Practice after `elapsed` seconds unused.
 pub fn faded(practice: f64, elapsed: i64) -> f64 {
     practice * 0.5f64.powf(elapsed.max(0) as f64 / PRACTICE_HALF_LIFE)
 }
 
 /// The chance one use gains a level.
-pub fn gain_chance(level: u32, max_level: u32, difficulty: f64, practice: f64) -> f64 {
-    if level >= max_level {
-        return 0.0;
-    }
-    let room = 1.0 - f64::from(level) / f64::from(max_level.max(1));
-    difficulty * BASE_GAIN_CHANCE * room * (0.2 + 0.8 * practice)
+pub fn gain_chance(level: u32, difficulty: f64, practice: f64, soft_cap: u32) -> f64 {
+    let level_ease = LEVEL_EASE / (LEVEL_EASE + f64::from(level));
+    let over = f64::from(level.saturating_sub(soft_cap));
+    difficulty
+        * BASE_GAIN_CHANCE
+        * level_ease
+        * (0.2 + 0.8 * practice)
+        * 0.5f64.powf(over / SOFT_CAP_HALVING)
+}
+
+/// How far a skill grows at full speed for a character of `level`: past it, gains come slowly.
+pub fn soft_cap(level: u32) -> u32 {
+    SOFT_CAP_BASE + SOFT_CAP_PER_LEVEL * level
 }
 
 /// Seconds before a skill can gain again, after gaining a level from `level`.
@@ -647,15 +655,15 @@ pub fn gain_cooldown(level: u32) -> i64 {
 /// gain cooldown, `roll` is asked whether the chance comes up. Returns whether it gained a level.
 pub fn roll_skill_gain(
     state: &mut SkillState,
-    max_level: u32,
     difficulty: f64,
+    soft_cap: u32,
     now: i64,
     roll: impl FnOnce(f64) -> bool,
 ) -> bool {
     let practice = faded(state.practice, state.last_used.map_or(0, |at| now - at));
     let mut gained = false;
-    if state.level < max_level && now >= state.next_gain_at {
-        let chance = gain_chance(state.level, max_level, difficulty, practice);
+    if now >= state.next_gain_at {
+        let chance = gain_chance(state.level, difficulty, practice, soft_cap);
         if roll(chance) {
             state.next_gain_at = now + gain_cooldown(state.level);
             state.level += 1;
@@ -745,6 +753,12 @@ impl Practice<'_, '_> {
         })
     }
 
+    /// An opposed roll: `rating` with `luck` against `against` with `their_luck` (0 for a fixed
+    /// difficulty). See the ratio rule in `docs/attributes.md`.
+    pub fn opposed(&mut self, rating: f64, luck: i32, against: f64, their_luck: i32) -> Contest {
+        self.dice.opposed(rating, luck, against, their_luck)
+    }
+
     /// Roll a yes-or-no with `who`'s Luck.
     pub fn chance(&mut self, luck: i32, p: f64) -> bool {
         self.dice.chance(luck, p)
@@ -813,8 +827,8 @@ pub fn tough_fight_boost(outmatched: Option<f64>) -> f64 {
     outmatched.map_or(1.0, |odds| odds.clamp(1.0, TOUGH_FIGHT_MAX_BOOST))
 }
 
-/// One use of a skill a character knows: practice, maybe a level, and maybe a character level
-/// and its Karma, or a discovery. Saves the skill, and returns what to tell them.
+/// One use of a skill a character knows: practice, maybe a level, and maybe a discovery and the
+/// experience it brings. Saves the skill, and returns what to tell them.
 pub fn count_use(
     defs: &SkillDefs,
     skills: &mut Skills,
@@ -828,8 +842,8 @@ pub fn count_use(
     if !skills.0.contains_key(key) {
         return Vec::new();
     }
-    let level_before = skills.character_level();
     let luck = attributes.get(Attribute::Luck);
+    let cap = soft_cap(attributes.level());
     let mut lines = Vec::new();
     // Skills that grow with this one or its tree, like the Adept's Inner Discipline, are practised
     // by this use too.
@@ -839,19 +853,15 @@ pub fn count_use(
         let (Some(skill), Some(state)) = (defs.skills.get(key), skills.0.get_mut(key)) else {
             continue;
         };
-        let gained = roll_skill_gain(
-            state,
-            skill.def.max_level,
-            skill.def.difficulty,
-            unix_now(),
-            |chance| dice.chance(luck, chance * learner.boost),
-        );
+        let gained = roll_skill_gain(state, skill.def.difficulty, cap, unix_now(), |chance| {
+            dice.chance(luck, chance * learner.boost)
+        });
         if let Err(err) = db.save_skill(character_id, key, state) {
             error!("failed to save {key} for character {character_id}: {err}");
         }
         if gained {
             let level = state.level;
-            let mastered = if level >= skill.def.max_level {
+            let mastered = if level == skill.def.mastery {
                 " You have mastered it."
             } else {
                 ""
@@ -861,15 +871,6 @@ pub fn count_use(
                 skill.def.name
             ));
         }
-    }
-    let level_after = skills.character_level();
-    if level_after > level_before {
-        attributes.set_earned(level_after as i32);
-        lines.push(format!(
-            "\x1b[1;33mYou feel more experienced. You have earned a point of Karma \
-             ({} to spend).\x1b[0m",
-            attributes.karma_unspent()
-        ));
     }
     let facts = Facts {
         attributes,
@@ -883,6 +884,8 @@ pub fn count_use(
         lines.push(format!(
             "\x1b[1;35mSomething clicks into place. You have discovered {name}.\x1b[0m"
         ));
+        let deed = format!("for discovering {name}");
+        lines.extend(attributes.earn(DISCOVERY_EXPERIENCE, &deed, character_id, db));
     }
     lines
 }
@@ -1050,9 +1053,14 @@ fn skills_cmd(
             Some(skill) => {
                 let tree = defs.trees.get(&skill.tree).cloned().unwrap_or_default();
                 let level = skills.0.get(&skill.key).map_or(0, |s| s.level);
+                let mastered = if level >= skill.def.mastery {
+                    ", mastered".to_string()
+                } else {
+                    format!(", mastered at {}", skill.def.mastery)
+                };
                 format!(
-                    "\x1b[1m{}\x1b[0m ({tree}), level {level} of {}\r\n{}",
-                    skill.def.name, skill.def.max_level, skill.def.description
+                    "\x1b[1m{}\x1b[0m ({tree}), level {level}{mastered}\r\n{}",
+                    skill.def.name, skill.def.description
                 )
             }
             None => format!("You don't know a skill called '{wanted}'."),
@@ -1110,16 +1118,17 @@ fn skills_text(
             None => unknown.push(key.as_str()),
         }
     }
-    let total: u32 = skills.0.values().map(|s| s.level).sum();
+    let level = attributes.level();
     let mut text = format!(
-        "Your skills (character level {}, {total} skill levels):",
-        skills.character_level()
+        "Your skills (character level {level}, {} experience; skills grow freely to {}):",
+        attributes.experience(),
+        soft_cap(level)
     );
     for (tree, list) in by_tree {
         text += &format!("\r\n  \x1b[1m{tree}\x1b[0m");
         for (skill, state) in list {
             let practice = faded(state.practice, state.last_used.map_or(0, |at| now - at));
-            let resting = if state.next_gain_at > now && state.level < skill.def.max_level {
+            let resting = if state.next_gain_at > now {
                 format!(
                     ", can improve again in {}",
                     duration(state.next_gain_at - now)
@@ -1134,11 +1143,15 @@ fn skills_text(
                 SkillKind::Technique(_) => " (technique)",
                 SkillKind::Aura { .. } => " (aura)",
             };
+            let mastered = if state.level >= skill.def.mastery {
+                " (mastered)"
+            } else {
+                ""
+            };
             text += &format!(
-                "\r\n    {:<22}{:>3}/{:<3} {} +{} {}{resting}{kind}",
+                "\r\n    {:<22}{:>4} {} +{} {}{resting}{kind}{mastered}",
                 skill.def.name,
                 state.level,
-                skill.def.max_level,
                 warmth(practice),
                 attributes.get(skill.attribute),
                 skill.attribute.name(),
@@ -1263,8 +1276,7 @@ fn grant_skill(
         Some(n) => Some(
             n.parse::<u32>()
                 .ok()
-                .filter(|n| *n <= skill.def.max_level)
-                .ok_or_else(|| format!("Levels go from 0 to {}.", skill.def.max_level))?,
+                .ok_or("A level is a whole number, 0 or more.")?,
         ),
     };
     let target = Target::parse(target).ok_or_else(|| inv.usage_error())?;
@@ -1272,7 +1284,7 @@ fn grant_skill(
         .find_one(inv.entity, targets_online(players, keywords))
         .and_then(|e| Actor::get(players, e))
         .ok_or_else(|| format!("No one matching {} is online.", target.describe()))?;
-    let (mut skills, mut attributes) = sheets
+    let (mut skills, _) = sheets
         .get_mut(actor.entity)
         .map_err(|_| format!("{} has no skills loaded.", actor.name))?;
     let new = learn(&mut skills, &key, "Admin", actor.character_id, db);
@@ -1284,7 +1296,6 @@ fn grant_skill(
             error!("failed to save {key} for {}: {err}", actor.name);
         }
     }
-    attributes.set_earned(skills.character_level() as i32);
     let level = skills.0.get(&key).map_or(0, |s| s.level);
     if actor.entity != inv.entity && new {
         out.push(Outgoing::line(
@@ -1404,17 +1415,28 @@ mod tests {
 
     #[test]
     fn gain_chances_match_the_design_table() {
-        // A skill at level 10 of 50: 20% base, 4% cold, 18% after twenty uses in a row.
-        assert!(close(gain_chance(10, 50, 1.0, 1.0), 0.20));
-        assert!(close(gain_chance(10, 50, 1.0, 0.0), 0.04));
+        // A skill at level 10, within its soft cap: 18% base, 4% cold, 16% after twenty uses.
+        assert!(close(gain_chance(10, 1.0, 1.0, 10), 0.18));
+        assert!(close(gain_chance(10, 1.0, 0.0, 10), 0.036));
         let mut practice = 0.0;
         for _ in 0..20 {
             practice += 0.1 * (1.0 - practice);
         }
         assert!(close(practice, 0.88), "{practice}");
-        assert!(close(gain_chance(10, 50, 1.0, practice), 0.18));
-        // Mastered skills don't gain.
-        assert_eq!(gain_chance(50, 50, 1.0, 1.0), 0.0);
+        assert!(close(gain_chance(10, 1.0, practice, 10), 0.16));
+        // No cap: a skill past mastery still improves, if slowly.
+        assert!(gain_chance(100, 1.0, 1.0, 1000) > 0.04);
+    }
+
+    #[test]
+    fn skills_slow_past_the_soft_cap() {
+        // 10 + 2 × character level.
+        assert_eq!(soft_cap(0), 10);
+        assert_eq!(soft_cap(20), 50);
+        // Ten levels over a cap of 10: a quarter of the chance it would have under a higher cap.
+        let free = gain_chance(20, 1.0, 1.0, 50);
+        assert!(close(gain_chance(20, 1.0, 1.0, 10), free / 4.0));
+        assert_eq!(gain_chance(10, 1.0, 1.0, 10), gain_chance(10, 1.0, 1.0, 50));
     }
 
     #[test]
@@ -1434,13 +1456,13 @@ mod tests {
     #[test]
     fn a_gain_starts_the_cooldown_and_uses_still_build_practice() {
         let mut state = SkillState::new("Starting");
-        assert!(roll_skill_gain(&mut state, 50, 1.0, 1000, |_| true));
+        assert!(roll_skill_gain(&mut state, 1.0, 50, 1000, |_| true));
         assert_eq!(state.level, 1);
         assert_eq!(state.next_gain_at, 1300);
         assert!(close(state.practice, 0.1));
         // On cooldown: no roll, but practice still builds.
         let rolled = std::cell::Cell::new(false);
-        assert!(!roll_skill_gain(&mut state, 50, 1.0, 1010, |_| {
+        assert!(!roll_skill_gain(&mut state, 1.0, 50, 1010, |_| {
             rolled.set(true);
             true
         }));
@@ -1448,7 +1470,7 @@ mod tests {
         assert_eq!(state.level, 1);
         assert!(state.practice > 0.18);
         // After the cooldown it can gain again.
-        assert!(roll_skill_gain(&mut state, 50, 1.0, 1300, |_| true));
+        assert!(roll_skill_gain(&mut state, 1.0, 50, 1300, |_| true));
         assert_eq!(state.level, 2);
     }
 
@@ -1480,7 +1502,7 @@ mod tests {
                         },
                     ],
                 },
-                max_level: 50,
+                mastery: 50,
                 attribute: None,
                 rarity: None,
                 difficulty: 1.0,
@@ -1516,7 +1538,7 @@ mod tests {
                     counter: None,
                     bonuses: Vec::new(),
                 },
-                max_level: 50,
+                mastery: 50,
                 attribute: None,
                 rarity: None,
                 difficulty: 1.0,
@@ -1707,17 +1729,6 @@ mod tests {
             Some(("brawling:kick".into(), "2.rat".into()))
         );
         assert_eq!(found("dance"), None);
-    }
-
-    #[test]
-    fn character_level_is_total_levels_over_five() {
-        let mut skills = Skills::default();
-        for (key, level) in [("a:x", 3), ("a:y", 4), ("b:z", 2)] {
-            let mut state = SkillState::new("Admin");
-            state.level = level;
-            skills.0.insert(key.into(), state);
-        }
-        assert_eq!(skills.character_level(), 1);
     }
 
     /// Every skill tree in `assets/skills` parses, and its active skills name a command.

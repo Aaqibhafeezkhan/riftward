@@ -186,7 +186,7 @@ fn track(
             }
             // Older tracks are harder: twice as hard after ten minutes.
             let hard = difficulty * (1.0 + (now - t.at) / 600.0);
-            if practice.chance(ready.luck, skill / (skill + hard)) {
+            if practice.opposed(skill, ready.luck, hard, 0).won {
                 let way = match &t.going {
                     Going::Out(dir) => format!("headed {dir}"),
                     Going::In(dir) => format!("came in {}", from(dir)),

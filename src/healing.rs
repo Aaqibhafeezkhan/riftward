@@ -188,8 +188,8 @@ fn used_up(commands: &mut Commands, db: &Database, entity: Entity, item: &Item) 
     commands.entity(entity).despawn();
 }
 
-/// `bandage [<someone>]`: First Aid. Uses up a bandage you carry; the chance it helps is your
-/// First Aid (level plus Intuition) against how much health they've lost, by the ratio rule.
+/// `bandage [<someone>]`: First Aid. Uses up a bandage you carry; whether it helps is your First
+/// Aid (level plus Intuition) against half the health they've lost, by opposed roll.
 /// If it does, it heals half your First Aid plus 1 to 3, and stops their bleeding.
 #[allow(clippy::too_many_arguments)]
 fn bandage(
@@ -268,7 +268,9 @@ fn bandage(
             .ok_or("You have no bandages.")?;
         let ready = practice.begin(actor.entity, FIRST_AID)?;
         let skill = f64::from(ready.effectiveness.max(1));
-        let helped = practice.chance(ready.luck, skill / (skill + f64::from(missing.max(1.0))));
+        // Half the health they've lost is how hard the wound is to treat.
+        let wound = f64::from((missing / 2.0).max(1.0));
+        let helped = practice.opposed(skill, ready.luck, wound, 0).won;
         let healed = if helped {
             let healed = ready.effectiveness / 2 + practice.roll(ready.luck, 1..=3) as i32;
             if let Some((mut vitals, max)) = practice.vitals(patient, bases.get(patient).ok()) {

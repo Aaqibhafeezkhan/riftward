@@ -253,7 +253,7 @@
             terrain: Wading,
             indoors: true,
             exits: {
-                "down": (to: "sunken_hall", needs: Swim(6)),
+                "down": (to: "sunken_hall", needs: Swim(4)),
                 "up": "cistern",
             },
             environment: Sewer,
@@ -264,7 +264,7 @@
             terrain: Wading,
             indoors: true,
             exits: {
-                "up": (to: "drowned_stair", needs: Swim(6)),
+                "up": (to: "drowned_stair", needs: Swim(4)),
             },
             environment: Sewer,
         ),

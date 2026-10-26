@@ -5,6 +5,9 @@
 //! anything else, but it stays latent (it does nothing) until the character knows a casting skill.
 //! Karma spent is not stored: it is worked out from the current ratings and the starting ones, so
 //! it can never drift out of sync with them.
+//!
+//! Karma is earned by character level, which comes from experience: deeds like victories and
+//! discoveries, not skill levels (see `docs/progression.md`).
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -13,6 +16,27 @@ use crate::db::Database;
 
 /// Karma every character starts with, to spend on attributes.
 pub const STARTING_KARMA: i32 = 10;
+/// Karma each character level earns.
+pub const KARMA_PER_LEVEL: i32 = 2;
+/// Experience for the first character level; each level after costs `LEVEL_GROWTH` times more.
+const FIRST_LEVEL_EXPERIENCE: f64 = 100.0;
+const LEVEL_GROWTH: f64 = 1.25;
+
+/// Total experience to reach character `level`: 100 for the first, then 1.25 times more each.
+pub fn experience_for(level: u32) -> u64 {
+    (0..level)
+        .map(|n| (FIRST_LEVEL_EXPERIENCE * LEVEL_GROWTH.powi(n as i32)).round() as u64)
+        .sum()
+}
+
+/// The character level `experience` reaches.
+pub fn level_for(experience: u64) -> u32 {
+    let mut level = 0;
+    while experience_for(level + 1) <= experience {
+        level += 1;
+    }
+    level
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Attribute {
@@ -107,8 +131,8 @@ pub struct Attributes {
     ratings: [i32; 10],
     start: [i32; 10],
     karma: i32,
-    /// Karma earned in play: one per character level.
-    earned: i32,
+    /// Experience, from deeds; it sets the character's level and so the Karma they've earned.
+    experience: u64,
 }
 
 impl Default for Attributes {
@@ -125,7 +149,7 @@ impl Attributes {
             ratings: start,
             start,
             karma,
-            earned: 0,
+            experience: 0,
         }
     }
 
@@ -175,12 +199,59 @@ impl Attributes {
 
     /// Karma available to spend: starting and earned Karma, less what's been spent.
     pub fn karma_unspent(&self) -> i32 {
-        (self.karma + self.earned - self.karma_spent()).max(0)
+        (self.karma + self.earned() - self.karma_spent()).max(0)
     }
 
-    /// Set the Karma earned in play, which is the character's level.
-    pub fn set_earned(&mut self, earned: i32) {
-        self.earned = earned;
+    /// Karma earned in play: `KARMA_PER_LEVEL` for each character level.
+    fn earned(&self) -> i32 {
+        self.level() as i32 * KARMA_PER_LEVEL
+    }
+
+    pub fn experience(&self) -> u64 {
+        self.experience
+    }
+
+    /// The character's level, from their experience.
+    pub fn level(&self) -> u32 {
+        level_for(self.experience)
+    }
+
+    /// Set experience as loaded.
+    pub fn set_experience(&mut self, experience: u64) {
+        self.experience = experience;
+    }
+
+    /// Earn `points` of experience for `deed` ("for defeating the sewer rat"), saving it for
+    /// character `character_id`. Returns what to tell them, including any character levels and
+    /// the Karma they bring.
+    pub fn earn(
+        &mut self,
+        points: u64,
+        deed: &str,
+        character_id: i64,
+        db: &Database,
+    ) -> Vec<String> {
+        if points == 0 {
+            return Vec::new();
+        }
+        let before = self.level();
+        self.experience += points;
+        if let Err(err) = db.save_experience(character_id, self.experience) {
+            error!("failed to save experience for character {character_id}: {err}");
+        }
+        let mut lines = vec![format!(
+            "\x1b[33mYou gain {points} experience {deed}.\x1b[0m"
+        )];
+        let after = self.level();
+        if after > before {
+            let karma = (after - before) as i32 * KARMA_PER_LEVEL;
+            lines.push(format!(
+                "\x1b[1;33mYou have reached character level {after}! You have earned {karma} \
+                 Karma ({} to spend).\x1b[0m",
+                self.karma_unspent()
+            ));
+        }
+        lines
     }
 
     /// Raise an attribute by one if there's Karma for it, or say why not.
@@ -249,8 +320,11 @@ pub fn score_text(
         (None, false) => String::new(),
     };
     let karma = attributes.karma_unspent();
+    let level = attributes.level();
+    let next = experience_for(level + 1);
     let mut text = format!(
-        "\x1b[1m{name}\x1b[0m, {who}\r\n{}\r\n{}\r\n{}{magic}\r\n\r\n  Health {}/{}    Stamina {}/{}    Initiative {}\r\n  Karma: {karma} unspent",
+        "\x1b[1m{name}\x1b[0m, {who}, level {level}  ({} of {next} experience for the next)\r\n{}\r\n{}\r\n{}{magic}\r\n\r\n  Health {}/{}    Stamina {}/{}    Initiative {}\r\n  Karma: {karma} unspent",
+        attributes.experience(),
         row("Physical", &[Body, Agility, Reaction, Strength]),
         row("Mental", &[Willpower, Logic, Intuition, Charisma]),
         row("Special", &[Luck, Magic]),
@@ -306,6 +380,29 @@ pub fn raise_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_level_costs_more_and_brings_karma() {
+        assert_eq!(experience_for(0), 0);
+        assert_eq!(experience_for(1), 100);
+        assert_eq!(experience_for(2), 225);
+        // The tenth level alone costs about 750.
+        let tenth = experience_for(10) - experience_for(9);
+        assert!((740..760).contains(&tenth), "{tenth}");
+        assert_eq!(level_for(99), 0);
+        assert_eq!(level_for(100), 1);
+        assert_eq!(level_for(experience_for(12)), 12);
+        assert_eq!(level_for(experience_for(12) - 1), 11);
+
+        let db = Database::open(":memory:").unwrap();
+        let mut attributes = Attributes::starting(Attribute::base_rating, STARTING_KARMA);
+        let before = attributes.karma_unspent();
+        let told = attributes.earn(150, "for testing", 1, &db);
+        assert_eq!(attributes.level(), 1);
+        assert_eq!(attributes.karma_unspent(), before + KARMA_PER_LEVEL);
+        assert!(told.iter().any(|line| line.contains("character level 1")));
+        assert!(attributes.earn(0, "for nothing", 1, &db).is_empty());
+    }
 
     #[test]
     fn cost_rises_every_five_ratings() {

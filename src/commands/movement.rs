@@ -290,7 +290,9 @@ fn cross(
     let rating = skills.0.get(key).map_or(0, |s| s.level as i32) + attributes.get(attribute);
     let luck = attributes.get(Attribute::Luck);
     let rating = f64::from(rating.max(1));
-    let made_it = practice.chance(luck, rating / (rating + f64::from(difficulty.max(1))));
+    let made_it = practice
+        .opposed(rating, luck, f64::from(difficulty.max(1)), 0)
+        .won;
 
     // What a failure costs.
     let mut cost = String::new();

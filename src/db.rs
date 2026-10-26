@@ -48,7 +48,9 @@ const SCHEMA: &str = "
         -- Their prompt format; NULL means the default.
         prompt      TEXT,
         -- The attack skill they make each round of a fight; NULL means the basic attack.
-        autoattack  TEXT
+        autoattack  TEXT,
+        -- Experience, which sets character level; NULL for characters from before it existed.
+        experience  INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS character_aliases (
@@ -260,6 +262,8 @@ pub struct CharacterRecord {
     pub prompt: Option<String>,
     /// The attack they've chosen to make each round, if any.
     pub autoattack: Option<String>,
+    /// Their experience; `None` for a character from before experience, worked out at login.
+    pub experience: Option<u64>,
 }
 
 /// SQLite connection. Queries run synchronously on the main thread; they're small and local,
@@ -284,6 +288,7 @@ impl Database {
             ("characters", "vitals_at", "INTEGER"),
             ("characters", "prompt", "TEXT"),
             ("characters", "autoattack", "TEXT"),
+            ("characters", "experience", "INTEGER"),
         ] {
             let exists: bool = conn.query_row(
                 &format!(
@@ -360,7 +365,7 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, name, room, race, background, description, health, stamina, vitals_at,
-                 prompt, autoattack FROM characters WHERE account_id = ?1 ORDER BY id",
+                 prompt, autoattack, experience FROM characters WHERE account_id = ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([account_id], |row| {
             Ok(CharacterRecord {
@@ -377,6 +382,7 @@ impl Database {
                 vitals_at: row.get(8)?,
                 prompt: row.get(9)?,
                 autoattack: row.get(10)?,
+                experience: row.get::<_, Option<i64>>(11)?.map(|e| e.max(0) as u64),
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -393,7 +399,7 @@ impl Database {
     pub fn create_character(&self, account_id: i64, name: &str) -> DbResult<CharacterRecord> {
         let conn = self.conn();
         conn.execute(
-            "INSERT INTO characters (account_id, name) VALUES (?1, ?2)",
+            "INSERT INTO characters (account_id, name, experience) VALUES (?1, ?2, 0)",
             params![account_id, name],
         )?;
         Ok(CharacterRecord {
@@ -407,7 +413,16 @@ impl Database {
             vitals_at: None,
             prompt: None,
             autoattack: None,
+            experience: Some(0),
         })
+    }
+
+    pub fn save_experience(&self, character_id: i64, experience: u64) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE characters SET experience = ?1 WHERE id = ?2",
+            params![experience as i64, character_id],
+        )?;
+        Ok(())
     }
 
     /// Save a chosen auto-attack, or `None` for fighting with what they hold.

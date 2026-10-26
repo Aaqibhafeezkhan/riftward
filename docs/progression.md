@@ -19,7 +19,7 @@ Each known skill stores its `level`, a `practice` value from 0 to 1, `last_used`
 2. **Roll for a gain**, unless the skill is on cooldown:
 
    ```math
-   \text{chance} = d \cdot 0.25 \left(1 - \frac{L}{L_{max}}\right) \left(0.2 + 0.8\,p'\right)
+   \text{chance} = d \cdot 0.25 \cdot \frac{25}{25 + L} \cdot \left(0.2 + 0.8\,p'\right) \cdot 0.5^{\max(0,\,L - C)/5}
    ```
 
 3. **Practice builds**, including during a cooldown, so the player is warmed up when it ends:
@@ -30,17 +30,17 @@ Each known skill stores its `level`, a `practice` value from 0 to 1, `last_used`
 
 4. **On a gain**, the level rises by one and the cooldown starts. Practice is kept.
 
-In the chance formula, d is the skill's `difficulty`, L its level and L<sub>max</sub> its `max_level`. A cold skill rolls at 20% of its base chance and a fully practised one at 100%, so a cold skill can still improve. The roll goes through the `Dice` service like every other roll (see [Luck](attributes.md#luck)).
+In the chance formula, d is the skill's `difficulty`, L its level, and C its soft cap, 10 + 2 × character level (see [The soft cap](#the-soft-cap-skills-and-the-character)); below the cap the last factor is 1. A cold skill rolls at 20% of its base chance and a fully practised one at 100%, so a cold skill can still improve. The roll goes through the `Dice` service like every other roll (see [Luck](attributes.md#luck)).
 
-For a skill at level 10 of 50 (base chance 20%):
+For a skill at level 10, within its soft cap (base chance 18%):
 
 | Situation | Practice | Chance per use |
 | --- | --- | --- |
 | First use, cold | 0.00 | 4% |
-| After 10 uses in a row | 0.65 | 14% |
-| After 20 uses in a row | 0.88 | 18% |
-| Warmed up, then a 30-minute break | 0.44 | 11% |
-| Warmed up, then 2 hours away | 0.06 | 5% |
+| After 10 uses in a row | 0.65 | 13% |
+| After 20 uses in a row | 0.88 | 16% |
+| Warmed up, then a 30-minute break | 0.44 | 10% |
+| Warmed up, then 2 hours away | 0.06 | 4% |
 
 ## Gain cooldown
 
@@ -49,6 +49,30 @@ After a gain, that skill cannot gain again until its cooldown ends. A starting c
 - **Uses during a cooldown still count.** They work normally and build practice; they just don't roll.
 - **Spamming and botting can't outpace it.** No amount of repetition gains faster than the cooldown allows.
 - **Mastery takes real time,** which is what keeps rare skills rare (see [Rarity](skills.md#rarity)).
+
+## Skill levels have no cap
+
+A skill can keep improving forever, but every level is harder than the last: the gain chance falls with level, and the cooldown after each gain grows. That makes a practical ceiling without a hard one.
+
+- **The gain chance** falls as 25 / (25 + L): full at level 0, half at 25, a third at 50, a fifth at 100.
+- **The cooldown** grows ×1.1 a level, as before: about 9 hours at 49, a day at 60, nearly three days at 70.
+- **Mastery** is a milestone, not a cap: at a skill's `mastery` level (50 unless it says otherwise) it's mastered ("You have mastered it."), and only a master can teach a loot skill.
+
+## The soft cap: skills and the character
+
+A skill grows at full speed up to **10 + 2 × character level**. Above that, its gain chance halves for every 5 levels over. A new character can take any skill to about 10 easily; a level-10 character to 30, a level-20 character to 50. Skills can run ahead of the character, but slowly, so a character who spreads across many trees doesn't outgrow their own experience.
+
+## Character level and experience
+
+Character level is separate from skill levels: skills grow by use, and the character grows by deeds.
+
+- **Experience** comes from:
+  - **Victories**, worth the risk you overcame: 100 × the chance you'd have lost, from how outmatched you were (see [Tough fights](#tough-fights)). An even fight gives about 50; a foe twice your match about 89; a rat, to a veteran, nothing. Everyone fighting the foe when it dies earns it.
+  - **Discoveries:** 50 for discovering a skill through use, 100 for Awakening.
+  - **Quests,** once they exist: the main source for guild contracts.
+- **Levels cost more each time:** level n to n + 1 takes 100 × 1.25ⁿ experience, so 100 for the first level, about 750 for the tenth, about 7,000 for the twentieth.
+- **Each level grants 2 Karma** (see [Karma](attributes.md#karma)). It doesn't raise health or stamina; those come from attributes and skills.
+- **Existing characters** start with the experience their old character level (total skill levels ÷ 5) would need, so they keep every point of Karma they had.
 
 ## Tough fights
 

@@ -10,7 +10,7 @@
 use bevy::prelude::*;
 
 use crate::aliases::Aliases;
-use crate::attributes::{Attribute, Attributes};
+use crate::attributes::{Attribute, Attributes, experience_for};
 use crate::characters::{self, Backgrounds, RaceDef, Races, STARTING_ITEMS};
 use crate::combat::AutoAttack;
 use crate::command::{self, ActionQueue};
@@ -867,7 +867,17 @@ fn enter_game(
             learned.push(skill.def.name.clone());
         }
     }
-    attributes.set_earned(skills.character_level() as i32);
+    // Characters from before experience start with what their old level (total skill levels over
+    // five) would need, so they keep every point of Karma.
+    let experience = character.experience.unwrap_or_else(|| {
+        let old_level = skills.0.values().map(|s| s.level).sum::<u32>() / 5;
+        let experience = experience_for(old_level);
+        if let Err(err) = db.save_experience(character.id, experience) {
+            error!("failed to save experience for {}: {err}", character.name);
+        }
+        experience
+    });
+    attributes.set_experience(experience);
     let karma = attributes.karma_unspent();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
