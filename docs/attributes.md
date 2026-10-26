@@ -50,7 +50,7 @@ Every contest is an **opposed roll**: each side rolls a performance around their
   | A master (55) on an ordinary lock (4) | fails 0.04% |
 
 - **Always rolled.** Nothing is decided without a roll, so even a one-sided fight plays out; a huge gap just makes the upset effectively never. Upsets that matter (fate, surpassing limits) come from the story, not the dice.
-- **How it's rolled:** each side's performance is its rating times a random factor (k·ln rating plus a Gumbel draw, which makes the odds exactly the curve above), and a side with Luck rolls twice and keeps the better. The margin is the winner's performance over the loser's: 1.1 is a near thing, 2 a decisive win. Margins are there for degrees of success: glancing and crushing blows, critical Backstabs, picks that leave no trace. *Built:* `Dice::opposed`; no rule reads the margin yet.
+- **How it's rolled:** each side's performance is its rating times a random factor (k·ln rating plus a Gumbel draw, which makes the odds exactly the curve above), and a side with Luck rolls twice and keeps the better. The margin is the winner's performance over the loser's: 1.1 is a near thing, 2 a decisive win. Margins are there for degrees of success: glancing and crushing blows, critical Backstabs, picks that leave no trace. *Built:* `Dice::opposed`; attacks read the margin as [blows](architecture.md#combat), glancing to crushing.
 - **Combat and every other contest must follow this rule.** Plain chances that aren't contests (fleeing, a skill's gain roll) stay plain chances.
 
 ## Luck

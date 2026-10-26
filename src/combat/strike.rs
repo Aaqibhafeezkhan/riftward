@@ -27,7 +27,6 @@ use crate::world::{ArmourDef, InRoom, Player};
 /// The skill that helps avoid attacks.
 const DODGE: &str = "athletics:dodge";
 /// Levels of a weapon skill for each extra point of damage with that weapon.
-const LEVELS_PER_DAMAGE: i32 = 10;
 /// Stamina a riposte takes.
 const RIPOSTE_COST: f32 = 1.0;
 
@@ -206,8 +205,6 @@ pub struct Strike {
     pub skill: String,
     pub damage: (u32, u32),
     pub text: SkillText,
-    /// Extra damage from training in the weapon.
-    pub bonus: i32,
     /// Stamina it takes.
     pub cost: u32,
 }
@@ -216,8 +213,9 @@ pub struct Strike {
 /// the weapon in their hand, otherwise the basic attack.
 ///
 /// A weapon does its own damage in anyone's hands. Trained in its skill, a fighter attacks with
-/// that skill and does a point more for every ten levels; untrained, they swing it with only
-/// their Brawling to guide them, and learn nothing of the weapon by it. Players must know an attack
+/// that skill, and their skill shows in how decisively their blows land (see [`Blow`]);
+/// untrained, they swing it with only their Brawling to guide them, and learn nothing of the
+/// weapon by it. Players must know an attack
 /// to make it; mobs fight with whatever their template gives them. An attack they haven't the
 /// stamina for falls back to the next, ending at the free basic attack.
 #[allow(clippy::too_many_arguments)]
@@ -252,20 +250,17 @@ pub fn choose_attack(
         if stamina < cost as f32 {
             return None;
         }
-        let level = skills.0.get(key).map_or(0, |s| s.level as i32);
         match weapon {
             Some(w) if w.skill == key => Some(Strike {
                 skill: key.to_string(),
                 damage: w.damage,
                 text,
-                bonus: level / LEVELS_PER_DAMAGE,
                 cost,
             }),
             _ => damage.map(|damage| Strike {
                 skill: key.to_string(),
                 damage,
                 text,
-                bonus: 0,
                 cost,
             }),
         }
@@ -285,6 +280,49 @@ pub fn choose_attack(
                 None => brawl,
             })
         })
+}
+
+/// How hard a blow lands, from how decisively its attack won (the opposed roll's margin): a near
+/// thing glances, a decisive win crushes. Skill shows in damage this way, for every attack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Blow {
+    Glancing,
+    Solid,
+    Strong,
+    Crushing,
+}
+
+impl Blow {
+    /// The tier a margin earns: under 1.15 glancing, under 1.6 solid, under 2.5 strong, then
+    /// crushing.
+    pub fn of(margin: f64) -> Self {
+        match margin {
+            m if m < 1.15 => Blow::Glancing,
+            m if m < 1.6 => Blow::Solid,
+            m if m < 2.5 => Blow::Strong,
+            _ => Blow::Crushing,
+        }
+    }
+
+    /// What it does to the damage, before armour.
+    pub fn multiplier(self) -> f64 {
+        match self {
+            Blow::Glancing => 0.5,
+            Blow::Solid => 1.0,
+            Blow::Strong => 1.5,
+            Blow::Crushing => 2.0,
+        }
+    }
+
+    /// Said after the damage: "(6, a strong blow)".
+    pub fn note(self) -> &'static str {
+        match self {
+            Blow::Glancing => ", a glancing blow",
+            Blow::Solid => "",
+            Blow::Strong => ", a strong blow",
+            Blow::Crushing => ", a crushing blow!",
+        }
+    }
 }
 
 /// What a weapon swung untrained looks like: there's no skill of its own to describe it.
@@ -656,7 +694,6 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             skill: key,
             damage,
             text,
-            bonus,
             cost,
         }) = choose_attack(
             attacker,
@@ -710,16 +747,15 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             a_attributes.get(Attribute::Luck),
             d_attributes.get(Attribute::Luck),
         );
-        // The attacker's skill against the defender's evasion, by opposed roll.
-        let hit = self
-            .dice
-            .opposed(
-                f64::from(attack_rating.max(1)),
-                a_luck,
-                f64::from(defence.max(1)),
-                d_luck,
-            )
-            .won;
+        // The attacker's skill against the defender's evasion, by opposed roll; how decisively
+        // it wins is how hard the blow lands.
+        let contest = self.dice.opposed(
+            f64::from(attack_rating.max(1)),
+            a_luck,
+            f64::from(defence.max(1)),
+            d_luck,
+        );
+        let (hit, blow) = (contest.won, Blow::of(contest.margin));
 
         let mut tell = Telling {
             lines: Vec::new(),
@@ -760,16 +796,16 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 } else {
                     (d_aura.armour + d_boosts.armour + d_gear.reduction - pierce).max(0)
                 };
-                dealt = (rolled
+                let force = rolled
                     + a_attributes.get(Attribute::Strength) / 2
-                    + bonus
                     + a_boosts.damage_with(&key)
-                    + extra
-                    - armour)
-                    .max(0);
-                tell.lines.push((attacker, format!("{mine} ({dealt})")));
+                    + extra;
+                dealt = ((f64::from(force) * blow.multiplier()).round() as i32 - armour).max(0);
+                let note = blow.note();
                 tell.lines
-                    .push((target, format!("\x1b[31m{theirs} ({dealt})\x1b[0m")));
+                    .push((attacker, format!("{mine} ({dealt}{note})")));
+                tell.lines
+                    .push((target, format!("\x1b[31m{theirs} ({dealt}{note})\x1b[0m")));
                 tell.room.push(seen);
                 if dealt == 0 {
                     let line = format!("The blow glances off {d_name}'s armour.");

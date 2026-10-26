@@ -1257,7 +1257,8 @@ mod tests {
                 opener: false,
             }),
         )]);
-        // Fists do 2; a breastplate takes 4.
+        // Fists do 2, doubled by the crushing blows of an attacker who can't miss: 4. A breastplate
+        // takes 4.
         let attacker = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK, "brawling:jab"]);
         let knight = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
         sure_hands(&mut world, attacker);
@@ -1279,12 +1280,12 @@ mod tests {
         world.run_system_once(combat_round).unwrap();
         assert!(said(&world, attacker, "glances off the brawler's armour"));
         assert_eq!(world.get::<Vitals>(knight).unwrap().health, 100.0);
-        // Piercing 3 of its 4 lets 1 through.
+        // Piercing 3 of its 4 leaves 1 of armour: 3 gets through.
         world.entity_mut(attacker).insert(Readied {
             skill: "brawling:jab".into(),
         });
         world.run_system_once(combat_round).unwrap();
-        assert_eq!(world.get::<Vitals>(knight).unwrap().health, 99.0);
+        assert_eq!(world.get::<Vitals>(knight).unwrap().health, 97.0);
     }
 
     #[test]
@@ -1403,6 +1404,18 @@ mod tests {
         assert_eq!(crate::skills::tough_fight_boost(odds(player)), 2.0);
         assert_eq!(crate::skills::tough_fight_boost(odds(challenger)), 1.0);
         assert_eq!(crate::skills::tough_fight_boost(Some(0.5)), 1.0);
+    }
+
+    #[test]
+    fn decisive_wins_land_harder() {
+        use strike::Blow;
+        assert_eq!(Blow::of(1.0), Blow::Glancing);
+        assert_eq!(Blow::of(1.3), Blow::Solid);
+        assert_eq!(Blow::of(2.0), Blow::Strong);
+        assert_eq!(Blow::of(10.0), Blow::Crushing);
+        assert_eq!(Blow::Glancing.multiplier(), 0.5);
+        assert_eq!(Blow::Crushing.multiplier(), 2.0);
+        assert_eq!(Blow::Solid.note(), "");
     }
 
     #[test]

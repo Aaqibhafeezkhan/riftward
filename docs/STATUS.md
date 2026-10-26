@@ -27,8 +27,8 @@ After that, in order ([Proposed order](trees.md#proposed-order)): spells (their 
 
 ## Small things noticed and not yet done
 
-- Contests return a margin, but nothing uses it yet: glancing and crushing blows, critical Backstabs (later Stealth and Knife skills could add Backstab damage or a crit), quiet picks.
-- Unarmed attacks gain no damage from their own level; a margin-based damage rule would fix that across all attacks.
+- Attacks use the margin as blows (glancing to crushing); other contests don't yet: quiet picks, finds of better quality. Later Stealth and Knife skills could add Backstab damage, or make crushing blows easier for it.
+- Trained mobs now land mostly strong and crushing blows on a novice: a town guard hits a new character for up to 14. Guards aren't aggressive, but this needs a look in play.
 - Experience and level numbers are first guesses: 50 for an even fight, 100 × 1.25ⁿ per level.
 - The silver locket from the Sunken Hall has no use until shops.
 - Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
