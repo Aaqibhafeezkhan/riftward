@@ -28,7 +28,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** one ability shape for spells, techniques and active skills (2c). Step 1, conditions as data, is built, and so are one effect vocabulary for spells and techniques (2b) and damage types (2a): typed weapons, attacks and spells, armour that says what it stops, and `Resist`, `Weakness` and `Immune`.
+**Step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** one ability shape for spells, techniques and active skills (2c-ii). Its first part, one contest with skills that resist tags (2c-i), is built. Step 1, conditions as data, is built, and so are one effect vocabulary for spells and techniques (2b) and damage types (2a): typed weapons, attacks and spells, armour that says what it stops, and `Resist`, `Weakness` and `Immune`.
 
 Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 
@@ -42,7 +42,7 @@ Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order
 - Spells come only from teachers: scrolls and grimoires, a spell-holding limit, more schools and great spells costing health are still to come. An admin can know every tradition's foundation; players can't yet, an open question.
 - Spell numbers are first guesses: Drain 2 or 3, resisted at twice that, power = school level + its attribute + Magic, a third of which adds to damage, healing and wards. A teacher at school 20 with Magic 4 casts a Spark or Ward that a new character can't match.
 - A spell readied out of a fight (`Casting`), like an opener, lingers if the fight never starts, and fires at the next one.
-- Races are uneven at the new Karma prices (shifts worth 14 to 22 Karma, humans 12 and Versatility), left until racial skills are built and each race can be balanced as a whole ([Races](characters.md#races)). No racial skill exists yet, Versatility included.
+- Races are uneven at the new Karma prices (shifts worth 14 to 22 Karma, humans 12 and Versatility), left until racial skills are built and each race can be balanced as a whole ([Races](characters.md#races)). The first racial skill exists, the elves' Fey Mind (resisting sleep and charm), as an example of skills resisting tags; it adds to their package unbalanced. The rest, Versatility included, are still to come.
 - Karma numbers are first guesses: 20 starting (32 for humans), 5 a level, and skill prices from 6 to 16.
 - Quality odds and multipliers are first guesses (half of found things standard, masterwork ×3 and +2), and so are the rarity multipliers.
 - Haggling's numbers are first guesses: deals of a twentieth to a fifth, lasting ten minutes, and shopkeepers at 5 to 10. Deals aren't saved, and a deal is only struck by those who know Haggling.

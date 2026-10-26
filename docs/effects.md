@@ -320,6 +320,16 @@ effects: [Apply(condition: "warded", strength: 4, lasts: Minutes(80), empowered:
 - **What fits where** is checked at load: a technique's damage is its blow, so `Damage`, `Heal` and `Calm` are for spells for now, and `Cleave` is for blows. Step 2c's one ability shape lifts this.
 - The old shorthands (`Stagger`, `KnockDown`, `Bleed`, `Hold`, `Expose`, `Guard`, `Inflict`, `Gain`, `Harm`, `Bless`, `Ward`) are gone; every skill and spell file uses `Apply`.
 
+### Resisting, as built
+
+Step 2c-i. Spells and techniques are resisted the same way, and skills made for it help:
+
+- **The contest:** a spell's power against what its `resist` names (Dodge, or an attribute); a technique's attack against the target's defence, as a blow. One opposed roll by the ratio rule, with both sides' Luck.
+- **Tags:** what a spell or technique *is*, worked out from what it does, with nothing to keep in step: the tags of every condition it puts on, the types of damage it does, and its own `tags: [...]` for anything else (`"charm"`). A sleep spell is `sleep` and `mind` because the asleep condition is; Spark is `force`.
+- **Skills that resist:** a passive skill's `(stat: Resist("sleep"), per: 10, base: 3)` adds to the target's rating against anything with that tag. Only skills that say so help, and only the best matching bonus counts, so a spell that's both `sleep` and `mind` doesn't count two. It's still a roll: a bonus counts for a lot against a weak caster and less against a strong one.
+- **The first:** the elves' racial Fey Mind (`assets/skills/racial.skill.ron`) resists sleep and charm, by 3 and 1 more every 10 levels, like the elves of old tales. Nothing casts sleep yet; the `asleep` condition is there for whatever does.
+- **Separate from conditions' `Resist` and `Immune`:** a skill helps win the contest; `Resist` takes damage off after it's lost, and `Immune` keeps a condition from taking hold at all.
+
 ## Abilities
 
 One shape for everything a character does on purpose: **spells, techniques, active skills and usable items all become abilities.** What makes a spell a spell is what it's cast through (a school) and its cost (Drain), not a separate system.
@@ -410,7 +420,7 @@ reactions: [(on: Hit, effects: [Damage(amount: "2", type: piercing, armour: fals
 Each step leaves the game working and designers with more they can do alone.
 
 1. **Conditions as data** (*built*). The built conditions move to `assets/conditions/`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
-2. **Effects and abilities.** Damage types (2a) and one effect vocabulary (2b) are built. Next, one ability shape: spells and techniques become abilities. `Imbue` and saved item conditions come with it.
+2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. Next (2c-ii), one ability shape and one resolver: spells and techniques become abilities, so either can use any effect and any contest (a Grapple against Strength). `Imbue` and saved item conditions come with it.
 3. **Formulas.** The expression evaluator, and every amount moved into data.
 4. **Triggers and reactions.** More game events; reactions on conditions, skills and items.
 5. **Active skills through `use`.** Most bespoke commands become abilities.

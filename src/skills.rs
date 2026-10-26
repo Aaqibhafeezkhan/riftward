@@ -373,7 +373,7 @@ fn default_per() -> u32 {
 }
 
 /// What a passive bonus raises.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Stat {
     MaxHealth,
     MaxStamina,
@@ -392,6 +392,10 @@ pub enum Stat {
     ArmourEase,
     /// Added to a held shield's block.
     Block,
+    /// Added to the rating they resist a spell or technique with, when it carries this tag: an
+    /// elf's mind shrugging off sleep, `Resist("sleep")`. Tags come from the conditions it puts on,
+    /// the damage it does and its own `tags` (`effects::tags`).
+    Resist(String),
 }
 
 /// Everything a character's passive skills add up to.
@@ -409,6 +413,8 @@ pub struct Boosts {
     pub block: i32,
     /// What only counts with one skill, by `tree:skill`.
     pub with: HashMap<String, WithSkill>,
+    /// Added to resisting what carries a tag, by tag.
+    pub resist: HashMap<String, i32>,
 }
 
 /// Bonuses for attacks made with one skill.
@@ -430,6 +436,17 @@ impl Boosts {
         self.damage + self.with.get(skill).map_or(0, |w| w.damage)
     }
 
+    /// Added to resisting something carrying `tags`: the best of their bonuses that match, so a
+    /// sleep spell that's also a mind spell doesn't count both.
+    pub fn resisting(&self, tags: &[String]) -> i32 {
+        tags.iter()
+            .filter_map(|tag| self.resist.get(tag))
+            .copied()
+            .max()
+            .unwrap_or(0)
+            .max(0)
+    }
+
     /// Armour ignored by an attack made with `skill`.
     pub fn pierce_with(&self, skill: &str) -> i32 {
         self.pierce + self.with.get(skill).map_or(0, |w| w.pierce)
@@ -446,7 +463,7 @@ pub fn boosts(skills: &Skills, defs: &SkillDefs) -> Boosts {
         };
         for bonus in bonuses {
             let value = bonus.base + (state.level / bonus.per.max(1)) as i32;
-            match (&bonus.with, bonus.stat) {
+            match (&bonus.with, &bonus.stat) {
                 (Some(skill), Stat::Attack) => {
                     total.with.entry(skill.clone()).or_default().attack += value
                 }
@@ -466,6 +483,7 @@ pub fn boosts(skills: &Skills, defs: &SkillDefs) -> Boosts {
                 (_, Stat::Pierce) => total.pierce += value,
                 (_, Stat::ArmourEase) => total.armour_ease += value,
                 (_, Stat::Block) => total.block += value,
+                (_, Stat::Resist(tag)) => *total.resist.entry(tag.clone()).or_default() += value,
             }
         }
     }
@@ -489,6 +507,9 @@ pub struct Technique {
     /// Whether it strikes at all, and whether a hit does damage.
     #[serde(default)]
     pub strike: StrikeKind,
+    /// What it is, beyond what its effects say (`effects::tags`), for skills that resist it.
+    #[serde(default)]
+    pub tags: Vec<String>,
     /// What it does besides its blow, in the one effect vocabulary (`effects.rs`): conditions
     /// on the target when it lands, or on the user whether or not it does.
     #[serde(default)]
@@ -1737,6 +1758,18 @@ mod tests {
         assert_eq!(boosts.max_health, 4);
         assert_eq!(boosts.attack_with("swordplay:basics"), 3);
         assert_eq!(boosts.attack_with("axes:basics"), 0);
+    }
+
+    #[test]
+    fn the_best_matching_resistance_counts() {
+        let boosts = Boosts {
+            resist: HashMap::from([("sleep".into(), 5), ("mind".into(), 2)]),
+            ..Boosts::default()
+        };
+        let tags = |list: &[&str]| list.iter().map(|t| t.to_string()).collect::<Vec<_>>();
+        assert_eq!(boosts.resisting(&tags(&["mind", "sleep"])), 5, "not both");
+        assert_eq!(boosts.resisting(&tags(&["mind"])), 2);
+        assert_eq!(boosts.resisting(&tags(&["fire"])), 0);
     }
 
     /// A skill in `tree` requiring `requires`.

@@ -43,7 +43,7 @@ Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to b
 | Race | In brief | Shifts | Starts | Racial skills (proposed) |
 | --- | --- | --- | --- | --- |
 | Dwarf | Stout, stubborn crafters and miners | +2 Body, +1 Strength, +1 Willpower, −1 Reaction | Body 5, Reaction 2 | **Heat Sight** (passive): see warm bodies in darkness |
-| Elf | Graceful, long-lived, close to the living world | +2 Agility, +1 Intuition, +1 Charisma, −1 Body | Agility 5, Body 2 | **Low-Light Vision** (passive) |
+| Elf | Graceful, long-lived, close to the living world | +2 Agility, +1 Intuition, +1 Charisma, −1 Body | Agility 5, Body 2 | **Low-Light Vision** (passive), **Fey Mind** (passive, built: resists sleep and charm) |
 | Human | Adaptable, found everywhere | +12 Karma | All 3, 32 Karma | **Versatility** (passive): practice builds faster |
 | Obsidiman | Living stone, huge, patient and slow | +3 Body, +3 Strength, −1 Agility, −2 Reaction | Body 6, Strength 6, Reaction 1 | **Stone Skin** (passive): natural armour |
 | Ork | Fierce, hardy, quick to anger | +2 Strength, +1 Body, +1 Reaction, −1 Charisma | Strength 5, Charisma 2 | **Low-Light Vision** (passive); **Gahad** (active): a burst of rage |

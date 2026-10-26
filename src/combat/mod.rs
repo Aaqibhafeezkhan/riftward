@@ -1275,7 +1275,8 @@ mod tests {
     use crate::effects::{Effect, Lasting, Who};
     use crate::items::Item;
     use crate::skills::{
-        Cost, Lines, Skill, SkillDef, SkillKind, SkillState, SkillText, StrikeKind, Technique,
+        Cost, Lines, PassiveBonus, Skill, SkillDef, SkillKind, SkillState, SkillText, Stat,
+        StrikeKind, Technique,
     };
     use crate::spells::{Resist, Spell, SpellDef, Spells};
     use crate::stealth::Hidden;
@@ -1342,6 +1343,7 @@ mod tests {
                 skill(
                     "brawling:cleave",
                     SkillKind::Technique(Technique {
+                        tags: Vec::new(),
                         with: BASIC_ATTACK.into(),
                         cost: Cost::Free,
                         accuracy: 0,
@@ -1355,6 +1357,7 @@ mod tests {
                 skill(
                     "brawling:trip",
                     SkillKind::Technique(Technique {
+                        tags: Vec::new(),
                         with: BASIC_ATTACK.into(),
                         cost: Cost::Free,
                         accuracy: 0,
@@ -1555,6 +1558,7 @@ mod tests {
             drain: 2,
             aim,
             resist,
+            tags: Vec::new(),
             effects,
             text: SkillText {
                 hit: lines(id),
@@ -1759,6 +1763,66 @@ mod tests {
     }
 
     #[test]
+    fn skills_made_for_it_help_resist_a_spell() {
+        // How often a weak sleep spell takes hold in twenty casts, against a target with or
+        // without a skill that resists sleep.
+        let slept = |resists: bool| {
+            (0..20)
+                .filter(|seed| {
+                    let (mut world, room) = world();
+                    world.insert_resource(Dice::seeded(*seed));
+                    let mage = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+                    let elf = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+                    let sleep = spell(
+                        "hermetic:sleep",
+                        Aim::Foe,
+                        Some(Resist::Attribute(Attribute::Willpower)),
+                        vec![Effect::Apply {
+                            condition: "asleep".into(),
+                            strength: 1,
+                            lasts: Lasting::Turns(5),
+                            on: Who::Target,
+                            empowered: false,
+                        }],
+                    );
+                    caster(&mut world, mage, vec![sleep]);
+                    world
+                        .get_mut::<Attributes>(mage)
+                        .unwrap()
+                        .set(Attribute::Magic, 3);
+                    if resists {
+                        let (key, fey) = skill(
+                            "racial:fey_mind",
+                            SkillKind::Passive {
+                                triggers: Vec::new(),
+                                bonuses: vec![PassiveBonus {
+                                    stat: Stat::Resist("sleep".into()),
+                                    per: 10,
+                                    base: 50,
+                                    with: None,
+                                }],
+                                counter: None,
+                            },
+                        );
+                        world
+                            .resource_mut::<SkillDefs>()
+                            .skills
+                            .insert(key.clone(), fey);
+                        let mut skills = world.get_mut::<Skills>(elf).unwrap();
+                        skills.0.insert(key, SkillState::new("Starting"));
+                    }
+                    world.entity_mut(mage).insert((Fighting(elf), Tactics(100)));
+                    world.run_system_once(combat_round).unwrap();
+                    world.get::<Conditions>(elf).unwrap().has("asleep")
+                })
+                .count()
+        };
+        let (without, with) = (slept(false), slept(true));
+        assert!(without >= 10, "a weak spell mostly works ({without})");
+        assert!(with <= 2, "but an elf mostly shrugs it off ({with})");
+    }
+
+    #[test]
     fn a_calmed_animal_stops_fighting() {
         let (mut world, room) = world();
         let shaman = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
@@ -1825,6 +1889,7 @@ mod tests {
         world.resource_mut::<SkillDefs>().skills.extend([skill(
             "brawling:backstab",
             SkillKind::Technique(Technique {
+                tags: Vec::new(),
                 with: BASIC_ATTACK.into(),
                 cost: Cost::Free,
                 accuracy: 0,
@@ -1936,6 +2001,7 @@ mod tests {
         world.resource_mut::<SkillDefs>().skills.extend([skill(
             "brawling:jab",
             SkillKind::Technique(Technique {
+                tags: Vec::new(),
                 with: BASIC_ATTACK.into(),
                 cost: Cost::Free,
                 accuracy: 0,

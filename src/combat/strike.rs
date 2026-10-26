@@ -829,6 +829,10 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let d_gear = gear(target, self.items, self.templates);
         let parts = defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts, &d_gear);
         let mut defence = d.conditions.defence(parts.total(), self.conditions);
+        // Skills made for it help against what a technique is: sure feet against a trip.
+        if let Some(Move { technique: t, .. }) = &technique {
+            defence += d_boosts.resisting(&effects::tags(&t.tags, &t.effects, self.conditions));
+        }
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let opener = technique.as_ref().is_some_and(|m| m.technique.opener);
         if self.resting.contains(&target) || opener {

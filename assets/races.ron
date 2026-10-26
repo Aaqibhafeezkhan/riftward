@@ -15,7 +15,7 @@
         name: "Elf",
         summary: "Graceful and long-lived, close to the living world.",
         attributes: {Agility: 2, Intuition: 1, Charisma: 1, Body: -1},
-        skills: ["racial:low_light_vision"],
+        skills: ["racial:low_light_vision", "racial:fey_mind"],
     ),
     (
         id: "human",

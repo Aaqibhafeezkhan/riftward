@@ -139,6 +139,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     }
                     Resist::Attribute(attribute) => d.attributes.get(attribute),
                 };
+                // Skills made for it help resist what the spell is: an elf against sleep.
+                let tags = effects::tags(&spell.tags, &spell.effects, self.conditions);
+                let rating = rating + boosts(&d.skills, self.defs).resisting(&tags);
                 let contest = self.dice.opposed(
                     f64::from(power),
                     luck,

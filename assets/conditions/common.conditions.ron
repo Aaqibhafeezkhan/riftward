@@ -77,6 +77,18 @@
         ),
     ),
 
+    "asleep": (
+        name: "asleep",
+        description: "asleep: losing your turns, and defending at half",
+        tags: ["sleep", "mind"],
+        modifiers: [LosesTurn, DefenceTimes(0.5)],
+        text: (
+            applied: (bearer: "You fall asleep!", room: "{bearer} falls asleep!"),
+            lost_turn: (bearer: "You sleep on, and can't act.", room: "{bearer} sleeps on."),
+            looks: ["{bearer} is fast asleep."],
+        ),
+    ),
+
     // Harm that lingers.
     "poisoned": (
         name: "poisoned",

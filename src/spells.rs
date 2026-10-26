@@ -100,6 +100,10 @@ pub struct SpellDef {
     /// What the target resists it with; without, it can't be resisted.
     #[serde(default)]
     pub resist: Option<Resist>,
+    /// What it is, beyond what its effects say (`effects::tags`), for skills that resist it:
+    /// `["charm"]`.
+    #[serde(default)]
+    pub tags: Vec<String>,
     /// What it does, in the one effect vocabulary (`effects.rs`). Amounts rolled get a third of
     /// the spell's power on top.
     pub effects: Vec<Effect>,
@@ -714,6 +718,7 @@ mod tests {
             drain: 2,
             aim: Aim::Foe,
             resist: Some(Resist::Dodge),
+            tags: Vec::new(),
             effects: vec![Effect::Damage {
                 amount: (1, 2),
                 damage_type: "force".into(),

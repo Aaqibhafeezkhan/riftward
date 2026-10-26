@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::combat::Lasts;
+use crate::combat::{ConditionDefs, Lasts};
 use crate::time::REAL_SECS_PER_GAME_DAY;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -156,6 +156,30 @@ pub fn check(effects: &[Effect], user: User) -> Result<(), String> {
     Ok(())
 }
 
+/// What a spell or technique is, for what resists it: its own `tags`, the tags of every condition
+/// it puts on, and the types of damage it does. A sleep spell is `sleep` and `mind` because its
+/// condition is; Spark is `force`.
+pub fn tags(own: &[String], effects: &[Effect], conditions: &ConditionDefs) -> Vec<String> {
+    let mut tags = own.to_vec();
+    for effect in effects {
+        match effect {
+            Effect::Apply { condition, .. } => {
+                tags.extend(
+                    conditions
+                        .get(condition)
+                        .into_iter()
+                        .flat_map(|d| d.tags.clone()),
+                );
+            }
+            Effect::Damage { damage_type, .. } => tags.push(damage_type.clone()),
+            _ => {}
+        }
+    }
+    tags.sort();
+    tags.dedup();
+    tags
+}
+
 /// The armour a blow or spell gets past: `Pierce`s added up.
 pub fn pierce(effects: &[Effect]) -> i32 {
     effects
@@ -196,6 +220,28 @@ mod tests {
         assert_eq!(effects[1].on(), Who::User);
         assert_eq!(effects[2].damage_type(), Some("physical"));
         assert_eq!(pierce(&effects), 2);
+    }
+
+    #[test]
+    fn tags_come_from_conditions_damage_and_the_ability_itself() {
+        let conditions = crate::combat::defs_on_disk();
+        let effects = [
+            Effect::Apply {
+                condition: "asleep".into(),
+                strength: 1,
+                lasts: Lasting::Turns(2),
+                on: Who::Target,
+                empowered: false,
+            },
+            Effect::Damage {
+                amount: (1, 2),
+                damage_type: "force".into(),
+            },
+        ];
+        assert_eq!(
+            tags(&["charm".into()], &effects, &conditions),
+            ["charm", "force", "mind", "sleep"]
+        );
     }
 
     #[test]
