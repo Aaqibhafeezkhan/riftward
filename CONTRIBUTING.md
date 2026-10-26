@@ -132,3 +132,7 @@ The design lives in [`docs/`](docs/README.md), one document per area, each with 
 - Work on a branch and open a pull request; don't commit straight to the main branch.
 - Write commit messages as a short imperative summary line ("Add item decay"), then a body explaining what changed and why.
 - Commit zone files and docs; never commit `mud.db` or anything from `target/`.
+
+## License
+
+Riftward is dual licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. Unless you say otherwise, anything you contribute is licensed the same way.
