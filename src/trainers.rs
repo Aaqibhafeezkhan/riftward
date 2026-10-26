@@ -20,9 +20,6 @@ use crate::output::{Characters, Outbox, Outgoing, deliver};
 use crate::skills::{Skill, SkillDefs, Skills, learn};
 use crate::spells::{self, Spell, SpellDefs, Spells};
 
-/// Experience for Awakening to a magical tradition.
-const AWAKENING_EXPERIENCE: u64 = 100;
-
 pub struct TrainersPlugin;
 
 impl Plugin for TrainersPlugin {
@@ -243,8 +240,12 @@ fn learn_cmd(
                              the {tradition} tradition.\x1b[0m"
                         );
                         let deed = format!("for Awakening to the {tradition} tradition");
-                        for line in attributes.earn(AWAKENING_EXPERIENCE, &deed, character_id, &db)
-                        {
+                        for line in attributes.earn(
+                            crate::attributes::progression().awakening_experience,
+                            &deed,
+                            character_id,
+                            &db,
+                        ) {
                             text += &format!("\r\n{line}");
                         }
                     }

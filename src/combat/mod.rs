@@ -63,8 +63,6 @@ const RESPAWN_ROOM: &str = "riftwatch:shrine";
 const FLEE_COST: f32 = 2.0;
 /// The chance of getting away, before Luck.
 const FLEE_CHANCE: f64 = 0.6;
-/// Experience for a victory against impossible odds; an even fight gives half.
-const VICTORY_EXPERIENCE: f64 = 100.0;
 
 pub struct CombatPlugin;
 
@@ -622,10 +620,17 @@ fn reveal_fighters(
 }
 
 /// Experience for a victory: 100 times the chance of having lost, from how outmatched the victor
-/// was (see `strike::outmatched`). An even fight gives 50; a foe you'd never lose to, nothing.
+/// was (see `strike::outmatched`). An even fight gives 50. A fight they'd have lost less than one
+/// time in ten gives nothing: a foe under about half their strength teaches them nothing, so a
+/// character outgrows easy prey and has to seek harder fights to level.
 pub fn victory_experience(outmatched: f64) -> u64 {
     let odds = outmatched.max(0.0).powf(crate::dice::STEEPNESS);
-    (VICTORY_EXPERIENCE * odds / (1.0 + odds)).round() as u64
+    let risk = odds / (1.0 + odds);
+    let numbers = crate::attributes::progression();
+    if risk < numbers.worthwhile_risk {
+        return 0;
+    }
+    (numbers.victory_experience * risk).round() as u64
 }
 
 /// `technique <skill> [<target>]`, run by `use` for a technique outside a fight: an opener starts
@@ -1947,7 +1952,10 @@ mod tests {
     fn victories_are_worth_the_risk_overcome() {
         assert_eq!(victory_experience(1.0), 50);
         assert_eq!(victory_experience(2.0), 89);
-        assert_eq!(victory_experience(0.1), 0);
+        assert!(victory_experience(0.75) > 0, "a near thing still counts");
+        // A foe under about half your strength is worth nothing.
+        assert_eq!(victory_experience(0.45), 0);
+        assert!(victory_experience(0.5) > 0);
         assert!(victory_experience(100.0) <= 100);
     }
 

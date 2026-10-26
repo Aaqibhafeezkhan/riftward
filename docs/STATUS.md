@@ -33,7 +33,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 - Attacks use the margin as blows (glancing to crushing), and so does gathering for the quality of what's found; quiet picks don't yet. Later Stealth and Knife skills could add Backstab damage, or make crushing blows easier for it.
 - Trained mobs now land mostly strong and crushing blows on a novice: a town guard hits a new character for up to 14. Guards aren't aggressive, but this needs a look in play.
-- Experience and level numbers are first guesses: 50 for an even fight, 100 × 1.25ⁿ per level.
+- Experience and level numbers are first guesses: 50 for an even fight, nothing below a one-in-ten risk, 1,000 a level, 5 Karma a level. With levels no longer slowing on their own, the soft cap (10 + 2 × level) and how high levels go both depend on how hard the world's fights get, which needs watching as content grows.
 - Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
 - Blessings and wards aren't saved: logging out or a restart ends them, along with every other condition.
 - A calmed animal stays calm until it dies or resets: there's no time limit yet.
@@ -41,7 +41,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 - Spell numbers are first guesses: Drain 2 or 3, resisted at twice that, power = school level + its attribute + Magic, a third of which adds to damage, healing and wards. A teacher at school 20 with Magic 4 casts a Spark or Ward that a new character can't match.
 - A spell readied out of a fight (`Casting`), like an opener, lingers if the fight never starts, and fires at the next one.
 - Races are uneven at the new Karma prices (shifts worth 14 to 22 Karma, humans 12 and Versatility), left until racial skills are built and each race can be balanced as a whole ([Races](characters.md#races)). No racial skill exists yet, Versatility included.
-- Karma numbers are first guesses: 20 starting (32 for humans), 2 a level, and skill prices from 6 to 16. At 2 a level, Karma is slow to come by at the new attribute prices.
+- Karma numbers are first guesses: 20 starting (32 for humans), 5 a level, and skill prices from 6 to 16.
 - Quality odds and multipliers are first guesses (half of found things standard, masterwork ×3 and +2), and so are the rarity multipliers.
 - Haggling's numbers are first guesses: deals of a twentieth to a fifth, lasting ten minutes, and shopkeepers at 5 to 10. Deals aren't saved, and a deal is only struck by those who know Haggling.
 - Prices are first guesses (see [Prices](economy.md#prices)), and so is buying at a third. A shop's resale stock and a player's money on death are open questions.

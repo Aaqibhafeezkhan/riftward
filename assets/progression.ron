@@ -1,0 +1,19 @@
+// How characters grow: Karma and experience. Read when the server starts, so restart it after a
+// change. See docs/progression.md#character-level-and-experience.
+(
+    // Karma every character starts with (a race can add more: humans get 12).
+    starting_karma: 20,
+    // Karma each character level earns.
+    karma_per_level: 5,
+    // Experience for each character level: the same for every level.
+    experience_per_level: 1000,
+    // Experience for a victory against impossible odds; an even fight gives half.
+    victory_experience: 100,
+    // A victory with less chance of having lost than this gives nothing: a foe under about half
+    // your strength teaches you nothing.
+    worthwhile_risk: 0.1,
+    // Experience for discovering a skill through use.
+    discovery_experience: 50,
+    // Experience for Awakening to a magical tradition.
+    awakening_experience: 100,
+)

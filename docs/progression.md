@@ -67,11 +67,12 @@ A skill grows at full speed up to **10 + 2 × character level**. Above that, its
 Character level is separate from skill levels: skills grow by use, and the character grows by deeds.
 
 - **Experience** comes from:
-  - **Victories**, worth the risk you overcame: 100 × the chance you'd have lost, from how outmatched you were (see [Tough fights](#tough-fights)). An even fight gives about 50; a foe twice your match about 89; a rat, to a veteran, nothing. Everyone fighting the foe when it dies earns it.
+  - **Victories**, worth the risk you overcame: 100 × the chance you'd have lost, from how outmatched you were (see [Tough fights](#tough-fights)). An even fight gives about 50; a foe twice your match about 89. **A fight you'd have lost less than one time in ten gives nothing:** a foe under about half your strength teaches you nothing, so you outgrow easy prey, and a rat, to a veteran, is worth nothing. Everyone fighting the foe when it dies earns it.
   - **Discoveries:** 50 for discovering a skill through use, 100 for Awakening.
   - **Quests,** once they exist: the main source for guild contracts.
-- **Levels cost more each time:** level n to n + 1 takes 100 × 1.25ⁿ experience, so 100 for the first level, about 750 for the tenth, about 7,000 for the twentieth.
-- **Each level grants 2 Karma** (see [Karma](attributes.md#karma)). It doesn't raise health or stamina; those come from attributes and skills.
+- **Every level costs the same: 1,000 experience,** about 20 even fights. What slows a character down isn't the price of a level but the fights it takes: as they grow stronger, the same foes are worth less and then nothing, so levelling means seeking harder challenges, and how far a character can climb is set by the hardest the world offers (2026-10-26).
+- **The numbers are data,** in `assets/progression.ron`: starting Karma, Karma and experience per level, victory experience and the least risk worth any, and discovery and Awakening experience. It's read when the server starts, so a change needs a restart, not a code change; a file that doesn't parse stops the server.
+- **Each level grants 5 Karma** (see [Karma](attributes.md#karma)). It doesn't raise health or stamina; those come from attributes and skills.
 - **Existing characters** start with the experience their old character level (total skill levels ÷ 5) would need, so they keep every point of Karma they had.
 
 ## Tough fights

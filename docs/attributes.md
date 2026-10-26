@@ -27,10 +27,10 @@ Players see their attributes with `score` and spend Karma with `raise <attribute
 
 ## Karma
 
-- **Earning:** each [character level](progression.md#character-level-and-experience) grants 2 Karma, the moment it's reached. Character level comes from experience, earned by deeds, not from skill levels, so Karma is scarce and every point is a small event.
+- **Earning:** each [character level](progression.md#character-level-and-experience) grants 5 Karma, the moment it's reached (`karma_per_level` in `assets/progression.ron`, with the starting Karma). Character level comes from experience, earned by deeds, not from skill levels, so Karma is scarce and every point is a small event.
 - **Cost:** raising an attribute costs the rating it reaches: 3 to 4 costs 4 Karma, 4 to 5 costs 5, and so on, so the total grows with the square of the rating. That suits the ratio rule, where doubling a rating is a big step. Latent Magic stays cheap: 0 to 1 costs 1.
 - **Karma also unlocks skills** in trees a character already has, at each skill's own price, once its requirements are met: see [Unlocking with Karma](skills.md#unlocking-with-karma). Attributes, deeper skills and Magic all compete for it.
-- **Estimates, to be checked by simulation:** about 10 Karma after a first week, 60 after a few months, 200 or more for long-term veterans.
+- **Estimates, to be checked in play:** a level is about 20 even fights, so a first week (levels 3 to 5) earns 15 to 25 Karma, enough for a first raise or unlock; level 15 has 95 in all, with the starting 20; level 20, 120: a main attribute to 10 (49), a second to 7 (22) and the unlocks of two trees (about 45). How many levels a veteran reaches depends on the hardest fights the world offers.
 - **Karma spent on attributes is not stored.** It is worked out from current ratings and the race's starting ratings, so it can never drift out of sync, and points a race gives aren't counted as spent. Karma spent unlocking a skill is saved with the skill (`karma_paid`).
 
 ## The ratio rule
@@ -111,5 +111,5 @@ An `Attributes` component on each player entity, loaded at login, holds the rati
 ## Open questions
 
 - [x] **Attribute cost curve:** a point costs the rating it reaches (2026-10-26).
-- [ ] **Karma per level:** 2 a level buys little at the new prices (a point of Strength at 6 takes three levels). Raise it?
+- [x] **Karma per level:** 5, with every level costing the same 1,000 experience (2026-10-26).
 - [ ] **Karma rate:** 1 Karma per 5 total skill levels is a guess, to be checked by the progression simulation.

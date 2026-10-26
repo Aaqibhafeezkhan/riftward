@@ -12,7 +12,7 @@ use bevy::asset::io::file::FileAssetReader;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::attributes::{Attribute, Attributes, STARTING_KARMA};
+use crate::attributes::{Attribute, Attributes, progression};
 use crate::conditions::{Condition, Facts};
 use crate::world::ron_options;
 
@@ -68,7 +68,7 @@ impl RaceDef {
                 let shift = self.attributes.get(&attribute).copied().unwrap_or(0);
                 (attribute.base_rating() + shift).max(floor)
             },
-            STARTING_KARMA + self.karma,
+            progression().starting_karma + self.karma,
         )
     }
 

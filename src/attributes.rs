@@ -1,7 +1,7 @@
 //! Character attributes, and the Karma spent on them and on unlocking skills.
 //!
 //! Attributes are uncapped. Every character starts from the base ratings (3, Luck 1, Magic 0),
-//! shifted by their race, with `STARTING_KARMA` to spend (humans get more). Raising one costs the
+//! shifted by their race, with starting Karma to spend (humans get more). Raising one costs the
 //! rating it's raised to: 3 to 4 costs 4 Karma, 4 to 5 costs 5. Magic can be raised like anything
 //! else, but it stays latent (it does nothing) until the character knows a casting skill. Karma
 //! spent on attributes is not stored: it is worked out from the current ratings and the starting
@@ -16,28 +16,53 @@ use serde::{Deserialize, Serialize};
 
 use crate::db::Database;
 
-/// Karma every character starts with, to spend on attributes.
-pub const STARTING_KARMA: i32 = 20;
-/// Karma each character level earns.
-pub const KARMA_PER_LEVEL: i32 = 2;
-/// Experience for the first character level; each level after costs `LEVEL_GROWTH` times more.
-const FIRST_LEVEL_EXPERIENCE: f64 = 100.0;
-const LEVEL_GROWTH: f64 = 1.25;
+/// How characters grow, from `assets/progression.ron`: Karma and experience. Every level costs the
+/// same experience; what slows a character down is that experience only comes from challenges
+/// that are hard for them (see `combat::victory_experience`).
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct Progression {
+    /// Karma every character starts with, to spend on attributes.
+    pub starting_karma: i32,
+    /// Karma each character level earns.
+    pub karma_per_level: i32,
+    /// Experience for each character level.
+    pub experience_per_level: u64,
+    /// Experience for a victory against impossible odds; an even fight gives half.
+    pub victory_experience: f64,
+    /// The least chance of having lost that makes a victory worth anything.
+    pub worthwhile_risk: f64,
+    /// Experience for discovering a skill through use.
+    pub discovery_experience: u64,
+    /// Experience for Awakening to a magical tradition.
+    pub awakening_experience: u64,
+}
 
-/// Total experience to reach character `level`: 100 for the first, then 1.25 times more each.
+/// Where the progression numbers live, from where the server runs.
+const PROGRESSION_FILE: &str = "assets/progression.ron";
+
+static PROGRESSION: std::sync::OnceLock<Progression> = std::sync::OnceLock::new();
+
+/// The progression numbers, read from `assets/progression.ron` the first time they're needed. A
+/// file that's missing or wrong stops the server: it's better to fix the file than to run on
+/// numbers nobody chose.
+pub fn progression() -> &'static Progression {
+    PROGRESSION.get_or_init(|| {
+        let text = std::fs::read_to_string(PROGRESSION_FILE)
+            .unwrap_or_else(|err| panic!("can't read {PROGRESSION_FILE}: {err}"));
+        crate::world::ron_options()
+            .from_str(&text)
+            .unwrap_or_else(|err| panic!("{PROGRESSION_FILE} doesn't parse: {err}"))
+    })
+}
+
+/// Total experience to reach character `level`.
 pub fn experience_for(level: u32) -> u64 {
-    (0..level)
-        .map(|n| (FIRST_LEVEL_EXPERIENCE * LEVEL_GROWTH.powi(n as i32)).round() as u64)
-        .sum()
+    u64::from(level) * progression().experience_per_level
 }
 
 /// The character level `experience` reaches.
 pub fn level_for(experience: u64) -> u32 {
-    let mut level = 0;
-    while experience_for(level + 1) <= experience {
-        level += 1;
-    }
-    level
+    (experience / progression().experience_per_level.max(1)) as u32
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -141,7 +166,7 @@ pub struct Attributes {
 
 impl Default for Attributes {
     fn default() -> Self {
-        Self::starting(Attribute::base_rating, STARTING_KARMA)
+        Self::starting(Attribute::base_rating, progression().starting_karma)
     }
 }
 
@@ -223,9 +248,9 @@ impl Attributes {
         (self.karma + self.earned() - self.karma_spent()).max(0)
     }
 
-    /// Karma earned in play: `KARMA_PER_LEVEL` for each character level.
+    /// Karma earned in play: `progression().karma_per_level` for each character level.
     fn earned(&self) -> i32 {
-        self.level() as i32 * KARMA_PER_LEVEL
+        self.level() as i32 * progression().karma_per_level
     }
 
     pub fn experience(&self) -> u64 {
@@ -265,7 +290,7 @@ impl Attributes {
         )];
         let after = self.level();
         if after > before {
-            let karma = (after - before) as i32 * KARMA_PER_LEVEL;
+            let karma = (after - before) as i32 * progression().karma_per_level;
             lines.push(format!(
                 "\x1b[1;33mYou have reached character level {after}! You have earned {karma} \
                  Karma ({} to spend).\x1b[0m",
@@ -403,24 +428,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn each_level_costs_more_and_brings_karma() {
+    fn every_level_costs_the_same_and_brings_karma() {
         assert_eq!(experience_for(0), 0);
-        assert_eq!(experience_for(1), 100);
-        assert_eq!(experience_for(2), 225);
-        // The tenth level alone costs about 750.
-        let tenth = experience_for(10) - experience_for(9);
-        assert!((740..760).contains(&tenth), "{tenth}");
-        assert_eq!(level_for(99), 0);
-        assert_eq!(level_for(100), 1);
+        assert_eq!(experience_for(1), progression().experience_per_level);
+        assert_eq!(
+            experience_for(30) - experience_for(29),
+            experience_for(1),
+            "the thirtieth costs what the first did"
+        );
+        let one = progression().experience_per_level;
+        assert_eq!(level_for(one - 1), 0);
+        assert_eq!(level_for(one), 1);
         assert_eq!(level_for(experience_for(12)), 12);
         assert_eq!(level_for(experience_for(12) - 1), 11);
 
         let db = Database::open(":memory:").unwrap();
-        let mut attributes = Attributes::starting(Attribute::base_rating, STARTING_KARMA);
+        let mut attributes =
+            Attributes::starting(Attribute::base_rating, progression().starting_karma);
         let before = attributes.karma_unspent();
-        let told = attributes.earn(150, "for testing", 1, &db);
+        let told = attributes.earn(one * 3 / 2, "for testing", 1, &db);
         assert_eq!(attributes.level(), 1);
-        assert_eq!(attributes.karma_unspent(), before + KARMA_PER_LEVEL);
+        assert_eq!(
+            attributes.karma_unspent(),
+            before + progression().karma_per_level
+        );
         assert!(told.iter().any(|line| line.contains("character level 1")));
         assert!(attributes.earn(0, "for nothing", 1, &db).is_empty());
     }
@@ -435,7 +466,7 @@ mod tests {
     fn karma_spent_is_derived_from_ratings() {
         let mut attributes = Attributes::default();
         assert_eq!(attributes.karma_spent(), 0);
-        assert_eq!(attributes.karma_unspent(), STARTING_KARMA);
+        assert_eq!(attributes.karma_unspent(), progression().starting_karma);
 
         attributes.set(Attribute::Agility, 5); // 3 -> 5: 4 then 5
         assert_eq!(attributes.karma_spent(), 9);
@@ -458,10 +489,10 @@ mod tests {
             Attribute::Strength => 6,
             other => other.base_rating(),
         };
-        let mut troll = Attributes::starting(start, STARTING_KARMA);
+        let mut troll = Attributes::starting(start, progression().starting_karma);
         assert_eq!(troll.karma_spent(), 0);
         assert_eq!(troll.raise(Attribute::Strength), Ok(7));
-        assert_eq!(troll.karma_unspent(), STARTING_KARMA - 7);
+        assert_eq!(troll.karma_unspent(), progression().starting_karma - 7);
         assert!(troll.lower(Attribute::Strength).is_ok());
         assert!(
             troll.lower(Attribute::Strength).is_err(),

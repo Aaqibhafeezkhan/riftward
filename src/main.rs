@@ -63,6 +63,12 @@ fn main() {
 /// Everything but the clock and the log: the engine and the game, with the database at `path`
 /// and listening on `address`.
 fn add_game(app: &mut App, path: String, address: String) {
+    // The progression numbers are read now, so a mistake in their file stops the server at once.
+    let numbers = attributes::progression();
+    info!(
+        "progression: {} experience and {} Karma a level",
+        numbers.experience_per_level, numbers.karma_per_level
+    );
     // Loads the zone files in `assets/zones` and hot-reloads them when they change on disk.
     app.add_plugins(AssetPlugin {
         watch_for_changes_override: Some(true),

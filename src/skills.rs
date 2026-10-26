@@ -60,8 +60,6 @@ const BASE_COOLDOWN: f64 = 5.0 * 60.0;
 const COOLDOWN_GROWTH: f64 = 1.1;
 /// The chance, per use of a skill, of discovering another in its tree, before Luck.
 const DISCOVERY_CHANCE: f64 = 0.001;
-/// Experience for discovering a skill through use.
-const DISCOVERY_EXPERIENCE: u64 = 50;
 /// The most a tough fight multiplies the chances of a gain or a discovery.
 const TOUGH_FIGHT_MAX_BOOST: f64 = 2.0;
 /// Skills every character starts with, whatever their race and background: a basic attack, and
@@ -962,7 +960,12 @@ pub fn count_use(
             "\x1b[1;35mSomething clicks into place. You have discovered {name}.\x1b[0m"
         ));
         let deed = format!("for discovering {name}");
-        lines.extend(attributes.earn(DISCOVERY_EXPERIENCE, &deed, character_id, db));
+        lines.extend(attributes.earn(
+            crate::attributes::progression().discovery_experience,
+            &deed,
+            character_id,
+            db,
+        ));
     }
     lines
 }
