@@ -19,7 +19,7 @@ use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::dice::Contest;
 use crate::items::{self, ItemQuery, ItemTemplates, worth};
 use crate::money;
-use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
 use crate::skills::{Learner, Practice, fill};
 use crate::targeting::Keywords;
 
@@ -176,7 +176,8 @@ fn appraisal_difficulty(value: u64) -> f64 {
 /// `appraise <item>`: what something you can reach is worth, if you can tell.
 fn appraise(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     items: ItemQuery,
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
@@ -246,7 +247,7 @@ fn appraise(
         }
         _ => {}
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 #[cfg(test)]

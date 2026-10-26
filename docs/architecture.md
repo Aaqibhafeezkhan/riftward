@@ -29,7 +29,8 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `commands/` | Player commands, one system each: `movement` (look, go, directions), `communication` (say, whisper, yell, gossip, who), `character` (score, raise, alias, unalias, quit) |
 | `build.rs` | Builder and admin commands, registered with a permission |
 | `targeting.rs` | `Keywords` and `Target`: resolving `goblin`, `2.goblin`, `all.coin`, `me` |
-| `output.rs` | Shared output plumbing: `Outgoing`, `deliver`, `Actor`, the common queries, target candidate lists |
+| `output.rs` | Characters and what they're told: the `Characters` query and `Actor` (players and mobs alike), `Outgoing`, the `Outbox` and `flush_outbox`, which delivers it to connections and puppeteers, target candidate lists |
+| `puppet.rs` | Puppeting: `puppet` (`possess`) and `release`, and letting go when the puppet or puppeteer goes |
 | `world.rs` | Zone assets (rooms, doors, item and mob templates, spawns), room entities, the `RoomIndex`, and `sync_world`, which applies zone changes live |
 | `items.rs` | Item entities, Bulk and placement rules, persistence, and the item commands |
 | `mobs.rs` | Mob entities, wandering and crowding, `summon` and `purge` |
@@ -112,7 +113,9 @@ app.add_command(
 
 ### Things in the world
 
-Items and mobs are entities made from templates in zone files. Items have an `ItemLocation` (a room, hands, a wear slot, or inside another item); mobs share players' `InRoom`, so queries that mean only one of them filter on `Connection`. Items, containers, locks, persistence and decay are in [Items, containers and locks](items.md); mob templates, spawns, resets, wandering and doors in [The living world](world.md). Builders edit templates with `item` and `mob`, and spawns with `spawn`.
+Items and mobs are entities made from templates in zone files. Items have an `ItemLocation` (a room, hands, a wear slot, or inside another item).
+
+**Players and mobs are the same kind of thing: characters.** Both have `InRoom`, attributes, skills, vitals, conditions, spells and gear, and the same rules apply to both. A player has a `Player` (their saved character and account) and a connection; a mob has a `Mob` (its template) and can have a race, as a player does. Commands work for either: `Characters` reads both, and `Actor` is whoever runs a command, with `character_id: None` for a mob, so anything that saves (skills, money, items, location) skips it, since mobs aren't saved. Output goes into the `Outbox`, never straight to a connection, and `flush_outbox` delivers it once a tick to players, and to whoever is puppeting a mob, capitalising each line's first letter so a mob's name reads right at the start. Mob behaviour issues the same commands a player would: a wandering mob walks with `go`. Items, containers, locks, persistence and decay are in [Items, containers and locks](items.md); mob templates, spawns, resets, wandering and doors in [The living world](world.md). Builders edit templates with `item` and `mob`, and spawns with `spawn`.
 
 ### Game events
 
@@ -165,6 +168,8 @@ Features that are designed but wait on other work.
 
 ### Game masters and puppeting
 
+*Built,* for builders and admins (`src/puppet.rs`), except the separate GM role. `puppet <mob>` (or `possess`) takes over a mob in the room; `release` lets go.
+
 Admins, and a new **GM (game master) role**, can **puppet** any mob: take it over and play it themselves until they release it. A GM can voice the goblin king during a raid, have a town guard question a suspicious player, or walk the dragon out of its lair for an event.
 
 ```
@@ -181,7 +186,7 @@ You release the goblin king and return to yourself.
 - **Release** with `release`, or automatically when the mob dies or the GM disconnects. The GM returns to their own character.
 - **Limits:** only mobs, never another player's character; one puppeteer per mob at a time.
 - **Every puppeting session is logged** (who, which mob, when, and what they did), so the power is accountable.
-- **How it fits the code:** a `Puppeting(mob)` component on the GM's connection makes the command dispatcher send each `Invocation` on behalf of the mob, and routes the mob's output back to the GM. This depends on mobs using the same command systems as players, which the design already intends (mobs fight with skills, by the same rules).
+- **How it fits the code:** a `Puppeting(mob)` component on the GM makes the command dispatcher send each `Invocation` on behalf of the mob (all but `release` and `quit`), with the GM's permissions, and `PuppetedBy` on the mob routes what it's told back to them. While puppeting, the GM hears nothing of their own body. The puppet gets an `ActionQueue`, so in a fight it acts on what the GM queues, and its own choices (wandering, aggression, techniques and spells by chance) stop. The prompt shows whose vitals it is: `[the town guard] <11/11hp 9/9st>`. Starting, stopping and every command typed through a puppet are logged.
 
 **Waits on mobs.** The GM role itself, and the open question of where it sits among the roles, are in [Open questions](#open-questions).
 

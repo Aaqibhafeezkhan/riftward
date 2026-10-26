@@ -6,13 +6,20 @@ use crate::aliases::{self, Aliases};
 use crate::attributes::{self, Attributes};
 use crate::characters::{Backgrounds, Races};
 use crate::combat::Conditions;
+use crate::combat::the;
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
+use crate::items::capitalized;
 use crate::money::{self, Purse};
-use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line};
+use crate::net::Connection;
+use crate::output::{Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line};
 use crate::skills::{SkillDefs, Skills};
 use crate::trainers;
-use crate::vitals::{Maxima, Vitals};
+use crate::vitals::{BaseHealth, Maxima, Vitals};
+use crate::world::Player;
+
+/// What a puppeted mob is told when it tries something only a player's account can do.
+const ONLY_PLAYERS: &str = "Only a player can do that.";
 
 /// The longest description a character can have.
 const MAX_DESCRIPTION_LEN: usize = 600;
@@ -24,30 +31,44 @@ type Sheet = (
     &'static Skills,
     Option<&'static Conditions>,
     Option<&'static Purse>,
+    Option<&'static BaseHealth>,
 );
 
 pub fn score(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     sheets: Query<Sheet>,
     races: Res<Races>,
     backgrounds: Res<Backgrounds>,
     defs: Res<SkillDefs>,
 ) {
-    let (Ok((_, _, Some(player), _)), Ok((attributes, vitals, skills, conditions, purse))) =
+    let (Ok((_, player, mob, _)), Ok((attributes, vitals, skills, conditions, purse, base))) =
         (players.get(inv.entity), sheets.get(inv.entity))
     else {
         return;
     };
-    let background = backgrounds
-        .get(&player.background)
-        .map_or(player.background.clone(), |b| b.name.clone());
-    let who = format!("{} {background}", races.name(&player.race));
+    // A player is their race and past life; a mob, its race, if it has one, and its template.
+    let (name, who) = match (player, mob) {
+        (Some(player), _) => {
+            let background = backgrounds
+                .get(&player.background)
+                .map_or(player.background.clone(), |b| b.name.clone());
+            let race = races.name(&player.race);
+            (player.name.clone(), format!("{race} {background}"))
+        }
+        (None, Some(mob)) => {
+            let race = mob.race.as_deref().map(|r| races.name(r));
+            let what = race.map_or(format!("[{}]", mob.key), |r| format!("{r} [{}]", mob.key));
+            (capitalized(&the(&mob.name)), what)
+        }
+        (None, None) => return,
+    };
     let current = (vitals.health.floor() as i32, vitals.stamina.floor() as i32);
     let tradition = trainers::awakened(skills);
-    let max = Maxima::of(attributes, skills, &defs, None);
+    let max = Maxima::of(attributes, skills, &defs, base);
     let mut text = attributes::score_text(
-        &player.name,
+        &name,
         who.trim(),
         attributes,
         current,
@@ -67,13 +88,18 @@ pub fn score(
             affected.join(", ")
         );
     }
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// `describe [<text>]`: see or set what others see when they look at you.
-pub fn describe(In(inv): In<Invocation>, mut players: PlayerQuery, db: Res<Database>) {
+pub fn describe(
+    In(inv): In<Invocation>,
+    mut players: Query<&mut Player>,
+    mut outbox: ResMut<Outbox>,
+    db: Res<Database>,
+) {
     let reply: Reply = match players.get_mut(inv.entity) {
-        Ok((_, _, Some(mut player), _)) => {
+        Ok(mut player) => {
             let text = inv.args.trim();
             if text.is_empty() {
                 Ok(if player.description.is_empty() {
@@ -91,14 +117,15 @@ pub fn describe(In(inv): In<Invocation>, mut players: PlayerQuery, db: Res<Datab
                 Ok("Description updated.".into())
             }
         }
-        _ => return,
+        _ => Err(ONLY_PLAYERS.into()),
     };
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 pub fn raise(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mut sheets: Query<&mut Attributes>,
     db: Res<Database>,
 ) {
@@ -107,13 +134,17 @@ pub fn raise(
     else {
         return;
     };
-    let text = attributes::raise_command(actor.character_id, &mut attributes, &inv.args, &db);
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    let text = match actor.character_id {
+        Some(id) => attributes::raise_command(id, &mut attributes, &inv.args, &db),
+        None => ONLY_PLAYERS.into(),
+    };
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 pub fn alias(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mut aliases: Query<&mut Aliases>,
     registry: Res<CommandRegistry>,
     db: Res<Database>,
@@ -124,19 +155,23 @@ pub fn alias(
     ) else {
         return;
     };
+    let Some(character_id) = actor.character_id else {
+        return deliver(vec![Outgoing::line(inv.entity, ONLY_PLAYERS)], &mut outbox);
+    };
     let text = aliases::alias_command(
-        actor.character_id,
+        character_id,
         &mut aliases,
         &inv.args,
         |name| registry.is_command(name, actor.role),
         &db,
     );
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 pub fn unalias(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mut aliases: Query<&mut Aliases>,
     db: Res<Database>,
 ) {
@@ -146,11 +181,19 @@ pub fn unalias(
     ) else {
         return;
     };
-    let text = aliases::unalias_command(actor.character_id, &mut aliases, &inv.args, &db);
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    let text = match actor.character_id {
+        Some(id) => aliases::unalias_command(id, &mut aliases, &inv.args, &db),
+        None => ONLY_PLAYERS.into(),
+    };
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
-pub fn quit(In(inv): In<Invocation>, mut players: PlayerQuery) {
+pub fn quit(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    mut connections: Query<&mut Connection>,
+) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
@@ -162,8 +205,8 @@ pub fn quit(In(inv): In<Invocation>, mut players: PlayerQuery) {
             text: format!("{} has left the game.\r\n", actor.name),
         },
     ];
-    deliver(out, &mut players);
-    if let Ok((_, mut conn, _, _)) = players.get_mut(actor.entity) {
+    deliver(out, &mut outbox);
+    if let Ok(mut conn) = connections.get_mut(actor.entity) {
         conn.closing = true;
     }
 }

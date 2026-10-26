@@ -12,7 +12,7 @@ use bevy::time::common_conditions::on_timer;
 
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::events::GameEvent;
-use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
 
 /// Real seconds in one game day.
 pub const REAL_SECS_PER_GAME_DAY: i64 = 3 * 60 * 60;
@@ -149,7 +149,12 @@ fn tick_clock(mut clock: ResMut<Clock>, mut events: MessageWriter<GameEvent>) {
 }
 
 /// `time`: the hour, read from the sky outdoors or guessed indoors.
-fn time_cmd(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery) {
+fn time_cmd(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    rooms: RoomQuery,
+) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
@@ -166,7 +171,7 @@ fn time_cmd(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery)
         };
         format!("{sky}. It's {when}.")
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 #[cfg(test)]

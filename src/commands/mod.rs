@@ -9,7 +9,9 @@ pub mod movement;
 use bevy::prelude::*;
 
 use crate::command::{self, AddCommand, Category, CommandSpec};
-use crate::output::{Outgoing, PlayerQuery, deliver};
+use crate::net::Connection;
+use crate::output::{Outbox, Outgoing, deliver};
+use crate::world::{InRoom, Player};
 
 pub struct CommandsPlugin;
 
@@ -152,17 +154,18 @@ fn direction(name: &'static str, shortcuts: &'static [&'static str]) -> CommandS
 }
 
 /// Tell the room when a player's connection drops.
-fn announce_departures(mut players: PlayerQuery) {
+fn announce_departures(
+    players: Query<(Entity, &Connection, &Player, &InRoom)>,
+    mut outbox: ResMut<Outbox>,
+) {
     let out: Vec<_> = players
         .iter()
-        .filter_map(|(entity, conn, player, in_room)| match (player, in_room) {
-            (Some(player), Some(in_room)) if conn.closing => Some(Outgoing::Room {
-                room: in_room.0,
-                except: entity,
-                text: format!("{} has left the game.\r\n", player.name),
-            }),
-            _ => None,
+        .filter(|(_, conn, _, _)| conn.closing)
+        .map(|(entity, _, player, in_room)| Outgoing::Room {
+            room: in_room.0,
+            except: entity,
+            text: format!("{} has left the game.\r\n", player.name),
         })
         .collect();
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }

@@ -593,7 +593,11 @@ pub struct MobDef {
     pub here: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
-    /// Attribute ratings; any not listed are at the base (3, Luck 1, Magic 0).
+    /// What it is, if it's one of the peoples (`human`, `dwarf`): its attributes start from that
+    /// race's, it has the race's skills, and it reads and tracks as one. Beasts have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub race: Option<String>,
+    /// Attribute ratings; any not listed are at the base (3, Luck 1, Magic 0), shifted by its race.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub attributes: BTreeMap<Attribute, i32>,
     /// Skills it knows, `tree:skill` to level. Mobs fight with skills by the same rules as players,
@@ -644,6 +648,7 @@ impl MobDef {
             keywords: Vec::new(),
             here: String::new(),
             description: String::new(),
+            race: None,
             attributes: BTreeMap::new(),
             skills: BTreeMap::new(),
             attack: None,
@@ -1636,6 +1641,16 @@ mod tests {
                 .any(|z| z.id == key.zone && z.doors.contains_key(&key.door))
         };
 
+        let races_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/races.ron");
+        let races: Vec<String> = ron_options()
+            .from_str::<Vec<crate::characters::RaceDef>>(
+                &std::fs::read_to_string(races_file).unwrap(),
+            )
+            .unwrap()
+            .into_iter()
+            .map(|race| race.id)
+            .collect();
+
         let mut problems = Vec::new();
         for zone in &zones {
             for (item_id, item) in &zone.items {
@@ -1644,6 +1659,14 @@ mod tests {
                     && !item_exists(&ItemKey::parse(key, &zone.id))
                 {
                     problems.push(format!("item {}:{item_id}: no key item '{key}'", zone.id));
+                }
+            }
+            // A mob's race must be one of the races.
+            for (mob_id, mob) in &zone.mobs {
+                if let Some(race) = &mob.race
+                    && !races.contains(race)
+                {
+                    problems.push(format!("mob {}:{mob_id}: no race '{race}'", zone.id));
                 }
             }
             // A shop's goods must exist and have a price, or they'd quietly go unsold.

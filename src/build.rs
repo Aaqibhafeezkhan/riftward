@@ -16,14 +16,15 @@ use crate::db::{Database, Permission, Role};
 use crate::events::{GameEvent, Way};
 use crate::net::Connection;
 use crate::output::{
-    Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_online,
+    Actor, Characters, Outbox, Outgoing, Reply, RoomQuery, deliver, reply_line, targets_online,
 };
 use crate::spawns::SpawnTimers;
 use crate::targeting::{Keywords, Target};
 use crate::world::{
     Bulk, Capacity, ContainerDef, DoorDef, DoorKey, DoorState, Environment, Every, ExitDef,
-    ItemDef, ItemKey, LockDef, MobDef, MobKey, Refill, RoomDef, RoomIndex, RoomKey, Slot, SpawnDef,
-    SpawnKey, Spawned, Terrain, Wander, ZONE_ENTRANCE, ZoneDef, format_bulk, without_article,
+    ItemDef, ItemKey, LockDef, MobDef, MobKey, Player, Refill, RoomDef, RoomIndex, RoomKey, Slot,
+    SpawnDef, SpawnKey, Spawned, Terrain, Wander, ZONE_ENTRANCE, ZoneDef, format_bulk,
+    without_article,
 };
 
 pub struct BuildPlugin;
@@ -178,26 +179,32 @@ impl Plugin for BuildPlugin {
 struct PendingZones(Vec<(String, Entity)>);
 
 /// The builder running a command and the room they're standing in.
-fn locate(players: &PlayerQuery, rooms: &RoomQuery, entity: Entity) -> Option<(Actor, RoomKey)> {
+fn locate(players: &Characters, rooms: &RoomQuery, entity: Entity) -> Option<(Actor, RoomKey)> {
     let actor = Actor::get(players, entity)?;
     let (_, here, _) = rooms.get(actor.room).ok()?;
     let here = here.clone();
     Some((actor, here))
 }
 
-fn where_cmd(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery) {
+fn where_cmd(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    rooms: RoomQuery,
+) {
     let Some((_, here)) = locate(&players, &rooms, inv.entity) else {
         return;
     };
     deliver(
         vec![Outgoing::line(inv.entity, format!("You are in [{here}]."))],
-        &mut players,
+        &mut outbox,
     );
 }
 
 fn rooms_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     zones: Res<Assets<ZoneDef>>,
 ) {
@@ -205,12 +212,15 @@ fn rooms_cmd(
         return;
     };
     let reply = list_rooms(&here, &zones);
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn goto_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    mut commands: Commands,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     view: View,
     index: Res<RoomIndex>,
     db: Res<Database>,
@@ -224,7 +234,8 @@ fn goto_cmd(
         &actor,
         &here,
         &inv,
-        &mut players,
+        &mut commands,
+        &players,
         &view,
         &index,
         &db,
@@ -233,7 +244,7 @@ fn goto_cmd(
     ) {
         out.push(reply_line(inv.entity, Err(err)));
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// A builder command that edits the zone they're standing in, by calling `$edit`.
@@ -241,7 +252,8 @@ macro_rules! zone_edit_command {
     ($name:ident, $edit:ident) => {
         fn $name(
             In(inv): In<Invocation>,
-            mut players: PlayerQuery,
+            players: Characters,
+            mut outbox: ResMut<Outbox>,
             rooms: RoomQuery,
             mut zones: ResMut<Assets<ZoneDef>>,
         ) {
@@ -249,7 +261,7 @@ macro_rules! zone_edit_command {
                 return;
             };
             let reply = $edit(&here, &inv, &mut zones);
-            deliver(vec![reply_line(inv.entity, reply)], &mut players);
+            deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
         }
     };
 }
@@ -264,7 +276,8 @@ zone_edit_command!(unlink_cmd, unlink);
 
 fn link_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     index: Res<RoomIndex>,
     mut zones: ResMut<Assets<ZoneDef>>,
@@ -273,12 +286,13 @@ fn link_cmd(
         return;
     };
     let reply = link(&here, &inv, &index, &mut zones);
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 fn door_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut zones: ResMut<Assets<ZoneDef>>,
 ) {
@@ -286,12 +300,13 @@ fn door_cmd(
         return;
     };
     let reply = door(&here, &inv, &mut zones);
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 fn item_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut zones: ResMut<Assets<ZoneDef>>,
 ) {
@@ -299,12 +314,13 @@ fn item_cmd(
         return;
     };
     let reply = item_template(&here, &inv, &mut zones);
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 fn mob_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut zones: ResMut<Assets<ZoneDef>>,
 ) {
@@ -312,12 +328,13 @@ fn mob_cmd(
         return;
     };
     let reply = mob_template(&here, &inv, &mut zones);
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 fn spawn_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut zones: ResMut<Assets<ZoneDef>>,
     mut timers: ResMut<SpawnTimers>,
@@ -338,12 +355,13 @@ fn spawn_cmd(
         }
         _ => spawn(&here, &inv, &mut zones, |key| timers.alive(key)),
     };
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 fn zones_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     zones: Res<Assets<ZoneDef>>,
 ) {
@@ -351,12 +369,13 @@ fn zones_cmd(
         return;
     };
     let reply = list_zones(&here, &zones);
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 fn zone_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut zones: ResMut<Assets<ZoneDef>>,
     mut pending: ResMut<PendingZones>,
@@ -369,22 +388,28 @@ fn zone_cmd(
         ("rename", rest) => rename_zone(&here, rest.trim(), &mut zones),
         _ => Err(inv.usage_error()),
     };
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
-fn role_cmd(In(inv): In<Invocation>, mut players: PlayerQuery, db: Res<Database>) {
-    let Some(actor) = Actor::get(&players, inv.entity) else {
+fn role_cmd(
+    In(inv): In<Invocation>,
+    mut both: ParamSet<(Characters, Query<(Entity, &mut Player)>)>,
+    mut outbox: ResMut<Outbox>,
+    db: Res<Database>,
+) {
+    let Some(actor) = Actor::get(&both.p0(), inv.entity) else {
         return;
     };
     let mut out = Vec::new();
-    let reply = set_role(&actor, &inv, &db, &mut players, &mut out);
+    let reply = set_role(&actor, &inv, &db, &mut both.p1(), &mut out);
     out.insert(0, reply_line(inv.entity, reply));
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 fn setattr_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     keywords: Query<&Keywords>,
     mut sheets: Query<&mut Attributes>,
     db: Res<Database>,
@@ -392,7 +417,7 @@ fn setattr_cmd(
     let mut out = Vec::new();
     let reply = set_attribute(&inv, &db, &players, &keywords, &mut sheets, &mut out);
     out.insert(0, reply_line(inv.entity, reply));
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// Apply an edit to a zone and save it to disk. `edit` should validate before changing anything.
@@ -452,7 +477,8 @@ fn goto(
     actor: &Actor,
     here: &RoomKey,
     inv: &Invocation,
-    players: &mut PlayerQuery,
+    commands: &mut Commands,
+    players: &Characters,
     view: &View,
     index: &RoomIndex,
     db: &Database,
@@ -476,7 +502,16 @@ fn goto(
         way: Way::Teleported,
         witnesses: None,
     });
-    move_player(entity, actor.character_id, to, players, view, db, out);
+    move_player(
+        entity,
+        actor.character_id,
+        to,
+        commands,
+        players,
+        view,
+        db,
+        out,
+    );
     events.write(GameEvent::Entered {
         who: entity,
         name: name.clone(),
@@ -788,7 +823,7 @@ fn set_role(
     actor: &Actor,
     inv: &Invocation,
     db: &Database,
-    players: &mut PlayerQuery,
+    players: &mut Query<(Entity, &mut Player)>,
     out: &mut Vec<Outgoing>,
 ) -> Reply {
     let usage = || inv.usage_error();
@@ -810,10 +845,8 @@ fn set_role(
     info!("account '{account}' is now {}", role.as_str());
 
     // Apply to anyone online from that account right away.
-    for (other, _, player, _) in players.iter_mut() {
-        if let Some(mut player) = player
-            && player.account.eq_ignore_ascii_case(account)
-        {
+    for (other, mut player) in players.iter_mut() {
+        if player.account.eq_ignore_ascii_case(account) {
             player.role = role;
             if other != entity {
                 out.push(Outgoing::line(
@@ -834,7 +867,7 @@ fn set_role(
 fn set_attribute(
     inv: &Invocation,
     db: &Database,
-    players: &PlayerQuery,
+    players: &Characters,
     keywords: &Query<&Keywords>,
     sheets: &mut Query<&mut Attributes>,
     out: &mut Vec<Outgoing>,
@@ -867,7 +900,9 @@ fn set_attribute(
         .get_mut(entity)
         .map_err(|_| format!("{name} has no attributes loaded."))?;
 
-    if let Err(err) = db.set_attribute(character_id, attribute.name(), rating) {
+    if let Some(id) = character_id
+        && let Err(err) = db.set_attribute(id, attribute.name(), rating)
+    {
         error!("failed to set attribute: {err}");
         return Err("Database error; the attribute was not changed.".into());
     }

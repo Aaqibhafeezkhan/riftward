@@ -3,7 +3,8 @@
 //! Every room remembers the tracks of whoever walks in or out of it, player or mob, for half an
 //! hour; a teleport leaves none, and wading water holds none. `track [<who>]` reads them with
 //! Tracking: each track is found by the tracker's skill against how hard the ground is to read,
-//! harder the older the track. Tracks show what made them, not who: "a human", "a sewer rat".
+//! harder the older the track. Tracks show what made them, not who: "a human" (a player or a
+//! townsperson alike), "a sewer rat".
 
 use std::collections::{HashMap, VecDeque};
 
@@ -13,7 +14,7 @@ use crate::characters::{Races, article};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::events::{GameEvent, Way, from};
 use crate::mobs::Mob;
-use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
 use crate::skills::{Learner, Practice, fill};
 use crate::targeting::Keywords;
 use crate::world::{Player, Room, Terrain};
@@ -137,8 +138,14 @@ fn lay_tracks(
         if rooms.get(room).is_ok_and(|r| ground(r.terrain).is_none()) {
             continue;
         }
-        let (what, words) = if let Ok(player) = players.get(who) {
-            let race = races.name(&player.race).to_lowercase();
+        // One of the peoples leaves a person's tracks, player or not; a beast its own.
+        let race = players
+            .get(who)
+            .ok()
+            .map(|p| p.race.clone())
+            .or_else(|| mobs.get(who).ok().and_then(|(mob, _)| mob.race.clone()));
+        let (what, words) = if let Some(race) = race {
+            let race = races.name(&race).to_lowercase();
             (format!("{} {race}", article(&race)), vec![race])
         } else if let Ok((mob, keywords)) = mobs.get(who) {
             (mob.name.clone(), keywords.0.clone())
@@ -161,7 +168,8 @@ fn lay_tracks(
 /// `track [<who>]`: read the tracks here, or only those whose maker matches `who`.
 fn track(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: Query<&Room>,
     mut tracks: ResMut<Tracks>,
     mut practice: Practice,
@@ -233,7 +241,7 @@ fn track(
         }
         _ => {}
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 #[cfg(test)]

@@ -25,13 +25,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::{CombatLog, Fighters, Fighting, Round, the};
+use crate::combat::{Fighters, Fighting, Round, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::dice::Dice;
 use crate::events::GameEvent;
 use crate::items::{ItemQuery, ItemTemplates};
-use crate::output::{Outgoing, PlayerQuery, deliver};
+use crate::output::{Outbox, Outgoing, deliver};
 use crate::skills::{SkillDefs, SkillText, Skills};
 use crate::stealth::{Hidden, sees};
 use crate::targeting::{Keywords, Target};
@@ -386,7 +386,7 @@ pub fn choose_target(
 /// `spells [<spell>]`: the spells you know, by school, or about one of them.
 fn spells_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    mut outbox: ResMut<Outbox>,
     sheets: Query<&Spells>,
     spells: Res<SpellDefs>,
     defs: Res<SkillDefs>,
@@ -435,7 +435,7 @@ fn spells_cmd(
             _ => format!("You don't know a spell called '{}'.", inv.args.trim()),
         }
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// `cast <spell> [<target>]`: cast a spell. Aimed at a foe out of a fight, it starts one, cast on
@@ -453,7 +453,7 @@ fn cast(
     mut dice: ResMut<Dice>,
     db: Res<Database>,
     mut events: MessageWriter<GameEvent>,
-    mut log: ResMut<CombatLog>,
+    mut log: ResMut<Outbox>,
     hidden: Query<&Hidden>,
     resting: Query<Entity, With<Resting>>,
     time: Res<Time>,
@@ -464,7 +464,7 @@ fn cast(
     let room = caster.in_room.0;
     let fighting = caster.fighting.map(|f| f.0);
     let known = caster.spells.cloned().unwrap_or_default();
-    let said = |log: &mut CombatLog, text: String| log.0.push(Outgoing::line(inv.entity, text));
+    let said = |log: &mut Outbox, text: String| log.0.push(Outgoing::line(inv.entity, text));
     if inv.args.trim().is_empty() {
         return said(
             &mut log,

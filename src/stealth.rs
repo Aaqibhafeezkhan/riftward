@@ -18,7 +18,7 @@ use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::dice::Dice;
 use crate::events::GameEvent;
 use crate::mobs::Mob;
-use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
 use crate::skills::{Learner, Practice, Skills, fill};
 use crate::targeting::Keywords;
 use crate::world::InRoom;
@@ -136,7 +136,8 @@ fn others_in(others: &Others, room: Entity, but: Entity) -> Vec<Entity> {
 fn hide(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut seen: ParamSet<(PlayerQuery, Others)>,
+    mut seen: ParamSet<(Characters, Others)>,
+    mut outbox: ResMut<Outbox>,
     mut practice: Practice,
     fighting: Query<(), With<Fighting>>,
 ) {
@@ -209,14 +210,14 @@ fn hide(
         }
         _ => {}
     }
-    deliver(out, &mut seen.p0());
+    deliver(out, &mut outbox);
 }
 
 /// `sneak`: start or stop moving quietly.
 fn sneak(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    mut outbox: ResMut<Outbox>,
     sheets: Query<&Skills>,
     sneaking: Query<(), With<Sneaking>>,
 ) {
@@ -232,11 +233,11 @@ fn sneak(
     } else {
         "You don't know how to do that (Stealth)."
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// A name for someone, as others say it.
-fn name_of(players: &PlayerQuery, mobs: &Query<&Mob>, who: Entity) -> String {
+fn name_of(players: &Characters, mobs: &Query<&Mob>, who: Entity) -> String {
     match (Actor::get(players, who), mobs.get(who)) {
         (Some(player), _) => player.name,
         (_, Ok(mob)) => the(&mob.name),
@@ -247,7 +248,8 @@ fn name_of(players: &PlayerQuery, mobs: &Query<&Mob>, who: Entity) -> String {
 /// `search`: look hard for anyone hiding here, with double your Intuition.
 fn search(
     In(inv): In<Invocation>,
-    mut both: ParamSet<(PlayerQuery, Hiders)>,
+    mut both: ParamSet<(Characters, Hiders)>,
+    mut outbox: ResMut<Outbox>,
     sheets: Query<&Attributes>,
     mobs: Query<&Mob>,
     mut dice: ResMut<Dice>,
@@ -273,7 +275,7 @@ fn search(
         }
     }
     let searcher_hidden = hiders.get(actor.entity).is_ok();
-    let mut players = both.p0();
+    let players = both.p0();
     let mut out = Vec::new();
     let told = if found.is_empty() {
         "You search the shadows, but find no one.".to_string()
@@ -299,13 +301,14 @@ fn search(
             text: format!("{} searches the shadows.\r\n", actor.name),
         });
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// Anyone who walks into a room gets a chance to notice whoever is hiding there.
 fn notice_newcomers(
     mut events: MessageReader<GameEvent>,
-    mut both: ParamSet<(PlayerQuery, Hiders)>,
+    mut both: ParamSet<(Characters, Hiders)>,
+    mut outbox: ResMut<Outbox>,
     sheets: Query<&Attributes>,
     mobs: Query<&Mob>,
     mut dice: ResMut<Dice>,
@@ -333,7 +336,7 @@ fn notice_newcomers(
             }
         }
     }
-    let mut players = both.p0();
+    let players = both.p0();
     let out = noticed
         .into_iter()
         .map(|(who, hider)| {
@@ -341,5 +344,5 @@ fn notice_newcomers(
             Outgoing::line(who, format!("You notice {name} hiding in the shadows."))
         })
         .collect();
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }

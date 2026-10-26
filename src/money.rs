@@ -9,7 +9,7 @@ use bevy::prelude::*;
 
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
-use crate::output::{Actor, Outgoing, PlayerQuery, deliver, targets_online};
+use crate::output::{Actor, Characters, Outbox, Outgoing, deliver, targets_online};
 use crate::targeting::{Keywords, Target};
 
 /// Copper in a silver piece, and silver in a gold one.
@@ -45,8 +45,11 @@ impl Purse {
         true
     }
 
-    /// Save it as `character_id`'s.
-    pub fn save(self, character_id: i64, db: &Database) {
+    /// Save it as `character_id`'s, if that's a player: a mob's purse isn't saved.
+    pub fn save(self, character_id: Option<i64>, db: &Database) {
+        let Some(character_id) = character_id else {
+            return;
+        };
         if let Err(err) = db.save_coins(character_id, self.0) {
             error!("failed to save the purse of character {character_id}: {err}");
         }
@@ -115,7 +118,8 @@ pub fn amount_in(text: &str) -> Option<(u64, &str)> {
 /// `setcoins <player> <amount>`: set someone's money, for testing.
 fn setcoins(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mut purses: Query<&mut Purse>,
     keywords: Query<&Keywords>,
     db: Res<Database>,
@@ -139,7 +143,7 @@ fn setcoins(
         Ok(format!("{} now has {}.", target.name, coins(amount)))
     })()
     .unwrap_or_else(|err| err);
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// Give `amount` from `giver`'s purse to `receiver`'s, and say so. For `give`.

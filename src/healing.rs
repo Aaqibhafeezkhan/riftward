@@ -16,7 +16,7 @@ use crate::db::Database;
 use crate::dice::Dice;
 use crate::items::{self, Item, ItemLocation, ItemQuery, ItemTemplates, Snapshot, capitalized};
 use crate::mobs::{self, MobQuery};
-use crate::output::{Actor, Outgoing, PlayerQuery, deliver, targets_in_room};
+use crate::output::{Actor, Characters, Outbox, Outgoing, deliver, targets_in_room};
 use crate::skills::{Learner, Practice, SkillDefs, Skills, fill};
 use crate::stealth::{Hidden, visible};
 use crate::targeting::{Keywords, Target};
@@ -61,7 +61,8 @@ impl Plugin for HealingPlugin {
 #[derive(SystemParam)]
 struct Pantry<'w, 's> {
     commands: Commands<'w, 's>,
-    players: PlayerQuery<'w, 's>,
+    players: Characters<'w, 's>,
+    outbox: ResMut<'w, Outbox>,
     items: ItemQuery<'w, 's>,
     keywords: Query<'w, 's, &'static Keywords>,
     templates: Res<'w, ItemTemplates>,
@@ -176,7 +177,7 @@ fn consume(inv: Invocation, how: Consume, mut p: Pantry) {
         }
         _ => {}
     }
-    deliver(out, &mut p.players);
+    deliver(out, &mut p.outbox);
 }
 
 /// An item used up: gone from the world, and from the database if it was real.
@@ -196,7 +197,8 @@ fn used_up(commands: &mut Commands, db: &Database, entity: Entity, item: &Item) 
 fn bandage(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mobs: MobQuery,
     items: ItemQuery,
     keywords: Query<&Keywords>,
@@ -232,7 +234,7 @@ fn bandage(
             players
                 .get(patient)
                 .ok()
-                .and_then(|(_, _, p, _)| p.map(|p: &Player| p.name.clone()))
+                .and_then(|(_, p, _, _)| p.map(|p: &Player| p.name.clone()))
                 .or_else(|| {
                     mobs.get(patient)
                         .ok()
@@ -311,10 +313,7 @@ fn bandage(
         let theirs = if me { "themselves" } else { name.as_str() };
         let seen = fill(&lines.room, &[("actor", &actor.name), ("target", theirs)]);
         for (watcher, _, _, at) in &players {
-            if at.is_some_and(|at| at.0 == actor.room)
-                && watcher != actor.entity
-                && watcher != patient
-            {
+            if at.0 == actor.room && watcher != actor.entity && watcher != patient {
                 out.push(Outgoing::line(watcher, seen.clone()));
             }
         }
@@ -337,5 +336,5 @@ fn bandage(
             .into_iter()
             .map(|line| Outgoing::line(actor.entity, line)),
     );
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }

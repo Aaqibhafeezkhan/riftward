@@ -12,7 +12,7 @@ use crate::combat::Blow;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::items::{ItemQuery, ItemTemplates, Quality, make_for};
-use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
 use crate::skills::{Learner, Practice, fill};
 use crate::world::{Finds, ItemKey, RoomKey, Table};
 
@@ -124,7 +124,8 @@ fn gather(In(inv): In<Invocation>, gatherer: Gatherer) {
 #[derive(bevy::ecs::system::SystemParam)]
 struct Gatherer<'w, 's> {
     commands: Commands<'w, 's>,
-    players: PlayerQuery<'w, 's>,
+    players: Characters<'w, 's>,
+    outbox: ResMut<'w, Outbox>,
     rooms: Query<'w, 's, (&'static RoomKey, Option<&'static Finds>)>,
     items: ItemQuery<'w, 's>,
     templates: Res<'w, ItemTemplates>,
@@ -221,7 +222,7 @@ fn gather_from(inv: Invocation, kind: Kind, mut g: Gatherer) {
             .into_iter()
             .map(|line| Outgoing::line(actor.entity, line)),
     );
-    deliver(out, &mut g.players);
+    deliver(out, &mut g.outbox);
 }
 
 #[cfg(test)]

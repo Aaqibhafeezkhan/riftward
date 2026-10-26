@@ -16,7 +16,7 @@ use crate::dice::Dice;
 use crate::items::{
     Item, ItemLocation, ItemTemplates, Snapshot, capitalized, carries, with_keywords,
 };
-use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
 use crate::skills::{Learner, Practice, fill};
 use crate::targeting::{Keywords, Target};
 use crate::world::{Door, DoorKey, DoorState, Exits, ItemKey, LockDef, without_article};
@@ -138,7 +138,7 @@ impl Lockable {
 
 fn find_lockable(
     inv: &Invocation,
-    players: &PlayerQuery,
+    players: &Characters,
     world: &Lockables,
 ) -> Result<Lockable, String> {
     let actor = Actor::get(players, inv.entity).ok_or_else(String::new)?;
@@ -210,7 +210,8 @@ fn find_lockable(
 /// everyone sees, then apply it.
 fn with_lockable(
     inv: &Invocation,
-    players: &mut PlayerQuery,
+    players: &Characters,
+    outbox: &mut Outbox,
     world: &mut Lockables,
     act: impl FnOnce(&Lockable, &Lockables) -> Result<(DoorState, Vec<Outgoing>), String>,
 ) {
@@ -235,11 +236,16 @@ fn with_lockable(
         Err(err) if err.is_empty() => Vec::new(),
         Err(err) => vec![Outgoing::line(inv.entity, err)],
     };
-    deliver(out, players);
+    deliver(out, outbox);
 }
 
-pub fn open(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockables) {
-    with_lockable(&inv, &mut players, &mut world, |it, _| {
+pub fn open(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    mut world: Lockables,
+) {
+    with_lockable(&inv, &players, &mut outbox, &mut world, |it, _| {
         match it.state {
             DoorState::Open => return Err("It's already open.".into()),
             DoorState::Locked => return Err("It's locked.".into()),
@@ -257,8 +263,13 @@ pub fn open(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockab
     });
 }
 
-pub fn close(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockables) {
-    with_lockable(&inv, &mut players, &mut world, |it, _| {
+pub fn close(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    mut world: Lockables,
+) {
+    with_lockable(&inv, &players, &mut outbox, &mut world, |it, _| {
         if it.state != DoorState::Open {
             return Err("It's already closed.".into());
         }
@@ -292,8 +303,13 @@ fn has_key(it: &Lockable, world: &Lockables) -> Result<(), String> {
     }
 }
 
-pub fn lock(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockables) {
-    with_lockable(&inv, &mut players, &mut world, |it, world| {
+pub fn lock(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    mut world: Lockables,
+) {
+    with_lockable(&inv, &players, &mut outbox, &mut world, |it, world| {
         if it.lock.is_none() {
             return Err("It has no lock.".into());
         }
@@ -315,8 +331,13 @@ pub fn lock(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockab
     });
 }
 
-pub fn unlock(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lockables) {
-    with_lockable(&inv, &mut players, &mut world, |it, world| {
+pub fn unlock(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    mut world: Lockables,
+) {
+    with_lockable(&inv, &players, &mut outbox, &mut world, |it, world| {
         if it.lock.is_none() {
             return Err("It has no lock.".into());
         }
@@ -340,7 +361,8 @@ pub fn unlock(In(inv): In<Invocation>, mut players: PlayerQuery, mut world: Lock
 /// with Luck. It only forces it open; the lock still works afterwards.
 pub fn bash(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mut world: Lockables,
     sheets: Query<&Attributes>,
     mut dice: ResMut<Dice>,
@@ -349,7 +371,7 @@ pub fn bash(
         .get(inv.entity)
         .map(|a| (a.get(Attribute::Strength), a.get(Attribute::Luck)))
         .unwrap_or((1, 0));
-    with_lockable(&inv, &mut players, &mut world, |it, _| {
+    with_lockable(&inv, &players, &mut outbox, &mut world, |it, _| {
         match it.state {
             DoorState::Open => return Err("It's already open.".into()),
             DoorState::Closed => return Err("It isn't locked; just open it.".into()),
@@ -395,12 +417,13 @@ const LOCKPICKING: &str = "thievery:lockpicking";
 /// difficulty, as a ratio, with Luck. Every attempt practises the skill.
 pub fn pick(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mut world: Lockables,
     mut practice: Practice,
 ) {
     let mut gains = Vec::new();
-    with_lockable(&inv, &mut players, &mut world, |it, _| {
+    with_lockable(&inv, &players, &mut outbox, &mut world, |it, _| {
         match it.state {
             DoorState::Open => return Err("It's already open.".into()),
             DoorState::Closed => return Err("It isn't locked.".into()),
@@ -452,5 +475,5 @@ pub fn pick(
         .into_iter()
         .map(|line| Outgoing::line(inv.entity, line))
         .collect();
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }

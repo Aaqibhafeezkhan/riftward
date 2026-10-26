@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells, then money and shops, then Karma's new costs and unlocking skills with it, then Haggling and Appraisal, then item quality and rarity
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells, then money and shops, then Karma's new costs and unlocking skills with it, then Haggling and Appraisal, then item quality and rarity, then players and mobs as one kind of character, with puppeting
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -15,6 +15,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Characters:** creation (race with Earthdawn-style shifts, starting Karma, a background as a past life, a description), vitals that recover (faster resting, offline too, never in a fight), `score`, `describe`, aliases, a custom prompt.
 - **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, uncapped levels with a soft cap from character level, experience and character levels that earn Karma, opposed-roll contests, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`, entry skills only), discovery of a tree's other skills through use, a tough-fight boost to learning, Awakening to the four magic traditions.
 - **Karma:** attributes cost the rating they reach (3 to 4 costs 4); characters start with 20 (humans 32); `karma <skill>` unlocks a priced skill in a tree the character has, once its requirements are met.
+- **Characters:** players and mobs share commands, output and rules. Mobs can have races; wandering mobs walk with `go`; builders can `puppet` a mob and play it.
 - **Items** also have quality (crude to masterwork, per item) and rarity (common to legendary, per template), which set their worth and, for quality, a weapon's damage or armour's protection.
 - **Money and shops:** a copper, silver and gold purse, coins from kills, three Riftwatch shops that sell, buy and resell, spell lessons that cost money, and the Trade tree: Haggling (a deal with each shopkeeper) and Appraisal.
 - **Spells:** spell books as data (`assets/spells/`), `cast` and `spells`, Drain resisted by Willpower, the first two spells of each casting tradition taught by its teacher, cast in or out of fights by players and mobs alike, and the blessed and warded conditions.
@@ -43,6 +44,8 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 - Quality odds and multipliers are first guesses (half of found things standard, masterwork ×3 and +2), and so are the rarity multipliers.
 - Haggling's numbers are first guesses: deals of a twentieth to a fifth, lasting ten minutes, and shopkeepers at 5 to 10. Deals aren't saved, and a deal is only struck by those who know Haggling.
 - Prices are first guesses (see [Prices](economy.md#prices)), and so is buying at a third. A shop's resale stock and a player's money on death are open questions.
+- Puppeting is for builders and up; the separate GM role isn't built. While puppeting, the builder hears nothing of their own body, even if it's attacked. Lessons (`learn`) and account commands (`raise`, `alias`, `describe`) are for players only.
+- Aggressive mobs still pick fights inside the combat round rather than with `kill`; everything else a mob does on its own (wandering, techniques, spells) goes through the same code as a player's.
 - No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built).
 - Hiding isn't saved: logging out shows you, and a restart forgets everyone's hiding.
 - Herbs, rat tails and the Rat King's tooth can only be sold until Brewing and quests use them.

@@ -9,14 +9,14 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 
 use crate::attributes::Attributes;
-use crate::combat::{Aggressive, AutoAttack, Fighting, Tactics};
-use crate::command::{AddCommand, Category, CommandSpec, Invocation};
-use crate::db::Permission;
+use crate::characters::{Races, article};
+use crate::combat::{Aggressive, AutoAttack, Fighting, Tactics, the};
+use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
+use crate::db::{Permission, Role};
 use crate::dice::Dice;
-use crate::events::{GameEvent, Way, way_back};
 use crate::items::{self, HANDS, ItemLocation, ItemTemplates, capitalized, counted};
 use crate::net::Connection;
-use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, PuppetedBy, RoomQuery, deliver};
 use crate::skills::{SkillDefs, SkillState, Skills};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::spells::Spells;
@@ -64,6 +64,8 @@ pub struct Mob {
     /// The line a room shows for it.
     pub here: String,
     pub description: String,
+    /// Its race, if it's one of the peoples.
+    pub race: Option<String>,
 }
 
 /// When a wandering mob next moves, in seconds since the server started.
@@ -80,7 +82,7 @@ pub type MobQuery<'w, 's> =
 pub type OnlyMobs = (With<Mob>, Without<Connection>);
 
 /// Mobs that aren't in a fight, so they're free to wander.
-type Idle = (Without<Connection>, Without<Fighting>);
+type Idle = (Without<Connection>, Without<Fighting>, Without<PuppetedBy>);
 
 /// Every mob template from every loaded zone.
 #[derive(Resource, Default)]
@@ -144,6 +146,7 @@ pub fn sync_mob_templates(
 }
 
 /// Make a mob from its template in `room`, with its gear.
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_mob(
     commands: &mut Commands,
     templates: &MobTemplates,
@@ -151,6 +154,7 @@ pub fn spawn_mob(
     defs: &SkillDefs,
     key: &MobKey,
     room: Entity,
+    races: &Races,
     dice: &mut Dice,
 ) -> Option<Entity> {
     let Some(def) = templates.0.get(key) else {
@@ -162,19 +166,28 @@ pub fn spawn_mob(
         name: def.name.clone(),
         here: def.here_line(),
         description: def.description.clone(),
+        race: def.race.clone(),
     };
-    // Mobs fight by the same rules as players, with what their template gives them.
+    // Mobs fight by the same rules as players, with what their template gives them: a race's
+    // attributes, unless the template sets one.
+    let race = def.race.as_deref().and_then(|id| races.get(id));
+    if let (Some(id), None) = (&def.race, race) {
+        warn!("mob [{key}]: no race '{id}'");
+    }
     let attributes = Attributes::starting(
         |attribute| {
-            def.attributes
-                .get(&attribute)
-                .copied()
-                .unwrap_or(attribute.base_rating())
+            def.attributes.get(&attribute).copied().unwrap_or_else(|| {
+                // A race's shift, which never takes an attribute below 1.
+                match race.and_then(|r| r.attributes.get(&attribute)) {
+                    Some(&shift) => (attribute.base_rating() + shift).max(1),
+                    None => attribute.base_rating(),
+                }
+            })
         },
         0,
     );
     let base = def.health.map(BaseHealth);
-    let skills = Skills(
+    let mut skills = Skills(
         def.skills
             .iter()
             .map(|(key, level)| {
@@ -184,6 +197,12 @@ pub fn spawn_mob(
             })
             .collect(),
     );
+    // Its race's skills, as a player of that race has them.
+    for racial in race.iter().flat_map(|r| &r.skills) {
+        if defs.skills.contains_key(racial) && !skills.0.contains_key(racial) {
+            skills.0.insert(racial.clone(), SkillState::new("Starting"));
+        }
+    }
     let vitals = Vitals::full(Maxima::of(&attributes, &skills, defs, base.as_ref()));
     let mut entity = commands.spawn((
         mob,
@@ -256,24 +275,33 @@ fn may_enter(wander: &Wander, spawn: &SpawnKey, room: &RoomKey, no_wander: bool)
 /// Move each wandering mob whose time has come through an open exit it's allowed to take: a random
 /// one, or, for a spawn that minds crowding, toward the room with the fewest of its kind, and
 /// only once its room holds too many.
+#[allow(clippy::too_many_arguments)]
 pub fn wander(
+    mut commands: Commands,
     time: Res<Time>,
     spawns: Res<Spawns>,
     rooms: RoomQuery,
     doors: Query<&Door>,
     mut dice: ResMut<Dice>,
-    mut mobs: Query<(Entity, &Mob, &SpawnedBy, &mut InRoom, &mut Wanderer), Idle>,
-    mut events: MessageWriter<GameEvent>,
+    mut mobs: Query<(Entity, &SpawnedBy, &InRoom, &mut Wanderer), Idle>,
+    registry: Res<CommandRegistry>,
 ) {
+    // Mobs walk the way players do, with the same command.
+    let Some((go, id)) = registry
+        .find("go", Role::Player)
+        .map(|(spec, id)| (spec.clone(), *id))
+    else {
+        return;
+    };
     let elapsed = time.elapsed_secs_f64();
     let mut crowds: HashMap<(SpawnKey, Entity), u32> = HashMap::new();
-    for (_, _, spawned_by, in_room, _) in &mobs {
+    for (_, spawned_by, in_room, _) in &mobs {
         *crowds.entry((spawned_by.0.clone(), in_room.0)).or_default() += 1;
     }
     let crowd = |crowds: &HashMap<(SpawnKey, Entity), u32>, key: &SpawnKey, room: Entity| {
         crowds.get(&(key.clone(), room)).copied().unwrap_or(0)
     };
-    for (entity, mob, spawned_by, mut in_room, mut wanderer) in &mut mobs {
+    for (entity, spawned_by, in_room, mut wanderer) in &mut mobs {
         if wanderer.next > elapsed {
             continue;
         }
@@ -324,22 +352,15 @@ pub fn wander(
         let (dir, to) = choices[pick];
         *crowds.entry((key.clone(), in_room.0)).or_default() -= 1;
         *crowds.entry((key.clone(), to)).or_default() += 1;
-        let name = capitalized(&mob.name);
-        events.write(GameEvent::Left {
-            who: entity,
-            name: name.clone(),
-            room: in_room.0,
-            way: Way::Walked(Some(dir.clone())),
-            witnesses: None,
-        });
-        events.write(GameEvent::Entered {
-            who: entity,
-            name,
-            room: to,
-            way: Way::Walked(way_back(&rooms, to, in_room.0)),
-            witnesses: None,
-        });
-        in_room.0 = to;
+        commands.run_system_with(
+            id,
+            Invocation {
+                entity,
+                command: go.name,
+                usage: go.usage,
+                args: dir.clone(),
+            },
+        );
     }
 }
 
@@ -380,12 +401,21 @@ pub fn targets_in<'a>(
         .collect()
 }
 
-/// What `look <mob>` shows.
-pub fn describe(mob: &Mob) -> String {
+/// What `look <mob>` shows: what race it is, if it's one of the peoples, and its description.
+pub fn describe(mob: &Mob, races: &Races) -> String {
+    let mut text = String::new();
+    if let Some(race) = &mob.race {
+        let race = races.name(race).to_lowercase();
+        text += &format!(
+            "{} is {} {race}.\r\n",
+            capitalized(&the(&mob.name)),
+            article(&race)
+        );
+    }
     if mob.description.is_empty() {
-        format!("You see nothing special about {}.", mob.name)
+        text + &format!("You see nothing special about {}.", the(&mob.name))
     } else {
-        mob.description.clone()
+        text + &mob.description
     }
 }
 
@@ -394,11 +424,12 @@ pub fn describe(mob: &Mob) -> String {
 fn summon(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     templates: Res<MobTemplates>,
     item_templates: Res<ItemTemplates>,
-    defs: Res<SkillDefs>,
+    (defs, races): (Res<SkillDefs>, Res<Races>),
     mut dice: ResMut<Dice>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
@@ -424,6 +455,7 @@ fn summon(
                 &defs,
                 &key,
                 actor.room,
+                &races,
                 &mut dice,
             );
             out.push(Outgoing::line(
@@ -437,14 +469,15 @@ fn summon(
             });
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// `purge [<mob>]`: a builder removes one mob here, or all of them.
 fn purge(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mobs: MobQuery,
     keywords: Query<&Keywords>,
 ) {
@@ -479,7 +512,7 @@ fn purge(
             commands.entity(entity).despawn();
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 #[cfg(test)]
@@ -494,6 +527,11 @@ mod tests {
         let mut world = World::new();
         let key = MobKey::parse("town:guard", "");
         let mut guard = MobDef::named("a town guard");
+        // A dwarf, but one the template makes quick.
+        guard.race = Some("dwarf".into());
+        guard
+            .attributes
+            .insert(crate::attributes::Attribute::Reaction, 5);
         // The helm is worn, the sword and shield fill both hands, so a second helm has nowhere to
         // go, and there's no such thing as a torch here.
         guard.equipment = ["sword", "helm", "shield", "helm", "torch"]
@@ -513,6 +551,14 @@ mod tests {
         world.insert_resource(items);
         world.insert_resource(SkillDefs::default());
         world.insert_resource(Dice::seeded(1));
+        world.insert_resource(Races(vec![crate::characters::RaceDef {
+            id: "dwarf".into(),
+            name: "Dwarf".into(),
+            summary: String::new(),
+            attributes: [(crate::attributes::Attribute::Body, 2)].into(),
+            karma: 0,
+            skills: Vec::new(),
+        }]));
         let room = world.spawn_empty().id();
         let mob = world
             .run_system_once(
@@ -520,12 +566,31 @@ mod tests {
                       mobs: Res<MobTemplates>,
                       items: Res<ItemTemplates>,
                       defs: Res<SkillDefs>,
+                      races: Res<Races>,
                       mut dice: ResMut<Dice>| {
-                    spawn_mob(&mut commands, &mobs, &items, &defs, &key, room, &mut dice)
+                    spawn_mob(
+                        &mut commands,
+                        &mobs,
+                        &items,
+                        &defs,
+                        &key,
+                        room,
+                        &races,
+                        &mut dice,
+                    )
                 },
             )
             .unwrap()
             .unwrap();
+        // Its race shifts what the template leaves alone.
+        let attributes = world.get::<Attributes>(mob).unwrap();
+        assert_eq!(attributes.get(crate::attributes::Attribute::Body), 5);
+        assert_eq!(attributes.get(crate::attributes::Attribute::Reaction), 5);
+        assert_eq!(
+            attributes.get(crate::attributes::Attribute::Magic),
+            0,
+            "no shift, the base"
+        );
         let mut gear: Vec<(String, ItemLocation)> = world
             .query::<(&Item, &ItemLocation)>()
             .iter(&world)

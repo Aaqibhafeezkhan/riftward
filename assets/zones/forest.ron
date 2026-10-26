@@ -59,6 +59,7 @@
     mobs: {
         "hedge_shaman": (
             name: "the hedge-shaman",
+            race: "human",
             keywords: ["hedge", "shaman", "hermit"],
             here: "The hedge-shaman crouches by a smoking fire, talking quietly to no one you can see.",
             description: "A wiry figure in layers of moss-dyed cloth, hung with feathers, bones and tiny clay charms. Their eyes are bright and a little wild, and they answer questions you haven't asked aloud.",

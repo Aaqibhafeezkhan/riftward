@@ -432,6 +432,7 @@
     mobs: {
         "town_guard": (
             name: "a town guard",
+            race: "human",
             keywords: ["town", "guard", "watchman"],
             here: "A town guard keeps watch, one hand resting on the hilt of a short sword.",
             description: "A broad-shouldered watchman in a dented helm and a tabard faded from Riftwatch's colours to something closer to grey. They look bored, which is not the same as inattentive.",
@@ -456,12 +457,14 @@
         ),
         "contract_clerk": (
             name: "the contract clerk",
+            race: "human",
             keywords: ["contract", "clerk"],
             here: "The contract clerk sits behind a desk heaped with ledgers, pen scratching.",
             description: "A thin, ink-stained clerk with spectacles pushed up into greying hair. They keep the guild's contracts, its ledgers and its members' tags, and they remember everyone who has ever failed to finish a job.",
         ),
         "herbalist": (
             name: "the herbalist",
+            race: "human",
             keywords: ["herbalist", "woman"],
             here: "The herbalist sorts dried leaves into bundles, muttering their names.",
             description: "A stooped woman with green-stained fingers and a sharp eye, who smells faintly of mint and something less pleasant underneath.",
@@ -475,6 +478,7 @@
         ),
         "provisioner": (
             name: "the provisioner",
+            race: "human",
             keywords: ["provisioner", "stallholder", "merchant"],
             here: "The provisioner leans on a counter stacked with loaves, packs and folded cloth, calling out prices.",
             description: "A round, red-cheeked man in a leather apron, with a pencil behind one ear and a ledger he never lets out of reach. He can tell you to the copper what anything in the market is worth, and what he'll pay for it, which is less.",
@@ -492,6 +496,7 @@
         ),
         "tinker": (
             name: "the tinker",
+            race: "dwarf",
             keywords: ["tinker", "mender"],
             here: "The tinker sits at a cluttered bench, hammering a dent out of a pot.",
             description: "A wiry woman with soot to her elbows and a dozen tools hung from her belt. Her bench is heaped with blades to sharpen, locks to mend and things nobody else wanted, and she'll buy almost anything if the price is low enough.",
@@ -507,6 +512,7 @@
         ),
         "hooded_figure": (
             name: "a hooded figure",
+            race: "human",
             keywords: ["hooded", "figure", "stranger"],
             here: "A hooded figure leans in a doorway, so still you almost missed them.",
             description: "A slight figure in a patched grey cloak, hood drawn low. Their hands never stop moving: a coin walking across the knuckles, a pick turning in the fingers. For the right price, or the right reason, they teach what they know.",
@@ -516,6 +522,7 @@
         ),
         "drill_sergeant": (
             name: "the drill sergeant",
+            race: "ork",
             keywords: ["drill", "sergeant"],
             here: "The drill sergeant paces the yard, barking at anyone who stands still.",
             description: "A grizzled veteran with a voice like a rockslide and a wooden practice sword that has broken more knuckles than any real blade.",
@@ -535,6 +542,7 @@
         ),
         "shrine_keeper": (
             name: "the keeper of the shrine",
+            race: "human",
             keywords: ["keeper", "shrine", "priestess"],
             here: "The keeper of the shrine tends the candles, murmuring a prayer over each.",
             description: "A calm-faced woman in a faded grey habit, wax spattered across her sleeves. Her eyes rest on each visitor a moment longer than is comfortable, as if listening for something.",
@@ -545,6 +553,7 @@
         ),
         "magister": (
             name: "the magister",
+            race: "elf",
             keywords: ["magister", "scholar", "mage"],
             here: "The magister sits at the reading desk, quill scratching beside a towering stack of books.",
             description: "An elderly scholar with ink-black fingertips and spectacles on a chain. The guild keeps him for his learning; he keeps the guild's grimoires, and teaches the rare few with the spark to read them.",
@@ -555,6 +564,7 @@
         ),
         "ascetic": (
             name: "an old ascetic",
+            race: "human",
             keywords: ["old", "ascetic", "monk"],
             here: "An old ascetic sits cross-legged at the parapet, breathing slowly, utterly still.",
             description: "Thin as a rake and brown as a nut, wearing little more than a loincloth despite the wind. The guards say he has sat here since before the barrier rose. His stillness has a weight to it, like a drawn bow.",

@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
+use crate::characters::Races;
 use crate::db::Database;
 use crate::dice::Dice;
 use crate::items::{self, Item, ItemLocation, ItemTemplates, Quality};
@@ -306,7 +307,7 @@ fn run_spawns(
     rooms: RoomQuery,
     mob_templates: Res<MobTemplates>,
     item_templates: Res<ItemTemplates>,
-    defs: Res<SkillDefs>,
+    (defs, races): (Res<SkillDefs>, Res<Races>),
     spawns: Res<Spawns>,
     mut timers: ResMut<SpawnTimers>,
     mut dice: ResMut<Dice>,
@@ -461,6 +462,7 @@ fn run_spawns(
                         &defs,
                         &mob,
                         room,
+                        &races,
                         &mut dice,
                     ) else {
                         break;

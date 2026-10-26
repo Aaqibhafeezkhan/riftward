@@ -9,8 +9,7 @@ use bevy::prelude::*;
 use super::casting::MobMove;
 use super::states::{Conditions, State};
 use super::{
-    ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, CombatLog, Dead, Fighting, HideNumbers,
-    Tactics,
+    ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, Dead, Fighting, HideNumbers, Tactics,
 };
 use crate::attributes::{Attribute, Attributes};
 use crate::db::Database;
@@ -18,7 +17,8 @@ use crate::dice::Dice;
 use crate::events::GameEvent;
 use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
 use crate::mobs::Mob;
-use crate::output::Outgoing;
+use crate::output::PuppetedBy;
+use crate::output::{Outbox, Outgoing};
 use crate::skills::{
     Bonus, Boosts, Cost, Effect, Learner, Lines, Skill, SkillDefs, SkillKind, SkillText, Skills,
     StrikeKind, Technique, Trigger, boosts, count_use, fill, tough_fight_boost,
@@ -56,6 +56,8 @@ pub struct Fighter {
     pub mob: Option<&'static Mob>,
     pub keywords: Option<&'static Keywords>,
     pub spells: Option<&'static Spells>,
+    /// A mob a builder is playing: it acts on what they queue, not on its own.
+    pub puppeted: Has<PuppetedBy>,
 }
 
 pub type Fighters<'w, 's> = Query<'w, 's, Fighter>;
@@ -415,7 +417,7 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub dice: &'a mut Dice,
     pub db: &'a Database,
     pub events: &'a mut MessageWriter<'ew, GameEvent>,
-    pub log: &'a mut CombatLog,
+    pub log: &'a mut Outbox,
     /// Players and the rooms they're in, who see fights there.
     pub watchers: &'a [(Entity, Entity)],
     /// Who each fighter was fighting before this round began, for openers.
@@ -487,7 +489,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             return;
         };
         let learner = Learner {
-            character_id: player.character_id,
+            character_id: Some(player.character_id),
             race: &player.race,
             boost: tough_fight_boost(self.outmatched.get(&who).copied()),
         };

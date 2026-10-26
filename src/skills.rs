@@ -32,7 +32,9 @@ use crate::conditions::{Condition, Facts};
 use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
 use crate::events::GameEvent;
-use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line, targets_online};
+use crate::output::{
+    Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
+};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::ron_options;
@@ -886,7 +888,8 @@ impl Practice<'_, '_> {
 /// much a tough fight multiplies their chances of a gain or a discovery (1 for none).
 #[derive(Clone, Copy)]
 pub struct Learner<'a> {
-    pub character_id: i64,
+    /// Their saved character; a mob has none, and doesn\'t learn.
+    pub character_id: Option<i64>,
     pub race: &'a str,
     pub boost: f64,
 }
@@ -909,7 +912,10 @@ pub fn count_use(
     learner: Learner,
     key: &str,
 ) -> Vec<String> {
-    let character_id = learner.character_id;
+    // Mobs don't improve: only a saved character learns.
+    let Some(character_id) = learner.character_id else {
+        return Vec::new();
+    };
     if !skills.0.contains_key(key) {
         return Vec::new();
     }
@@ -951,7 +957,7 @@ pub fn count_use(
     let chance = DISCOVERY_CHANCE * learner.boost;
     if let Some(found) = discover(defs, &practised, &facts, dice, chance) {
         let (found, name) = (found.key.clone(), found.def.name.clone());
-        learn(skills, &found, "Discovered", character_id, db);
+        learn(skills, &found, "Discovered", Some(character_id), db);
         lines.push(format!(
             "\x1b[1;35mSomething clicks into place. You have discovered {name}.\x1b[0m"
         ));
@@ -1028,20 +1034,30 @@ fn discover<'a>(
     found.get(pick).copied()
 }
 
-/// Learn a skill at level 0, if it isn't known already. Returns whether it was new.
-pub fn learn(skills: &mut Skills, key: &str, via: &str, character_id: i64, db: &Database) -> bool {
+/// Learn a skill at level 0, if it isn't known already, saving it for `character_id` if that's a
+/// player. Returns whether it was new.
+pub fn learn(
+    skills: &mut Skills,
+    key: &str,
+    via: &str,
+    character_id: Option<i64>,
+    db: &Database,
+) -> bool {
     if skills.0.contains_key(key) {
         return false;
     }
     let state = SkillState::new(via);
-    if let Err(err) = db.save_skill(character_id, key, &state) {
-        error!("failed to save new skill {key} for character {character_id}: {err}");
+    if let Some(id) = character_id
+        && let Err(err) = db.save_skill(id, key, &state)
+    {
+        error!("failed to save new skill {key} for character {id}: {err}");
     }
     skills.0.insert(key.to_string(), state);
     true
 }
 
 /// Practise passive skills when their triggers happen.
+#[allow(clippy::too_many_arguments)]
 fn practise_passives(
     mut events: MessageReader<GameEvent>,
     defs: Res<SkillDefs>,
@@ -1049,7 +1065,8 @@ fn practise_passives(
     fights: Query<&Outmatched, With<Fighting>>,
     mut dice: ResMut<Dice>,
     db: Res<Database>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
 ) {
     let mut out = Vec::new();
     for event in events.read() {
@@ -1104,7 +1121,7 @@ fn practise_passives(
             }
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// `skills`: what you know, by tree.
@@ -1145,7 +1162,8 @@ fn requirement_text(defs: &SkillDefs, condition: &Condition) -> String {
 /// level 0, as if discovered, and the Karma is gone for good.
 fn karma_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     defs: Res<SkillDefs>,
     mut sheets: Query<(&mut Skills, &mut Attributes)>,
     db: Res<Database>,
@@ -1217,7 +1235,9 @@ fn karma_cmd(
                     learn(&mut skills, &skill.key, "Karma", actor.character_id, &db);
                     if let Some(state) = skills.0.get_mut(&skill.key) {
                         state.karma_paid = cost;
-                        if let Err(err) = db.save_skill(actor.character_id, &skill.key, state) {
+                        if let Some(id) = actor.character_id
+                            && let Err(err) = db.save_skill(id, &skill.key, state)
+                        {
                             error!(
                                 "failed to save {}'s Karma for {}: {err}",
                                 actor.name, skill.key
@@ -1235,12 +1255,12 @@ fn karma_cmd(
             }
         }
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 fn skills_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    mut outbox: ResMut<Outbox>,
     sheets: Query<(&Skills, &Attributes)>,
     defs: Res<SkillDefs>,
     time: Res<Time>,
@@ -1266,7 +1286,7 @@ fn skills_cmd(
             }
             None => format!("You don't know a skill called '{wanted}'."),
         };
-        deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+        deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
         return;
     }
     let text = skills_text(
@@ -1276,7 +1296,7 @@ fn skills_cmd(
         unix_now(),
         time.elapsed_secs_f64(),
     );
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// How warmed up a skill feels.
@@ -1372,7 +1392,8 @@ fn skills_text(
 fn use_cmd(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     sheets: Query<&Skills>,
     defs: Res<SkillDefs>,
     registry: Res<CommandRegistry>,
@@ -1434,13 +1455,14 @@ fn use_cmd(
         },
         Err(_) => return,
     };
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 /// `grantskill <player> <tree:skill> [<level>]`: an admin teaches a skill or sets its level.
 fn grantskill_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     keywords: Query<&Keywords>,
     mut sheets: Query<(&mut Skills, &mut Attributes)>,
     defs: Res<SkillDefs>,
@@ -1449,12 +1471,12 @@ fn grantskill_cmd(
     let mut out = Vec::new();
     let reply = grant_skill(&inv, &players, &keywords, &mut sheets, &defs, &db, &mut out);
     out.insert(0, reply_line(inv.entity, reply));
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 fn grant_skill(
     inv: &Invocation,
-    players: &PlayerQuery,
+    players: &Characters,
     keywords: &Query<&Keywords>,
     sheets: &mut Query<(&mut Skills, &mut Attributes)>,
     defs: &SkillDefs,
@@ -1493,7 +1515,9 @@ fn grant_skill(
         && let Some(state) = skills.0.get_mut(&key)
     {
         state.level = level;
-        if let Err(err) = db.save_skill(actor.character_id, &key, state) {
+        if let Some(id) = actor.character_id
+            && let Err(err) = db.save_skill(id, &key, state)
+        {
             error!("failed to save {key} for {}: {err}", actor.name);
         }
     }
@@ -1884,7 +1908,7 @@ mod tests {
         let (mut attributes, mut dice) = (Attributes::default(), Dice::seeded(3));
         let db = Database::open(":memory:").unwrap();
         let learner = Learner {
-            character_id: 1,
+            character_id: Some(1),
             race: "human",
             boost: 1.0,
         };

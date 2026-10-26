@@ -6,7 +6,7 @@
 use bevy::prelude::*;
 
 use crate::net;
-use crate::output::{Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::output::{Characters, Outbox, Outgoing, RoomQuery, deliver};
 use crate::time::Phase;
 use crate::world::MobKey;
 
@@ -15,7 +15,15 @@ pub struct EventsPlugin;
 impl Plugin for EventsPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<GameEvent>()
-            .add_systems(PostUpdate, announce.before(net::flush_output));
+            .init_resource::<crate::output::Outbox>()
+            // Room announcements join what systems queued, and all of it goes out before the
+            // prompt is drawn.
+            .add_systems(
+                PostUpdate,
+                (announce, crate::output::flush_outbox)
+                    .chain()
+                    .before(net::flush_output),
+            );
     }
 }
 
@@ -122,7 +130,12 @@ fn text(event: &GameEvent) -> Option<String> {
 }
 
 /// Tell players what they see happen around them.
-fn announce(mut events: MessageReader<GameEvent>, rooms: RoomQuery, mut players: PlayerQuery) {
+fn announce(
+    mut events: MessageReader<GameEvent>,
+    rooms: RoomQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+) {
     let mut out = Vec::new();
     for event in events.read() {
         let Some(text) = text(event) else {
@@ -160,18 +173,16 @@ fn announce(mut events: MessageReader<GameEvent>, rooms: RoomQuery, mut players:
             | GameEvent::Damaged { .. }
             | GameEvent::Died { .. } => {}
             GameEvent::PhaseChanged(_) => {
-                for (entity, _, player, in_room) in &players {
-                    let outdoors = in_room
-                        .and_then(|r| rooms.get(r.0).ok())
-                        .is_some_and(|(room, _, _)| !room.indoors);
-                    if player.is_some() && outdoors {
+                for (entity, _, _, in_room) in &players {
+                    let outdoors = rooms.get(in_room.0).is_ok_and(|(room, _, _)| !room.indoors);
+                    if outdoors {
                         out.push(Outgoing::To(entity, text.clone()));
                     }
                 }
             }
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 #[cfg(test)]

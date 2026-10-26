@@ -18,12 +18,12 @@ use crate::items::{
 };
 use crate::items::{Snapshot, bulk_limits, coloured, counted_with};
 use crate::mobs::{self, MobQuery};
-use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
+use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver, targets_in_room};
 use crate::skills::{Learner, Practice, fill};
 use crate::stealth::{Hidden, STEALTH, Sneaking, sees, stealth_rating, visible};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::Resting;
-use crate::world::{Door, DoorState, Obstacle, Player};
+use crate::world::{Door, DoorState, InRoom, Obstacle, Player};
 
 /// Everything a room shows a player besides other players: the room itself, its doors, and the
 /// items lying in it.
@@ -43,7 +43,8 @@ pub struct View<'w, 's> {
 /// at an item here or in your pack.
 pub fn look(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     view: View,
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
@@ -98,7 +99,7 @@ pub fn look(
             match target.find_one(actor.entity, candidates).map(|e| {
                 (
                     e,
-                    players.get(e).ok().and_then(|p| p.2),
+                    players.get(e).ok().and_then(|p| p.1),
                     view.mobs.get(e).ok(),
                 )
             }) {
@@ -109,7 +110,9 @@ pub fn look(
                     describe_player(other, &races) + &gear_lines(e, &view.items, &other.name)
                 }
                 Some((e, _, Some((_, mob, _)))) => {
-                    mobs::describe(mob) + "\r\n" + &gear_lines(e, &view.items, &the(&mob.name))
+                    mobs::describe(mob, &races)
+                        + "\r\n"
+                        + &gear_lines(e, &view.items, &the(&mob.name))
                 }
                 _ => match find_item(&inv.args, &actor, &view.items, &keywords, &templates) {
                     Ok(item) => describe_item(item, &view.items, &templates) + "\r\n",
@@ -118,13 +121,15 @@ pub fn look(
             }
         }
     };
-    deliver(vec![Outgoing::To(actor.entity, text)], &mut players);
+    deliver(vec![Outgoing::To(actor.entity, text)], &mut outbox);
 }
 
 /// `go <direction>`.
+#[allow(clippy::too_many_arguments)]
 pub fn go(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     view: View,
     db: Res<Database>,
     fighting: Query<(), With<Fighting>>,
@@ -140,7 +145,7 @@ pub fn go(
         travel(
             inv.entity,
             &inv.args,
-            &mut players,
+            &players,
             &view,
             &db,
             &mut practice,
@@ -148,13 +153,15 @@ pub fn go(
             true,
         )
     };
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// `north`, `south`, ... and their short forms: the command's name is the direction.
+#[allow(clippy::too_many_arguments)]
 pub fn walk(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     view: View,
     db: Res<Database>,
     fighting: Query<(), With<Fighting>>,
@@ -163,20 +170,20 @@ pub fn walk(
 ) {
     commands.entity(inv.entity).remove::<Resting>();
     if fighting.get(inv.entity).is_ok() {
-        deliver(vec![Outgoing::line(inv.entity, IN_A_FIGHT)], &mut players);
+        deliver(vec![Outgoing::line(inv.entity, IN_A_FIGHT)], &mut outbox);
         return;
     }
     let out = travel(
         inv.entity,
         inv.command,
-        &mut players,
+        &players,
         &view,
         &db,
         &mut practice,
         &mut commands,
         true,
     );
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// What someone in a fight is told when they try to walk away.
@@ -190,7 +197,7 @@ const IN_A_FIGHT: &str = "You're fighting for your life! Type 'flee' to try to e
 pub fn travel(
     entity: Entity,
     dir: &str,
-    players: &mut PlayerQuery,
+    players: &Characters,
     view: &View,
     db: &Database,
     practice: &mut Practice,
@@ -277,7 +284,16 @@ pub fn travel(
         way: Way::Walked(Some(dir)),
         witnesses: left_seen_by,
     });
-    move_player(entity, actor.character_id, to, players, view, db, &mut out);
+    move_player(
+        entity,
+        actor.character_id,
+        to,
+        commands,
+        players,
+        view,
+        db,
+        &mut out,
+    );
     practice.events.write(GameEvent::Entered {
         who: entity,
         name: actor.name.clone(),
@@ -295,7 +311,7 @@ pub fn travel(
 fn sneak_through(
     actor: &Actor,
     to: Entity,
-    players: &PlayerQuery,
+    players: &Characters,
     view: &View,
     practice: &mut Practice,
     commands: &mut Commands,
@@ -315,7 +331,7 @@ fn sneak_through(
         .map(|h| h.seen_by.iter().copied().collect());
     let watchers: Vec<Entity> = players
         .iter()
-        .filter(|(_, _, p, r)| p.is_some() && r.is_some_and(|r| r.0 == to))
+        .filter(|(_, p, _, r)| p.is_some() && r.0 == to)
         .map(|(e, ..)| e)
         .chain(
             view.mobs
@@ -506,22 +522,24 @@ pub fn full_direction(dir: &str) -> &str {
     }
 }
 
-/// Put a player in a room, remember it in the database, and show them where they are.
+/// Put a character in a room, remember it in the database if they're a player, and show them
+/// where they are. The move happens as the command finishes.
+#[allow(clippy::too_many_arguments)]
 pub fn move_player(
     entity: Entity,
-    character_id: i64,
+    character_id: Option<i64>,
     to: Entity,
-    players: &mut PlayerQuery,
+    commands: &mut Commands,
+    players: &Characters,
     view: &View,
     db: &Database,
     out: &mut Vec<Outgoing>,
 ) {
-    let mut show_ids = false;
-    if let Ok((_, _, player, Some(mut in_room))) = players.get_mut(entity) {
-        in_room.0 = to;
-        show_ids = player.is_some_and(|p| p.role.can(Permission::Build));
-    }
-    if let Ok((_, key, _)) = view.rooms.get(to)
+    commands.entity(entity).insert(InRoom(to));
+    let show_ids = players
+        .get(entity)
+        .is_ok_and(|(_, player, _, _)| player.is_some_and(|p| p.role.can(Permission::Build)));
+    if let (Some(character_id), Ok((_, key, _))) = (character_id, view.rooms.get(to))
         && let Err(err) = db.save_location(character_id, &key.to_string())
     {
         error!("failed to save location for character {character_id}: {err}");
@@ -533,19 +551,20 @@ pub fn move_player(
 }
 
 /// What you see looking into a neighbouring room: its name and who's there.
-fn glimpse(room: Entity, viewer: Entity, players: &PlayerQuery, view: &View) -> String {
+fn glimpse(room: Entity, viewer: Entity, players: &Characters, view: &View) -> String {
     let name = view
         .rooms
         .get(room)
         .map(|(room, _, _)| room.name.clone())
         .unwrap_or_default();
     let mut text = format!("{name}.\r\n");
-    let shown = |who: Entity| sees(&view.hidden, viewer, who);
+    // Everyone the viewer can see but themselves, player or mob.
+    let shown = |who: Entity| who != viewer && sees(&view.hidden, viewer, who);
     for name in mobs::names_in(room, &view.mobs, shown) {
         text += &format!("  {} is there.\r\n", capitalized(&name));
     }
-    for (other, _, player, in_room) in players.iter() {
-        if let (Some(player), Some(in_room)) = (player, in_room)
+    for (other, player, _, in_room) in players.iter() {
+        if let Some(player) = player
             && other != viewer
             && in_room.0 == room
             && shown(other)
@@ -560,7 +579,7 @@ fn glimpse(room: Entity, viewer: Entity, players: &PlayerQuery, view: &View) -> 
 pub fn describe_room(
     room: Entity,
     viewer: Entity,
-    players: &PlayerQuery,
+    players: &Characters,
     view: &View,
     show_id: bool,
 ) -> String {
@@ -649,13 +668,14 @@ pub fn describe_room(
             paint(&name, format!("{} lies here.", capitalized(&line)))
         );
     }
-    let shown = |who: Entity| sees(&view.hidden, viewer, who);
+    // Everyone the viewer can see but themselves, player or mob.
+    let shown = |who: Entity| who != viewer && sees(&view.hidden, viewer, who);
     for line in mobs::here_lines(room, &view.mobs, shown) {
         text += &format!("{line}\r\n");
     }
 
-    for (other, _, player, in_room) in players.iter() {
-        if let (Some(player), Some(in_room)) = (player, in_room)
+    for (other, player, _, in_room) in players.iter() {
+        if let Some(player) = player
             && other != viewer
             && in_room.0 == room
             && shown(other)

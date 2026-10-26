@@ -39,7 +39,7 @@ use crate::items::{
 use crate::mobs::{self, Mob, MobQuery, MobTemplates};
 use crate::money::{self, Purse};
 use crate::net::Connection;
-use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
 use crate::skills::{Bonus, Practice, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::spells::{Aim, Casting, SpellDefs};
@@ -70,15 +70,13 @@ pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CombatLog>()
-            .add_systems(Update, expire_conditions.run_if(heartbeat()))
+        app.add_systems(Update, expire_conditions.run_if(heartbeat()))
             .add_systems(
                 Update,
                 (
                     combat_round.run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
                     abandon_fights,
                     handle_deaths,
-                    deliver_log,
                 )
                     .chain()
                     .after(command::dispatch),
@@ -169,10 +167,6 @@ pub struct Dead;
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Slayer(pub Entity);
 
-/// What combat has to say, delivered after each round.
-#[derive(Resource, Default)]
-pub struct CombatLog(pub Vec<Outgoing>);
-
 /// "the sewer rat" for "a sewer rat"; names stay as they are.
 pub fn the(name: &str) -> String {
     let bare = without_article(name);
@@ -240,7 +234,7 @@ fn combat_round(
     db: Res<Database>,
     time: Res<Time>,
     mut events: MessageWriter<GameEvent>,
-    mut log: ResMut<CombatLog>,
+    mut log: ResMut<Outbox>,
     spawned: Query<&SpawnedBy>,
     spawns: Res<Spawns>,
     resting_query: Query<Entity, With<Resting>>,
@@ -269,7 +263,7 @@ fn combat_round(
     // one player than its `pack` allows; the rest wait their turn.
     let spawn_of = |entity: Entity| spawned.get(entity).ok().map(|s| &s.0);
     for fighter in &fighters {
-        if !fighter.aggressive || fighter.dead || fighter.fighting.is_some() {
+        if !fighter.aggressive || fighter.dead || fighter.fighting.is_some() || fighter.puppeted {
             continue;
         }
         let entity = fighter.entity;
@@ -427,9 +421,9 @@ fn combat_round(
             technique = Some(r.skill.clone());
             commands.entity(attacker).remove::<Readied>();
         } else if let Ok(mut fighter) = round.fighters.get_mut(attacker)
-            && fighter.player.is_some()
             && let Some(queue) = fighter.queue.as_mut()
         {
+            // A player's, or a puppeted mob's, queued actions.
             technique = queued_technique(queue, &fighter.skills, &defs);
             if technique.is_some() {
                 queue.pop();
@@ -451,8 +445,9 @@ fn combat_round(
                 Err(refusal) => round.say(attacker, refusal),
             }
         }
-        // Mobs choose their own, now and then.
-        if technique.is_none() && spell.is_none() {
+        // Mobs choose their own, now and then, unless someone's playing them.
+        let puppeted = round.fighters.get(attacker).is_ok_and(|f| f.puppeted);
+        if technique.is_none() && spell.is_none() && !puppeted {
             match round.mob_move(attacker) {
                 Some(MobMove::Technique(key)) => technique = Some(key),
                 Some(MobMove::Spell(key, whom)) => spell = Some((key, whom)),
@@ -534,7 +529,7 @@ fn combat_round(
 /// `affects`: what's affecting you, and for how long.
 fn affects(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    mut outbox: ResMut<Outbox>,
     conditions: Query<&Conditions>,
     time: Res<Time>,
 ) {
@@ -547,14 +542,14 @@ fn affects(
     } else {
         format!("You are:\r\n  {}", lines.join("\r\n  "))
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// End conditions whose time is up, in a fight or out of one, and tell their bearers.
 fn expire_conditions(
     mut conditions: Query<(Entity, &mut Conditions)>,
     time: Res<Time>,
-    mut log: ResMut<CombatLog>,
+    mut log: ResMut<Outbox>,
 ) {
     let now = time.elapsed_secs_f64();
     for (who, mut conditions) in &mut conditions {
@@ -612,7 +607,8 @@ pub fn victory_experience(outmatched: f64) -> u64 {
 fn technique(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mobs: MobQuery,
     keywords: Query<&Keywords>,
     fighting: Query<&Fighting>,
@@ -667,7 +663,7 @@ fn technique(
             }
         }
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// Fighters who haven't fallen yet.
@@ -679,7 +675,7 @@ type StillFighting = (With<Fighting>, Without<Dead>);
 fn abandon_fights(
     mut commands: Commands,
     leaving: Query<(Entity, &Connection, &Player, &InRoom), StillFighting>,
-    mut log: ResMut<CombatLog>,
+    mut log: ResMut<Outbox>,
 ) {
     for (entity, conn, player, in_room) in &leaving {
         if !conn.closing {
@@ -718,12 +714,13 @@ type DeadMobs<'w, 's> = Query<
 /// Lay out the dead: mobs leave a corpse, and players leave one with everything they carried,
 /// then wake at the shrine.
 #[allow(clippy::too_many_arguments)]
-fn handle_deaths(
+pub fn handle_deaths(
     mut commands: Commands,
     dead_mobs: DeadMobs,
     dead_players: Query<Entity, (With<Dead>, With<Player>)>,
     (mob_templates, mut dice): (Res<MobTemplates>, ResMut<Dice>),
-    mut players: PlayerQuery,
+    players: Characters,
+    mut log: ResMut<Outbox>,
     mut sheets: Query<(
         &mut Vitals,
         &Attributes,
@@ -738,13 +735,8 @@ fn handle_deaths(
     index: Res<RoomIndex>,
     registry: Res<CommandRegistry>,
     db: Res<Database>,
-    mut log: ResMut<CombatLog>,
     mut purses: Query<&mut Purse>,
 ) {
-    // Say how the fight ended before the dead wake up somewhere else.
-    if !log.0.is_empty() {
-        deliver(std::mem::take(&mut log.0), &mut players);
-    }
     let now = unix_now();
     for (entity, mob, in_room, slayer) in &dead_mobs {
         let corpse = items::spawn_corpse(
@@ -869,11 +861,9 @@ fn handle_deaths(
             .copied()
             .or_else(|| index.start())
             .unwrap_or(actor.room);
-        if let Ok((_, _, _, Some(mut in_room))) = players.get_mut(entity) {
-            in_room.0 = shrine;
-        }
-        if let Ok((_, key, _)) = rooms.get(shrine)
-            && let Err(err) = db.save_location(actor.character_id, &key.to_string())
+        commands.entity(entity).insert(InRoom(shrine));
+        if let (Some(id), Ok((_, key, _))) = (actor.character_id, rooms.get(shrine))
+            && let Err(err) = db.save_location(id, &key.to_string())
         {
             error!("failed to save {}'s location: {err}", actor.name);
         }
@@ -903,7 +893,7 @@ fn handle_deaths(
                 actor.name
             ),
         });
-        deliver(out, &mut players);
+        deliver(out, &mut log);
         if let Some((spec, id)) = registry.find("look", actor.role) {
             commands.run_system_with(
                 *id,
@@ -915,14 +905,6 @@ fn handle_deaths(
                 },
             );
         }
-    }
-}
-
-/// Tell everyone what happened in the round. World events run after this, so news of a death
-/// follows the blow that caused it.
-pub fn deliver_log(mut log: ResMut<CombatLog>, mut players: PlayerQuery) {
-    if !log.0.is_empty() {
-        deliver(std::mem::take(&mut log.0), &mut players);
     }
 }
 
@@ -938,7 +920,8 @@ fn unix_now() -> i64 {
 fn kill(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mobs: MobQuery,
     keywords: Query<&Keywords>,
     fighting: Query<&Fighting>,
@@ -949,17 +932,24 @@ fn kill(
         return;
     };
     let mut out = Vec::new();
-    let candidates: Vec<_> = mobs::targets_in(actor.room, &mobs, &keywords)
+    // Players fight mobs; a mob, puppeted, can go for anyone here.
+    let mut candidates = mobs::targets_in(actor.room, &mobs, &keywords);
+    let players_here = crate::output::targets_in_room(actor.room, &players, &keywords);
+    if actor.character_id.is_none() {
+        candidates.extend(players_here.iter().copied());
+    }
+    let candidates: Vec<_> = candidates
         .into_iter()
-        .filter(|(entity, _)| dead.get(*entity).is_err() && sees(&hidden, inv.entity, *entity))
+        .filter(|(entity, _)| {
+            *entity != inv.entity
+                && dead.get(*entity).is_err()
+                && sees(&hidden, inv.entity, *entity)
+        })
         .collect();
     let target = Target::parse(&inv.args).and_then(|t| t.find_one(inv.entity, candidates));
-    match target.and_then(|e| mobs.get(e).ok()) {
+    match target.and_then(|e| Actor::get(&players, e)) {
         _ if inv.args.trim().is_empty() => out.push(Outgoing::line(inv.entity, "Kill what?")),
-        None if crate::output::targets_in_room(actor.room, &players, &keywords)
-            .iter()
-            .any(|(_, k)| k.matches(inv.args.trim())) =>
-        {
+        None if players_here.iter().any(|(_, k)| k.matches(inv.args.trim())) => {
             out.push(Outgoing::line(
                 inv.entity,
                 "You can't attack other players.",
@@ -969,9 +959,9 @@ fn kill(
             inv.entity,
             format!("You don't see {} here.", inv.args.trim()),
         )),
-        Some((mob_entity, mob, _)) => {
-            let name = the(&mob.name);
-            if fighting.get(inv.entity).is_ok_and(|f| f.0 == mob_entity) {
+        Some(foe) => {
+            let (foe, name) = (foe.entity, foe.name);
+            if fighting.get(inv.entity).is_ok_and(|f| f.0 == foe) {
                 out.push(Outgoing::line(
                     inv.entity,
                     format!("You're already fighting {name}!"),
@@ -979,24 +969,30 @@ fn kill(
             } else {
                 commands
                     .entity(inv.entity)
-                    .insert(Fighting(mob_entity))
+                    .insert(Fighting(foe))
                     .remove::<Resting>();
-                if fighting.get(mob_entity).is_err() {
-                    commands.entity(mob_entity).insert(Fighting(inv.entity));
+                if fighting.get(foe).is_err() {
+                    commands.entity(foe).insert(Fighting(inv.entity));
                 }
                 out.push(Outgoing::line(
                     inv.entity,
                     format!("\x1b[1mYou attack {name}!\x1b[0m"),
                 ));
-                out.push(Outgoing::Room {
-                    room: actor.room,
-                    except: inv.entity,
-                    text: format!("{} attacks {name}!\r\n", actor.name),
-                });
+                // The one attacked is told so; everyone else sees it.
+                for (other, _, _, in_room) in &players {
+                    let line = if other == foe {
+                        format!("\x1b[1;31m{} attacks you!\x1b[0m", actor.name)
+                    } else {
+                        format!("{} attacks {name}!", actor.name)
+                    };
+                    if in_room.0 == actor.room && other != inv.entity {
+                        out.push(Outgoing::line(other, line));
+                    }
+                }
             }
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// `flee`: try to run from a fight through a random open exit.
@@ -1004,7 +1000,8 @@ fn kill(
 fn flee(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     view: View,
     fighting: Query<&Fighting>,
     mut practice: Practice,
@@ -1075,7 +1072,7 @@ fn flee(
         out.extend(travel(
             inv.entity,
             &dir,
-            &mut players,
+            &players,
             &view,
             &db,
             &mut practice,
@@ -1083,14 +1080,15 @@ fn flee(
             false,
         ));
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// `numbers [on | off]`: show or hide damage numbers in fights, saved with the character.
 fn numbers(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     hidden: Query<(), With<HideNumbers>>,
     db: Res<Database>,
 ) {
@@ -1108,7 +1106,9 @@ fn numbers(
             } else {
                 commands.entity(inv.entity).remove::<HideNumbers>();
             }
-            if let Err(err) = db.set_hide_numbers(actor.character_id, hide) {
+            if let Some(id) = actor.character_id
+                && let Err(err) = db.set_hide_numbers(id, hide)
+            {
                 error!("failed to save {}'s numbers setting: {err}", actor.name);
             }
             if hide {
@@ -1119,13 +1119,14 @@ fn numbers(
         }
         _ => inv.usage_error(),
     };
-    deliver(vec![Outgoing::line(inv.entity, reply)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, reply)], &mut outbox);
 }
 
 /// `autoattack [<skill>]`: see or choose the attack made each round.
 fn autoattack(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mut sheets: Query<(&Skills, &mut AutoAttack)>,
     defs: Res<SkillDefs>,
     db: Res<Database>,
@@ -1163,7 +1164,9 @@ fn autoattack(
         )
     } else if inv.args.trim().eq_ignore_ascii_case("default") {
         auto.0 = None;
-        if let Err(err) = db.set_autoattack(actor.character_id, None) {
+        if let Some(id) = actor.character_id
+            && let Err(err) = db.set_autoattack(id, None)
+        {
             error!("failed to save {}'s auto-attack: {err}", actor.name);
         }
         "You'll fight with the weapon in your hand, or your fists.".into()
@@ -1171,7 +1174,9 @@ fn autoattack(
         match defs.find_known(skills, inv.args.trim()) {
             Some(skill) if matches!(skill.def.kind, SkillKind::Attack { .. }) => {
                 let key = skill.key.clone();
-                if let Err(err) = db.set_autoattack(actor.character_id, Some(&key)) {
+                if let Some(id) = actor.character_id
+                    && let Err(err) = db.set_autoattack(id, Some(&key))
+                {
                     error!("failed to save {}'s auto-attack: {err}", actor.name);
                 }
                 let weapon = match &skill.def.kind {
@@ -1189,11 +1194,11 @@ fn autoattack(
             None => format!("You don't know an attack called '{}'.", inv.args.trim()),
         }
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// `stop`: forget queued actions.
-fn stop(In(inv): In<Invocation>, mut players: PlayerQuery, mut queues: Query<&mut ActionQueue>) {
+fn stop(In(inv): In<Invocation>, mut outbox: ResMut<Outbox>, mut queues: Query<&mut ActionQueue>) {
     let text = match queues.get_mut(inv.entity) {
         Ok(mut queue) if queue.len() > 0 => {
             let n = queue.len();
@@ -1202,7 +1207,7 @@ fn stop(In(inv): In<Invocation>, mut players: PlayerQuery, mut queues: Query<&mu
         }
         _ => "You have nothing planned.".into(),
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 #[cfg(test)]
@@ -1295,7 +1300,7 @@ mod tests {
         world.insert_resource(Dice::seeded(7));
         world.insert_resource(Database::open(":memory:").unwrap());
         world.insert_resource(Time::<()>::default());
-        world.insert_resource(CombatLog::default());
+        world.insert_resource(Outbox::default());
         world.insert_resource(Spawns::default());
         world.init_resource::<Messages<GameEvent>>();
         let room = world
@@ -1346,6 +1351,7 @@ mod tests {
             name: "a brawler".into(),
             here: String::new(),
             description: String::new(),
+            race: None,
         };
         world
             .spawn((
@@ -1360,7 +1366,7 @@ mod tests {
     }
 
     fn said(world: &World, who: Entity, text: &str) -> bool {
-        world.resource::<CombatLog>().0.iter().any(|out| match out {
+        world.resource::<Outbox>().0.iter().any(|out| match out {
             Outgoing::To(entity, line) => *entity == who && line.contains(text),
             _ => false,
         })

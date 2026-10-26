@@ -17,7 +17,7 @@ use crate::items::{
 };
 use crate::mobs::{MobQuery, MobTemplates};
 use crate::money::{self, Purse};
-use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
 use crate::skills::Practice;
 use crate::targeting::Keywords;
 use crate::trade::{self, Bargains};
@@ -92,7 +92,8 @@ pub fn buys(shop: &ShopDef, def: &ItemDef) -> bool {
 #[derive(SystemParam)]
 struct Counter<'w, 's> {
     commands: Commands<'w, 's>,
-    players: PlayerQuery<'w, 's>,
+    players: Characters<'w, 's>,
+    outbox: ResMut<'w, Outbox>,
     mobs: MobQuery<'w, 's>,
     mob_templates: Res<'w, MobTemplates>,
     templates: Res<'w, ItemTemplates>,
@@ -261,7 +262,7 @@ fn list(In(inv): In<Invocation>, mut counter: Counter) {
         .take_while(|o| matches!(o, Outgoing::To(..)))
         .count();
     out.insert(at, Outgoing::line(inv.entity, text));
-    deliver(out, &mut counter.players);
+    deliver(out, &mut counter.outbox);
 }
 
 /// `buy <item>`: buy something from the shopkeeper here. It goes into a free hand, or onto the
@@ -319,7 +320,7 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
         let (location, place, where_to) = if hands < HANDS {
             (
                 ItemLocation::Held(actor.entity),
-                ItemPlace::Held(actor.character_id),
+                actor.character_id.map(ItemPlace::Held),
                 "",
             )
         } else {
@@ -330,15 +331,18 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
                 .unwrap_or_default();
             (
                 ItemLocation::Room(actor.room),
-                ItemPlace::Room(room),
+                Some(ItemPlace::Room(room)),
                 " Your hands are full, so it's set down at your feet.",
             )
         };
-        let id = counter
-            .db
-            .create_item(&ware.key.to_string(), &place, ware.quality)
-            .map_err(|err| error!("failed to save a bought item [{}]: {err}", ware.key))
-            .ok();
+        // A mob's things aren't saved.
+        let id = place.and_then(|place| {
+            counter
+                .db
+                .create_item(&ware.key.to_string(), &place, ware.quality)
+                .map_err(|err| error!("failed to save a bought item [{}]: {err}", ware.key))
+                .ok()
+        });
         items::spawn_item(
             &mut counter.commands,
             &counter.templates,
@@ -375,7 +379,7 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
         }
         _ => {}
     }
-    deliver(out, &mut counter.players);
+    deliver(out, &mut counter.outbox);
 }
 
 /// `sell <item>`: sell something you carry to the shopkeeper here, for a third of its value.
@@ -456,7 +460,7 @@ fn sell(In(inv): In<Invocation>, mut counter: Counter) {
         }
         _ => {}
     }
-    deliver(out, &mut counter.players);
+    deliver(out, &mut counter.outbox);
 }
 
 /// `value <item>`: what the shopkeeper here would pay for something you carry.
@@ -490,7 +494,7 @@ fn value(In(inv): In<Invocation>, mut counter: Counter) {
         .take_while(|o| matches!(o, Outgoing::To(..)))
         .count();
     out.insert(at, Outgoing::line(inv.entity, text));
-    deliver(out, &mut counter.players);
+    deliver(out, &mut counter.outbox);
 }
 
 #[cfg(test)]

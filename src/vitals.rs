@@ -10,11 +10,14 @@
 use bevy::prelude::*;
 
 use crate::attributes::Attributes;
-use crate::combat::{Conditions, Dead, Fighting};
+use crate::combat::{Conditions, Dead, Fighting, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
+use crate::mobs::Mob;
 use crate::net::{self, Connection};
-use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line, targets_online};
+use crate::output::{
+    Actor, Characters, Outbox, Outgoing, Puppeting, Reply, deliver, reply_line, targets_online,
+};
 use crate::skills::{SkillDefs, Skills, boosts};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
@@ -41,7 +44,9 @@ impl Plugin for VitalsPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    show_prompts.before(net::flush_output),
+                    show_prompts
+                        .after(crate::output::flush_outbox)
+                        .before(net::flush_output),
                     save_on_logout.before(net::cleanup_disconnected),
                 ),
             )
@@ -298,27 +303,55 @@ fn save(db: &Database, player: &Player, vitals: &Vitals, at: i64) {
     }
 }
 
-/// Give each player's connection their prompt, filled in fresh, just before output is sent.
+/// A player, as their prompt shows them, and what they're puppeting, if anything.
+type Prompted = (
+    &'static Vitals,
+    &'static Attributes,
+    &'static Skills,
+    &'static PromptFormat,
+    Option<&'static Puppeting>,
+);
+
+/// A puppeted mob, as its puppeteer's prompt shows it.
+type Puppet = (
+    &'static Vitals,
+    &'static Attributes,
+    &'static Skills,
+    Option<&'static BaseHealth>,
+    &'static Mob,
+);
+
+/// Give each player's connection their prompt, filled in fresh, just before output is sent. A
+/// builder puppeting a mob sees the mob's vitals, and whose they are.
 fn show_prompts(
-    mut players: Query<(
-        &mut Connection,
-        &Vitals,
-        &Attributes,
-        &Skills,
-        &PromptFormat,
-    )>,
+    mut players: Query<(&mut Connection, Prompted)>,
+    puppets: Query<Puppet>,
     defs: Res<SkillDefs>,
 ) {
-    for (mut conn, vitals, attributes, skills, format) in &mut players {
-        let max = Maxima::of(attributes, skills, &defs, None);
-        conn.set_prompt(render_prompt(&format.0, vitals, max));
+    for (mut conn, (vitals, attributes, skills, format, puppeting)) in &mut players {
+        let prompt = match puppeting.and_then(|p| puppets.get(p.0).ok()) {
+            Some((vitals, attributes, skills, base, mob)) => {
+                let max = Maxima::of(attributes, skills, &defs, base);
+                format!(
+                    "[{}] {}",
+                    the(&mob.name),
+                    render_prompt(&format.0, vitals, max)
+                )
+            }
+            None => {
+                let max = Maxima::of(attributes, skills, &defs, None);
+                render_prompt(&format.0, vitals, max)
+            }
+        };
+        conn.set_prompt(prompt);
     }
 }
 
 /// `prompt [<format>]`: set the prompt, or go back to the default.
 fn prompt_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mut formats: Query<&mut PromptFormat>,
     db: Res<Database>,
 ) {
@@ -337,7 +370,10 @@ fn prompt_cmd(
         Err(format!("Keep it under {MAX_PROMPT_LEN} characters."))
     } else {
         let saved = (wanted != DEFAULT_PROMPT).then_some(wanted.as_str());
-        match db.set_prompt(actor.character_id, saved) {
+        match actor
+            .character_id
+            .map_or(Ok(()), |id| db.set_prompt(id, saved))
+        {
             Ok(()) => {
                 let custom = saved.is_some();
                 format.0 = wanted.clone();
@@ -353,14 +389,15 @@ fn prompt_cmd(
             }
         }
     };
-    deliver(vec![reply_line(inv.entity, reply)], &mut players);
+    deliver(vec![reply_line(inv.entity, reply)], &mut outbox);
 }
 
 /// `rest`: sit down to recover faster.
 fn rest(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     state: Query<(Has<Resting>, Has<Fighting>)>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
@@ -380,14 +417,14 @@ fn rest(
             });
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// `stand`: get up from resting.
 fn stand(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    mut outbox: ResMut<Outbox>,
     resting: Query<(), With<Resting>>,
 ) {
     let text = if resting.get(inv.entity).is_ok() {
@@ -396,13 +433,14 @@ fn stand(
     } else {
         "You're already on your feet."
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// `setvitals <player> <health> [<stamina>]`: an admin sets someone's current vitals.
 fn setvitals_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     keywords: Query<&Keywords>,
     mut sheets: Query<(&mut Vitals, &Attributes, &Skills)>,
     defs: Res<SkillDefs>,
@@ -410,12 +448,12 @@ fn setvitals_cmd(
     let mut out = Vec::new();
     let reply = set_vitals(&inv, &players, &keywords, &mut sheets, &defs, &mut out);
     out.insert(0, reply_line(inv.entity, reply));
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 fn set_vitals(
     inv: &Invocation,
-    players: &PlayerQuery,
+    players: &Characters,
     keywords: &Query<&Keywords>,
     sheets: &mut Query<(&mut Vitals, &Attributes, &Skills)>,
     defs: &SkillDefs,

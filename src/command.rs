@@ -17,10 +17,13 @@ use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
 
 use crate::aliases::Aliases;
+use crate::combat::the;
 use crate::db::{Permission, Role};
 use crate::events::GameEvent;
+use crate::mobs::Mob;
 use crate::net::{Connection, PlayerInput};
-use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, Puppeting, deliver};
+use crate::puppet::OWN_COMMANDS;
 use crate::stealth::{Hidden, reveal};
 use crate::world::{InRoom, Player};
 
@@ -317,25 +320,38 @@ type Speakers<'w, 's> = Query<
         &'static mut Connection,
         &'static Player,
         Option<&'static Aliases>,
+        Option<&'static Puppeting>,
+    ),
+>;
+
+/// Whoever acts on a player's line: the player, or the mob they puppet. Their queued actions,
+/// where they are, whether they're hiding, and what they're called.
+type Bodies<'w, 's> = Query<
+    'w,
+    's,
+    (
         Option<&'static mut ActionQueue>,
-        Option<&'static InRoom>,
+        &'static InRoom,
         Has<Hidden>,
+        Option<&'static Player>,
+        Option<&'static Mob>,
     ),
 >;
 
 /// Turn each logged-in player's line into a command invocation. Lines from connections that
-/// haven't logged in yet are left to `login.rs`.
+/// haven't logged in yet are left to `login.rs`. A builder puppeting a mob acts as it, with their
+/// own permissions, except for the commands that are theirs alone (`puppet::OWN_COMMANDS`).
 pub fn dispatch(
     mut commands: Commands,
     mut inputs: MessageReader<PlayerInput>,
     mut players: Speakers,
+    mut bodies: Bodies,
     registry: Res<CommandRegistry>,
     mut events: MessageWriter<GameEvent>,
 ) {
     for PlayerInput { entity, line } in inputs.read() {
         let entity = *entity;
-        let Ok((mut conn, player, aliases, queue, in_room, hidden)) = players.get_mut(entity)
-        else {
+        let Ok((mut conn, player, aliases, puppeting)) = players.get_mut(entity) else {
             continue;
         };
         if conn.closing {
@@ -358,15 +374,28 @@ pub fn dispatch(
             conn.send("Huh? Type 'help' for a list of commands.");
             continue;
         };
+        let actor = match puppeting {
+            Some(Puppeting(mob)) if !OWN_COMMANDS.contains(&spec.name) => {
+                // Everything done through a puppet is logged.
+                info!("{} as a puppet: {line}", player.name);
+                *mob
+            }
+            _ => entity,
+        };
+        let Ok((queue, in_room, hidden, as_player, as_mob)) = bodies.get_mut(actor) else {
+            continue;
+        };
         // Acting openly shows someone hiding.
-        if hidden
-            && spec.reveals()
-            && let Some(in_room) = in_room
-        {
-            reveal(&mut commands, &mut events, entity, &player.name, in_room.0);
+        if hidden && spec.reveals() {
+            let name = match (as_player, as_mob) {
+                (Some(player), _) => player.name.clone(),
+                (_, Some(mob)) => the(&mob.name),
+                _ => String::new(),
+            };
+            reveal(&mut commands, &mut events, actor, &name, in_room.0);
         }
         let invocation = Invocation {
-            entity,
+            entity: actor,
             command: spec.name,
             usage: spec.usage,
             args: args.into(),
@@ -403,7 +432,12 @@ fn run_queued_actions(
     }
 }
 
-fn help(In(inv): In<Invocation>, registry: Res<CommandRegistry>, mut players: PlayerQuery) {
+fn help(
+    In(inv): In<Invocation>,
+    registry: Res<CommandRegistry>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
@@ -415,5 +449,5 @@ fn help(In(inv): In<Invocation>, registry: Res<CommandRegistry>, mut players: Pl
             .help_for(&verb, actor.role)
             .unwrap_or_else(|| format!("There is no command '{verb}'."))
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }

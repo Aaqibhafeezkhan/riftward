@@ -87,16 +87,16 @@ app.add_command(
     wave,
 );
 
-fn wave(In(inv): In<Invocation>, mut players: PlayerQuery) {
+fn wave(In(inv): In<Invocation>, players: Characters, mut outbox: ResMut<Outbox>) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
     // ... build a Vec<Outgoing>, then:
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 ```
 
-Registration takes care of the rest: `help` lists it, aliases can't shadow it, and `.permission(Permission::Build)` hides it from anyone without that permission. Don't write prompts yourself; the connection adds one after every batch of output. Resolve target words with `Target::parse` and `find_one` (see `src/targeting.rs`), so `2.goblin` and `me` work everywhere.
+The actor can be a player or a mob (a builder may be puppeting it), so don't assume a saved character: `actor.character_id` is `None` for a mob, and anything you save should skip it. Registration takes care of the rest: `help` lists it, aliases can't shadow it, and `.permission(Permission::Build)` hides it from anyone without that permission. Don't write prompts yourself; the connection adds one after every batch of output. Resolve target words with `Target::parse` and `find_one` (see `src/targeting.rs`), so `2.goblin` and `me` work everywhere.
 
 ### House rules
 

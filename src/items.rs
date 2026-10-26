@@ -20,7 +20,7 @@ use crate::dice::Dice;
 use crate::money::{self, Purse};
 use crate::net::{self, Connection};
 use crate::output::{
-    Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_in_room,
+    Actor, Characters, Outbox, Outgoing, Reply, RoomQuery, deliver, reply_line, targets_in_room,
 };
 use crate::skills::Rarity;
 use crate::stealth::{Hidden, visible};
@@ -968,7 +968,7 @@ fn rot(
     mut items: ItemMutQuery,
     rooms: RoomQuery,
     db: Res<Database>,
-    mut players: PlayerQuery,
+    mut outbox: ResMut<Outbox>,
 ) {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1022,7 +1022,7 @@ fn rot(
             });
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// Once the world has loaded, put real items back in the rooms they were left in, with their
@@ -1182,7 +1182,7 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
     fn new(
         actor: Actor,
         items: &'a mut ItemMutQuery<'w, 's>,
-        players: &PlayerQuery,
+        players: &Characters,
         rooms: &RoomQuery,
         templates: &ItemTemplates,
         db: &'a Database,
@@ -1190,7 +1190,7 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         let snapshot = Snapshot::new(items.iter().map(|(e, i, l)| (e, i, *l)), templates);
         let characters = players
             .iter()
-            .filter_map(|(entity, _, player, _)| Some((entity, player?.character_id)))
+            .filter_map(|(entity, player, _, _)| Some((entity, player?.character_id)))
             .collect();
         let room_key = rooms
             .get(actor.room)
@@ -1381,7 +1381,7 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
 
 fn inventory(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    mut outbox: ResMut<Outbox>,
     items: ItemQuery,
     templates: Res<ItemTemplates>,
     sheets: Query<&Attributes>,
@@ -1439,7 +1439,7 @@ fn inventory(
         format_bulk(encumbered),
         format_bulk(max)
     );
-    deliver(vec![Outgoing::line(who, text)], &mut players);
+    deliver(vec![Outgoing::line(who, text)], &mut outbox);
 }
 
 /// " [2/4 Bulk]" for a container, " [closed]" for a closed one, nothing for anything else.
@@ -1504,7 +1504,8 @@ fn contents_lines(snapshot: &Snapshot, container: Entity, indent: usize) -> Vec<
 
 fn examine(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     items: ItemQuery,
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
@@ -1534,7 +1535,7 @@ fn examine(
         }
         Err(err) => err,
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 /// One item the player names, on them (at any depth) or lying here, theirs first.
@@ -1618,7 +1619,8 @@ fn item_and_container(args: &str) -> (Option<Target>, Option<Target>) {
 #[allow(clippy::too_many_arguments)]
 fn get(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -1631,7 +1633,7 @@ fn get(
     };
     let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
     let out = get_items(&inv, &mut mover, &keywords, &sheets);
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 fn get_items(
@@ -1740,7 +1742,8 @@ fn get_items(
 #[allow(clippy::too_many_arguments)]
 fn put(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -1754,7 +1757,7 @@ fn put(
     let me = mover.me();
     let out =
         put_items(&inv, &mut mover, &keywords).unwrap_or_else(|err| vec![Outgoing::line(me, err)]);
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 fn put_items(
@@ -1821,7 +1824,8 @@ fn put_items(
 #[allow(clippy::too_many_arguments)]
 fn drop(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -1833,7 +1837,7 @@ fn drop(
     };
     let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
     let out = drop_items(&inv, &mut mover, &keywords);
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 fn drop_items(inv: &Invocation, mover: &mut Mover, keywords: &Query<&Keywords>) -> Vec<Outgoing> {
@@ -1886,7 +1890,8 @@ fn drop_items(inv: &Invocation, mover: &mut Mover, keywords: &Query<&Keywords>) 
 #[allow(clippy::too_many_arguments)]
 fn give(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -1912,20 +1917,20 @@ fn give(
             .ok_or_else(|| format!("You don't see {} here.", who.trim()))
             .and_then(|receiver| money::give_coins(&actor, &receiver, amount, &mut purses, &db))
             .unwrap_or_else(|err| vec![Outgoing::line(actor.entity, err)]);
-        deliver(out, &mut players);
+        deliver(out, &mut outbox);
         return;
     }
     let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
     let me = mover.me();
     let out = give_item(&inv, &mut mover, &players, &keywords, &sheets, &hidden)
         .unwrap_or_else(|err| vec![Outgoing::line(me, err)]);
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 fn give_item(
     inv: &Invocation,
     mover: &mut Mover,
-    players: &PlayerQuery,
+    players: &Characters,
     keywords: &Query<&Keywords>,
     sheets: &Query<&Attributes>,
     hidden: &Query<&Hidden>,
@@ -1988,9 +1993,11 @@ fn give_item(
     Ok(out)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sheath(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -2048,12 +2055,14 @@ fn sheath(
         mover.move_to(entity, target);
         Ok(format!("You sheath {name} {}.", mover.where_phrase(target)))
     })();
-    deliver(vec![reply_line(me, reply)], &mut players);
+    deliver(vec![reply_line(me, reply)], &mut outbox);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -2084,13 +2093,14 @@ fn draw(
         mover.move_to(entity, ItemLocation::Held(me));
         Ok(format!("You draw {name}."))
     })();
-    deliver(vec![reply_line(me, reply)], &mut players);
+    deliver(vec![reply_line(me, reply)], &mut outbox);
 }
 
 #[allow(clippy::too_many_arguments)]
 fn hold(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -2124,13 +2134,14 @@ fn hold(
         mover.move_to(entity, ItemLocation::Held(me));
         Ok(format!("You hold {name}."))
     })();
-    deliver(vec![reply_line(me, reply)], &mut players);
+    deliver(vec![reply_line(me, reply)], &mut outbox);
 }
 
 #[allow(clippy::too_many_arguments)]
 fn wear(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -2178,13 +2189,14 @@ fn wear(
             _ => format!("You put on {name}."),
         })
     })();
-    deliver(vec![reply_line(me, reply)], &mut players);
+    deliver(vec![reply_line(me, reply)], &mut outbox);
 }
 
 #[allow(clippy::too_many_arguments)]
 fn remove(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     mut items: ItemMutQuery,
     keywords: Query<&Keywords>,
@@ -2214,14 +2226,15 @@ fn remove(
         mover.move_to(entity, ItemLocation::Held(me));
         Ok(format!("You take off {name} and hold it."))
     })();
-    deliver(vec![reply_line(me, reply)], &mut players);
+    deliver(vec![reply_line(me, reply)], &mut outbox);
 }
 
 #[allow(clippy::too_many_arguments)]
 fn create(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     rooms: RoomQuery,
     items: ItemQuery,
     templates: Res<ItemTemplates>,
@@ -2255,7 +2268,7 @@ fn create(
         )?;
         Ok(format!("You create {name} [{key}] {where_to}."))
     })();
-    deliver(vec![reply_line(actor.entity, reply)], &mut players);
+    deliver(vec![reply_line(actor.entity, reply)], &mut outbox);
 }
 
 /// Make a new item from template `key` for `actor`, standing in `here`: in their hand, or at
@@ -2281,24 +2294,31 @@ pub fn make_for(
         .filter(|(_, _, loc)| **loc == ItemLocation::Held(actor.entity))
         .count();
     let (location, place, where_to) = if def.fixed || held >= HANDS {
-        let place = ItemPlace::Room(here.to_string());
+        let place = Some(ItemPlace::Room(here.to_string()));
         (ItemLocation::Room(actor.room), place, "here")
     } else {
-        let place = ItemPlace::Held(actor.character_id);
+        // A mob's things aren't saved.
+        let place = actor.character_id.map(ItemPlace::Held);
         (ItemLocation::Held(actor.entity), place, "in your hand")
     };
-    let id = db
-        .create_item(&key.to_string(), &place, quality)
-        .map_err(|err| format!("Couldn't save the item: {err}"))?;
+    let id = match place {
+        Some(place) => Some(
+            db.create_item(&key.to_string(), &place, quality)
+                .map_err(|err| format!("Couldn't save the item: {err}"))?,
+        ),
+        None => None,
+    };
     let name = quality.named(def);
-    spawn_item(commands, templates, key, Some(id), location, quality);
+    spawn_item(commands, templates, key, id, location, quality);
     Ok((name, where_to))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn destroy(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     items: ItemQuery,
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
@@ -2324,7 +2344,7 @@ fn destroy(
             }
             Ok(format!("You destroy {}.", item.name))
         });
-    deliver(vec![reply_line(actor.entity, reply)], &mut players);
+    deliver(vec![reply_line(actor.entity, reply)], &mut outbox);
 }
 
 #[cfg(test)]

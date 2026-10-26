@@ -4,11 +4,11 @@ use bevy::prelude::*;
 
 use crate::characters::Races;
 use crate::command::Invocation;
-use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
+use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver, targets_in_room};
 use crate::stealth::{Hidden, sees, visible};
 use crate::targeting::{Keywords, Target};
 
-pub fn say(In(inv): In<Invocation>, mut players: PlayerQuery) {
+pub fn say(In(inv): In<Invocation>, players: Characters, mut outbox: ResMut<Outbox>) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
@@ -25,13 +25,14 @@ pub fn say(In(inv): In<Invocation>, mut players: PlayerQuery) {
             },
         ]
     };
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// Only the target hears the words; everyone else in the room just sees that a whisper happened.
 pub fn whisper(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     keywords: Query<&Keywords>,
     hidden: Query<&Hidden>,
 ) {
@@ -86,10 +87,15 @@ pub fn whisper(
         }
         _ => out.push(Outgoing::line(actor.entity, inv.usage_error())),
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
-pub fn yell(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery) {
+pub fn yell(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    rooms: RoomQuery,
+) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
@@ -104,20 +110,21 @@ pub fn yell(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery)
         ));
         if let Ok((_, key, _)) = rooms.get(actor.room) {
             let heard = format!("\x1b[1;31m{} yells, \"{text}\"\x1b[0m\r\n", actor.name);
-            for (other, _, player, in_room) in players.iter() {
-                let in_zone = in_room
-                    .and_then(|r| rooms.get(r.0).ok())
-                    .is_some_and(|(_, k, _)| k.zone == key.zone);
-                if player.is_some() && in_zone && other != actor.entity {
+            // Everyone in the zone hears, player or mob: a mob only listens if puppeted.
+            for (other, _, _, in_room) in players.iter() {
+                let in_zone = rooms
+                    .get(in_room.0)
+                    .is_ok_and(|(_, k, _)| k.zone == key.zone);
+                if in_zone && other != actor.entity {
                     out.push(Outgoing::To(other, heard.clone()));
                 }
             }
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
-pub fn gossip(In(inv): In<Invocation>, mut players: PlayerQuery) {
+pub fn gossip(In(inv): In<Invocation>, players: Characters, mut outbox: ResMut<Outbox>) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
@@ -131,19 +138,24 @@ pub fn gossip(In(inv): In<Invocation>, mut players: PlayerQuery) {
             format!("\x1b[35m[Gossip] You: {text}\x1b[0m"),
         ));
         let heard = format!("\x1b[35m[Gossip] {}: {text}\x1b[0m\r\n", actor.name);
-        for (other, _, player, _) in players.iter() {
+        for (other, player, _, _) in players.iter() {
             if player.is_some() && other != actor.entity {
                 out.push(Outgoing::To(other, heard.clone()));
             }
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
-pub fn who(In(inv): In<Invocation>, mut players: PlayerQuery, races: Res<Races>) {
+pub fn who(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    races: Res<Races>,
+) {
     let mut names: Vec<_> = players
         .iter()
-        .filter_map(|(_, _, p, _)| p.map(|p| format!("{} ({})", p.name, races.name(&p.race))))
+        .filter_map(|(_, p, _, _)| p.map(|p| format!("{} ({})", p.name, races.name(&p.race))))
         .collect();
     names.sort();
     let text = format!(
@@ -151,5 +163,5 @@ pub fn who(In(inv): In<Invocation>, mut players: PlayerQuery, races: Res<Races>)
         names.len(),
         names.join("\r\n  ")
     );
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }

@@ -17,7 +17,7 @@ use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
 use crate::events::GameEvent;
 use crate::mobs::Mob;
-use crate::output::{Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::output::{Characters, Outbox, Outgoing, RoomQuery, deliver};
 use crate::world::{MobKey, RoomIndex, RoomKey, ZoneDef};
 
 pub struct WorldEventsPlugin;
@@ -26,7 +26,7 @@ impl Plugin for WorldEventsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WorldFlags>()
             .add_systems(Startup, load_world_flags)
-            .add_systems(Update, run_world_events.after(crate::combat::deliver_log))
+            .add_systems(Update, run_world_events.after(crate::combat::handle_deaths))
             .add_command(
                 CommandSpec::new("worldflag", Category::Admin)
                     .usage("worldflag [<flag> on|off]")
@@ -131,7 +131,8 @@ fn run_world_events(
     rooms: RoomQuery,
     index: Res<RoomIndex>,
     db: Res<Database>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
 ) {
     let happened: Vec<Occurred> = events
         .read()
@@ -168,10 +169,7 @@ fn run_world_events(
                         }
                         Action::Announce(scope, text) => {
                             let line = format!("\x1b[1;35m{text}\x1b[0m\r\n");
-                            for (entity, _, player, in_room) in &players {
-                                let Some(room) = in_room.filter(|_| player.is_some()) else {
-                                    continue;
-                                };
+                            for (entity, _, _, room) in &players {
                                 let hears = match scope {
                                     Scope::Everyone => true,
                                     Scope::Zone(z) => {
@@ -192,14 +190,14 @@ fn run_world_events(
             }
         }
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// `worldflag [<flag> on|off]`: an admin lists, sets or clears world flags. Setting one by hand
 /// fires nothing itself, but gated spawns see it at once.
 fn worldflag(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    mut outbox: ResMut<Outbox>,
     mut flags: ResMut<WorldFlags>,
     db: Res<Database>,
 ) {
@@ -240,7 +238,7 @@ fn worldflag(
         }
         _ => inv.usage_error(),
     };
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
 #[cfg(test)]

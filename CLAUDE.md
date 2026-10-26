@@ -43,9 +43,9 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 **Commands** are Bevy systems registered with `app.add_command(CommandSpec::new(..).usage(..).summary(..), system)`. The system takes `In<Invocation>` plus whatever queries/resources it needs; `help` is generated from the registry, and `.permission(Permission::Build)` hides it from lower roles. Player commands live in `src/commands/` and topic modules (`items.rs`, `combat/`, `skills.rs`…); builder/admin commands in `build.rs`. See `CONTRIBUTING.md` for a worked example.
 
 - **Never write prompts from a command.** The connection appends exactly one prompt after each batch of output; `vitals.rs` computes the prompt text just before flush.
-- Build output as `Vec<Outgoing>` and send it with `deliver` (`output.rs`), which also holds `Actor` and the common queries.
+- **Players and mobs are both characters.** Commands read them through `Characters` and get their actor with `Actor::get`, which works for either: a mob runs commands when it wanders (`go`) or a builder `puppet`s it. `actor.character_id` is `None` for a mob, and mobs aren't saved, so skip saving for them. Build output as `Vec<Outgoing>` and queue it with `deliver(out, &mut outbox)` into the `Outbox` (`output.rs`); never write to a `Connection` from a command.
 - Resolve target words with `Target::parse` + `find_one`/`find_all` (`targeting.rs`) so `2.goblin`, `all.coin` and `me` work everywhere.
-- Mobs share players' `InRoom`; queries meant for players only filter on `Connection`.
+- To act on players only, check for `Player` (`Characters` gives `Option<&Player>`); text sent to a mob nobody is puppeting is simply dropped.
 - **Action commands** (`kill`, `flee`, `use`, `pick`, `bash`, techniques) go through the per-player `ActionQueue` and take a 3-second combat round; everything else is instant.
 - **Game events:** systems that make something happen write a `GameEvent` (`events.rs`); announcements, passive-skill triggers and world events listen to it. Add events rather than special cases.
 - **Time:** a one-second heartbeat drives spawns, wandering, recovery, the clock. Heartbeat systems must work from elapsed time and timestamps, never by counting beats.

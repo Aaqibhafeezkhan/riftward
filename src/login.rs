@@ -19,7 +19,7 @@ use crate::db::{Account, CharacterRecord, Database, ItemPlace, Permission, Role}
 use crate::items::{HANDS, ItemTemplates, Quality};
 use crate::money::Purse;
 use crate::net::{Connection, JustConnected, PlayerInput};
-use crate::output::{Outgoing, PlayerQuery, deliver};
+use crate::output::{Characters, Outbox, Outgoing, deliver};
 use crate::skills::{SkillDefs, Skills, UNIVERSAL_SKILLS, learn};
 use crate::spells::Spells;
 use crate::targeting::Keywords;
@@ -149,7 +149,9 @@ fn handle_login(
     mut commands: Commands,
     mut inputs: MessageReader<PlayerInput>,
     mut states: Query<&mut LoginState>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
+    mut connections: Query<&mut Connection>,
     view: View,
     index: Res<RoomIndex>,
     db: Res<Database>,
@@ -198,7 +200,7 @@ fn handle_login(
         };
 
         // The client doesn't echo the newline after a hidden password either, so add one.
-        if let Ok((_, mut conn, _, _)) = players.get_mut(entity) {
+        if let Ok(mut conn) = connections.get_mut(entity) {
             if was_secret {
                 conn.set_echo(true);
                 conn.send_raw("\r\n");
@@ -213,7 +215,7 @@ fn handle_login(
         match step {
             Step::Next(next) => *state = next,
             Step::Disconnect => {
-                if let Ok((_, mut conn, _, _)) = players.get_mut(entity) {
+                if let Ok(mut conn) = connections.get_mut(entity) {
                     conn.closing = true;
                 }
             }
@@ -232,14 +234,14 @@ fn handle_login(
                 ) {
                     Some(next) => *state = next,
                     None => {
-                        if let Ok((_, mut conn, _, _)) = players.get_mut(entity) {
+                        if let Ok(mut conn) = connections.get_mut(entity) {
                             conn.enable_prompt();
                         }
                     }
                 }
             }
         }
-        deliver(std::mem::take(&mut out), &mut players);
+        deliver(std::mem::take(&mut out), &mut outbox);
     }
 }
 
@@ -777,7 +779,7 @@ fn enter_game(
     account: Account,
     character: CharacterRecord,
     commands: &mut Commands,
-    players: &PlayerQuery,
+    players: &Characters,
     view: &View,
     index: &RoomIndex,
     choices: &Choices,
@@ -798,7 +800,7 @@ fn enter_game(
 
     let online = players
         .iter()
-        .any(|(_, _, p, _)| p.is_some_and(|p| p.character_id == character.id));
+        .any(|(_, p, _, _)| p.is_some_and(|p| p.character_id == character.id));
     if online {
         return back_to_menu(out, &format!("{} is already playing.", character.name));
     }
@@ -873,7 +875,7 @@ fn enter_game(
     let mut learned = Vec::new();
     for key in starting {
         if let Some(skill) = choices.skills.skills.get(&key)
-            && learn(&mut skills, &key, "Starting", character.id, db)
+            && learn(&mut skills, &key, "Starting", Some(character.id), db)
         {
             learned.push(skill.def.name.clone());
         }

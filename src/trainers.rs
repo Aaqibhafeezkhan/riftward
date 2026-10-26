@@ -16,7 +16,7 @@ use crate::db::Database;
 use crate::items::capitalized;
 use crate::mobs::{MobQuery, MobTemplates};
 use crate::money::{self, Purse};
-use crate::output::{Outgoing, PlayerQuery, deliver};
+use crate::output::{Characters, Outbox, Outgoing, deliver};
 use crate::skills::{Skill, SkillDefs, Skills, learn};
 use crate::spells::{self, Spell, SpellDefs, Spells};
 
@@ -63,14 +63,16 @@ pub fn awakened(skills: &Skills) -> Option<&'static str> {
 #[allow(clippy::too_many_arguments)]
 fn learn_cmd(
     In(inv): In<Invocation>,
-    mut players: PlayerQuery,
+    players: Characters,
+    mut outbox: ResMut<Outbox>,
     mobs: MobQuery,
     templates: Res<MobTemplates>,
     (defs, spell_defs): (Res<SkillDefs>, Res<SpellDefs>),
     mut sheets: Query<(&mut Skills, &mut Attributes, &mut Spells, &mut Purse)>,
     db: Res<Database>,
 ) {
-    let Ok((_, _, Some(player), Some(in_room))) = players.get(inv.entity) else {
+    // Lessons are for players: a mob has no purse to pay with, and nothing to save.
+    let Ok((_, Some(player), _, in_room)) = players.get(inv.entity) else {
         return;
     };
     let (room, race, name, character_id) = (
@@ -204,7 +206,7 @@ fn learn_cmd(
                 }
                 (None, Lesson::Spell(spell)) => {
                     if spell.def.price > 0 {
-                        purse.save(character_id, &db);
+                        purse.save(Some(character_id), &db);
                     }
                     spells.0.insert(spell.key.clone());
                     if let Err(err) = db.save_spell(character_id, &spell.key, "Taught") {
@@ -228,7 +230,7 @@ fn learn_cmd(
                 }
                 (None, Lesson::Skill(skill)) => {
                     let key = skill.key.clone();
-                    learn(&mut skills, &key, "Taught", character_id, &db);
+                    learn(&mut skills, &key, "Taught", Some(character_id), &db);
                     let mut text = format!(
                         "{} takes you through the basics of {}.\r\n\x1b[1;32mYou have learned {}.\x1b[0m",
                         capitalized(&trainer),
@@ -261,7 +263,7 @@ fn learn_cmd(
         };
         out.insert(0, Outgoing::line(inv.entity, text));
     }
-    deliver(out, &mut players);
+    deliver(out, &mut outbox);
 }
 
 /// Something a trainer teaches: a skill, or a spell.

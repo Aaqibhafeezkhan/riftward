@@ -1,51 +1,77 @@
-//! Shared plumbing for sending text to players: who is where, and queuing text for one player or a
-//! whole room. Text is collected as `Outgoing` while a system works, then delivered in one pass.
+//! Shared plumbing for characters and what they're told: who is where, and queuing text for one
+//! character or a whole room.
+//!
+//! **Characters are players and mobs alike.** `Characters` reads both, and `Actor` is whichever
+//! one is running a command: a player typing, or a mob a builder has puppeted (see
+//! `puppet.rs`). Only players are saved, so `Actor::character_id` is `None` for a mob, and
+//! anything that saves skips it.
+//!
+//! Text goes into the `Outbox` while systems work, and `flush_outbox` delivers it once a tick:
+//! to a player's connection, or to whoever is puppeting a mob. A line starting with a name gets
+//! its capital letter there, so "the town guard says" reads right wherever it lands.
 
 use bevy::prelude::*;
 
+use crate::combat::the;
 use crate::db::Role;
+use crate::mobs::Mob;
 use crate::net::Connection;
 use crate::targeting::Keywords;
 use crate::world::{Exits, InRoom, Player, Room, RoomKey};
 
-pub type PlayerQuery<'w, 's> = Query<
+/// Players and mobs: who they are and where.
+pub type Characters<'w, 's> = Query<
     'w,
     's,
     (
         Entity,
-        &'static mut Connection,
-        Option<&'static mut Player>,
-        Option<&'static mut InRoom>,
+        Option<&'static Player>,
+        Option<&'static Mob>,
+        &'static InRoom,
     ),
+    Or<(With<Player>, With<Mob>)>,
 >;
 
 pub type RoomQuery<'w, 's> = Query<'w, 's, (&'static Room, &'static RoomKey, &'static Exits)>;
 
-/// The player running a command, copied out of `PlayerQuery` so handlers can keep using it.
+/// The character running a command, copied out of `Characters` so handlers can keep using it.
 pub struct Actor {
     pub entity: Entity,
+    /// As others say it: "Grok", "the town guard".
     pub name: String,
-    pub character_id: i64,
+    /// Their saved character, if they're a player. Mobs aren't saved.
+    pub character_id: Option<i64>,
     pub account: String,
     pub role: Role,
-    /// Their race id, for requirements.
+    /// Their race id, for requirements; empty for a beast.
     pub race: String,
     pub room: Entity,
 }
 
 impl Actor {
-    /// The logged-in player behind `entity`, if there is one.
-    pub fn get(players: &PlayerQuery, entity: Entity) -> Option<Self> {
-        let (_, _, player, in_room) = players.get(entity).ok()?;
-        let (player, in_room) = (player?, in_room?);
-        Some(Self {
-            entity,
-            name: player.name.clone(),
-            character_id: player.character_id,
-            account: player.account.clone(),
-            role: player.role,
-            race: player.race.clone(),
-            room: in_room.0,
+    /// The character behind `entity`, player or mob, if there is one.
+    pub fn get(characters: &Characters, entity: Entity) -> Option<Self> {
+        let (_, player, mob, in_room) = characters.get(entity).ok()?;
+        Some(match (player, mob) {
+            (Some(player), _) => Self {
+                entity,
+                name: player.name.clone(),
+                character_id: Some(player.character_id),
+                account: player.account.clone(),
+                role: player.role,
+                race: player.race.clone(),
+                room: in_room.0,
+            },
+            (None, Some(mob)) => Self {
+                entity,
+                name: the(&mob.name),
+                character_id: None,
+                account: String::new(),
+                role: Role::Player,
+                race: mob.race.clone().unwrap_or_default(),
+                room: in_room.0,
+            },
+            (None, None) => return None,
         })
     }
 }
@@ -61,16 +87,28 @@ pub enum Outgoing {
 }
 
 impl Outgoing {
-    /// A full line of text for one player.
+    /// A full line of text for one character.
     pub fn line(entity: Entity, text: impl Into<String>) -> Self {
         Outgoing::To(entity, text.into() + "\r\n")
     }
 }
 
+/// What everyone is to be told this tick, in order.
+#[derive(Resource, Default)]
+pub struct Outbox(pub Vec<Outgoing>);
+
+/// A builder puppeting a mob: their input goes to it, and what it's told goes to them.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Puppeting(pub Entity);
+
+/// A mob being puppeted, by the builder whose entity this is.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct PuppetedBy(pub Entity);
+
 /// A command's reply: `Ok` for success, `Err` for a problem, shown in red.
 pub type Reply = Result<String, String>;
 
-/// Turn a `Reply` into a line for the player who ran the command.
+/// Turn a `Reply` into a line for the character who ran the command.
 pub fn reply_line(entity: Entity, reply: Reply) -> Outgoing {
     match reply {
         Ok(text) => Outgoing::line(entity, text),
@@ -78,18 +116,78 @@ pub fn reply_line(entity: Entity, reply: Reply) -> Outgoing {
     }
 }
 
-pub fn deliver(out: Vec<Outgoing>, players: &mut PlayerQuery) {
-    for msg in out {
-        match msg {
-            Outgoing::To(entity, text) => {
-                if let Ok((_, mut conn, _, _)) = players.get_mut(entity) {
-                    conn.send_raw(text);
+/// Queue `out` to be told.
+pub fn deliver(out: Vec<Outgoing>, outbox: &mut Outbox) {
+    outbox.0.extend(out);
+}
+
+/// `text` with the first letter of each line capitalised, past any colour codes: a line that
+/// starts with a mob's name, "the town guard says", reads "The town guard says".
+fn capital_lines(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut start = true;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // A colour code: copy it through to its closing letter.
+            out.push(c);
+            for code in chars.by_ref() {
+                out.push(code);
+                if code.is_ascii_alphabetic() {
+                    break;
                 }
             }
+            continue;
+        }
+        if start && c.is_alphabetic() {
+            out.extend(c.to_uppercase());
+        } else {
+            out.push(c);
+        }
+        start = c == '\n';
+    }
+    out
+}
+
+/// Characters' rooms, for delivering what's said in one.
+type Present<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static InRoom,
+        Option<&'static PuppetedBy>,
+        Has<Puppeting>,
+    ),
+    Or<(With<Player>, With<Mob>)>,
+>;
+
+/// Deliver everything in the outbox: to players' connections, and what a puppeted mob is told
+/// to the builder puppeting it. A builder puppeting something hears nothing of their own body,
+/// only their puppet.
+pub fn flush_outbox(
+    mut outbox: ResMut<Outbox>,
+    mut connections: Query<&mut Connection>,
+    present: Present,
+    puppeted: Query<&PuppetedBy>,
+    puppeting: Query<(), With<Puppeting>>,
+) {
+    let mut send = |to: Entity, text: &str| {
+        if puppeting.get(to).is_ok() {
+            return;
+        }
+        let to = puppeted.get(to).map_or(to, |by| by.0);
+        if let Ok(mut conn) = connections.get_mut(to) {
+            conn.send_raw(capital_lines(text));
+        }
+    };
+    for msg in std::mem::take(&mut outbox.0) {
+        match msg {
+            Outgoing::To(entity, text) => send(entity, &text),
             Outgoing::Room { room, except, text } => {
-                for (entity, mut conn, _, in_room) in players.iter_mut() {
-                    if entity != except && in_room.is_some_and(|r| r.0 == room) {
-                        conn.send_raw(&text);
+                for (entity, in_room, _, puppeting) in &present {
+                    if entity != except && in_room.0 == room && !puppeting {
+                        send(entity, &text);
                     }
                 }
             }
@@ -100,24 +198,46 @@ pub fn deliver(out: Vec<Outgoing>, players: &mut PlayerQuery) {
 /// Logged-in players in `room` with their keywords, in a stable order, for resolving targets.
 pub fn targets_in_room<'a>(
     room: Entity,
-    players: &PlayerQuery,
+    characters: &Characters,
     keywords: &'a Query<&Keywords>,
 ) -> Vec<(Entity, &'a Keywords)> {
-    players
+    characters
         .iter()
-        .filter(|(_, _, player, in_room)| player.is_some() && in_room.is_some_and(|r| r.0 == room))
+        .filter(|(_, player, _, in_room)| player.is_some() && in_room.0 == room)
         .filter_map(|(entity, ..)| Some((entity, keywords.get(entity).ok()?)))
         .collect()
 }
 
 /// Every logged-in player with their keywords, for commands that reach anyone online.
 pub fn targets_online<'a>(
-    players: &PlayerQuery,
+    characters: &Characters,
     keywords: &'a Query<&Keywords>,
 ) -> Vec<(Entity, &'a Keywords)> {
-    players
+    characters
         .iter()
-        .filter(|(_, _, player, _)| player.is_some())
+        .filter(|(_, player, _, _)| player.is_some())
         .filter_map(|(entity, ..)| Some((entity, keywords.get(entity).ok()?)))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lines_start_with_a_capital() {
+        assert_eq!(
+            capital_lines("the town guard says hello.\r\nthe rat squeaks.\r\n"),
+            "The town guard says hello.\r\nThe rat squeaks.\r\n"
+        );
+        assert_eq!(
+            capital_lines("\x1b[1;31mthe rat attacks you!\x1b[0m"),
+            "\x1b[1;31mThe rat attacks you!\x1b[0m"
+        );
+        assert_eq!(
+            capital_lines("  a knife\r\n"),
+            "  a knife\r\n",
+            "indented stays"
+        );
+    }
 }

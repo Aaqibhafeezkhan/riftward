@@ -21,6 +21,7 @@ mod mobs;
 mod money;
 mod net;
 mod output;
+mod puppet;
 mod shops;
 mod skills;
 mod spawns;
@@ -98,7 +99,12 @@ fn add_game(app: &mut App, path: String, address: String) {
         stealth::StealthPlugin,
     ))
     // Magic and trade.
-    .add_plugins((spells::SpellsPlugin, shops::ShopsPlugin, trade::TradePlugin));
+    .add_plugins((
+        spells::SpellsPlugin,
+        shops::ShopsPlugin,
+        trade::TradePlugin,
+        puppet::PuppetPlugin,
+    ));
 }
 
 #[cfg(test)]

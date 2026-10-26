@@ -91,7 +91,7 @@ Each spawn says how far its mobs may roam and how often they move.
 - **Each mob moves on its own random interval,** `min` to `max` seconds, so a room's goblins don't all move in the same tick. Each move picks a random open exit it's allowed to take, rolled through [`Dice`](attributes.md#the-dice-service). Mobs don't open doors yet.
 - **Rooms can refuse wanderers** with a `no_wander` flag: temples, shops, players' homes.
 - **A puppeted mob doesn't wander.** While a GM or admin [puppets](architecture.md#game-masters-and-puppeting) it, it only moves when they move it.
-- **Wanderers move like players.** Rooms see "A stray dog arrives from the west." and "A city guard leaves north.", from the same `Left` and `Entered` [game events](architecture.md#game-events) players' moves write, so triggers and passive skills will see mob movement too.
+- **Wanderers move like players, because they use the same command.** A wanderer chooses where to go, and walks there with `go`, as a player would: terrain costs it stamina (a tired mob waits until it's recovered), it leaves tracks, and rooms see "The stray dog leaves east." from the same `Left` and `Entered` [game events](architecture.md#game-events), so triggers and passive skills see mob movement too.
 
 ## Mob templates
 
@@ -115,7 +115,8 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
 ```ron
 "sewer_rat": (
     name: "a sewer rat",
-    attributes: {Body: 1, Strength: 1, Agility: 4, Reaction: 4},   // the rest at the base, 3
+    race: "human",                   // one of the peoples: its race's attributes and skills
+    attributes: {Body: 1, Strength: 1, Agility: 4, Reaction: 4},   // the rest at the base, 3, shifted by race
     skills: {"beast:bite": 2},       // levels; mobs don't improve
     attack: "beast:bite",            // without one, a weapon in hand, then Brawling
     equipment: ["rusty_knife"],      // item templates: worn if wearable, else held (two hands)
@@ -125,6 +126,8 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     aggressive: true,                 // attacks players in its room
 ),
 ```
+
+**A mob can be one of the peoples,** with `race`: its attributes start from that race's (the template's own ratings win where it sets them), it has the race's skills, `look` says "The provisioner is a human.", and its tracks read "a human", as a player's do. Riftwatch's townsfolk are mostly human; the tinker is a dwarf, the drill sergeant an ork, the magister an elf. Beasts have no race. The zone test checks every race exists.
 
 Mobs use equipment as players do: a mob holding a sword fights with it (and its Swordplay), its weapon techniques work, and `look` shows what it holds and wears. When it dies, its gear falls into its corpse, with one find from each of its **loot tables**: weighted, ordered worst to best, rolled with the Luck of whoever struck the killing blow, `None` for nothing. Sewer rats sometimes leave a tail; the Rat King leaves a tail or his tooth, and sometimes a healing draught.
 
