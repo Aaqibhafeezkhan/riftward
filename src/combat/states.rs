@@ -1,10 +1,14 @@
-//! Conditions: short-lived states a technique leaves on a fighter, counted in their own turns.
+//! Conditions: short-lived states on a fighter. A technique's last some of their own turns; a
+//! spell's last a while, counted in time, in a fight or out of one.
 //!
 //! Every fighter has a `Conditions` component (it comes with `Vitals`). At the start of each of
-//! their turns, bleeding hurts, a stagger or a fall costs them the turn, and everything else counts
-//! down.
+//! their turns, bleeding hurts, a stagger or a fall costs them the turn, and conditions counted in
+//! turns count down. Conditions counted in time end when their time is up (`expire`), whether or
+//! not anyone is fighting, so a blessing can't be cast and saved for later.
 
 use bevy::prelude::*;
+
+use crate::time::span;
 
 /// A short-lived state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,15 +32,41 @@ pub enum State {
 }
 
 impl State {
+    /// What it's called, and what it does: ("blessed", "attacking 2 better").
+    pub fn describe(self) -> (&'static str, String) {
+        match self {
+            State::Staggered => ("staggered", "losing your next turn".into()),
+            State::Down => (
+                "down",
+                "losing your next turn, and defending at half".into(),
+            ),
+            State::Bleeding(n) => ("bleeding", format!("losing {n} health each turn")),
+            State::Held => ("held", "unable to flee, and defending at half".into()),
+            State::Guarding(n) => ("guarding", format!("defending {n} better")),
+            State::Exposed => ("exposed", "defending at half until your next turn".into()),
+            State::Blessed(n) => ("blessed", format!("attacking {n} better")),
+            State::Warded(n) => ("warded", format!("a ward that will take {n} more damage")),
+        }
+    }
+
     /// Whether two states are the same kind, so a new one replaces the old.
     fn same_kind(self, other: State) -> bool {
         std::mem::discriminant(&self) == std::mem::discriminant(&other)
     }
 }
 
-/// A fighter's current conditions, each with the turns it has left.
+/// How long a condition lasts.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Lasts {
+    /// This many more of the fighter's turns.
+    Turns(u32),
+    /// Until this time, in seconds since the server started.
+    Until(f64),
+}
+
+/// A fighter's current conditions, each with how long it has left.
 #[derive(Component, Clone, Debug, Default)]
-pub struct Conditions(pub Vec<(State, u32)>);
+pub struct Conditions(pub Vec<(State, Lasts)>);
 
 /// What the start of a fighter's turn brings.
 #[derive(Debug, Default, PartialEq)]
@@ -51,7 +81,24 @@ impl Conditions {
     /// Add a state for `turns` of the fighter's turns, replacing one of the same kind.
     pub fn add(&mut self, state: State, turns: u32) {
         self.0.retain(|(s, _)| !s.same_kind(state));
-        self.0.push((state, turns.max(1)));
+        self.0.push((state, Lasts::Turns(turns.max(1))));
+    }
+
+    /// Add a state until `until` (seconds since the server started), replacing one of the same
+    /// kind.
+    pub fn add_until(&mut self, state: State, until: f64) {
+        self.0.retain(|(s, _)| !s.same_kind(state));
+        self.0.push((state, Lasts::Until(until)));
+    }
+
+    /// End the states whose time is up at `now`. Returns them.
+    pub fn expire(&mut self, now: f64) -> Vec<State> {
+        let (over, left) = self
+            .0
+            .drain(..)
+            .partition(|(_, lasts)| matches!(lasts, Lasts::Until(until) if *until <= now));
+        self.0 = left;
+        over.into_iter().map(|(state, _)| state).collect()
     }
 
     pub fn has(&self, state: State) -> bool {
@@ -102,6 +149,23 @@ impl Conditions {
         taken
     }
 
+    /// Each state, what it does and how long it has left at `now`, for `affects`: "blessed:
+    /// attacking 2 better, for 1 hour 20 minutes (10 real minutes)".
+    pub fn listed(&self, now: f64) -> Vec<String> {
+        self.0
+            .iter()
+            .map(|(state, lasts)| {
+                let (name, what) = state.describe();
+                let left = match *lasts {
+                    Lasts::Until(until) => format!("for {}", span((until - now).max(0.0))),
+                    Lasts::Turns(1) => "for 1 more turn".into(),
+                    Lasts::Turns(n) => format!("for {n} more turns"),
+                };
+                format!("{name}: {what}, {left}")
+            })
+            .collect()
+    }
+
     /// Whether they can run from a fight.
     pub fn can_flee(&self) -> bool {
         !self.has(State::Held)
@@ -111,7 +175,7 @@ impl Conditions {
     /// everything counts down.
     pub fn start_turn(&mut self) -> TurnStart {
         let mut start = TurnStart::default();
-        for (state, turns) in &mut self.0 {
+        for (state, lasts) in &mut self.0 {
             match state {
                 State::Bleeding(damage) => start.bleeding += *damage,
                 State::Staggered | State::Down if start.lost_to.is_none() => {
@@ -119,11 +183,13 @@ impl Conditions {
                 }
                 _ => {}
             }
-            *turns = turns.saturating_sub(1);
+            if let Lasts::Turns(turns) = lasts {
+                *turns = turns.saturating_sub(1);
+            }
         }
         // Exposure only lasts until the fighter acts again.
         self.0
-            .retain(|(state, turns)| *turns > 0 && *state != State::Exposed);
+            .retain(|(state, lasts)| *lasts != Lasts::Turns(0) && *state != State::Exposed);
         start
     }
 
@@ -200,6 +266,23 @@ mod tests {
         assert_eq!(conditions.absorb(4), 2, "only 2 left in it");
         assert!(!conditions.has(State::Warded(0)));
         assert_eq!(conditions.absorb(4), 0);
+    }
+
+    #[test]
+    fn timed_states_last_their_time_whatever_the_turns() {
+        let mut conditions = Conditions::default();
+        conditions.add_until(State::Blessed(2), 600.0);
+        conditions.add(State::Held, 1);
+        // Fighting doesn't wear a blessing down...
+        for _ in 0..10 {
+            conditions.start_turn();
+        }
+        assert_eq!(conditions.blessing(), 2);
+        assert!(!conditions.has(State::Held));
+        // ...time does, in a fight or out.
+        assert!(conditions.expire(599.0).is_empty());
+        assert_eq!(conditions.expire(600.0), vec![State::Blessed(2)]);
+        assert_eq!(conditions.blessing(), 0);
     }
 
     #[test]

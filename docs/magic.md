@@ -96,28 +96,32 @@ Spells are their own category, separate from skills. **Schools are what improve;
 - **Effects** (any number; amounts rolled get a third of the power on top):
   - **Harm:** damage, landing harder the more decisively the spell won (the same [blows](attributes.md#the-ratio-rule) as an attack), less armour; told in Diku's words with `{harm}`.
   - **Heal:** health back, up to the most.
-  - **Bless:** attacks better for some of their turns (the *blessed* condition).
-  - **Ward:** a ward that takes the next blows' damage in their place, up to its strength, for some of their turns (the *warded* condition). It takes from any blow, weapon or spell.
+  - **Bless:** attacks better for as long as it lasts (the *blessed* condition).
+  - **Ward:** a ward that takes the next blows' damage in their place, up to its strength, for as long as it lasts (the *warded* condition). It takes from any blow, weapon or spell.
   - **Hold:** can't flee, and defends at half (the *held* condition, as a grapple leaves).
   - **Calm:** an animal (anything that fights with the Beast tree) stops fighting, no one fights it, and it no longer attacks those who come near.
 - **In a fight,** a queued `cast` is cast on the caster's turn in the round, in initiative order like any blow, so its damage, deaths and experience go the way a blow's do (`src/combat/casting.rs`).
 - **Mobs cast** by the same rules. A template lists `spells` (and the school skill and attributes they need); on its turn, with its `tactics` chance, a mob picks among its techniques and the spells that would do some good: a spell at its foe, healing itself only when badly hurt, blessing or warding itself only when it isn't already. The three teachers know their tradition's two spells and cast them if attacked.
-- **Conditions count down in fights.** A blessing or ward cast out of a fight waits for the next one, and lasts that many of the bearer's turns.
+- **Lasting effects count down in time, fighting or not,** so a blessing can't be cast, rested on to win back the stamina, and saved for a fight. Each spell says how long its effect lasts in game time (`lasts: Minutes(80)`, `Hours(12)`; a game hour is 7.5 real minutes), and the bearer is told when it fades. `affects` (`aff`) lists everything on you, what it does and how long it has left, in game time and real ("blessed: attacking 2 better, for 1 hour 19 minutes (10 real minutes)"); `score` names them. Durations differ by spell: Bless and Ward last 80 minutes (10 real minutes); an Armour spell, when there is one, might last 12 hours (an hour and a half). A technique's conditions (staggered, held and the rest) still count the bearer's turns, and so does Spirit Grasp's hold.
+- **Later skills can stretch durations or cut Drain:** a caster's lasting effects are timed in one place (`casting.rs`), which such skills would add to, and Drain is resisted in one place (`spells.rs`).
 
 ### The first spells (built)
 
 | Tradition | Spell | Aim | Resisted by | Does | Drain |
 | --- | --- | --- | --- | --- | --- |
 | Divine | **Mend** | Ally | | Heals 2 to 5 | 3 |
-| Divine | **Bless** | Ally | | Attack +2 for 5 turns | 2 |
+| Divine | **Bless** | Ally | | Attack +2 for 80 minutes | 2 |
 | Hermetic | **Spark** | Foe | Dodge | 2 to 5 damage | 2 |
-| Hermetic | **Ward** | Ally | | Takes 4 damage, within 10 turns | 3 |
+| Hermetic | **Ward** | Ally | | Takes 4 damage, within 80 minutes | 3 |
 | Shamanic | **Beast Speech** | Other | Willpower | Calms an animal | 2 |
 | Shamanic | **Spirit Grasp** | Foe | Strength | Held for 2 turns | 3 |
 
 All are cast through the tradition's foundation, at level 0, and taught by its teacher (`learn`), who needs the student to know the school first.
 
 ## Possible later additions
+
+- **Armour and Shield spells,** lasting much longer than a ward: Armour, say, for 12 game hours.
+- **Skills that stretch spells' durations or cut their Drain,** in each tradition's craft of casting (Litany already sustains blessings).
 
 - **Essence:** dark pacts or iron grafts give power now and lower Magic for good.
 - **Burnout:** very rare events reduce Magic.

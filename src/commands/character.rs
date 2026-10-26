@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::aliases::{self, Aliases};
 use crate::attributes::{self, Attributes};
 use crate::characters::{Backgrounds, Races};
+use crate::combat::Conditions;
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
 use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line};
@@ -18,12 +19,12 @@ const MAX_DESCRIPTION_LEN: usize = 600;
 pub fn score(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
-    sheets: Query<(&Attributes, &Vitals, &Skills)>,
+    sheets: Query<(&Attributes, &Vitals, &Skills, Option<&Conditions>)>,
     races: Res<Races>,
     backgrounds: Res<Backgrounds>,
     defs: Res<SkillDefs>,
 ) {
-    let (Ok((_, _, Some(player), _)), Ok((attributes, vitals, skills))) =
+    let (Ok((_, _, Some(player), _)), Ok((attributes, vitals, skills, conditions))) =
         (players.get(inv.entity), sheets.get(inv.entity))
     else {
         return;
@@ -35,7 +36,7 @@ pub fn score(
     let current = (vitals.health.floor() as i32, vitals.stamina.floor() as i32);
     let tradition = trainers::awakened(skills);
     let max = Maxima::of(attributes, skills, &defs, None);
-    let text = attributes::score_text(
+    let mut text = attributes::score_text(
         &player.name,
         who.trim(),
         attributes,
@@ -43,6 +44,16 @@ pub fn score(
         (max.health, max.stamina),
         tradition,
     );
+    let affected: Vec<&str> = conditions
+        .into_iter()
+        .flat_map(|c| c.0.iter().map(|(state, _)| state.describe().0))
+        .collect();
+    if !affected.is_empty() {
+        text += &format!(
+            "\r\n  Affected by: {} (type 'affects' to see for how long)",
+            affected.join(", ")
+        );
+    }
     deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
 }
 

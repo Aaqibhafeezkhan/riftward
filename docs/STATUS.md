@@ -31,7 +31,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 - Experience and level numbers are first guesses: 50 for an even fight, 100 × 1.25ⁿ per level.
 - The silver locket from the Sunken Hall has no use until shops.
 - Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
-- Blessings and wards count down only in fight turns, so one cast out of a fight waits, however long, for the next fight.
+- Blessings and wards aren't saved: logging out or a restart ends them, along with every other condition.
 - A calmed animal stays calm until it dies or resets: there's no time limit yet.
 - Spells come only from teachers: scrolls and grimoires, a spell-holding limit, more schools and great spells costing health are still to come. An admin can know every tradition's foundation; players can't yet, an open question.
 - Spell numbers are first guesses: Drain 2 or 3, resisted at twice that, power = school level + its attribute + Magic, a third of which adds to damage, healing and wards. A teacher at school 20 with Magic 4 casts a Spark or Ward that a new character can't match.

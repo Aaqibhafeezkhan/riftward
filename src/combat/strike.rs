@@ -423,6 +423,8 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub outmatched: &'a HashMap<Entity, f64>,
     /// Attackers their targets haven't noticed, striking from hiding.
     pub ambushers: &'a HashSet<Entity>,
+    /// Seconds since the server started, for conditions that last a while.
+    pub now: f64,
 }
 
 /// Messages for a strike: the attacker, the target, and everyone else there.

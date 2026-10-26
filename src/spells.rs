@@ -35,6 +35,7 @@ use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::skills::{SkillDefs, SkillText, Skills};
 use crate::stealth::{Hidden, sees};
 use crate::targeting::{Keywords, Target};
+use crate::time::REAL_SECS_PER_GAME_DAY;
 use crate::vitals::Resting;
 use crate::world::ron_options;
 
@@ -129,14 +130,33 @@ pub enum SpellEffect {
     Harm { damage: (u32, u32) },
     /// Health back, up to the most.
     Heal { heal: (u32, u32) },
-    /// Attacks better by `attack` for `rounds` of their turns.
-    Bless { attack: i32, rounds: u32 },
-    /// The next `absorb` damage is taken by the ward instead, within `rounds` of their turns.
-    Ward { absorb: u32, rounds: u32 },
+    /// Attacks better by `attack`, for as long as it `lasts`.
+    Bless { attack: i32, lasts: Lasting },
+    /// The next `absorb` damage is taken by the ward instead, within as long as it `lasts`.
+    Ward { absorb: u32, lasts: Lasting },
     /// Can't flee, and defends at half, for `rounds` of their turns.
     Hold { rounds: u32 },
     /// An animal stops fighting and stops attacking those who come near.
     Calm,
+}
+
+/// How long a spell's effect lasts, in game time: a game hour is 7.5 real minutes. It counts down
+/// in a fight or out of one.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lasting {
+    Minutes(u32),
+    Hours(u32),
+}
+
+impl Lasting {
+    /// The same time in real seconds.
+    pub fn real_secs(self) -> f64 {
+        let minutes = match self {
+            Lasting::Minutes(n) => n,
+            Lasting::Hours(n) => n * 60,
+        };
+        f64::from(minutes) * REAL_SECS_PER_GAME_DAY as f64 / (24.0 * 60.0)
+    }
 }
 
 impl SpellDef {
@@ -433,6 +453,7 @@ fn cast(
     mut log: ResMut<CombatLog>,
     hidden: Query<&Hidden>,
     resting: Query<Entity, With<Resting>>,
+    time: Res<Time>,
 ) {
     let Ok(caster) = fighters.get(inv.entity) else {
         return;
@@ -542,6 +563,7 @@ fn cast(
         resting: &resting,
         outmatched: &none,
         ambushers: &HashSet::new(),
+        now: time.elapsed_secs_f64(),
     };
     let outcome = round.cast(inv.entity, target, &spell.key);
     if let Some(calmed) = outcome.calmed {
@@ -754,6 +776,13 @@ mod tests {
             "no PvP"
         );
         assert!(choose_target(&spark, me, None, "dragon", here(), players).is_err());
+    }
+
+    #[test]
+    fn spell_time_is_game_time() {
+        // Twelve game hours is an eighth of a day: an hour and a half, really.
+        assert_eq!(Lasting::Hours(12).real_secs(), 90.0 * 60.0);
+        assert_eq!(Lasting::Minutes(80).real_secs(), 10.0 * 60.0);
     }
 
     #[test]

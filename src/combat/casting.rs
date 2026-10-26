@@ -179,12 +179,14 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                         f.vitals.health = (before + (rolled + power / 3) as f32).min(most as f32);
                         healed = Some((f.vitals.health - before).round() as i32);
                     }
-                    SpellEffect::Bless { attack, rounds } => {
-                        f.conditions.add(State::Blessed(attack), rounds);
+                    SpellEffect::Bless { attack, lasts } => {
+                        let until = self.now + lasts.real_secs();
+                        f.conditions.add_until(State::Blessed(attack), until);
                     }
-                    SpellEffect::Ward { absorb, rounds } => {
+                    SpellEffect::Ward { absorb, lasts } => {
                         let strength = absorb + (power / 3).max(0) as u32;
-                        f.conditions.add(State::Warded(strength), rounds);
+                        let until = self.now + lasts.real_secs();
+                        f.conditions.add_until(State::Warded(strength), until);
                     }
                     SpellEffect::Hold { rounds } => f.conditions.add(State::Held, rounds),
                     SpellEffect::Calm => cast.calmed = Some(target),

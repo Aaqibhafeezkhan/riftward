@@ -44,6 +44,7 @@ use crate::spawns::{SpawnedBy, Spawns};
 use crate::spells::{Aim, Casting, SpellDefs};
 use crate::stealth::{Hidden, reveal, sees};
 use crate::targeting::{Keywords, Target};
+use crate::time::heartbeat;
 use crate::vitals::{Maxima, Resting, Vitals};
 use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_article};
 
@@ -69,6 +70,7 @@ pub struct CombatPlugin;
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CombatLog>()
+            .add_systems(Update, expire_conditions.run_if(heartbeat()))
             .add_systems(
                 Update,
                 (
@@ -106,6 +108,14 @@ impl Plugin for CombatPlugin {
                     .usage("numbers [on | off]")
                     .summary("show or hide damage numbers in fights"),
                 numbers,
+            )
+            .add_command(
+                CommandSpec::new("affects", Category::Character)
+                    .shortcuts(&["aff"])
+                    .summary(
+                        "see what's affecting you, like a blessing or a ward, and for how long",
+                    ),
+                affects,
             )
             .add_command(
                 CommandSpec::new("stop", Category::Character)
@@ -370,6 +380,7 @@ fn combat_round(
         resting: &resting,
         outmatched: &outmatched,
         ambushers: &ambushers,
+        now,
     };
     for (_, attacker) in order {
         let Some(&target) = targets.get(&attacker) else {
@@ -515,6 +526,44 @@ fn combat_round(
             for line in fighter.attributes.earn(points, &deed, character_id, &db) {
                 log.0.push(Outgoing::line(who, line));
             }
+        }
+    }
+}
+
+/// `affects`: what's affecting you, and for how long.
+fn affects(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    conditions: Query<&Conditions>,
+    time: Res<Time>,
+) {
+    let lines = conditions
+        .get(inv.entity)
+        .map(|c| c.listed(time.elapsed_secs_f64()))
+        .unwrap_or_default();
+    let text = if lines.is_empty() {
+        "Nothing is affecting you.".to_string()
+    } else {
+        format!("You are:\r\n  {}", lines.join("\r\n  "))
+    };
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+}
+
+/// End conditions whose time is up, in a fight or out of one, and tell their bearers.
+fn expire_conditions(
+    mut conditions: Query<(Entity, &mut Conditions)>,
+    time: Res<Time>,
+    mut log: ResMut<CombatLog>,
+) {
+    let now = time.elapsed_secs_f64();
+    for (who, mut conditions) in &mut conditions {
+        for state in conditions.expire(now) {
+            let line = match state {
+                State::Blessed(_) => "The warm light of your blessing fades.",
+                State::Warded(_) => "Your ward flickers and fades.",
+                _ => continue,
+            };
+            log.0.push(Outgoing::line(who, line));
         }
     }
 }
@@ -1519,6 +1568,24 @@ mod tests {
         assert!(world.get::<Fighting>(dog).is_none());
         assert!(world.get::<Fighting>(shaman).is_none());
         assert!(world.get::<Aggressive>(dog).is_none());
+    }
+
+    #[test]
+    fn a_blessing_wears_off_in_time_fighting_or_not() {
+        let (mut world, room) = world();
+        let resting = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world
+            .get_mut::<Conditions>(resting)
+            .unwrap()
+            .add_until(State::Blessed(2), 600.0);
+        world.run_system_once(expire_conditions).unwrap();
+        assert_eq!(world.get::<Conditions>(resting).unwrap().blessing(), 2);
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs(600));
+        world.run_system_once(expire_conditions).unwrap();
+        assert_eq!(world.get::<Conditions>(resting).unwrap().blessing(), 0);
+        assert!(said(&world, resting, "blessing fades"));
     }
 
     #[test]

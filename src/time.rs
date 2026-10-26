@@ -25,6 +25,20 @@ pub fn heartbeat() -> impl FnMut(Res<Time>) -> bool + Clone {
     on_timer(HEARTBEAT)
 }
 
+/// How long `real_secs` is, said in game time with the real time after it: "1 hour 20 minutes
+/// (10 real minutes)".
+pub fn span(real_secs: f64) -> String {
+    let game_minutes = (real_secs * 24.0 * 60.0 / REAL_SECS_PER_GAME_DAY as f64).ceil() as i64;
+    let real_minutes = (real_secs / 60.0).ceil() as i64;
+    let plural = |n: i64, unit: &str| format!("{n} {unit}{}", if n == 1 { "" } else { "s" });
+    let game = match (game_minutes / 60, game_minutes % 60) {
+        (0, m) => plural(m, "minute"),
+        (h, 0) => plural(h, "hour"),
+        (h, m) => format!("{} {}", plural(h, "hour"), plural(m, "minute")),
+    };
+    format!("{game} ({})", plural(real_minutes, "real minute"))
+}
+
 pub struct TimePlugin;
 
 impl Plugin for TimePlugin {
@@ -158,6 +172,13 @@ fn time_cmd(In(inv): In<Invocation>, mut players: PlayerQuery, rooms: RoomQuery)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spans_read_in_game_time_and_real() {
+        assert_eq!(span(600.0), "1 hour 20 minutes (10 real minutes)");
+        assert_eq!(span(90.0 * 60.0), "12 hours (90 real minutes)");
+        assert_eq!(span(7.0), "1 minute (1 real minute)");
+    }
 
     #[test]
     fn a_game_day_passes_every_three_real_hours() {
