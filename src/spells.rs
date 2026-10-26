@@ -29,7 +29,7 @@ use crate::combat::{ConditionDefs, Conditions, Fighters, Fighting, Round, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::dice::Dice;
-use crate::effects::{self, Effect, User};
+use crate::effects::Effect;
 use crate::events::GameEvent;
 use crate::items::{ItemQuery, ItemTemplates};
 use crate::output::{Outbox, Outgoing, deliver};
@@ -123,14 +123,7 @@ pub enum Aim {
     Other,
 }
 
-/// What a spell is resisted with.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Resist {
-    /// Getting out of the way: Reaction and Dodge, as against a blow. A shield doesn't help.
-    Dodge,
-    /// An attribute: Strength against a spirit's grip, Willpower against a mind's touch.
-    Attribute(Attribute),
-}
+pub use crate::effects::Resist;
 
 impl SpellDef {
     /// Whether it's complete, so nothing is forgotten. A spell that fails this keeps its whole
@@ -142,7 +135,6 @@ impl SpellDef {
         if self.effects.is_empty() {
             return Err("needs effects: what it does".into());
         }
-        effects::check(&self.effects, User::Spell)?;
         if self.harms() && self.aim != Aim::Foe {
             return Err("does damage, so it must be aimed at a Foe".into());
         }

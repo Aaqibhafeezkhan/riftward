@@ -42,8 +42,9 @@
         ),
         "grapple": (
             name: "Grapple",
-            description: "Grab hold of a foe and pin them: for two turns they can't flee, and they defend poorly.",
+            description: "Grab hold of a foe and pin them: for two turns they can't flee, and they defend poorly. It's your grip against their Strength, not their footwork.",
             kind: Technique((with: "brawling:basics", cost: Stamina(2), strike: Harmless,
+                resist: Some(Attribute(Strength)),
                 effects: [Apply(condition: "held", lasts: Turns(2))])),
             requires: Skill("brawling:basics", 15),
             karma: 10,
@@ -54,9 +55,9 @@
                     room: "{actor} grabs {target} and holds on.",
                 ),
                 miss: (
-                    actor: "You grab at {target}, but they slip away.",
-                    target: "{actor} grabs at you, but you slip away.",
-                    room: "{actor} grabs at {target}, who slips away.",
+                    actor: "You grab {target}, but they break your grip.",
+                    target: "{actor} grabs you, but you break their grip.",
+                    room: "{actor} grabs {target}, who breaks free.",
                 ),
             ),
         ),

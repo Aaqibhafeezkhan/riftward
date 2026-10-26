@@ -7,6 +7,7 @@ use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 
 use super::casting::MobMove;
+use super::resolve::{BlowDamage, Use};
 use super::states::{ConditionDefs, Conditions};
 use super::{
     ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, Dead, Fighting, HideNumbers, Tactics,
@@ -14,7 +15,7 @@ use super::{
 use crate::attributes::{Attribute, Attributes};
 use crate::db::Database;
 use crate::dice::Dice;
-use crate::effects::{self, Effect, Who};
+use crate::effects::{self, Resist, Who};
 use crate::events::GameEvent;
 use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
 use crate::mobs::Mob;
@@ -22,7 +23,7 @@ use crate::output::PuppetedBy;
 use crate::output::{Outbox, Outgoing};
 use crate::skills::{
     Bonus, Boosts, Cost, Learner, Lines, Skill, SkillDefs, SkillKind, SkillText, Skills,
-    StrikeKind, Technique, Trigger, boosts, count_use, fill, tough_fight_boost,
+    StrikeKind, Technique, boosts, count_use, fill, tough_fight_boost,
 };
 use crate::spells::{SpellDefs, Spells};
 use crate::targeting::Keywords;
@@ -410,7 +411,7 @@ pub(super) fn untrained() -> SkillText {
 }
 
 /// What a shield turning a blow looks like for someone with no skill to describe it.
-fn shield_block() -> Lines {
+pub(super) fn shield_block() -> Lines {
     Lines {
         actor: "You get your shield in the way of {target}'s attack.".into(),
         target: Some("{actor} gets a shield in the way of your attack.".into()),
@@ -699,9 +700,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         };
         let (room, a_name, is_player) = (a.in_room.0, name_of(a.player, a.mob), a.player.is_some());
         let chosen = a.auto.and_then(|auto| auto.0.clone());
-        let a_numbers = !a.hide_numbers;
         let blessing = a.conditions.attack(self.conditions);
-        let a_damage_times = a.conditions.damage_dealt(self.conditions);
         let stamina = a.vitals.stamina;
         let a_attributes = a.attributes.clone();
         let a_skills = a.skills.clone();
@@ -808,262 +807,36 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             .as_ref()
             .and_then(|m| self.defs.skills.get(m.key)?.def.text.clone())
             .unwrap_or(text);
-        let (accuracy, extra) = technique
-            .as_ref()
-            .map_or((0, 0), |m| (m.technique.accuracy, m.technique.damage));
+        let t = technique.as_ref().map(|m| m.technique);
+        let (accuracy, extra) = t.map_or((0, 0), |t| (t.accuracy, t.damage));
         let a_aura = self.auras.get(&attacker).copied().unwrap_or_default();
         let a_boosts = boosts(&a_skills, self.defs);
-        let attack_rating =
+        let rating =
             attack_rating(&a_attributes, &a_skills, skill, a_aura, &a_boosts) + accuracy + blessing;
-
-        let Ok(d) = self.fighters.get(target) else {
-            return died;
-        };
-        let d_attributes = d.attributes.clone();
-        let d_skills = d.skills.clone();
-        let d_mob = d.mob.map(|m| m.key.clone());
-        let d_numbers = !d.hide_numbers;
-        let d_most = Maxima::of(&d_attributes, &d_skills, self.defs, d.base).health;
-        let d_aura = self.auras.get(&target).copied().unwrap_or_default();
-        let d_boosts = boosts(&d_skills, self.defs);
-        let d_gear = gear(target, self.items, self.templates);
-        let parts = defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts, &d_gear);
-        let mut defence = d.conditions.defence(parts.total(), self.conditions);
-        // Skills made for it help against what a technique is: sure feet against a trip.
-        if let Some(Move { technique: t, .. }) = &technique {
-            defence += d_boosts.resisting(&effects::tags(&t.tags, &t.effects, self.conditions));
-        }
-        // Someone sitting down, or caught unawares by an opener, is much easier to hit.
-        let opener = technique.as_ref().is_some_and(|m| m.technique.opener);
-        if self.resting.contains(&target) || opener {
-            defence /= 2;
-        }
-        let (a_luck, d_luck) = (
-            a_attributes.get(Attribute::Luck),
-            d_attributes.get(Attribute::Luck),
-        );
-        // The attacker's skill against the defender's evasion, by opposed roll; how decisively
-        // it wins is how hard the blow lands.
-        let contest = self.dice.opposed(
-            f64::from(attack_rating.max(1)),
-            a_luck,
-            f64::from(defence.max(1)),
-            d_luck,
-        );
-        // An opener from hiding can't be dodged or blocked: Backstab from the shadows lands.
-        let ambush = self.ambushers.contains(&attacker)
-            && technique.as_ref().is_some_and(|m| m.technique.opener);
-        let (hit, blow) = match (ambush, contest.won) {
-            (true, false) => (true, Blow::Solid),
-            (_, won) => (won, Blow::of(contest.margin)),
-        };
-
-        let mut tell = Telling {
-            lines: Vec::new(),
-            room: Vec::new(),
-        };
-        let harmless = technique
-            .as_ref()
-            .is_some_and(|m| m.technique.strike == StrikeKind::Harmless);
-        let ignores_armour = technique
-            .as_ref()
-            .is_some_and(|m| m.technique.effects.contains(&Effect::IgnoreArmour));
-        let mut dealt = 0;
-        let mut blocked = false;
-        if hit {
-            if harmless {
-                let (mine, theirs, seen) = told(&text.hit, &a_name, &d_name);
-                tell.lines.push((attacker, mine));
-                tell.lines
-                    .push((target, format!("\x1b[31m{theirs}\x1b[0m")));
-                tell.room.push(seen);
-            } else {
-                let (low, high) = (damage.0.min(damage.1), damage.0.max(damage.1));
-                let rolled = self.dice.range(a_luck, i64::from(low)..=i64::from(high)) as i32;
-                // Armour takes its share off, even all of it; a point can find the gaps.
-                let pierce = a_boosts.pierce_with(&key)
-                    + technique
-                        .as_ref()
-                        .map_or(0, |m| effects::pierce(&m.technique.effects));
-                let force = rolled
-                    + a_attributes.get(Attribute::Strength) / 2
-                    + a_boosts.damage_with(&key)
-                    + extra;
-                // Conditions on either side move it, weakened, strengthened and the like, and
-                // the target's armour and resistances have their say.
-                let times = blow.multiplier() * a_damage_times;
-                dealt = self.mitigate(
-                    target,
-                    f64::from(force) * times,
-                    &damage_type,
-                    pierce,
-                    ignores_armour,
-                );
-                // A ward takes what it can, told after the blow it stopped.
-                let mut ward = Telling::default();
-                let warded = self.ward_off(target, attacker, dealt, &d_name, &mut ward);
-                dealt -= warded;
-                // Told in the attack's words, with how much of them it took: "Your slash
-                // decimates the rat." A crushing blow ends with a bang.
-                let with = [
-                    ("actor", a_name.as_str()),
-                    ("target", d_name.as_str()),
-                    ("harm", harm(dealt, d_most)),
-                ];
-                let say = |template: &str| {
-                    let line = fill(template, &with);
-                    match (blow, line.strip_suffix('.')) {
-                        (Blow::Crushing, Some(line)) => format!("{line}!"),
-                        _ => line,
-                    }
-                };
-                let count = |shown: bool| {
-                    if shown {
-                        format!(" ({dealt})")
-                    } else {
-                        String::new()
-                    }
-                };
-                let (mine, seen) = (say(&text.hit.actor), say(&text.hit.room));
-                let theirs = text.hit.target.as_deref().map(say).unwrap_or_default();
-                tell.lines
-                    .push((attacker, format!("{mine}{}", count(a_numbers))));
-                tell.lines.push((
-                    target,
-                    format!("\x1b[31m{theirs}{}\x1b[0m", count(d_numbers)),
-                ));
-                tell.room.push(seen);
-                tell.lines.append(&mut ward.lines);
-                tell.room.append(&mut ward.room);
-                if dealt == 0 && warded == 0 {
-                    let line = format!("The blow glances off {d_name}'s armour.");
-                    tell.lines.push((attacker, line.clone()));
-                    tell.lines
-                        .push((target, "The blow glances off your armour.".into()));
-                    tell.room.push(line);
-                }
-                if d_gear.reduction > 0 {
-                    self.events.write(GameEvent::HitInArmour { who: target });
-                }
-                if dealt > 0
-                    && self.wound(
-                        target,
-                        dealt,
-                        &mut tell,
-                        attacker,
-                        &d_name,
-                        room,
-                        d_mob.clone(),
-                    )
-                {
-                    died.push(target);
-                }
-            }
-            // The technique's effects on the target, if it's still standing.
-            if let Some(Move { technique: t, .. }) = &technique {
-                // Told in the conditions' own words: "The rat is staggered!".
-                if !died.contains(&target) {
-                    self.affect(attacker, target, &t.effects, Who::Target, 0, &mut tell);
-                }
-                // Cleave: the blow carries on into another foe fighting the attacker, even
-                // when it fells the first.
-                if t.effects.contains(&Effect::Cleave) && dealt > 0 {
-                    let second = self.targets.iter().find_map(|(who, whom)| {
-                        (*whom == attacker && *who != target && !died.contains(who))
-                            .then_some(*who)
-                            .filter(|who| {
-                                self.fighters
-                                    .get(*who)
-                                    .is_ok_and(|f| f.in_room.0 == room && !f.dead)
-                            })
-                    });
-                    if let Some(second) = second {
-                        let second_name = self.name(second);
-                        let second_mob = self
-                            .fighters
-                            .get(second)
-                            .ok()
-                            .and_then(|f| f.mob.map(|m| m.key.clone()));
-                        tell.lines.push((
-                            attacker,
-                            format!("Your blow carries on into {second_name}! ({dealt})"),
-                        ));
-                        tell.lines.push((
-                            second,
-                            format!(
-                                "\x1b[31m{}'s blow carries on into you! ({dealt})\x1b[0m",
-                                capitalized(&a_name)
-                            ),
-                        ));
-                        tell.room.push(format!(
-                            "{}'s blow carries on into {second_name}.",
-                            capitalized(&a_name)
-                        ));
-                        if self.wound(
-                            second,
-                            dealt,
-                            &mut tell,
-                            attacker,
-                            &second_name,
-                            room,
-                            second_mob,
-                        ) {
-                            died.push(second);
-                        }
-                    }
-                }
-            }
-        } else {
-            // The miss is the shield's in proportion to its share of the defence, and otherwise
-            // a dodge. Either is told in the words of the defender's skill for it, if they have
-            // one: a shield untrained says so plainly, and a miss nobody dodged is just a miss.
-            let share = f64::from(parts.block) / f64::from(parts.total().max(1));
-            blocked = parts.block > 0 && self.dice.chance(0, share);
-            let words = |trigger: Trigger| {
-                d_skills.0.keys().find_map(|key| {
-                    let skill = self.defs.skills.get(key)?;
-                    match &skill.def.kind {
-                        SkillKind::Passive { triggers, .. } if triggers.contains(&trigger) => {
-                            skill.def.text.as_ref().map(|t| t.hit.clone())
-                        }
-                        _ => None,
-                    }
-                })
-            };
-            let avoided = if blocked {
-                Some(words(Trigger::Blocked).unwrap_or_else(shield_block))
-            } else {
-                words(Trigger::Dodged)
-            };
-            if let Some(avoided) = avoided {
-                // The defender is the one using the skill.
-                let (theirs, mine, seen) = told(&avoided, &d_name, &a_name);
-                tell.lines.push((attacker, mine));
-                tell.lines.push((target, theirs));
-                tell.room.push(seen);
-            } else {
-                let miss = text
-                    .miss
-                    .clone()
-                    .or_else(|| untrained().miss)
-                    .unwrap_or(text.hit);
-                let (mine, theirs, seen) = told(&miss, &a_name, &d_name);
-                tell.lines.push((attacker, mine));
-                tell.lines.push((target, theirs));
-                tell.room.push(seen);
-            }
-            self.events.write(if blocked {
-                GameEvent::Blocked { who: target }
-            } else {
-                GameEvent::Dodged { who: target }
-            });
-        }
-
-        for (who, line) in tell.lines {
-            self.say(who, line);
-        }
-        let room_line = tell.room.join(" ");
-        self.tell_room(room, attacker, target, &room_line);
+        // A grab only applies its effects; anything else hurts.
+        let harmless = t.is_some_and(|t| t.strike == StrikeKind::Harmless);
+        let blow = (!harmless).then(|| BlowDamage {
+            damage,
+            bonus: a_attributes.get(Attribute::Strength) / 2 + a_boosts.damage_with(&key) + extra,
+            damage_type,
+            pierce: a_boosts.pierce_with(&key),
+        });
+        let outcome = self.resolve(Use {
+            user: attacker,
+            target,
+            rating,
+            resist: t.map_or(Some(Resist::Evasion), |t| t.resist),
+            tags: t.map_or_else(Vec::new, |t| {
+                effects::tags(&t.tags, &t.effects, self.conditions)
+            }),
+            blow,
+            effects: t.map_or(&[][..], |t| &t.effects),
+            power: 0,
+            text: &text,
+            opener: t.is_some_and(|t| t.opener),
+            harmful: true,
+        });
+        died.extend(outcome.died);
 
         // Players practise what they used.
         self.practise(attacker, &key);
@@ -1072,7 +845,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         }
 
         // A dodge can be answered at once.
-        if !hit && !blocked && !counter && !died.contains(&target) {
+        if outcome.dodged && !counter && !died.contains(&target) {
             died.extend(self.riposte(target, attacker));
         }
         died

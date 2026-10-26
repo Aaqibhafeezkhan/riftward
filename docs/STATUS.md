@@ -28,7 +28,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** one ability shape for spells, techniques and active skills (2c-ii). Its first part, one contest with skills that resist tags (2c-i), is built. Step 1, conditions as data, is built, and so are one effect vocabulary for spells and techniques (2b) and damage types (2a): typed weapons, attacks and spells, armour that says what it stops, and `Resist`, `Weakness` and `Immune`.
+**The rest of step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** `Imbue` and saved item conditions; then step 3, formulas. Built so far: conditions as data (1), damage types (2a: typed weapons, attacks and spells, armour that says what it stops, `Resist`, `Weakness` and `Immune`), one effect vocabulary (2b), skills that resist by tag (2c-i), and one resolver for spells, techniques and blows, so either can use any effect and any contest (2c-ii).
 
 Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 

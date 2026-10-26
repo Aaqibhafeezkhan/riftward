@@ -5,11 +5,12 @@
 //! through the target's armour and resistances. Effects on the user happen whether or not the
 //! spell or blow lands; effects on the target only when it does.
 //!
-//! Not every effect fits everywhere yet: a technique's damage is its blow, so `Damage`, `Heal` and
-//! `Calm` are for spells, and `Cleave` is for blows. `check` says so at load.
+//! Any effect works in either: a technique can do fire damage on top of its blow, and a spell can
+//! cleave.
 
 use serde::{Deserialize, Serialize};
 
+use crate::attributes::Attribute;
 use crate::combat::{ConditionDefs, Lasts};
 use crate::time::REAL_SECS_PER_GAME_DAY;
 
@@ -63,6 +64,24 @@ fn one() -> i32 {
     1
 }
 
+/// What the target resists a spell or technique with, in an opposed roll against the user's
+/// rating (`combat/resolve.rs`).
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Resist {
+    /// Getting out of the way as from a blow: Reaction and Dodge, and a shield's block. What a
+    /// technique is resisted with unless it says otherwise.
+    Evasion,
+    /// Getting out of the way, but a shield doesn't help: a bolt of force.
+    Dodge,
+    /// An attribute: Strength against a grip, Willpower against a mind's touch.
+    Attribute(Attribute),
+}
+
+/// A blow's resistance, for techniques that don't name another.
+pub fn evasion() -> Option<Resist> {
+    Some(Resist::Evasion)
+}
+
 /// Whom an effect is on.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Who {
@@ -102,13 +121,6 @@ impl Lasting {
     }
 }
 
-/// What uses an effect list, for what fits in it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum User {
-    Spell,
-    Technique,
-}
-
 impl Effect {
     /// Whom it's on.
     pub fn on(&self) -> Who {
@@ -135,25 +147,6 @@ impl Effect {
             _ => None,
         }
     }
-}
-
-/// Whether `effects` all fit in a `user`.
-pub fn check(effects: &[Effect], user: User) -> Result<(), String> {
-    for effect in effects {
-        let fits = match effect {
-            Effect::Damage { .. } | Effect::Heal { .. } | Effect::Calm => user == User::Spell,
-            Effect::Cleave => user == User::Technique,
-            _ => true,
-        };
-        if !fits {
-            let what = match user {
-                User::Spell => "a spell",
-                User::Technique => "a technique",
-            };
-            return Err(format!("{effect:?} doesn't work in {what} yet"));
-        }
-    }
-    Ok(())
 }
 
 /// What a spell or technique is, for what resists it: its own `tags`, the tags of every condition
@@ -242,15 +235,6 @@ mod tests {
             tags(&["charm".into()], &effects, &conditions),
             ["charm", "force", "mind", "sleep"]
         );
-    }
-
-    #[test]
-    fn effects_fit_where_they_work() {
-        let calm = [Effect::Calm];
-        assert!(check(&calm, User::Spell).is_ok());
-        assert!(check(&calm, User::Technique).is_err());
-        assert!(check(&[Effect::Cleave], User::Spell).is_err());
-        assert!(check(&[Effect::Pierce(1)], User::Spell).is_ok());
     }
 
     #[test]

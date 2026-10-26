@@ -157,7 +157,7 @@ Each step adds its trees' entry skills to the trainers in Riftwatch: the drill s
 
   | Tree | Built |
   | --- | --- |
-  | Brawling | **Kick** (+2 damage, 1 stamina), **Grapple** (a harmless grab that holds for 2 turns, 2) |
+  | Brawling | **Kick** (+2 damage, 1 stamina), **Grapple** (a harmless grab that holds for 2 turns, resisted by Strength, 2) |
   | Swordplay | **Lunge** (+4 accuracy, then exposed, 1), **Riposte** (counter a dodge, 1) |
   | Knife Fighting | **Backstab** (opener, +4 damage, 2), **Open Vein** (bleeds 1 for 3 turns, 2). Open Vein comes before Throw, which waits on ranged attacks |
   | Axe Fighting | **Cleave** (carries into a second foe, even when it kills the first, 3), **Hew** (+3 damage, −2 accuracy, 2) |

@@ -16,6 +16,7 @@
 
 mod casting;
 mod effects;
+mod resolve;
 mod states;
 mod strike;
 
@@ -1343,6 +1344,7 @@ mod tests {
                 skill(
                     "brawling:cleave",
                     SkillKind::Technique(Technique {
+                        resist: Some(Resist::Evasion),
                         tags: Vec::new(),
                         with: BASIC_ATTACK.into(),
                         cost: Cost::Free,
@@ -1357,6 +1359,7 @@ mod tests {
                 skill(
                     "brawling:trip",
                     SkillKind::Technique(Technique {
+                        resist: Some(Resist::Evasion),
                         tags: Vec::new(),
                         with: BASIC_ATTACK.into(),
                         cost: Cost::Free,
@@ -1889,6 +1892,7 @@ mod tests {
         world.resource_mut::<SkillDefs>().skills.extend([skill(
             "brawling:backstab",
             SkillKind::Technique(Technique {
+                resist: Some(Resist::Evasion),
                 tags: Vec::new(),
                 with: BASIC_ATTACK.into(),
                 cost: Cost::Free,
@@ -2001,6 +2005,7 @@ mod tests {
         world.resource_mut::<SkillDefs>().skills.extend([skill(
             "brawling:jab",
             SkillKind::Technique(Technique {
+                resist: Some(Resist::Evasion),
                 tags: Vec::new(),
                 with: BASIC_ATTACK.into(),
                 cost: Cost::Free,
@@ -2121,6 +2126,52 @@ mod tests {
         assert!(world.get::<Conditions>(tripper).unwrap().has("exposed"));
         assert!(said(&world, foe, "You go down!"), "told in its words");
         assert_eq!(world.get::<Vitals>(foe).unwrap().health, 100.0, "harmless");
+    }
+
+    #[test]
+    fn a_technique_can_be_resisted_by_an_attribute_and_do_any_damage() {
+        // A trip made a grip against Strength, that burns besides, used on a foe this strong.
+        let trip_against = |strength: i32| {
+            let (mut world, room) = world();
+            let grappler = fighter(&mut world, room, 1000, 1, &[BASIC_ATTACK, "brawling:trip"]);
+            let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK, "brawling:riposte"]);
+            world
+                .get_mut::<Attributes>(foe)
+                .unwrap()
+                .set(Attribute::Strength, strength);
+            let mut defs = world.resource_mut::<SkillDefs>();
+            let trip = defs.skills.get_mut("brawling:trip").unwrap();
+            let SkillKind::Technique(t) = &mut trip.def.kind else {
+                unreachable!()
+            };
+            t.resist = Some(Resist::Attribute(Attribute::Strength));
+            t.effects.push(Effect::Damage {
+                amount: (5, 5),
+                damage_type: "fire".into(),
+            });
+            world.entity_mut(grappler).insert((
+                Fighting(foe),
+                Readied {
+                    skill: "brawling:trip".into(),
+                },
+            ));
+            world.run_system_once(combat_round).unwrap();
+            (world, grappler, foe)
+        };
+        // A giant breaks the grip however quick the grappler, and that's no dodge to riposte.
+        let (world, grappler, giant) = trip_against(100_000);
+        assert!(!world.get::<Conditions>(giant).unwrap().has("down"));
+        assert!(
+            !said(&world, grappler, "ripost"),
+            "a broken grip isn't a dodge"
+        );
+        // Someone weak goes down, and the fire hurts though the grab doesn't.
+        let (world, _, weakling) = trip_against(1);
+        assert!(world.get::<Conditions>(weakling).unwrap().has("down"));
+        assert!(
+            world.get::<Vitals>(weakling).unwrap().health < 100.0,
+            "burned"
+        );
     }
 
     #[test]

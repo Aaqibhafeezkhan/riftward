@@ -31,11 +31,13 @@ use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocat
 use crate::conditions::{Condition, Facts};
 use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
-use crate::effects::{self, Effect, User};
+use crate::effects::{self, Effect, Resist};
 use crate::events::GameEvent;
 use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
 };
+use crate::spells::{SpellDefs, Spells};
+use crate::stealth::{Hidden, reveal};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::ron_options;
@@ -86,7 +88,7 @@ impl Plugin for SkillsPlugin {
             .add_command(
                 CommandSpec::new("use", Category::Interaction)
                     .usage("use <skill> [<target>]")
-                    .summary("use an active skill, like 'use lockpicking north'")
+                    .summary("use an active skill, like 'use lockpicking north'; spells are cast, but 'use' finds them too")
                     .quiet()
                     .action(),
                 use_cmd,
@@ -205,9 +207,6 @@ impl SkillDef {
         }
         if self.karma.is_some() && self.requires.is_none() {
             return Err("has a Karma cost but no requirements: entry skills are taught".into());
-        }
-        if let SkillKind::Technique(t) = &self.kind {
-            effects::check(&t.effects, User::Technique)?;
         }
         let (target, miss) = match &self.kind {
             // Struck at someone, so their view and a miss are needed.
@@ -507,6 +506,10 @@ pub struct Technique {
     /// Whether it strikes at all, and whether a hit does damage.
     #[serde(default)]
     pub strike: StrikeKind,
+    /// What the target resists it with: `Some(Evasion)`, as a blow, unless it names another
+    /// (`Some(Attribute(Strength))` for a grip), or `None` if nothing can.
+    #[serde(default = "effects::evasion")]
+    pub resist: Option<Resist>,
     /// What it is, beyond what its effects say (`effects::tags`), for skills that resist it.
     #[serde(default)]
     pub tags: Vec<String>,
@@ -1400,6 +1403,7 @@ fn skills_text(
 }
 
 /// `use <skill> [<target>]`: run an active skill's command.
+#[allow(clippy::too_many_arguments)]
 fn use_cmd(
     In(inv): In<Invocation>,
     mut commands: Commands,
@@ -1408,14 +1412,46 @@ fn use_cmd(
     sheets: Query<&Skills>,
     defs: Res<SkillDefs>,
     registry: Res<CommandRegistry>,
+    (known_spells, spell_defs): (Query<&Spells>, Res<SpellDefs>),
+    (hidden, mut events): (Query<(), With<Hidden>>, MessageWriter<GameEvent>),
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
     let name = inv.args.split_whitespace().next().unwrap_or("");
+    // A spell is cast, but 'use' finds it too: it goes to 'cast', showing a hidden caster as
+    // casting does.
+    let spell = known_spells
+        .get(inv.entity)
+        .ok()
+        .and_then(|known| spell_defs.find_known_in(known, &inv.args));
     let reply: Reply = match sheets.get(inv.entity) {
         _ if name.is_empty() => Err(inv.usage_error()),
         Ok(skills) => match defs.find_known_in(skills, &inv.args) {
+            None if spell.is_some() => match registry.find("cast", actor.role) {
+                Some((spec, id)) => {
+                    if hidden.get(inv.entity).is_ok() {
+                        reveal(
+                            &mut commands,
+                            &mut events,
+                            actor.entity,
+                            &actor.name,
+                            actor.room,
+                        );
+                    }
+                    commands.run_system_with(
+                        *id,
+                        Invocation {
+                            entity: inv.entity,
+                            command: spec.name,
+                            usage: spec.usage,
+                            args: inv.args.clone(),
+                        },
+                    );
+                    return;
+                }
+                None => Err(format!("You don't know a skill called '{name}'.")),
+            },
             None => Err(format!("You don't know a skill called '{name}'.")),
             Some((skill, target)) => match &skill.def.kind {
                 SkillKind::Attack { .. } => Err(format!(
