@@ -83,9 +83,11 @@ pub enum Modifier {
     /// Takes this much more off every blow, like armour: only damage armour stops (physical).
     Armour(i32),
     /// The share of damage of this type (`assets/damage_types.ron`) they shrug off: `Resist("fire",
-    /// 0.8)` stops 80% of fire, 1 stops it all, and a negative share is a weakness (`-0.5` takes
-    /// half as much again).
+    /// 0.8)` stops 80% of fire, and 1 stops it all.
     Resist(String, f64),
+    /// Extra damage of this type they take, added up: `Weakness("fire", 0.5)` takes 150% of fire,
+    /// and 1 takes double.
+    Weakness(String, f64),
     /// Conditions with this tag don't take hold of them: `Immune("poison")`.
     Immune(String),
     /// Damage they deal, multiplied.
@@ -329,12 +331,20 @@ impl Conditions {
     }
 
     /// What damage of type `kind` they take is multiplied by: what each resistance lets through,
-    /// together.
+    /// together, times one plus their weaknesses to it.
     pub fn resist(&self, defs: &ConditionDefs, kind: &str) -> f64 {
-        self.product(defs, |m| match m {
-            Modifier::Resist(k, x) if k == kind => Some((1.0 - x).max(0.0)),
+        let through = self.product(defs, |m| match m {
+            Modifier::Resist(k, x) if k == kind => Some((1.0 - x).clamp(0.0, 1.0)),
             _ => None,
-        })
+        });
+        let weakness: f64 = self
+            .modifiers(defs)
+            .filter_map(|(m, _)| match m {
+                Modifier::Weakness(k, x) if k == kind => Some(*x),
+                _ => None,
+            })
+            .sum();
+        through * (1.0 + weakness).max(0.0)
     }
 
     /// What the damage they deal is multiplied by.
@@ -675,6 +685,14 @@ mod tests {
                 !def.description.trim().is_empty(),
                 "{key} needs a description"
             );
+            for m in &def.modifiers {
+                if let Modifier::Resist(kind, _) | Modifier::Weakness(kind, _) = m {
+                    assert!(
+                        crate::world::damage_types().contains_key(kind),
+                        "{key}: no damage type {kind}"
+                    );
+                }
+            }
         }
     }
 
@@ -819,13 +837,16 @@ mod tests {
             "fireproof".into(),
             charm(vec![
                 Modifier::Resist("fire".into(), 0.75),
-                Modifier::Resist("cold".into(), -0.5),
+                Modifier::Weakness("cold".into(), 0.5),
                 Modifier::Immune("poison".into()),
             ]),
         );
         defs.0.insert(
             "scaled".into(),
-            charm(vec![Modifier::Resist("fire".into(), 0.5)]),
+            charm(vec![
+                Modifier::Resist("fire".into(), 0.5),
+                Modifier::Weakness("cold".into(), 1.0),
+            ]),
         );
         let mut conditions = Conditions::default();
         conditions.apply(&defs, "fireproof", 1, Lasts::Turns(5));
@@ -838,6 +859,7 @@ mod tests {
             0.125,
             "resistances let through a share of a share"
         );
+        assert_eq!(conditions.resist(&defs, "cold"), 2.5, "weaknesses add up");
         assert!(
             !conditions.apply(&defs, "poisoned", 1, Lasts::Turns(3)),
             "immune"

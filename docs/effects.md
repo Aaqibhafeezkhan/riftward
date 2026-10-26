@@ -118,7 +118,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 | `SensesMagic` | Sees magic conditions on people and things | |
 | `Hidden` | Out of sight to those who haven't noticed | ✓ Hidden |
 | `Invisible` | Unseen by all but those who see invisible | |
-| `Resist(type, x)` / `Immune(tag)` | Stops a share `x` of a damage type (0.8 = 80%); can't get a tag's conditions | |
+| `Resist(type, x)` / `Weakness(type, x)` / `Immune(tag)` | Stops a share `x` of a damage type (0.8 = 80%); takes `x` more of one (1 = double); can't get a tag's conditions | |
 | `BreathesWater` / `FreeClimb` / `FreeSwim` | | |
 | `Hasted(n)` / `Slowed` | An extra action every N turns; acts every other turn | |
 
@@ -210,7 +210,8 @@ Every attack and harming effect names its type, so armour, resistances and immun
 - **The list** is `assets/damage_types.ron`: each type's name and whether ordinary armour stops it (only `physical` does). Tests fail if a weapon, attack skill, spell, armour piece or condition names a type that isn't there.
 - **Weapons and attack skills** take `type:` and default to `"physical"`; Spark's `Harm` is `type: "force"`.
 - **Armour:** worn and held pieces count against a hit only if they stop its type (`against`, empty meaning what ordinary armour stops). Natural armour (auras, boosts) and armour from conditions count only against types ordinary armour stops.
-- **Resistances:** a condition's `Resist(type, x)` is the share of that type it stops: 0.8 stops 80%, 1 all of it, and a negative share is a weakness (-0.5 takes 150%). Several stack on what gets through: 50% and 50% let a quarter in. **`Immune(tag)`** stops a condition carrying that tag from being put on at all.
+- **Resistances:** a condition's `Resist(type, x)` is the share of that type it stops: 0.8 stops 80%, 1 all of it. Several stack on what gets through: 50% and 50% let a quarter in.
+- **Weaknesses:** `Weakness(type, x)` is extra damage of that type, added up: 0.5 takes 150%, 1 takes double, and two weaknesses of 0.5 take double. Weaknesses multiply what resistances let through, so resisting 50% of fire while weak to it by 1 takes 100%. **`Immune(tag)`** stops a condition carrying that tag from being put on at all.
 - Weapon blows and harming spells go through the same armour and resistance rules, for players and mobs alike.
 
 ## Effects
