@@ -1,0 +1,42 @@
+// Hermetic spells: a tradition's spell book. A spell's key is `hermetic:<id>`, and it's cast
+// through a school skill in the Hermetic tree; see `src/spells.rs` and docs/magic.md#spells.
+(
+    spells: {
+        "spark": (
+            name: "Spark",
+            description: "Loose a crackling bolt of force at a foe: 2 to 5 damage, and a third of your power (Hermetic Principles, plus Logic, plus Magic) on top, landing harder the more surely it strikes. It can be dodged, and armour takes its share, but a shield is no help against it. Cast out of a fight, it starts one.",
+            school: "hermetic:foundation",
+            drain: 2,
+            aim: Foe,
+            resist: Some(Dodge),
+            effects: [Harm(damage: (2, 5))],
+            text: (
+                hit: (
+                    actor: "Your spark {harm} {target}.",
+                    target: "{actor}'s spark {harm} you.",
+                    room: "{actor}'s spark {harm} {target}.",
+                ),
+                miss: (
+                    actor: "Your spark flies at {target}, but goes wide.",
+                    target: "{actor}'s spark flies at you, but you twist out of its way.",
+                    room: "{actor}'s spark flies at {target}, but goes wide.",
+                ),
+            ),
+        ),
+        "ward": (
+            name: "Ward",
+            description: "Trace a ward around someone, or yourself, that takes the next blows in their place: 4 damage, and a third of your power on top, within the next ten turns of fighting.",
+            school: "hermetic:foundation",
+            drain: 3,
+            aim: Ally,
+            effects: [Ward(absorb: 4, rounds: 10)],
+            text: (
+                hit: (
+                    actor: "You trace a shimmering ward around {target}.",
+                    target: "{actor} traces a shimmering ward around you.",
+                    room: "{actor} traces a shimmering ward around {target}.",
+                ),
+            ),
+        ),
+    },
+)

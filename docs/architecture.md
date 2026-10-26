@@ -36,7 +36,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
 | `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
-| `combat/` | Combat: the round, death and respawn and the commands (`mod.rs`), attacks, techniques and ripostes (`strike.rs`), conditions (`states.rs`) |
+| `combat/` | Combat: the round, death and respawn and the commands (`mod.rs`), attacks, techniques and ripostes (`strike.rs`), casting spells and mobs' choice of them (`casting.rs`), conditions (`states.rs`) |
 | `world_events.rs` | World flags, world events from zone files, and the admin `worldflag` |
 | `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
 | `vitals.rs` | Current health and stamina for players and mobs alike, their maximums, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
@@ -44,7 +44,8 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `gathering.rs` | `forage` and `gather`, from a room's finds, and how finds deplete and grow back |
 | `tracking.rs` | Tracks left in rooms by whoever walks through, and `track` |
 | `stealth.rs` | Hiding, sneaking and noticing: `hide`, `sneak`, `search`, who sees whom, and revealing |
-| `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
+| `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |
+| `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |

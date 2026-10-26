@@ -1,6 +1,6 @@
 # Magic and Awakening
 
-[Design summary](README.md) · Status: Awakening is built (Magic as latent talent, a teacher for each tradition, foundation skills); casting is not
+[Design summary](README.md) · Status: Awakening is built (Magic as latent talent, a teacher for each tradition, foundation skills), and so are spells: `cast`, Drain, and the first two spells of each casting tradition
 
 Every character starts at Magic 0 and can raise it with Karma from creation onward. On its own, Magic is **latent talent**: it does nothing until the character knows a **casting skill**, a tradition's foundation skill. Knowing one is what it means to be Awakened, and which one decides the character's tradition.
 
@@ -27,7 +27,7 @@ Every character starts mundane. Awakening happens in play, like learning a sword
 3. **Apprenticeship to a player:** a master teaches the foundation skill. They must have mastered it, the same rule as teaching a loot skill. The apprentice needs only the skill's requirements, starting with Magic 1.
 4. **Ordeal:** surviving a near-death event with high Willpower and latent Magic. The epiphany grants the foundation skill of the tradition matching the character's strongest tradition attribute.
 
-Being Awakened shows in `score` ("Magic 1 (Awakened: Divine)"). The foundation skills exist and Awaken; casting, Drain and spells are still to come.
+Being Awakened shows in `score` ("Magic 1 (Awakened: Divine)"). The foundation skills exist and Awaken, and are each tradition's first school: see [Spells](#spells).
 
 ## Traditions
 
@@ -64,24 +64,58 @@ Spells are their own category, separate from skills. **Schools are what improve;
 
 - **The rest of a tradition's tree is the craft of casting:** Drain resistance, shaping, countering, sustaining, summoning, rituals and a capstone, all skills worth improving. See [Skill trees](trees.md#magic) for each tradition's.
 
-- **A spell belongs to a school** and has a minimum school level, a Drain cost, a target and an effect. It never levels.
-- **Learning a spell** happens once: from a tradition's teacher, a scroll (used up) or a grimoire (studied, kept). Finding a new spell should feel like gaining a new option, not starting a new climb from level 0.
-- **Casting** is an action like any other: `cast <spell> [<target>]` takes a round. Its power is **school level + Magic**, contested by the ratio rule like everything else, and casting practises the school. Every spell in a school grows stronger together, so a caster's progress isn't split between a dozen spells.
-- **Drain** is what a spell costs: stamina (and, for great spells, health), resisted by Willpower plus the tradition's attribute. A failed resistance costs more.
-- **Spells don't add to character level or Karma.** Only skills do, so casters don't out-level fighters by knowing more.
-- **How many spells a caster can hold** is limited, so they choose a repertoire rather than collecting everything (an open question below).
-- **Data:** spells live in `assets/spells/<tradition>.spells.ron`; each character's known spells in a `character_spells` table. `spells` lists what a character knows.
+- **A spell belongs to a school** and has a minimum school level, a Drain cost, an aim, what resists it, and its effects. It never levels.
+- **Learning a spell** happens once: from a tradition's teacher (built), a scroll (used up) or a grimoire (studied, kept). Finding a new spell should feel like gaining a new option, not starting a new climb from level 0. Learning costs no Karma: spells are found, not bought.
+- **Casting** is an action like any other: `cast <spell> [<target>]` takes a round. Its power is the school's rating, **school level + the school's attribute + Magic**, contested by the ratio rule like everything else, and casting practises the school. Every spell in a school grows stronger together, so a caster's progress isn't split between a dozen spells.
+- **Drain** is what a spell costs: stamina, resisted by Willpower plus the school's attribute against twice the Drain, as a fixed difficulty. Resisted, it costs half (rounded up); a failed resistance costs it all ("The casting takes more out of you than it should."). A caster without the stamina for the whole Drain can't cast. Great spells costing health are for later.
+- **Spells don't add to character level or Karma** beyond what practising their school does, so casters don't out-level fighters by knowing more.
+- **How many spells a caster can hold** has no limit for now; it's decided once there are more than two spells per tradition (an open question below).
+- **Data:** spells live in `assets/spells/<tradition>.spells.ron` (key `tradition:spell`), hot-reloaded and checked at load like skills; each character's known spells in the `character_spells` table. `spells` lists what a character knows, and `spells <spell>` reads about one.
 
 ```ron
-"mend": (
-    name: "Mend",
-    school: "divine:foundation",
-    min_level: 0,
-    drain: Stamina(2),
-    target: Touch,                  // self or someone here
-    effect: Heal(dice: (2, 5)),     // plus a share of school level + Magic
+"spark": (
+    name: "Spark",
+    description: "Loose a crackling bolt of force at a foe...",
+    school: "hermetic:foundation",
+    min_level: 0,                     // the school level it needs
+    drain: 2,                         // stamina; half if resisted
+    aim: Foe,                         // Foe, Ally or Other
+    resist: Some(Dodge),              // or Some(Attribute(Willpower)); none for a blessing
+    effects: [Harm(damage: (2, 5))],  // plus a third of the power
+    text: (hit: (...), miss: (...)),  // like a skill's, with {harm} when it harms
 ),
 ```
+
+### How a spell is cast (built)
+
+- **Aim** says whom a spell goes to, and whether it starts a fight:
+  - **Foe:** hostile. Your foe unless you name another; never another player. Cast out of a fight, it starts one and is cast on your first turn, the way an opener is; a foe it's cast at fights back.
+  - **Ally:** yourself unless you name someone else here. Cast now, in a fight or out of one.
+  - **Other:** someone else here, your foe by default, without starting a fight (Beast Speech).
+- **Resisting:** each spell names what resists it. **Dodge** is Reaction plus Dodge, as against a blow, but a shield doesn't help against magic; an **attribute** is the target's rating in it. A spell aimed at a foe must be resistable. Unresisted spells (blessings, healing) always work.
+- **Effects** (any number; amounts rolled get a third of the power on top):
+  - **Harm:** damage, landing harder the more decisively the spell won (the same [blows](attributes.md#the-ratio-rule) as an attack), less armour; told in Diku's words with `{harm}`.
+  - **Heal:** health back, up to the most.
+  - **Bless:** attacks better for some of their turns (the *blessed* condition).
+  - **Ward:** a ward that takes the next blows' damage in their place, up to its strength, for some of their turns (the *warded* condition). It takes from any blow, weapon or spell.
+  - **Hold:** can't flee, and defends at half (the *held* condition, as a grapple leaves).
+  - **Calm:** an animal (anything that fights with the Beast tree) stops fighting, no one fights it, and it no longer attacks those who come near.
+- **In a fight,** a queued `cast` is cast on the caster's turn in the round, in initiative order like any blow, so its damage, deaths and experience go the way a blow's do (`src/combat/casting.rs`).
+- **Mobs cast** by the same rules. A template lists `spells` (and the school skill and attributes they need); on its turn, with its `tactics` chance, a mob picks among its techniques and the spells that would do some good: a spell at its foe, healing itself only when badly hurt, blessing or warding itself only when it isn't already. The three teachers know their tradition's two spells and cast them if attacked.
+- **Conditions count down in fights.** A blessing or ward cast out of a fight waits for the next one, and lasts that many of the bearer's turns.
+
+### The first spells (built)
+
+| Tradition | Spell | Aim | Resisted by | Does | Drain |
+| --- | --- | --- | --- | --- | --- |
+| Divine | **Mend** | Ally | | Heals 2 to 5 | 3 |
+| Divine | **Bless** | Ally | | Attack +2 for 5 turns | 2 |
+| Hermetic | **Spark** | Foe | Dodge | 2 to 5 damage | 2 |
+| Hermetic | **Ward** | Ally | | Takes 4 damage, within 10 turns | 3 |
+| Shamanic | **Beast Speech** | Other | Willpower | Calms an animal | 2 |
+| Shamanic | **Spirit Grasp** | Foe | Strength | Held for 2 turns | 3 |
+
+All are cast through the tradition's foundation, at level 0, and taught by its teacher (`learn`), who needs the student to know the school first.
 
 ## Possible later additions
 
@@ -92,5 +126,5 @@ Spells are their own category, separate from skills. **Schools are what improve;
 
 - [ ] **Are the four traditions right?** Hermetic, Shamanic, Divine and Adept.
 - [ ] **Can a character know more than one foundation skill?** That would mean belonging to two traditions.
-- [ ] **How many spells can a caster hold?** Options: a number from school levels (say one per 10 levels in each school), from an attribute (Logic for Hermetics, Intuition for Shamans), or a grimoire that holds them and must be carried.
-- [ ] **Do spells cost Karma to learn,** as in Shadowrun, or only the effort of finding them?
+- [ ] **How many spells can a caster hold?** No limit for now (2026-10-26), decided once there are more spells. Options: a number from school levels (say one per 10 levels in each school), from an attribute (Logic for Hermetics, Intuition for Shamans), or a grimoire that holds them and must be carried.
+- [x] **Do spells cost Karma to learn?** No: only the effort of finding them (2026-10-26).

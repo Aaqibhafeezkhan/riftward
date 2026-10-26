@@ -97,6 +97,15 @@ const SCHEMA: &str = "
         PRIMARY KEY (character_id, skill)
     );
 
+    -- The spells each character knows.
+    CREATE TABLE IF NOT EXISTS character_spells (
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        spell        TEXT NOT NULL,        -- tradition:spell
+        learned_via  TEXT NOT NULL,
+        learned_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (character_id, spell)
+    );
+
     -- Spawns waiting to return after their last mob died (`AfterDeath`, or a wiped-out
     -- breeding spawn's reseed), so a restart doesn't bring the dragon back early.
     CREATE TABLE IF NOT EXISTS spawn_state (
@@ -746,6 +755,24 @@ impl Database {
                 state.next_gain_at,
                 state.learned_via
             ],
+        )?;
+        Ok(())
+    }
+
+    /// The spells a character knows, by `tradition:spell`.
+    pub fn spells(&self, character_id: i64) -> DbResult<Vec<String>> {
+        let conn = self.conn();
+        let mut stmt =
+            conn.prepare("SELECT spell FROM character_spells WHERE character_id = ?1")?;
+        let rows = stmt.query_map([character_id], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn save_spell(&self, character_id: i64, spell: &str, learned_via: &str) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT OR IGNORE INTO character_spells (character_id, spell, learned_via)
+             VALUES (?1, ?2, ?3)",
+            params![character_id, spell, learned_via],
         )?;
         Ok(())
     }

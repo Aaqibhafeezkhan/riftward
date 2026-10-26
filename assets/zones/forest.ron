@@ -55,7 +55,13 @@
             keywords: ["hedge", "shaman", "hermit"],
             here: "The hedge-shaman crouches by a smoking fire, talking quietly to no one you can see.",
             description: "A wiry figure in layers of moss-dyed cloth, hung with feathers, bones and tiny clay charms. Their eyes are bright and a little wild, and they answer questions you haven't asked aloud.",
-            teaches: ["shamanic:foundation", "survival:tracking"],
+            attributes: {Charisma: 6, Willpower: 5, Magic: 4},
+            skills: {"shamanic:foundation": 20},
+            spells: ["shamanic:beast_speech", "shamanic:spirit_grasp"],
+            teaches: [
+                "shamanic:foundation", "shamanic:beast_speech", "shamanic:spirit_grasp",
+                "survival:tracking",
+            ],
         ),
     },
     spawns: {

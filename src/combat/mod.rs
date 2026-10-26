@@ -14,6 +14,7 @@
 //!
 //! Players can't fight each other yet.
 
+mod casting;
 mod states;
 mod strike;
 
@@ -40,11 +41,13 @@ use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::skills::{Bonus, Practice, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
+use crate::spells::{Aim, Casting, SpellDefs};
 use crate::stealth::{Hidden, reveal, sees};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::{Maxima, Resting, Vitals};
 use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_article};
 
+pub use casting::MobMove;
 pub use states::{Conditions, State};
 pub use strike::{Fighters, Move, Round, name_of};
 
@@ -157,7 +160,7 @@ pub struct Slayer(pub Entity);
 
 /// What combat has to say, delivered after each round.
 #[derive(Resource, Default)]
-pub struct CombatLog(Vec<Outgoing>);
+pub struct CombatLog(pub Vec<Outgoing>);
 
 /// "the sewer rat" for "a sewer rat"; names stay as they are.
 pub fn the(name: &str) -> String {
@@ -221,7 +224,7 @@ fn combat_round(
     mut fighters: Fighters,
     items: ItemQuery,
     templates: Res<ItemTemplates>,
-    defs: Res<SkillDefs>,
+    (defs, spells): (Res<SkillDefs>, Res<SpellDefs>),
     mut dice: ResMut<Dice>,
     db: Res<Database>,
     time: Res<Time>,
@@ -230,7 +233,7 @@ fn combat_round(
     spawned: Query<&SpawnedBy>,
     spawns: Res<Spawns>,
     resting_query: Query<Entity, With<Resting>>,
-    readied: Query<&Readied>,
+    (readied, casting): (Query<&Readied>, Query<&Casting>),
     rooms: RoomQuery,
     hidden: Query<&Hidden>,
 ) {
@@ -349,11 +352,13 @@ fn combat_round(
         .collect();
 
     let mut fallen: HashSet<Entity> = HashSet::new();
+    let mut calmed: HashSet<Entity> = HashSet::new();
     let mut round = Round {
         fighters: &mut fighters,
         items: &items,
         templates: &templates,
         defs: &defs,
+        spells: &spells,
         dice: &mut dice,
         db: &db,
         events: &mut events,
@@ -371,6 +376,10 @@ fn combat_round(
             continue;
         };
         if fallen.contains(&attacker) || fallen.contains(&target) {
+            continue;
+        }
+        // A calmed animal fights no more, and no one fights it.
+        if calmed.contains(&attacker) || calmed.contains(&target) {
             continue;
         }
         // Someone caught resting spends their first turn getting up.
@@ -392,9 +401,18 @@ fn combat_round(
         if !acts {
             continue;
         }
-        // A readied opener, or a technique next in the queue, takes the turn.
-        let mut technique = readied.get(attacker).ok().map(|r| r.skill.clone());
-        if technique.is_some() {
+        // A spell or opener readied for this turn, or a technique or spell next in the queue,
+        // takes the turn.
+        let mut spell = casting
+            .get(attacker)
+            .ok()
+            .map(|c| (c.spell.clone(), c.target));
+        let mut technique = None;
+        let mut queued_cast = None;
+        if spell.is_some() {
+            commands.entity(attacker).remove::<Casting>();
+        } else if let Ok(r) = readied.get(attacker) {
+            technique = Some(r.skill.clone());
             commands.entity(attacker).remove::<Readied>();
         } else if let Ok(mut fighter) = round.fighters.get_mut(attacker)
             && fighter.player.is_some()
@@ -405,29 +423,59 @@ fn combat_round(
                 queue.pop();
                 queue.next_at = now + ROUND_SECS;
             } else if let Some((id, invocation)) = queue.pop() {
-                // Any other action takes the turn too.
                 queue.next_at = now + ROUND_SECS;
-                commands.run_system_with(id, invocation);
-                continue;
+                if invocation.command == "cast" {
+                    queued_cast = Some(invocation.args);
+                } else {
+                    // Any other action takes the turn too.
+                    commands.run_system_with(id, invocation);
+                    continue;
+                }
+            }
+        }
+        if let Some(args) = queued_cast {
+            match round.queued_spell(attacker, target, &args, &hidden) {
+                Ok(chosen) => spell = Some(chosen),
+                Err(refusal) => round.say(attacker, refusal),
             }
         }
         // Mobs choose their own, now and then.
-        if technique.is_none() {
-            technique = round.mob_technique(attacker);
+        if technique.is_none() && spell.is_none() {
+            match round.mob_move(attacker) {
+                Some(MobMove::Technique(key)) => technique = Some(key),
+                Some(MobMove::Spell(key, whom)) => spell = Some((key, whom)),
+                None => {}
+            }
         }
-        let moves = technique
-            .as_ref()
-            .and_then(|key| match defs.skills.get(key) {
-                Some(skill) => match &skill.def.kind {
-                    SkillKind::Technique(t) => Some(Move {
-                        key: key.as_str(),
-                        technique: t,
-                    }),
-                    _ => None,
-                },
-                None => None,
-            });
-        for died in round.strike(attacker, target, moves, false) {
+
+        let died = if let Some((key, whom)) = spell {
+            let cast = round.cast(attacker, whom, &key);
+            // A foe a spell is cast at fights back, if it wasn't already fighting.
+            let hostile = spells.0.get(&key).is_some_and(|s| s.def.aim == Aim::Foe);
+            if hostile && !targets.contains_key(&whom) && !cast.died.contains(&whom) {
+                commands.entity(whom).insert(Fighting(attacker));
+            }
+            if let Some(beast) = cast.calmed {
+                calm(&mut commands, beast, &targets);
+                calmed.insert(beast);
+            }
+            cast.died
+        } else {
+            let moves = technique
+                .as_ref()
+                .and_then(|key| match defs.skills.get(key) {
+                    Some(skill) => match &skill.def.kind {
+                        SkillKind::Technique(t) => Some(Move {
+                            key: key.as_str(),
+                            technique: t,
+                        }),
+                        _ => None,
+                    },
+                    None => None,
+                });
+            round.strike(attacker, target, moves, false)
+        };
+        for died in died {
             fallen.insert(died);
             // A riposte can fell the attacker; then the target struck the blow.
             let slayer = if died == attacker { target } else { attacker };
@@ -467,6 +515,17 @@ fn combat_round(
             for line in fighter.attributes.earn(points, &deed, character_id, &db) {
                 log.0.push(Outgoing::line(who, line));
             }
+        }
+    }
+}
+
+/// Let an animal out of its fights: it stops fighting, no one fights it, and it no longer
+/// attacks those who come near.
+pub fn calm(commands: &mut Commands, beast: Entity, targets: &HashMap<Entity, Entity>) {
+    commands.entity(beast).remove::<(Fighting, Aggressive)>();
+    for (who, whom) in targets {
+        if *whom == beast {
+            commands.entity(*who).remove::<Fighting>();
         }
     }
 }
@@ -1079,6 +1138,7 @@ mod tests {
         Cost, Effect, Lines, Skill, SkillDef, SkillKind, SkillState, SkillText, StrikeKind,
         Technique,
     };
+    use crate::spells::{Resist, Spell, SpellDef, SpellEffect, Spells};
     use crate::stealth::Hidden;
     use crate::vitals::BaseHealth;
     use crate::world::{ArmourDef, DoorState, Exits, ItemDef, ItemKey, Room, Slot, Terrain};
@@ -1154,6 +1214,7 @@ mod tests {
             trees: HashMap::new(),
         };
         world.insert_resource(defs);
+        world.insert_resource(SpellDefs::default());
         world.insert_resource(ItemTemplates::default());
         world.insert_resource(Dice::seeded(7));
         world.insert_resource(Database::open(":memory:").unwrap());
@@ -1301,6 +1362,163 @@ mod tests {
             luck: 0,
             seen_by: HashSet::new(),
         });
+    }
+
+    /// A spell for these tests, cast through `school`, with text that says what happened: "You
+    /// spark {target}." and so on, and `{harm}` in every hit line.
+    fn spell(key: &str, aim: Aim, resist: Option<Resist>, effects: Vec<SpellEffect>) -> Spell {
+        let (_, id) = key.split_once(':').unwrap();
+        let lines = |verb: &str| Lines {
+            actor: format!("You {verb} {{target}} ({{harm}})."),
+            target: Some(format!("{{actor}} {verb}s you ({{harm}}).")),
+            room: format!("{{actor}} {verb}s {{target}} ({{harm}})."),
+            beyond: None,
+        };
+        let def = SpellDef {
+            name: id.into(),
+            description: id.into(),
+            school: SCHOOL.into(),
+            min_level: 0,
+            drain: 2,
+            aim,
+            resist,
+            effects,
+            text: SkillText {
+                hit: lines(id),
+                miss: Some(lines(&format!("miss with a {id} at"))),
+            },
+        };
+        def.check().unwrap();
+        Spell {
+            key: key.into(),
+            def,
+        }
+    }
+
+    /// The school the test spells are cast through.
+    const SCHOOL: &str = "hermetic:foundation";
+
+    /// Teach `who` these spells and their school, with Magic enough that they never fail.
+    fn caster(world: &mut World, who: Entity, spells: Vec<Spell>) {
+        world.resource_mut::<SkillDefs>().skills.extend([skill(
+            SCHOOL,
+            SkillKind::Passive {
+                triggers: Vec::new(),
+                bonuses: Vec::new(),
+                counter: None,
+            },
+        )]);
+        world
+            .get_mut::<Skills>(who)
+            .unwrap()
+            .0
+            .insert(SCHOOL.into(), SkillState::new("Template"));
+        world
+            .get_mut::<Attributes>(who)
+            .unwrap()
+            .set(Attribute::Magic, 1000);
+        let keys = spells.iter().map(|s| s.key.clone()).collect();
+        world.entity_mut(who).insert(Spells(keys));
+        let mut defs = world.resource_mut::<SpellDefs>();
+        for spell in spells {
+            defs.0.insert(spell.key.clone(), spell);
+        }
+    }
+
+    #[test]
+    fn a_spell_cast_in_a_fight_hurts_drains_and_practises_its_school() {
+        let (mut world, room) = world();
+        let mage = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, mage);
+        let spark = spell(
+            "hermetic:spark",
+            Aim::Foe,
+            Some(Resist::Dodge),
+            vec![SpellEffect::Harm { damage: (2, 2) }],
+        );
+        caster(&mut world, mage, vec![spark]);
+        world.entity_mut(mage).insert((
+            Fighting(rat),
+            Casting {
+                spell: "hermetic:spark".into(),
+                target: rat,
+            },
+        ));
+        world.run_system_once(combat_round).unwrap();
+        assert!(said(&world, mage, "You spark the brawler"));
+        assert!(world.get::<Vitals>(rat).unwrap().health < 100.0);
+        assert!(
+            world.get::<Vitals>(mage).unwrap().stamina < 100.0,
+            "drained"
+        );
+        assert!(world.get::<Skills>(mage).unwrap().0[SCHOOL].practice > 0.0);
+        assert!(world.get::<Casting>(mage).is_none(), "cast, and done");
+    }
+
+    #[test]
+    fn a_ward_takes_blows_in_its_bearers_place() {
+        let (mut world, room) = world();
+        let brute = fighter(&mut world, room, 5, 1, &[BASIC_ATTACK]);
+        let warded = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        sure_hands(&mut world, brute);
+        world
+            .get_mut::<Conditions>(warded)
+            .unwrap()
+            .add(State::Warded(1000), 5);
+        world.entity_mut(brute).insert(Fighting(warded));
+        world.run_system_once(combat_round).unwrap();
+        assert_eq!(world.get::<Vitals>(warded).unwrap().health, 100.0);
+        assert!(said(&world, warded, "Your ward takes the blow"));
+    }
+
+    #[test]
+    fn a_hurt_mob_heals_itself_with_a_spell() {
+        let (mut world, room) = world();
+        // A foe who can't land a blow, against a badly hurt healer who always casts.
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let healer = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
+        let mend = spell(
+            "divine:mend",
+            Aim::Ally,
+            None,
+            vec![SpellEffect::Heal { heal: (5, 5) }],
+        );
+        caster(&mut world, healer, vec![mend]);
+        world.entity_mut(healer).insert(Tactics(100));
+        world.get_mut::<Vitals>(healer).unwrap().health = 20.0;
+        world.entity_mut(foe).insert(Fighting(healer));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Vitals>(healer).unwrap().health > 20.0);
+    }
+
+    #[test]
+    fn a_calmed_animal_stops_fighting() {
+        let (mut world, room) = world();
+        let shaman = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
+        let dog = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK, "beast:bite"]);
+        as_player(&mut world, shaman);
+        world.entity_mut(dog).insert(Aggressive);
+        let calm = spell(
+            "shamanic:beast_speech",
+            Aim::Other,
+            Some(Resist::Attribute(Attribute::Willpower)),
+            vec![SpellEffect::Calm],
+        );
+        caster(&mut world, shaman, vec![calm]);
+        world.entity_mut(shaman).insert((
+            Fighting(dog),
+            Casting {
+                spell: "shamanic:beast_speech".into(),
+                target: dog,
+            },
+        ));
+        world.entity_mut(dog).insert(Fighting(shaman));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get::<Fighting>(dog).is_none());
+        assert!(world.get::<Fighting>(shaman).is_none());
+        assert!(world.get::<Aggressive>(dog).is_none());
     }
 
     #[test]

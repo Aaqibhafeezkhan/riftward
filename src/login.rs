@@ -20,6 +20,7 @@ use crate::items::{HANDS, ItemTemplates};
 use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::skills::{SkillDefs, Skills, UNIVERSAL_SKILLS, learn};
+use crate::spells::Spells;
 use crate::targeting::Keywords;
 use crate::vitals::{DEFAULT_PROMPT, Maxima, PromptFormat, Vitals};
 use crate::world::{InRoom, Player, RoomIndex, RoomKey};
@@ -845,6 +846,15 @@ fn enter_game(
             .into_iter()
             .collect(),
     );
+    let spells = Spells(
+        db.spells(character.id)
+            .unwrap_or_else(|err| {
+                error!("failed to load spells for {}: {err}", character.name);
+                Vec::new()
+            })
+            .into_iter()
+            .collect(),
+    );
     let background = character.background.clone().unwrap_or_default();
     let starting = choices
         .races
@@ -899,6 +909,7 @@ fn enter_game(
         vitals,
         prompt,
         skills,
+        spells,
         ActionQueue::default(),
         AutoAttack(character.autoattack.clone()),
         Keywords::from_name(&character.name),

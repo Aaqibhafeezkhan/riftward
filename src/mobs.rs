@@ -19,6 +19,7 @@ use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::skills::{SkillDefs, SkillState, Skills};
 use crate::spawns::{SpawnedBy, Spawns};
+use crate::spells::Spells;
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
@@ -192,6 +193,7 @@ pub fn spawn_mob(
         skills,
         AutoAttack(def.attack.clone()),
         Tactics(def.tactics.unwrap_or(DEFAULT_TACTICS)),
+        Spells(def.spells.iter().cloned().collect()),
     ));
     if let Some(base) = base {
         entity.insert(base);

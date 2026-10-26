@@ -22,6 +22,7 @@ mod net;
 mod output;
 mod skills;
 mod spawns;
+mod spells;
 mod stealth;
 mod targeting;
 mod telnet;
@@ -91,6 +92,7 @@ fn add_game(app: &mut App, path: String, address: String) {
         gathering::GatheringPlugin,
         tracking::TrackingPlugin,
         stealth::StealthPlugin,
+        spells::SpellsPlugin,
     ));
 }
 

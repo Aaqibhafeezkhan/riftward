@@ -21,6 +21,10 @@ pub enum State {
     Guarding(i32),
     /// Defends at half until their next turn.
     Exposed,
+    /// Attacks this much better: a blessing.
+    Blessed(i32),
+    /// A ward that takes this much more damage in their place.
+    Warded(u32),
 }
 
 impl State {
@@ -71,6 +75,31 @@ impl Conditions {
             .any(|(s, _)| matches!(s, State::Down | State::Held | State::Exposed));
         let defence = base + guard;
         if halved { defence / 2 } else { defence }
+    }
+
+    /// How much better they attack: a blessing's worth.
+    pub fn blessing(&self) -> i32 {
+        self.0
+            .iter()
+            .map(|(s, _)| match s {
+                State::Blessed(n) => *n,
+                _ => 0,
+            })
+            .sum()
+    }
+
+    /// Let a ward take what it can of `damage`. Returns how much it took; a ward that's taken all
+    /// it can is gone.
+    pub fn absorb(&mut self, damage: i32) -> i32 {
+        let mut taken = 0;
+        for (state, _) in &mut self.0 {
+            if let State::Warded(left) = state {
+                taken = damage.clamp(0, *left as i32);
+                *left -= taken as u32;
+            }
+        }
+        self.0.retain(|(s, _)| *s != State::Warded(0));
+        taken
     }
 
     /// Whether they can run from a fight.
@@ -161,6 +190,16 @@ mod tests {
         // A new guard replaces the old one.
         conditions.add(State::Guarding(2), 2);
         assert_eq!(conditions.defence(6), 4);
+    }
+
+    #[test]
+    fn a_ward_takes_what_it_can_and_then_is_gone() {
+        let mut conditions = Conditions::default();
+        conditions.add(State::Warded(5), 3);
+        assert_eq!(conditions.absorb(3), 3);
+        assert_eq!(conditions.absorb(4), 2, "only 2 left in it");
+        assert!(!conditions.has(State::Warded(0)));
+        assert_eq!(conditions.absorb(4), 0);
     }
 
     #[test]

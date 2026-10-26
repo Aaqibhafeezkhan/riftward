@@ -1,0 +1,48 @@
+// Shamanic spells: a tradition's spell book. A spell's key is `shamanic:<id>`, and it's cast
+// through a school skill in the Shamanic tree; see `src/spells.rs` and docs/magic.md#spells.
+(
+    spells: {
+        "beast_speech": (
+            name: "Beast Speech",
+            description: "Speak to an animal in the spirits' tongue and calm it: it stops fighting, and no longer attacks those who come near. Its Willpower resists. It doesn't start a fight.",
+            school: "shamanic:foundation",
+            drain: 2,
+            aim: Other,
+            resist: Some(Attribute(Willpower)),
+            effects: [Calm],
+            text: (
+                hit: (
+                    actor: "You speak softly to {target} in the spirits' tongue, and it calms.",
+                    target: "{actor} speaks to you in the spirits' tongue, and your anger drains away.",
+                    room: "{actor} speaks softly to {target}, and it calms.",
+                ),
+                miss: (
+                    actor: "You speak to {target} in the spirits' tongue, but it won't listen.",
+                    target: "{actor} speaks to you in a strange tongue; you pay it no mind.",
+                    room: "{actor} speaks softly to {target}, but it won't listen.",
+                ),
+            ),
+        ),
+        "spirit_grasp": (
+            name: "Spirit Grasp",
+            description: "Call a spirit to seize a foe: for two of their turns they can't flee, and defend at half. Their Strength resists. Cast out of a fight, it starts one.",
+            school: "shamanic:foundation",
+            drain: 3,
+            aim: Foe,
+            resist: Some(Attribute(Strength)),
+            effects: [Hold(rounds: 2)],
+            text: (
+                hit: (
+                    actor: "A spirit answers your call and seizes {target}!",
+                    target: "Something unseen seizes you at {actor}'s call!",
+                    room: "At {actor}'s call, something unseen seizes {target}!",
+                ),
+                miss: (
+                    actor: "A spirit grabs at {target} at your call, but can't hold on.",
+                    target: "Something unseen grabs at you at {actor}'s call, but can't hold on.",
+                    room: "At {actor}'s call, something unseen grabs at {target}, but can't hold on.",
+                ),
+            ),
+        ),
+    },
+)

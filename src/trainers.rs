@@ -16,6 +16,7 @@ use crate::items::capitalized;
 use crate::mobs::{MobQuery, MobTemplates};
 use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::skills::{Skill, SkillDefs, Skills, learn};
+use crate::spells::{self, Spell, SpellDefs, Spells};
 
 /// Experience for Awakening to a magical tradition.
 const AWAKENING_EXPERIENCE: u64 = 100;
@@ -63,8 +64,8 @@ fn learn_cmd(
     mut players: PlayerQuery,
     mobs: MobQuery,
     templates: Res<MobTemplates>,
-    defs: Res<SkillDefs>,
-    mut sheets: Query<(&mut Skills, &mut Attributes)>,
+    (defs, spell_defs): (Res<SkillDefs>, Res<SpellDefs>),
+    mut sheets: Query<(&mut Skills, &mut Attributes, &mut Spells)>,
     db: Res<Database>,
 ) {
     let Ok((_, _, Some(player), Some(in_room))) = players.get(inv.entity) else {
@@ -76,19 +77,23 @@ fn learn_cmd(
         player.name.clone(),
         player.character_id,
     );
-    let Ok((mut skills, mut attributes)) = sheets.get_mut(inv.entity) else {
+    let Ok((mut skills, mut attributes, mut spells)) = sheets.get_mut(inv.entity) else {
         return;
     };
 
     // The trainers here, and what each teaches.
-    let mut trainers: Vec<(Entity, String, Vec<&Skill>)> = mobs
+    let mut trainers: Vec<(Entity, String, Vec<Lesson>)> = mobs
         .iter()
         .filter(|(_, _, r)| r.0 == room)
         .filter_map(|(entity, mob, _)| {
             let teaches = &templates.0.get(&mob.key)?.teaches;
-            let lessons: Vec<&Skill> = teaches
+            let lessons: Vec<Lesson> = teaches
                 .iter()
-                .filter_map(|key| defs.skills.get(key))
+                .filter_map(|key| match (defs.skills.get(key), spell_defs.0.get(key)) {
+                    (Some(skill), _) => Some(Lesson::Skill(skill)),
+                    (None, Some(spell)) => Some(Lesson::Spell(spell)),
+                    (None, None) => None,
+                })
                 .collect();
             (!lessons.is_empty()).then(|| (entity, mob.name.clone(), lessons))
         })
@@ -100,13 +105,29 @@ fn learn_cmd(
         race: &race,
         skills: Some(&skills),
     };
-    let needs = |skill: &Skill| {
-        skill
+    let needs = |lesson: &Lesson| match lesson {
+        Lesson::Skill(skill) => skill
             .def
             .requires
             .as_ref()
             .filter(|c| !c.met(&facts))
-            .map(|c| c.describe(&|id| id.to_string()))
+            .map(|c| c.describe(&|id| id.to_string())),
+        // A spell needs its school, at its level.
+        Lesson::Spell(spell) => {
+            let school = defs
+                .skills
+                .get(&spell.def.school)
+                .map_or(spell.def.school.as_str(), |s| s.def.name.as_str());
+            match (skills.0.get(&spell.def.school), spell.def.min_level) {
+                (Some(state), min) if state.level >= min => None,
+                (_, 0) => Some(school.to_string()),
+                (_, min) => Some(format!("{school} {min}")),
+            }
+        }
+    };
+    let known = |lesson: &Lesson| match lesson {
+        Lesson::Skill(skill) => skills.0.contains_key(&skill.key),
+        Lesson::Spell(spell) => spells.0.contains(&spell.key),
     };
 
     let mut out = Vec::new();
@@ -120,13 +141,11 @@ fn learn_cmd(
         for (_, trainer, lessons) in &trainers {
             let list: Vec<String> = lessons
                 .iter()
-                .map(
-                    |skill| match (skills.0.contains_key(&skill.key), needs(skill)) {
-                        (true, _) => format!("{} (known)", skill.def.name),
-                        (false, Some(req)) => format!("{} (requires {req})", skill.def.name),
-                        (false, None) => skill.def.name.clone(),
-                    },
-                )
+                .map(|lesson| match (known(lesson), needs(lesson)) {
+                    (true, _) => format!("{} (known)", lesson.title()),
+                    (false, Some(req)) => format!("{} (requires {req})", lesson.title()),
+                    (false, None) => lesson.title(),
+                })
                 .collect();
             out.push(Outgoing::line(
                 inv.entity,
@@ -142,24 +161,55 @@ fn learn_cmd(
             "Type 'learn <skill>' to take a lesson.",
         ));
     } else {
-        let found = trainers.iter().find_map(|(_, trainer, lessons)| {
-            lessons
-                .iter()
-                .find(|skill| matches_name(skill, &wanted))
-                .map(|skill| (trainer.clone(), *skill))
-        });
+        // A word that names several lessons means one they don't know yet: `learn spirit`
+        // next to the hedge-shaman is Spirit Grasp to someone who knows Spirit Sight.
+        let matching: Vec<(String, Lesson)> = trainers
+            .iter()
+            .flat_map(|(_, trainer, lessons)| {
+                lessons
+                    .iter()
+                    .filter(|lesson| lesson.matches(&wanted))
+                    .map(|lesson| (trainer.clone(), *lesson))
+            })
+            .collect();
+        let found = matching
+            .iter()
+            .find(|(_, lesson)| !known(lesson))
+            .or(matching.first())
+            .cloned();
         let text = match found {
             None => format!("No one here teaches '{}'.", inv.args.trim()),
-            Some((_, skill)) if skills.0.contains_key(&skill.key) => {
-                format!("You already know {}.", skill.def.name)
+            Some((_, lesson)) if known(&lesson) => {
+                format!("You already know {}.", lesson.name())
             }
-            Some((trainer, skill)) => match needs(skill) {
-                Some(req) => format!(
+            Some((trainer, lesson)) => match (needs(&lesson), lesson) {
+                (Some(req), _) => format!(
                     "{} can't teach you {} yet: it requires {req}.",
                     capitalized(&trainer),
-                    skill.def.name
+                    lesson.name()
                 ),
-                None => {
+                (None, Lesson::Spell(spell)) => {
+                    spells.0.insert(spell.key.clone());
+                    if let Err(err) = db.save_spell(character_id, &spell.key, "Taught") {
+                        error!("failed to save {name}'s new spell {}: {err}", spell.key);
+                    }
+                    out.push(Outgoing::Room {
+                        room,
+                        except: inv.entity,
+                        text: format!(
+                            "{} teaches {name} the spell {}.\r\n",
+                            capitalized(&trainer),
+                            spell.def.name
+                        ),
+                    });
+                    format!(
+                        "{} takes you through the words and the shape of {}.\r\n\x1b[1;32mYou have learned the spell {}.\x1b[0m Type 'spells' to see the spells you know.",
+                        capitalized(&trainer),
+                        spell.def.name,
+                        spell.def.name
+                    )
+                }
+                (None, Lesson::Skill(skill)) => {
                     let key = skill.key.clone();
                     learn(&mut skills, &key, "Taught", character_id, &db);
                     let mut text = format!(
@@ -195,6 +245,39 @@ fn learn_cmd(
         out.insert(0, Outgoing::line(inv.entity, text));
     }
     deliver(out, &mut players);
+}
+
+/// Something a trainer teaches: a skill, or a spell.
+#[derive(Clone, Copy)]
+enum Lesson<'a> {
+    Skill(&'a Skill),
+    Spell(&'a Spell),
+}
+
+impl Lesson<'_> {
+    fn name(&self) -> &str {
+        match self {
+            Lesson::Skill(skill) => &skill.def.name,
+            Lesson::Spell(spell) => &spell.def.name,
+        }
+    }
+
+    /// How it's listed: a spell says so.
+    fn title(&self) -> String {
+        match self {
+            Lesson::Skill(skill) => skill.def.name.clone(),
+            Lesson::Spell(spell) => format!("the spell {}", spell.def.name),
+        }
+    }
+
+    fn matches(&self, wanted: &str) -> bool {
+        match self {
+            Lesson::Skill(skill) => matches_name(skill, wanted),
+            Lesson::Spell(spell) => {
+                spell.key == wanted || spells::matches_name(&spell.def.name, wanted)
+            }
+        }
+    }
 }
 
 /// Whether a student asking for `wanted` means this skill: its id, its tree, the start of its

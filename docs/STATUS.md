@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -14,6 +14,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Mobs:** templates and spawns (keeping a count, breeding, after-death and reseed timers, gated by world flags), wandering and crowding, pack limits, aggression, auras, the players' vitals, technique skills used by chance, and equipment they fight with and drop.
 - **Characters:** creation (race with Earthdawn-style shifts, starting Karma, a background as a past life, a description), vitals that recover (faster resting, offline too, never in a fight), `score`, `describe`, aliases, a custom prompt.
 - **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, uncapped levels with a soft cap from character level, experience and character levels that earn Karma, opposed-roll contests, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`, entry skills only), discovery of a tree's other skills through use, a tough-fight boost to learning, Awakening to the four magic traditions.
+- **Spells:** spell books as data (`assets/spells/`), `cast` and `spells`, Drain resisted by Willpower, the first two spells of each casting tradition taught by its teacher, cast in or out of fights by players and mobs alike, and the blessed and warded conditions.
 - **Combat:** rounds in initiative order, auto-attacks, weapons (trained and untrained), techniques for every weapon tree's journeyman tier, conditions (staggered, down, bleeding, held, guarding, exposed), stamina costs, fleeing, death and respawn at the shrine, corpses that keep a player's gear, and death for anyone who quits or disconnects mid-fight.
 - **World events:** saved world flags and data-driven events. A rat breakout into the city raises the Rat King, whose aura toughens the rats until he dies.
 
@@ -21,9 +22,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Spells,** step 6 of the plan in [Skill trees](trees.md#proposed-order): the spell category, `cast` and Drain, and the first two spells per tradition. Stealth, step 5, is built: see [Stealth](trees.md#stealth).
-
-After that, in order ([Proposed order](trees.md#proposed-order)): (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
+**Money and shops,** step 7 of the plan in [Skill trees](trees.md#proposed-order), then Trade and the crafts. Spells, step 6, are built: see [Spells](magic.md#spells).
 
 ## Small things noticed and not yet done
 
@@ -32,6 +31,11 @@ After that, in order ([Proposed order](trees.md#proposed-order)): (their own cat
 - Experience and level numbers are first guesses: 50 for an even fight, 100 × 1.25ⁿ per level.
 - The silver locket from the Sunken Hall has no use until shops.
 - Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
+- Blessings and wards count down only in fight turns, so one cast out of a fight waits, however long, for the next fight.
+- A calmed animal stays calm until it dies or resets: there's no time limit yet.
+- Spells come only from teachers: scrolls and grimoires, a spell-holding limit, more schools and great spells costing health are still to come. An admin can know every tradition's foundation; players can't yet, an open question.
+- Spell numbers are first guesses: Drain 2 or 3, resisted at twice that, power = school level + its attribute + Magic, a third of which adds to damage, healing and wards. A teacher at school 20 with Magic 4 casts a Spark or Ward that a new character can't match.
+- A spell readied out of a fight (`Casting`), like an opener, lingers if the fight never starts, and fires at the next one.
 - No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built).
 - Hiding isn't saved: logging out shows you, and a restart forgets everyone's hiding.
 - Herbs have no use until Brewing; rat tails and the Rat King's tooth have none until quests or shops.

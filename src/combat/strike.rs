@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 
+use super::casting::MobMove;
 use super::states::{Conditions, State};
 use super::{
     ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, CombatLog, Dead, Fighting, HideNumbers,
@@ -22,6 +23,8 @@ use crate::skills::{
     Bonus, Boosts, Cost, Effect, Learner, Lines, Skill, SkillDefs, SkillKind, SkillText, Skills,
     StrikeKind, Technique, Trigger, boosts, count_use, fill, tough_fight_boost,
 };
+use crate::spells::{SpellDefs, Spells};
+use crate::targeting::Keywords;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{ArmourDef, InRoom, Player};
 
@@ -51,6 +54,8 @@ pub struct Fighter {
     pub hide_numbers: Has<HideNumbers>,
     pub player: Option<&'static Player>,
     pub mob: Option<&'static Mob>,
+    pub keywords: Option<&'static Keywords>,
+    pub spells: Option<&'static Spells>,
 }
 
 pub type Fighters<'w, 's> = Query<'w, 's, Fighter>;
@@ -88,7 +93,7 @@ fn attack_rating(
 }
 
 /// Defence before conditions: Reaction and Dodge, plus auras and passive bonuses.
-fn defence_rating(
+pub(super) fn defence_rating(
     attributes: &Attributes,
     skills: &Skills,
     aura: Bonus,
@@ -340,7 +345,7 @@ impl Blow {
 }
 
 /// What a weapon swung untrained looks like: there's no skill of its own to describe it.
-fn untrained() -> SkillText {
+pub(super) fn untrained() -> SkillText {
     let lines = |actor: &str, target: &str, room: &str| Lines {
         actor: actor.into(),
         target: Some(target.into()),
@@ -373,7 +378,7 @@ fn shield_block() -> Lines {
 
 /// `lines` filled in for `actor` using a skill on `target`: what the actor, the target and the
 /// room see.
-fn told(lines: &Lines, actor: &str, target: &str) -> (String, String, String) {
+pub(super) fn told(lines: &Lines, actor: &str, target: &str) -> (String, String, String) {
     let with = [("actor", actor), ("target", target)];
     (
         fill(&lines.actor, &with),
@@ -399,6 +404,7 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub items: &'a ItemQuery<'iw, 'is>,
     pub templates: &'a ItemTemplates,
     pub defs: &'a SkillDefs,
+    pub spells: &'a SpellDefs,
     pub dice: &'a mut Dice,
     pub db: &'a Database,
     pub events: &'a mut MessageWriter<'ew, GameEvent>,
@@ -420,18 +426,19 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
 }
 
 /// Messages for a strike: the attacker, the target, and everyone else there.
-struct Telling {
-    lines: Vec<(Entity, String)>,
-    room: Vec<String>,
+#[derive(Default)]
+pub(super) struct Telling {
+    pub(super) lines: Vec<(Entity, String)>,
+    pub(super) room: Vec<String>,
 }
 
 impl Round<'_, '_, '_, '_, '_, '_> {
-    fn say(&mut self, who: Entity, line: impl Into<String>) {
+    pub(super) fn say(&mut self, who: Entity, line: impl Into<String>) {
         self.log.0.push(Outgoing::line(who, line.into()));
     }
 
     /// Tell everyone in `room` but `a` and `b`.
-    fn tell_room(&mut self, room: Entity, a: Entity, b: Entity, line: &str) {
+    pub(super) fn tell_room(&mut self, room: Entity, a: Entity, b: Entity, line: &str) {
         for &(player, at) in self.watchers {
             if at == room && player != a && player != b {
                 self.log.0.push(Outgoing::line(player, line.to_string()));
@@ -439,7 +446,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         }
     }
 
-    fn name(&self, entity: Entity) -> String {
+    pub(super) fn name(&self, entity: Entity) -> String {
         self.fighters
             .get(entity)
             .map(|f| name_of(f.player, f.mob))
@@ -447,7 +454,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
     }
 
     /// Spend a fighter's stamina, if they have it.
-    fn pay(&mut self, who: Entity, cost: f32) -> bool {
+    pub(super) fn pay(&mut self, who: Entity, cost: f32) -> bool {
         let Ok(mut fighter) = self.fighters.get_mut(who) else {
             return false;
         };
@@ -463,7 +470,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
     }
 
     /// Count a use of a skill by a player. Mobs don't improve.
-    fn practise(&mut self, who: Entity, key: &str) {
+    pub(super) fn practise(&mut self, who: Entity, key: &str) {
         let Ok(mut fighter) = self.fighters.get_mut(who) else {
             return;
         };
@@ -489,14 +496,19 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         }
     }
 
-    /// The technique a mob makes this turn instead of its auto-attack, if any: with its `Tactics`
-    /// chance, one it can make now (its attack ready, the stamina for it), picked at random.
-    /// Openers start fights, so a mob already in one never picks them.
-    pub fn mob_technique(&mut self, attacker: Entity) -> Option<String> {
+    /// What a mob does this turn instead of its auto-attack, if anything: with its `Tactics`
+    /// chance, a technique it can make now (its attack ready, the stamina for it) or a spell that
+    /// would do some good, picked at random. Openers start fights, so a mob already in one never
+    /// picks them.
+    pub fn mob_move(&mut self, attacker: Entity) -> Option<MobMove> {
+        let spells = self
+            .targets
+            .get(&attacker)
+            .map_or_else(Vec::new, |foe| self.mob_spells(attacker, *foe));
         let f = self.fighters.get(attacker).ok()?;
         let chance = f.tactics?.0;
         let (stamina, luck) = (f.vitals.stamina, f.attributes.get(Attribute::Luck));
-        let usable: Vec<String> = f
+        let usable: Vec<MobMove> = f
             .skills
             .0
             .keys()
@@ -523,7 +535,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     )
                     .is_some_and(|s| s.skill == t.with)
             })
-            .cloned()
+            .map(|key| MobMove::Technique(key.clone()))
+            .chain(spells)
             .collect();
         if usable.is_empty() || !self.dice.chance(luck, f64::from(chance) / 100.0) {
             return None;
@@ -623,6 +636,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let (room, a_name, is_player) = (a.in_room.0, name_of(a.player, a.mob), a.player.is_some());
         let chosen = a.auto.and_then(|auto| auto.0.clone());
         let a_numbers = !a.hide_numbers;
+        let blessing = a.conditions.blessing();
         let stamina = a.vitals.stamina;
         let a_attributes = a.attributes.clone();
         let a_skills = a.skills.clone();
@@ -742,7 +756,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let a_aura = self.auras.get(&attacker).copied().unwrap_or_default();
         let a_boosts = boosts(&a_skills, self.defs);
         let attack_rating =
-            attack_rating(&a_attributes, &a_skills, skill, a_aura, &a_boosts) + accuracy;
+            attack_rating(&a_attributes, &a_skills, skill, a_aura, &a_boosts) + accuracy + blessing;
 
         let Ok(d) = self.fighters.get(target) else {
             return died;
@@ -826,6 +840,10 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     + a_boosts.damage_with(&key)
                     + extra;
                 dealt = ((f64::from(force) * blow.multiplier()).round() as i32 - armour).max(0);
+                // A ward takes what it can, told after the blow it stopped.
+                let mut ward = Telling::default();
+                let warded = self.ward_off(target, attacker, dealt, &d_name, &mut ward);
+                dealt -= warded;
                 // Told in the attack's words, with how much of them it took: "Your slash
                 // decimates the rat." A crushing blow ends with a bang.
                 let with = [
@@ -856,7 +874,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     format!("\x1b[31m{theirs}{}\x1b[0m", count(d_numbers)),
                 ));
                 tell.room.push(seen);
-                if dealt == 0 {
+                tell.lines.append(&mut ward.lines);
+                tell.room.append(&mut ward.room);
+                if dealt == 0 && warded == 0 {
                     let line = format!("The blow glances off {d_name}'s armour.");
                     tell.lines.push((attacker, line.clone()));
                     tell.lines
@@ -1026,9 +1046,43 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         died
     }
 
+    /// Let `who`'s ward, if they have one, take what it can of `damage`, and say so. Returns how
+    /// much it took.
+    pub(super) fn ward_off(
+        &mut self,
+        who: Entity,
+        attacker: Entity,
+        damage: i32,
+        name: &str,
+        tell: &mut Telling,
+    ) -> i32 {
+        let Ok(mut f) = self.fighters.get_mut(who) else {
+            return 0;
+        };
+        let taken = f.conditions.absorb(damage);
+        if taken > 0 {
+            let gone = if f.conditions.has(State::Warded(0)) {
+                ""
+            } else {
+                ", and fails"
+            };
+            let count = if f.hide_numbers {
+                String::new()
+            } else {
+                format!(" ({taken})")
+            };
+            tell.lines
+                .push((who, format!("Your ward takes the blow{count}{gone}.")));
+            let seen = format!("{}'s ward takes the blow{gone}.", capitalized(name));
+            tell.lines.push((attacker, seen.clone()));
+            tell.room.push(seen);
+        }
+        taken
+    }
+
     /// Take damage. Returns whether it killed them.
     #[allow(clippy::too_many_arguments)]
-    fn wound(
+    pub(super) fn wound(
         &mut self,
         who: Entity,
         dealt: i32,

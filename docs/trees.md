@@ -103,7 +103,7 @@ Each tradition is a full tree in the same shape as the others, entered through i
 | **Adept** | Body | **Inner Discipline** ✓ | **Killing Hands:** unarmed strikes hit like weapons (the Adept's weapon). **Quickened Reflexes** (passive: initiative and Dodge). **Iron Breath** (passive: Endurance and stamina) | **Iron Body** (passive: natural armour). **Flowing Step:** flee and move with uncanny ease. **Spirit Strike:** Killing Hands that wound spirits and the Awakened | **Perfect Strike:** a single blow that cannot be dodged |
 
 - **Adepts have no spells.** Their magic is turned inward, as **powers** that are ordinary skills, so the Adept tree is all skills, like a weapon tree. Their powers cost Drain like spells, resisted the same way.
-- **First spells,** two per casting tradition, to build alongside: Divine **Mend** (heal by touch) and **Bless** (an ally fights better); Hermetic **Spark** (a bolt of force, at range) and **Ward** (absorbs damage); Shamanic **Beast Speech** (calm and question animals) and **Spirit Grasp** (a spirit holds a foe).
+- **First spells,** two per casting tradition, *built* ([The first spells](magic.md#the-first-spells-built)): Divine **Mend** (heal by touch) and **Bless** (an ally fights better); Hermetic **Spark** (a bolt of force) and **Ward** (absorbs damage); Shamanic **Beast Speech** (calm animals) and **Spirit Grasp** (a spirit holds a foe). Questioning animals, and Spark reaching into the next room, wait for later.
 - **Drain resistance skills** add to the Willpower + tradition attribute that resists Drain, so a practised caster casts more and pays less.
 
 ### Racial
@@ -134,7 +134,7 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 3. **Healing and consumables:** First Aid and bandages, so fighters can patch up without walking to town; herbs come with step 4. *Built:* see [Healing](#healing).
 4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things. *Built:* loot tables, Foraging and Herbalism (see [Gathering](#gathering)), and Tracking, Climbing and Swimming (see [Climbing and swimming](world.md#climbing-and-swimming) and [Tracking](world.md#tracking)). Climbing and Swimming are Athletics skills, taught by the drill sergeant; Tracking is Survival's, taught by the hedge-shaman.
 5. **Seeing and being seen:** Stealth, and Backstab from hiding. *Built:* see [Stealth](#stealth).
-6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions.
+6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions. *Built:* see [Spells](magic.md#spells): Mend and Bless, Spark and Ward, Beast Speech and Spirit Grasp, taught by each tradition's teacher.
 7. **Money and shops,** then Trade and the crafts.
 
 Each step adds its trees' entry skills to the trainers in Riftwatch: the drill sergeant teaches each weapon's basics, and new trainers appear for the rest (the herbalist for Herbalism and First Aid, someone in the Back Alley for Stealth and Thievery). Trainers teach only entry skills; the rest of each tree is [discovered](skills.md#discovery) or learned another way.

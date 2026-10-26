@@ -1,0 +1,36 @@
+// Divine spells: a tradition's spell book. A spell's key is `divine:<id>`, and it's cast through a
+// school skill in the Divine tree; see `src/spells.rs` and docs/magic.md#spells.
+(
+    spells: {
+        "mend": (
+            name: "Mend",
+            description: "Lay hands on someone, or yourself, and pray: wounds close. Heals 2 to 5, and a third of your power (Faith, plus Intuition, plus Magic) on top. In a fight or out of one.",
+            school: "divine:foundation",
+            drain: 3,
+            aim: Ally,
+            effects: [Heal(heal: (2, 5))],
+            text: (
+                hit: (
+                    actor: "You lay your hands on {target} and pray, and the wounds close.",
+                    target: "{actor} lays hands on you and prays, and your wounds close.",
+                    room: "{actor} lays hands on {target} and prays, and the wounds close.",
+                ),
+            ),
+        ),
+        "bless": (
+            name: "Bless",
+            description: "Call your god's favour onto someone, or yourself: for the next five turns of fighting, they attack better by 2.",
+            school: "divine:foundation",
+            drain: 2,
+            aim: Ally,
+            effects: [Bless(attack: 2, rounds: 5)],
+            text: (
+                hit: (
+                    actor: "You trace a holy sign over {target}, and warm light gathers.",
+                    target: "{actor} traces a holy sign over you, and warm light gathers about you.",
+                    room: "{actor} traces a holy sign over {target}, and warm light gathers.",
+                ),
+            ),
+        ),
+    },
+)
