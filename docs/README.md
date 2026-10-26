@@ -47,7 +47,8 @@ Each document below covers one area and can be read on its own. This page is the
 - Per-character aliases.
 - Character creation: race, starting Karma, background (11 past lives, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
 - Trainers: `learn` from mobs who teach, entry skills and first spells only. Skills are free; spells cost money, but for each tradition's starter. The drill sergeant teaches every weapon's basics; a teacher for each magic tradition Awakens those with latent talent. Higher skills are discovered, very rarely, by using their tree, and a tough fight makes gains and discoveries likelier.
-- Attributes, starting Karma, `raise`, `score`, `describe`, and the Luck-aware `Dice` service.
+- Attributes, starting Karma, `raise` (a point costs the rating it reaches), `score`, `describe`, and the Luck-aware `Dice` service.
+- Unlocking skills with Karma: `karma` lists the priced skills in your trees, and `karma <skill>` learns one whose requirements you meet.
 - Skills: trees as data, use-based progression with practice and cooldowns, active skills (`use`, `pick` for Lockpicking) and passive ones (Endurance), starting skills, uncapped levels with a soft cap set by character level, `skills`.
 - Experience and character level: earned by victories (worth the risk overcome) and discoveries; each level brings 2 Karma. Contests are opposed rolls by the ratio rule, steep (k = 3), with a margin.
 - World events: saved world flags, and events in zone files that react to mobs entering zones and dying. A rat breakout raises the Rat King, whose aura toughens every sewer rat until he dies.
@@ -98,9 +99,9 @@ Designed, waiting on other work:
 | Death | A player's corpse keeps everything they carried, where they fell, for 30 minutes (surviving restarts); they wake at the Wayside Shrine, hurt. No PvP yet |
 | Combat | Made entirely of skills. Everyone starts with a basic attack skill; mobs fight with skills too. Each round a fighter's auto-attack fires on its own: the most basic attack they know, unless they've chosen another. Other skills are used by command |
 | Starting skills | Granted by race and background, plus universal skills (Brawling, Dodge, Endurance). Racial abilities are skills that require the race. Backgrounds are past lives: everyday skills and tools, never fighting or magic, which everyone learns from trainers. Backgrounds can require attributes or a race |
-| Races | The eight Earthdawn races: Dwarf, Elf, Human, Obsidiman, Ork, Troll, T'skrang, Windling. Earthdawn-style attribute shifts that total +3 for every race; humans get +3 Karma instead |
+| Races | The eight Earthdawn races: Dwarf, Elf, Human, Obsidiman, Ork, Troll, T'skrang, Windling. Earthdawn-style attribute shifts that total +3 for every race; humans get 12 Karma instead |
 | Hidden skills | Learned only by epiphany when stringent conditions are met (skills, titles, the right place at the right moment), with an optional trigger |
-| Attributes | Ten, uncapped, Shadowrun and Earthdawn flavoured. Base 3 (Luck 1, Magic 0), shifted by race, with 10 Karma to spend, which can go on Magic as latent talent |
+| Attributes | Ten, uncapped, Shadowrun and Earthdawn flavoured. Base 3 (Luck 1, Magic 0), shifted by race, with 20 Karma to spend, which can go on Magic as latent talent. A point costs the rating it reaches. Karma also unlocks priced skills in a character's trees |
 | Formulas | Contests are opposed rolls that compare ratios, never differences, because ratings are uncapped; steep (k = 3), always rolled, with a margin |
 | Progression | Skills level by use, uncapped but ever slower, with a soft cap of 10 + 2 × character level. Character level comes from experience (victories by risk, discoveries, quests) and brings 2 Karma a level |
 | Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |

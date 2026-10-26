@@ -28,6 +28,7 @@
             kind: Technique((with: "swordplay:basics", cost: Stamina(1), accuracy: 4,
                 effects: [Expose, Pierce(1)])),
             requires: Skill("swordplay:basics", 15),
+            karma: 8,
             text: (
                 hit: (
                     actor: "Your lunge {harm} {target}.",
@@ -47,6 +48,7 @@
             description: "When you dodge an attack with a sword in hand, you strike back at once, for 1 stamina.",
             kind: Passive(counter: "swordplay:basics"),
             requires: Skill("swordplay:basics", 15),
+            karma: 16,
             text: (
                 hit: (
                     actor: "You riposte!",

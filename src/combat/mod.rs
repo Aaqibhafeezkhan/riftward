@@ -1235,6 +1235,7 @@ mod tests {
             rarity: None,
             difficulty: 1.0,
             requires: None,
+            karma: None,
         };
         let skill = Skill {
             key: key.into(),

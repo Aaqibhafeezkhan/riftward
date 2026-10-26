@@ -91,6 +91,12 @@ impl Plugin for SkillsPlugin {
                 use_cmd,
             )
             .add_command(
+                CommandSpec::new("karma", Category::Character)
+                    .usage("karma [<skill>]")
+                    .summary("see the skills in your trees Karma can unlock, or spend Karma on one"),
+                karma_cmd,
+            )
+            .add_command(
                 CommandSpec::new("grantskill", Category::Admin)
                     .usage("grantskill <player> <tree:skill> [<level>]")
                     .summary("teach an online player a skill, or set its level, for testing")
@@ -148,6 +154,11 @@ pub struct SkillDef {
     /// Who may learn it. Checked by teaching later; starting skills are granted regardless.
     #[serde(default)]
     pub requires: Option<Condition>,
+    /// Karma to unlock it without a teacher (`karma <skill>`), for a character who already has a
+    /// skill in its tree and meets its requirements. Without one, Karma can't unlock it: entry
+    /// skills, which trainers teach, and the world's hidden skills.
+    #[serde(default)]
+    pub karma: Option<u32>,
 }
 
 impl SkillDef {
@@ -156,6 +167,9 @@ impl SkillDef {
     pub fn check(&self) -> Result<(), String> {
         if self.description.trim().is_empty() {
             return Err("needs a description".into());
+        }
+        if self.karma.is_some() && self.requires.is_none() {
+            return Err("has a Karma cost but no requirements: entry skills are taught".into());
         }
         let (target, miss) = match &self.kind {
             // Struck at someone, so their view and a miss are needed.
@@ -625,6 +639,8 @@ pub struct SkillState {
     pub ready_at: f64,
     /// Trigger amounts towards a passive skill's next use, like stamina spent. Not saved.
     pub pending: f64,
+    /// Karma paid to unlock it, if it was unlocked.
+    pub karma_paid: u32,
 }
 
 impl SkillState {
@@ -637,6 +653,7 @@ impl SkillState {
             learned_via: learned_via.into(),
             ready_at: 0.0,
             pending: 0.0,
+            karma_paid: 0,
         }
     }
 }
@@ -1057,6 +1074,136 @@ fn practise_passives(
 }
 
 /// `skills`: what you know, by tree.
+/// The skills Karma could unlock for a character who knows `known`: the others in the trees they
+/// have, not yet known, that have a Karma cost. Requirements aren't checked here, so `karma` can
+/// show what's still out of reach. Cheapest first, within each tree.
+pub fn unlockable<'a>(defs: &'a SkillDefs, known: &Skills) -> Vec<&'a Skill> {
+    let trees: Vec<&String> = known
+        .0
+        .keys()
+        .filter_map(|key| defs.skills.get(key).map(|s| &s.tree))
+        .collect();
+    let mut found: Vec<&Skill> = defs
+        .skills
+        .values()
+        .filter(|s| s.def.karma.is_some())
+        .filter(|s| trees.contains(&&s.tree) && !known.0.contains_key(&s.key))
+        .collect();
+    found.sort_by_key(|s| (s.tree.clone(), s.def.karma, s.def.name.clone()));
+    found
+}
+
+/// A skill's requirements as players read them: "Swordplay 15".
+fn requirement_text(defs: &SkillDefs, condition: &Condition) -> String {
+    match condition {
+        Condition::Skill(key, level) => {
+            let name = defs
+                .skills
+                .get(key)
+                .map_or(key.as_str(), |s| s.def.name.as_str());
+            format!("{name} {level}")
+        }
+        other => other.describe(&|id| id.to_string()),
+    }
+}
+
+/// `karma [<skill>]`: list what Karma could unlock in your trees, or unlock one. It's learned at
+/// level 0, as if discovered, and the Karma is gone for good.
+fn karma_cmd(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    defs: Res<SkillDefs>,
+    mut sheets: Query<(&mut Skills, &mut Attributes)>,
+    db: Res<Database>,
+) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let Ok((mut skills, mut attributes)) = sheets.get_mut(inv.entity) else {
+        return;
+    };
+    let facts = Facts {
+        attributes: &attributes,
+        race: &actor.race,
+        skills: Some(&skills),
+    };
+    let unmet = |skill: &Skill| {
+        skill
+            .def
+            .requires
+            .as_ref()
+            .filter(|c| !c.met(&facts))
+            .map(|c| requirement_text(&defs, c))
+    };
+    let karma = attributes.karma_unspent();
+    let options = unlockable(&defs, &skills);
+    let wanted = inv.args.trim().to_lowercase();
+    let text = if wanted.is_empty() {
+        if options.is_empty() {
+            "There's nothing in your trees that Karma can unlock.".to_string()
+        } else {
+            let mut text = format!("Karma can unlock, in your trees (you have {karma} Karma):");
+            let mut tree = None;
+            for skill in &options {
+                if tree != Some(&skill.tree) {
+                    let name = defs.trees.get(&skill.tree).unwrap_or(&skill.tree);
+                    text += &format!("\r\n  {name}:");
+                    tree = Some(&skill.tree);
+                }
+                let cost = skill.def.karma.unwrap_or_default();
+                let needs = unmet(skill)
+                    .map(|req| format!(", requires {req}"))
+                    .unwrap_or_default();
+                text += &format!("\r\n    {} ({cost} Karma{needs})", skill.def.name);
+            }
+            text + "\r\nType 'karma <skill>' to spend the Karma."
+        }
+    } else {
+        let found = options.iter().find(|s| {
+            let name = s.def.name.to_lowercase();
+            s.key == wanted
+                || name.starts_with(&wanted)
+                || name.split_whitespace().any(|w| w.starts_with(&wanted))
+        });
+        match found {
+            None => format!(
+                "Karma can't unlock '{}' for you. Type 'karma' to see what it can.",
+                inv.args.trim()
+            ),
+            Some(skill) => {
+                let cost = skill.def.karma.unwrap_or_default();
+                if let Some(req) = unmet(skill) {
+                    format!("{} requires {req} first.", skill.def.name)
+                } else if !attributes.spend_on_skill(cost as i32) {
+                    format!(
+                        "Unlocking {} costs {cost} Karma, and you have {karma}.",
+                        skill.def.name
+                    )
+                } else {
+                    learn(&mut skills, &skill.key, "Karma", actor.character_id, &db);
+                    if let Some(state) = skills.0.get_mut(&skill.key) {
+                        state.karma_paid = cost;
+                        if let Err(err) = db.save_skill(actor.character_id, &skill.key, state) {
+                            error!(
+                                "failed to save {}'s Karma for {}: {err}",
+                                actor.name, skill.key
+                            );
+                        }
+                    }
+                    format!(
+                        "You spend {cost} Karma, and {} falls into place, as if you'd always known \
+                         it.\r\n\x1b[1;32mYou have learned {}.\x1b[0m ({} Karma left.)",
+                        skill.def.name,
+                        skill.def.name,
+                        attributes.karma_unspent()
+                    )
+                }
+            }
+        }
+    };
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut players);
+}
+
 fn skills_cmd(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
@@ -1527,6 +1674,7 @@ mod tests {
                 rarity: None,
                 difficulty: 1.0,
                 requires: None,
+                karma: None,
             },
         };
         let defs = SkillDefs {
@@ -1563,9 +1711,69 @@ mod tests {
                 rarity: None,
                 difficulty: 1.0,
                 requires,
+                karma: None,
             },
         };
         (key.into(), skill)
+    }
+
+    #[test]
+    fn karma_unlocks_priced_skills_in_trees_you_have() {
+        let at = |level| Some(Condition::Skill("axes:basics".into(), level));
+        let priced = |key: &str, karma: u32| {
+            let (key, mut skill) = tree_skill(key, at(15));
+            skill.def.karma = Some(karma);
+            (key, skill)
+        };
+        let defs = SkillDefs {
+            skills: HashMap::from([
+                tree_skill("axes:basics", None),
+                priced("axes:cleave", 12),
+                priced("axes:hew", 8),
+                // A secret: no price, so Karma can't reach it.
+                tree_skill("axes:secret", at(15)),
+                tree_skill("swordplay:basics", None),
+                priced("swordplay:lunge", 8),
+            ]),
+            trees: HashMap::new(),
+        };
+        let mut known = Skills::default();
+        assert!(
+            unlockable(&defs, &known).is_empty(),
+            "no trees, nothing to unlock"
+        );
+        known
+            .0
+            .insert("axes:basics".into(), SkillState::new("Taught"));
+        let keys = |known: &Skills| -> Vec<String> {
+            unlockable(&defs, known)
+                .iter()
+                .map(|s| s.key.clone())
+                .collect()
+        };
+        // Only the axe tree's priced skills, cheapest first; not Swordplay's, which they don't have.
+        assert_eq!(keys(&known), ["axes:hew", "axes:cleave"]);
+        known.0.insert("axes:hew".into(), SkillState::new("Karma"));
+        assert_eq!(keys(&known), ["axes:cleave"]);
+        let facts = Facts {
+            attributes: &Attributes::default(),
+            race: "human",
+            skills: Some(&known),
+        };
+        let cleave = &defs.skills["axes:cleave"];
+        assert!(
+            !cleave.def.requires.as_ref().unwrap().met(&facts),
+            "still needs Axes 15"
+        );
+    }
+
+    #[test]
+    fn a_karma_price_is_only_for_skills_with_requirements() {
+        let (_, mut entry) = tree_skill("axes:basics", None);
+        entry.def.description = "Axes.".into();
+        assert_eq!(entry.def.check(), Ok(()));
+        entry.def.karma = Some(5);
+        assert!(entry.def.check().unwrap_err().contains("entry skills"));
     }
 
     #[test]

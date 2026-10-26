@@ -27,6 +27,7 @@
             description: "A low sweep that takes a foe off their feet: they lose their next turn, and defend at half until then.",
             kind: Technique((with: "staves:basics", cost: Stamina(3), effects: [KnockDown])),
             requires: Skill("staves:basics", 15),
+            karma: 10,
             text: (
                 hit: (
                     actor: "Your sweep {harm} {target}.",
@@ -46,6 +47,7 @@
             kind: Technique((with: "staves:basics", cost: Stamina(1), strike: None,
                 effects: [Guard(defence: 4, rounds: 2)])),
             requires: Skill("staves:basics", 15),
+            karma: 6,
             text: (
                 hit: (
                     actor: "You take a guarding stance.",

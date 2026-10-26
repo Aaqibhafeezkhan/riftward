@@ -25,7 +25,18 @@ Races and backgrounds are data, and a builder may remove one that characters alr
 
 ## Races
 
-The eight races of Earthdawn, in `assets/races.ron`. Each shifts the base attributes, Earthdawn-style, and grants racial skills once skills exist. Every race's shifts plus its extra Karma total **+3**, so no race starts ahead overall; humans get their +3 as Karma to spend as they like instead.
+The eight races of Earthdawn, in `assets/races.ron`. Each shifts the base attributes, Earthdawn-style, and grants racial skills once skills exist. Every race's shifts net **+3** points; humans get no shifts and **12 Karma** to spend as they like instead, and **Versatility**, which makes their skills grow faster. A test checks every race keeps to this.
+
+Since a point costs the rating it reaches, shifts aren't all worth the same: a third point of Agility (5 to 6) is worth 6 Karma, while a lost point low down (3 to 2) saves only 3. At real prices the races' shifts are worth:
+
+| Race | Shifts worth |
+| --- | --- |
+| Dwarf, Elf, Ork, T'skrang | 14 Karma |
+| Troll, Windling | 18 Karma |
+| Obsidiman | 22 Karma |
+| Human | none: 12 Karma instead, and Versatility |
+
+**This is left uneven on purpose for now.** A race is a whole package (shifts, racial skills and any extra Karma), and racial skills aren't built yet: a Windling's Flight and Astral Sight, an Ork's Gahad, a human's Versatility. Each race gets balanced once against its whole package when they are, so a big shift like the Obsidiman's can be paid for with fewer or smaller racial skills. Humans don't open trees without a trainer: Versatility, learning faster, is their edge (2026-10-26).
 
 Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to be weak as well as strong. No shift takes an attribute below 1.
 
@@ -33,7 +44,7 @@ Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to b
 | --- | --- | --- | --- | --- |
 | Dwarf | Stout, stubborn crafters and miners | +2 Body, +1 Strength, +1 Willpower, −1 Reaction | Body 5, Reaction 2 | **Heat Sight** (passive): see warm bodies in darkness |
 | Elf | Graceful, long-lived, close to the living world | +2 Agility, +1 Intuition, +1 Charisma, −1 Body | Agility 5, Body 2 | **Low-Light Vision** (passive) |
-| Human | Adaptable, found everywhere | +3 Karma | All 3, 13 Karma | **Versatility** (passive): practice builds faster |
+| Human | Adaptable, found everywhere | +12 Karma | All 3, 32 Karma | **Versatility** (passive): practice builds faster |
 | Obsidiman | Living stone, huge, patient and slow | +3 Body, +3 Strength, −1 Agility, −2 Reaction | Body 6, Strength 6, Reaction 1 | **Stone Skin** (passive): natural armour |
 | Ork | Fierce, hardy, quick to anger | +2 Strength, +1 Body, +1 Reaction, −1 Charisma | Strength 5, Charisma 2 | **Low-Light Vision** (passive); **Gahad** (active): a burst of rage |
 | Troll | Towering, proud, warrior culture | +3 Strength, +2 Body, −1 Agility, −1 Logic | Strength 6, Body 5 | **Heat Sight** (passive) |

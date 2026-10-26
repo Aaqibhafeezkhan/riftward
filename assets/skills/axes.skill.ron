@@ -27,6 +27,7 @@
             description: "A great swing that carries on into a second foe fighting you, even when it fells the first.",
             kind: Technique((with: "axes:basics", cost: Stamina(3), effects: [Cleave])),
             requires: Skill("axes:basics", 15),
+            karma: 12,
             text: (
                 hit: (
                     actor: "Your cleave {harm} {target}.",
@@ -45,6 +46,7 @@
             description: "A huge, slow chop: 3 more damage, but harder to land.",
             kind: Technique((with: "axes:basics", cost: Stamina(2), damage: 3, accuracy: -2)),
             requires: Skill("axes:basics", 15),
+            karma: 8,
             text: (
                 hit: (
                     actor: "Your hewing chop {harm} {target}.",

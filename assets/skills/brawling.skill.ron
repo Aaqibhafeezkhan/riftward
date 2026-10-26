@@ -26,6 +26,7 @@
             description: "A swift kick that lands harder than a punch, for a little stamina.",
             kind: Technique((with: "brawling:basics", cost: Stamina(1), damage: 2)),
             requires: Skill("brawling:basics", 15),
+            karma: 6,
             text: (
                 hit: (
                     actor: "Your kick {harm} {target}.",
@@ -45,6 +46,7 @@
             kind: Technique((with: "brawling:basics", cost: Stamina(2), strike: Harmless,
                 effects: [Hold(rounds: 2)])),
             requires: Skill("brawling:basics", 15),
+            karma: 10,
             text: (
                 hit: (
                     actor: "You grab {target} and hold on.",

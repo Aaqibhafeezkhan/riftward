@@ -96,6 +96,7 @@ const SCHEMA: &str = "
         next_gain_at INTEGER NOT NULL,     -- unix seconds
         learned_via  TEXT NOT NULL,
         learned_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+        karma_paid   INTEGER NOT NULL DEFAULT 0, -- Karma spent unlocking it
         PRIMARY KEY (character_id, skill)
     );
 
@@ -311,6 +312,11 @@ impl Database {
             ("characters", "experience", "INTEGER"),
             ("characters", "hide_numbers", "INTEGER NOT NULL DEFAULT 0"),
             ("characters", "coins", "INTEGER NOT NULL DEFAULT 0"),
+            (
+                "character_skills",
+                "karma_paid",
+                "INTEGER NOT NULL DEFAULT 0",
+            ),
         ] {
             let exists: bool = conn.query_row(
                 &format!(
@@ -739,7 +745,7 @@ impl Database {
     pub fn skills(&self, character_id: i64) -> DbResult<Vec<(String, SkillState)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT skill, level, practice, last_used, next_gain_at, learned_via
+            "SELECT skill, level, practice, last_used, next_gain_at, learned_via, karma_paid
              FROM character_skills WHERE character_id = ?1",
         )?;
         let rows = stmt.query_map([character_id], |row| {
@@ -748,6 +754,7 @@ impl Database {
             state.practice = row.get(2)?;
             state.last_used = row.get(3)?;
             state.next_gain_at = row.get(4)?;
+            state.karma_paid = row.get(6)?;
             Ok((row.get(0)?, state))
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -756,11 +763,13 @@ impl Database {
     pub fn save_skill(&self, character_id: i64, skill: &str, state: &SkillState) -> DbResult<()> {
         self.conn().execute(
             "INSERT INTO character_skills
-                 (character_id, skill, level, practice, last_used, next_gain_at, learned_via)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 (character_id, skill, level, practice, last_used, next_gain_at, learned_via,
+                  karma_paid)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT (character_id, skill) DO UPDATE SET
                  level = excluded.level, practice = excluded.practice,
-                 last_used = excluded.last_used, next_gain_at = excluded.next_gain_at",
+                 last_used = excluded.last_used, next_gain_at = excluded.next_gain_at,
+                 karma_paid = excluded.karma_paid",
             params![
                 character_id,
                 skill,
@@ -768,7 +777,8 @@ impl Database {
                 state.practice,
                 state.last_used,
                 state.next_gain_at,
-                state.learned_via
+                state.learned_via,
+                state.karma_paid
             ],
         )?;
         Ok(())

@@ -28,6 +28,7 @@
             kind: Technique((with: "knives:basics", cost: Stamina(2), damage: 4, opener: true,
                 effects: [Pierce(2)])),
             requires: Skill("knives:basics", 15),
+            karma: 12,
             text: (
                 hit: (
                     actor: "Your knife in the back {harm} {target}.",
@@ -47,6 +48,7 @@
             kind: Technique((with: "knives:basics", cost: Stamina(2),
                 effects: [Bleed(damage: 1, rounds: 3)])),
             requires: Skill("knives:basics", 15),
+            karma: 8,
             text: (
                 hit: (
                     actor: "Your vein-opening slash {harm} {target}.",

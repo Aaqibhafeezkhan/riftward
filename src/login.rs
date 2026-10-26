@@ -889,6 +889,7 @@ fn enter_game(
         experience
     });
     attributes.set_experience(experience);
+    attributes.set_karma_on_skills(skills.0.values().map(|s| s.karma_paid as i32).sum());
     let karma = attributes.karma_unspent();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

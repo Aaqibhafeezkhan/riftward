@@ -170,12 +170,23 @@ Every skill can be taught, and every route checks the same thing: the learner mu
 | Route | Available for | Who or what | Notes |
 | --- | --- | --- | --- |
 | Mob trainer | Entry skills | Trainers placed in rooms, each with a fixed list (`teaches` on the mob template) | **Trainers teach only each tree's entry skill,** the skill with no requirement inside its tree. *Built:* `learn` lists a trainer's lessons and `learn <skill>` takes one, checking the skill's `requires`. Free until there's money. The drill sergeant teaches every weapon's basics and Toughness; each magic tradition's teacher Awakens students with Magic 1 |
-| Discovery | Skills above the entry tier | Using any skill in the same tree | Very rare, and the only route that needs no one else. See [Discovery](#discovery). *Built* |
+| Discovery | Skills above the entry tier | Using any skill in the same tree | Very rare, and free. See [Discovery](#discovery). *Built* |
+| Karma | Skills above the entry tier with a Karma price | `karma <skill>`, in a tree the character already has | The sure route that needs no one else. See [Unlocking with Karma](#unlocking-with-karma). *Built* |
 | Remote trainer | Higher tiers | A trainer out in the world who teaches only as a quest reward | Planned, with [quests](quests.md): finding the old axeman is easy, earning his lesson is not |
 | Player teacher | All skills | A player at the skill's `teach_level`, or at mastery for `Loot` skills | `teach <player> <skill>`, then the student types `accept`; both in the same room |
 | Loot | Mostly `source: Loot` | A scroll or tome item; using it teaches the skill and consumes it | Tradeable, so it feeds an economy |
 | Epiphany | Hidden skills | The character meets the unlock conditions, and the trigger if one is set | See [Hidden skills](#hidden-skills) |
 | Starting | Universal, racial and background skills | Granted at character creation | Backgrounds give everyday skills only, never fighting or magic; see [Races and backgrounds](characters.md) |
+
+### Unlocking with Karma
+
+Karma can force a discovery. *Built.*
+
+- **Each skill names its own price** (`karma: 12` in its `.skill.ron`), so two skills opening at the same level can cost differently: Swordplay's Lunge costs 8 and Riposte 16, both at Swordplay 15. A skill without a price can't be unlocked this way: entry skills, which trainers teach (a price on one is an error at load), and the world's hidden skills.
+- **Only in trees the character has:** they must know a skill in its tree. Karma deepens a build; it doesn't open new trees.
+- **Requirements still apply.** Karma can bring Cleave at Axes 15 sooner than luck would, but not at Axes 5.
+- **`karma`** lists every priced skill in the character's trees, with its cost and any requirement still unmet; **`karma <skill>`** spends the Karma and learns it at level 0 (`learned_via` `Karma`). The Karma is gone for good, and saved with the skill.
+- First prices: the journeyman techniques cost 6 to 16 (Kick 6, Lunge 8, Cleave 12, Riposte 16), and the Adept's Killing Hands 10 and Quickened Reflexes 12.
 
 ### Discovery
 

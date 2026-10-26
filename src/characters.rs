@@ -219,7 +219,7 @@ pub fn karma_sheet(race: &RaceDef, attributes: &Attributes) -> String {
         attributes.get(Attribute::Magic)
     );
     text += &format!(
-        "Karma: {} to spend. Raising costs 1 a point, 2 from 5, 3 from 10.\r\n\
+        "Karma: {} to spend. A point costs the rating it reaches: 3 to 4 costs 4.\r\n\
          Type 'raise <attribute>', 'lower <attribute>', 'done' when finished, or 'back' to choose \
          another race.\r\n> ",
         attributes.karma_unspent()
@@ -298,6 +298,12 @@ pub fn article(word: &str) -> &'static str {
 mod tests {
     use super::*;
 
+    /// What one point of a racial shift counts as in Karma, for a race without shifts: a raise
+    /// from the base 3 to 4.
+    const KARMA_PER_SHIFT: i32 = 4;
+    /// What every race's shifts and extra Karma are worth together.
+    const RACE_BALANCE: i32 = 12;
+
     fn read<T: for<'de> Deserialize<'de>>(file: &str) -> Vec<T> {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("assets")
@@ -320,11 +326,13 @@ mod tests {
             problems.push("duplicate race ids".to_string());
         }
         for race in &races.0 {
-            // Each race's shifts plus its extra Karma come to the same total.
-            let total: i32 = race.attributes.values().sum::<i32>() + race.karma;
-            if total != 3 {
+            // Each race's shifts net +3 points; a race without shifts gets 12 Karma instead (4 a
+            // point, a first raise). Big shifts are worth more than that at real prices (see
+            // docs/characters.md#races), which racial skills will balance once they're built.
+            let total: i32 = race.attributes.values().sum::<i32>() * KARMA_PER_SHIFT + race.karma;
+            if total != RACE_BALANCE {
                 problems.push(format!(
-                    "{}: shifts and Karma total {total}, not 3",
+                    "{}: shifts and Karma are worth {total} Karma, not {RACE_BALANCE}",
                     race.id
                 ));
             }

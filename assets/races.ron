@@ -1,6 +1,7 @@
 // Races, in the order the creation menu shows them. Each shifts the base attributes (3, Luck 1,
-// Magic 0) and grants racial skills once skills exist. Every race's shifts plus its extra Karma
-// total +3, so none starts ahead overall.
+// Magic 0) and grants racial skills once skills exist. Every race's shifts net +3 points;
+// humans get no shifts and 12 Karma instead, plus Versatility. What shifts are really worth in
+// Karma differs by race (docs/characters.md#races), to be balanced with racial skills.
 [
     (
         id: "dwarf",
@@ -20,7 +21,7 @@
         id: "human",
         name: "Human",
         summary: "Adaptable and everywhere; extra Karma to spend as you like.",
-        karma: 3,
+        karma: 12,
         skills: ["racial:versatility"],
     ),
     (

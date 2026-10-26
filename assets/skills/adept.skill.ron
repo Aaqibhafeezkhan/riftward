@@ -28,6 +28,7 @@
             attribute: Agility,
             kind: Attack(damage: (2, 4)),
             requires: Skill("adept:foundation", 0),
+            karma: 10,
             text: (
                 hit: (
                     actor: "Your open-handed strike {harm} {target}.",
@@ -50,6 +51,7 @@
                 bonuses: [(stat: Initiative, per: 5, base: 1), (stat: Defence, per: 10)],
             ),
             requires: Skill("adept:foundation", 5),
+            karma: 12,
         ),
     },
 )

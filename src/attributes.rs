@@ -1,10 +1,12 @@
-//! Character attributes and the Karma spent to raise them.
+//! Character attributes, and the Karma spent on them and on unlocking skills.
 //!
 //! Attributes are uncapped. Every character starts from the base ratings (3, Luck 1, Magic 0),
-//! shifted by their race, with `STARTING_KARMA` to spend (humans get more). Magic can be raised like
-//! anything else, but it stays latent (it does nothing) until the character knows a casting skill.
-//! Karma spent is not stored: it is worked out from the current ratings and the starting ones, so
-//! it can never drift out of sync with them.
+//! shifted by their race, with `STARTING_KARMA` to spend (humans get more). Raising one costs the
+//! rating it's raised to: 3 to 4 costs 4 Karma, 4 to 5 costs 5. Magic can be raised like anything
+//! else, but it stays latent (it does nothing) until the character knows a casting skill. Karma
+//! spent on attributes is not stored: it is worked out from the current ratings and the starting
+//! ones, so it can never drift out of sync with them. Karma spent unlocking skills is kept with
+//! each skill (see `skills::karma_cmd`) and totalled here at login.
 //!
 //! Karma is earned by character level, which comes from experience: deeds like victories and
 //! discoveries, not skill levels (see `docs/progression.md`).
@@ -15,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::db::Database;
 
 /// Karma every character starts with, to spend on attributes.
-pub const STARTING_KARMA: i32 = 10;
+pub const STARTING_KARMA: i32 = 20;
 /// Karma each character level earns.
 pub const KARMA_PER_LEVEL: i32 = 2;
 /// Experience for the first character level; each level after costs `LEVEL_GROWTH` times more.
@@ -119,9 +121,9 @@ impl Attribute {
     }
 }
 
-/// Karma it costs to raise an attribute from `rating` to `rating + 1`.
+/// Karma it costs to raise an attribute from `rating` to `rating + 1`: the new rating.
 pub fn raise_cost(rating: i32) -> i32 {
-    1 + rating.max(0) / 5
+    (rating + 1).max(1)
 }
 
 /// A character's attribute ratings, where they started, and the Karma they started with. Lives on
@@ -131,6 +133,8 @@ pub struct Attributes {
     ratings: [i32; 10],
     start: [i32; 10],
     karma: i32,
+    /// Karma spent unlocking skills.
+    on_skills: i32,
     /// Experience, from deeds; it sets the character's level and so the Karma they've earned.
     experience: u64,
 }
@@ -149,6 +153,7 @@ impl Attributes {
             ratings: start,
             start,
             karma,
+            on_skills: 0,
             experience: 0,
         }
     }
@@ -185,16 +190,32 @@ impl Attributes {
             .collect()
     }
 
-    /// Total Karma spent to reach the current ratings from the starting ones.
+    /// Karma spent unlocking skills, as saved with them.
+    pub fn set_karma_on_skills(&mut self, karma: i32) {
+        self.on_skills = karma;
+    }
+
+    /// Spend `karma` unlocking a skill, if there's that much. Returns whether there was.
+    pub fn spend_on_skill(&mut self, karma: i32) -> bool {
+        if karma > self.karma_unspent() {
+            return false;
+        }
+        self.on_skills += karma;
+        true
+    }
+
+    /// Total Karma spent: on attributes, to reach the current ratings from the starting ones, and
+    /// on unlocking skills.
     pub fn karma_spent(&self) -> i32 {
-        Attribute::ALL
+        let on_attributes: i32 = Attribute::ALL
             .into_iter()
             .map(|attribute| {
                 (self.start(attribute)..self.get(attribute))
                     .map(raise_cost)
                     .sum::<i32>()
             })
-            .sum()
+            .sum();
+        on_attributes + self.on_skills
     }
 
     /// Karma available to spend: starting and earned Karma, less what's been spent.
@@ -405,11 +426,9 @@ mod tests {
     }
 
     #[test]
-    fn cost_rises_every_five_ratings() {
-        assert_eq!((1..=4).map(raise_cost).collect::<Vec<_>>(), [1, 1, 1, 1]);
-        assert_eq!(raise_cost(5), 2);
-        assert_eq!(raise_cost(10), 3);
-        assert_eq!(raise_cost(19), 4);
+    fn a_raise_costs_the_rating_it_reaches() {
+        assert_eq!((3..=6).map(raise_cost).collect::<Vec<_>>(), [4, 5, 6, 7]);
+        assert_eq!(raise_cost(0), 1, "latent Magic is cheap");
     }
 
     #[test]
@@ -418,13 +437,18 @@ mod tests {
         assert_eq!(attributes.karma_spent(), 0);
         assert_eq!(attributes.karma_unspent(), STARTING_KARMA);
 
-        attributes.set(Attribute::Agility, 5); // 3 -> 5: two raises at 1 each
-        assert_eq!(attributes.karma_spent(), 2);
-        attributes.set(Attribute::Agility, 7); // 5 -> 7: two more at 2 each
-        assert_eq!(attributes.karma_spent(), 6);
+        attributes.set(Attribute::Agility, 5); // 3 -> 5: 4 then 5
+        assert_eq!(attributes.karma_spent(), 9);
+        attributes.set(Attribute::Agility, 7); // 5 -> 7: 6 then 7
+        assert_eq!(attributes.karma_spent(), 22);
 
-        attributes.set(Attribute::Magic, 2); // Magic starts at 0: two raises at 1 each
-        assert_eq!(attributes.karma_spent(), 8);
+        attributes.set(Attribute::Magic, 2); // Magic starts at 0: 1 then 2
+        assert_eq!(attributes.karma_spent(), 25);
+        // Unlocking a skill counts too, and needs the Karma to be there.
+        attributes.set_experience(experience_for(10));
+        assert!(attributes.spend_on_skill(10));
+        assert_eq!(attributes.karma_spent(), 35);
+        assert!(!attributes.spend_on_skill(1000));
     }
 
     #[test]
@@ -436,8 +460,8 @@ mod tests {
         };
         let mut troll = Attributes::starting(start, STARTING_KARMA);
         assert_eq!(troll.karma_spent(), 0);
-        assert_eq!(troll.raise(Attribute::Strength), Ok(2));
-        assert_eq!(troll.karma_unspent(), STARTING_KARMA - 2);
+        assert_eq!(troll.raise(Attribute::Strength), Ok(7));
+        assert_eq!(troll.karma_unspent(), STARTING_KARMA - 7);
         assert!(troll.lower(Attribute::Strength).is_ok());
         assert!(
             troll.lower(Attribute::Strength).is_err(),
@@ -445,13 +469,13 @@ mod tests {
         );
         // Humans start with more Karma.
         assert_eq!(
-            Attributes::starting(Attribute::base_rating, 13).karma_unspent(),
-            13
+            Attributes::starting(Attribute::base_rating, 32).karma_unspent(),
+            32
         );
         // You can't spend Karma you don't have.
-        let mut broke = Attributes::starting(Attribute::base_rating, 1);
-        assert_eq!(broke.raise(Attribute::Body), Ok(1));
-        assert!(broke.raise(Attribute::Body).is_err());
+        let mut broke = Attributes::starting(Attribute::base_rating, 6);
+        assert_eq!(broke.raise(Attribute::Body), Ok(4));
+        assert!(broke.raise(Attribute::Body).is_err(), "5 more for Body 5");
     }
 
     #[test]

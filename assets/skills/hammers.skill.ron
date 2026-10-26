@@ -27,6 +27,7 @@
             description: "A heavy slam that leaves a foe reeling: they lose their next turn.",
             kind: Technique((with: "hammers:basics", cost: Stamina(4), effects: [Stagger])),
             requires: Skill("hammers:basics", 15),
+            karma: 12,
             text: (
                 hit: (
                     actor: "Your slam {harm} {target}.",
@@ -46,6 +47,7 @@
             kind: Technique((with: "hammers:basics", cost: Stamina(2), damage: 1,
                 effects: [IgnoreArmour])),
             requires: Skill("hammers:basics", 15),
+            karma: 8,
             text: (
                 hit: (
                     actor: "Your hammer blow {harm} {target}.",
