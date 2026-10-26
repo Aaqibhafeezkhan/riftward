@@ -129,8 +129,13 @@ pub enum Resist {
 /// What a spell does. Amounts rolled get a third of the spell's power on top.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum SpellEffect {
-    /// Damage, landing harder the more decisively the spell won. Armour takes its share.
-    Harm { damage: (u32, u32) },
+    /// Damage of a type (`assets/damage_types.ron`), landing harder the more decisively the spell
+    /// won. Armour takes its share only of what armour stops; resistances count.
+    Harm {
+        damage: (u32, u32),
+        #[serde(rename = "type", default = "crate::world::physical")]
+        damage_type: String,
+    },
     /// Health back, up to the most.
     Heal { heal: (u32, u32) },
     /// Attacks better by `attack`, for as long as it `lasts`.
@@ -725,6 +730,14 @@ mod tests {
                 .from_bytes(&std::fs::read(&path).unwrap())
                 .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
             for (id, spell) in &book.spells {
+                for effect in &spell.effects {
+                    if let SpellEffect::Harm { damage_type, .. } = effect {
+                        assert!(
+                            crate::world::damage_types().contains_key(damage_type),
+                            "{id}: no damage type '{damage_type}'"
+                        );
+                    }
+                }
                 // Every condition it puts on someone is a real one.
                 let conditions = crate::combat::defs_on_disk();
                 for effect in &spell.effects {
@@ -772,7 +785,10 @@ mod tests {
             drain: 2,
             aim: Aim::Foe,
             resist: Some(Resist::Dodge),
-            effects: vec![SpellEffect::Harm { damage: (1, 2) }],
+            effects: vec![SpellEffect::Harm {
+                damage: (1, 2),
+                damage_type: "force".into(),
+            }],
             text: SkillText {
                 hit: lines("Your bolt {harm} {target}."),
                 miss: Some(lines("Your bolt misses {target}.")),

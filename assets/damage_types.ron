@@ -1,0 +1,27 @@
+// Damage types: what kind of harm an attack, weapon or spell does, for armour, resistances and
+// immunities. Read when the server starts. See docs/effects.md#damage-types.
+//
+// `armour: true` means ordinary armour stops it; other types get through armour unless a piece
+// names them in its `against` list (a fire-proofed cloak: `against: ["physical", "fire"]`).
+{
+    "physical": (name: "physical", armour: true),
+
+    // The elements.
+    "fire": (name: "fire"),
+    "cold": (name: "cold"),
+    "lightning": (name: "lightning"),
+    "wind": (name: "wind"),
+    "earth": (name: "earth"),
+    "water": (name: "water"),
+
+    // The energies: life and death.
+    "positive": (name: "positive"),
+    "negative": (name: "negative"),
+
+    // Holy and unholy power, and the dark.
+    "light": (name: "light"),
+    "shadow": (name: "shadow"),
+
+    "force": (name: "force"),
+    "poison": (name: "poison"),
+}

@@ -118,7 +118,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 | `SensesMagic` | Sees magic conditions on people and things | |
 | `Hidden` | Out of sight to those who haven't noticed | ✓ Hidden |
 | `Invisible` | Unseen by all but those who see invisible | |
-| `Resist(type, x)` / `Immune(tag)` | Takes less of a damage type; can't get a tag's conditions | |
+| `Resist(type, x)` / `Immune(tag)` | Stops a share `x` of a damage type (0.8 = 80%); can't get a tag's conditions | |
 | `BreathesWater` / `FreeClimb` / `FreeSwim` | | |
 | `Hasted(n)` / `Slowed` | An extra action every N turns; acts every other turn | |
 
@@ -203,7 +203,15 @@ Every attack and harming effect names its type, so armour, resistances and immun
 - **Every weapon and natural attack is `physical`** (2026-10-26). There's no slashing, piercing and crushing split: a sword and a hammer differ in their skills and techniques, not their damage type. Splitting physical damage can come later if armour wants to care.
 - **Magic picks its type:** Spark is `force`, a fire spell `fire`; Evocation's fire and lightning and the shamanic Elements school's wind, earth and water are the elements.
 - **The energies** are life and death: `positive` heals the living and hurts the undead, `negative` the reverse, once there are undead. **Light** and **shadow** are holy and unholy power, and the dark.
-- **Armour stops physical damage** unless it names more (`armour: (reduction: 3, against: [physical, fire])`), so a fire-proofed cloak or a blessed shield can be made in data. Resistances and immunities come from conditions (`Resist(fire, 0.5)`, `Immune(poison)`).
+- **Armour stops physical damage** unless it names more (`armour: (reduction: 3, against: ["physical", "fire"])`), so a fire-proofed cloak or a blessed shield can be made in data. Resistances and immunities come from conditions (`Resist("fire", 0.5)`, `Immune("poison")`).
+
+### Damage types, as built
+
+- **The list** is `assets/damage_types.ron`: each type's name and whether ordinary armour stops it (only `physical` does). Tests fail if a weapon, attack skill, spell, armour piece or condition names a type that isn't there.
+- **Weapons and attack skills** take `type:` and default to `"physical"`; Spark's `Harm` is `type: "force"`.
+- **Armour:** worn and held pieces count against a hit only if they stop its type (`against`, empty meaning what ordinary armour stops). Natural armour (auras, boosts) and armour from conditions count only against types ordinary armour stops.
+- **Resistances:** a condition's `Resist(type, x)` is the share of that type it stops: 0.8 stops 80%, 1 all of it, and a negative share is a weakness (-0.5 takes 150%). Several stack on what gets through: 50% and 50% let a quarter in. **`Immune(tag)`** stops a condition carrying that tag from being put on at all.
+- Weapon blows and harming spells go through the same armour and resistance rules, for players and mobs alike.
 
 ## Effects
 
@@ -374,7 +382,7 @@ reactions: [(on: Hit, effects: [Damage(amount: "2", type: piercing, armour: fals
 Each step leaves the game working and designers with more they can do alone.
 
 1. **Conditions as data** (*built*). The built conditions move to `assets/conditions/`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
-2. **Effects and abilities.** One effect vocabulary and one ability shape; spells and techniques become abilities, and damage types arrive. `Imbue` and saved item conditions come with it.
+2. **Effects and abilities.** Damage types are built (2a). One effect vocabulary and one ability shape; spells and techniques become abilities, and damage types arrive. `Imbue` and saved item conditions come with it.
 3. **Formulas.** The expression evaluator, and every amount moved into data.
 4. **Triggers and reactions.** More game events; reactions on conditions, skills and items.
 5. **Active skills through `use`.** Most bespoke commands become abilities.

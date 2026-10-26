@@ -72,7 +72,7 @@ pub enum Stacking {
 }
 
 /// What a condition does. Amounts on additive modifiers count once per point of strength.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Modifier {
     /// Attacks better, or worse.
     Attack(i32),
@@ -80,8 +80,14 @@ pub enum Modifier {
     Defence(i32),
     /// Defence multiplied: half for someone down, held or exposed.
     DefenceTimes(f64),
-    /// Takes this much more off every blow, like armour.
+    /// Takes this much more off every blow, like armour: only damage armour stops (physical).
     Armour(i32),
+    /// The share of damage of this type (`assets/damage_types.ron`) they shrug off: `Resist("fire",
+    /// 0.8)` stops 80% of fire, 1 stops it all, and a negative share is a weakness (`-0.5` takes
+    /// half as much again).
+    Resist(String, f64),
+    /// Conditions with this tag don't take hold of them: `Immune("poison")`.
+    Immune(String),
     /// Damage they deal, multiplied.
     DamageDealt(f64),
     /// Damage they take, multiplied.
@@ -206,8 +212,16 @@ pub struct TurnStart {
 }
 
 impl Conditions {
-    /// Put a condition on them, by its stacking rule.
-    pub fn apply(&mut self, defs: &ConditionDefs, key: &str, strength: i32, lasts: Lasts) {
+    /// Put a condition on them, by its stacking rule. Returns whether it took hold: one with a tag
+    /// they're immune to doesn't.
+    pub fn apply(&mut self, defs: &ConditionDefs, key: &str, strength: i32, lasts: Lasts) -> bool {
+        let tags = defs.get(key).map(|d| d.tags.as_slice()).unwrap_or_default();
+        let immune = self
+            .modifiers(defs)
+            .any(|(m, _)| matches!(m, Modifier::Immune(tag) if tags.contains(tag)));
+        if immune {
+            return false;
+        }
         let stacking = defs.get(key).map_or(Stacking::Replace, |d| d.stacking);
         let mine = |a: &Active| a.key == key && !matches!(a.lasts, Lasts::Granted(_));
         let new = Active {
@@ -233,6 +247,7 @@ impl Conditions {
                 self.0.push(new);
             }
         }
+        true
     }
 
     pub fn has(&self, key: &str) -> bool {
@@ -255,35 +270,35 @@ impl Conditions {
     fn modifiers<'a>(
         &'a self,
         defs: &'a ConditionDefs,
-    ) -> impl Iterator<Item = (Modifier, i32)> + 'a {
+    ) -> impl Iterator<Item = (&'a Modifier, i32)> + 'a {
         self.0.iter().flat_map(move |active| {
             defs.get(&active.key)
                 .into_iter()
-                .flat_map(|def| def.modifiers.iter().copied())
+                .flat_map(|def| def.modifiers.iter())
                 .map(move |m| (m, active.strength))
         })
     }
 
     /// The sum of an additive modifier, each counted per point of strength.
-    fn total(&self, defs: &ConditionDefs, pick: impl Fn(Modifier) -> Option<i32>) -> i32 {
+    fn total(&self, defs: &ConditionDefs, pick: impl Fn(&Modifier) -> Option<i32>) -> i32 {
         self.modifiers(defs)
             .filter_map(|(m, strength)| pick(m).map(|n| n * strength))
             .sum()
     }
 
     /// The product of a multiplier.
-    fn product(&self, defs: &ConditionDefs, pick: impl Fn(Modifier) -> Option<f64>) -> f64 {
+    fn product(&self, defs: &ConditionDefs, pick: impl Fn(&Modifier) -> Option<f64>) -> f64 {
         self.modifiers(defs).filter_map(|(m, _)| pick(m)).product()
     }
 
     fn any(&self, defs: &ConditionDefs, flag: Modifier) -> bool {
-        self.modifiers(defs).any(|(m, _)| m == flag)
+        self.modifiers(defs).any(|(m, _)| *m == flag)
     }
 
     /// How much better they attack.
     pub fn attack(&self, defs: &ConditionDefs) -> i32 {
         self.total(defs, |m| match m {
-            Modifier::Attack(n) => Some(n),
+            Modifier::Attack(n) => Some(*n),
             _ => None,
         })
     }
@@ -292,20 +307,32 @@ impl Conditions {
     pub fn defence(&self, base: i32, defs: &ConditionDefs) -> i32 {
         let added = base
             + self.total(defs, |m| match m {
-                Modifier::Defence(n) => Some(n),
+                Modifier::Defence(n) => Some(*n),
                 _ => None,
             });
         let times = self.product(defs, |m| match m {
-            Modifier::DefenceTimes(x) => Some(x),
+            Modifier::DefenceTimes(x) => Some(*x),
             _ => None,
         });
         (f64::from(added) * times).floor() as i32
     }
 
-    /// How much more they take off every blow.
-    pub fn armour(&self, defs: &ConditionDefs) -> i32 {
+    /// How much more they take off a blow of type `kind`: only what armour stops.
+    pub fn armour(&self, defs: &ConditionDefs, kind: &str) -> i32 {
+        if !crate::world::armour_stops(kind) {
+            return 0;
+        }
         self.total(defs, |m| match m {
-            Modifier::Armour(n) => Some(n),
+            Modifier::Armour(n) => Some(*n),
+            _ => None,
+        })
+    }
+
+    /// What damage of type `kind` they take is multiplied by: what each resistance lets through,
+    /// together.
+    pub fn resist(&self, defs: &ConditionDefs, kind: &str) -> f64 {
+        self.product(defs, |m| match m {
+            Modifier::Resist(k, x) if k == kind => Some((1.0 - x).max(0.0)),
             _ => None,
         })
     }
@@ -313,7 +340,7 @@ impl Conditions {
     /// What the damage they deal is multiplied by.
     pub fn damage_dealt(&self, defs: &ConditionDefs) -> f64 {
         self.product(defs, |m| match m {
-            Modifier::DamageDealt(x) => Some(x),
+            Modifier::DamageDealt(x) => Some(*x),
             _ => None,
         })
     }
@@ -321,7 +348,7 @@ impl Conditions {
     /// What the damage they take is multiplied by.
     pub fn damage_taken(&self, defs: &ConditionDefs) -> f64 {
         self.product(defs, |m| match m {
-            Modifier::DamageTaken(x) => Some(x),
+            Modifier::DamageTaken(x) => Some(*x),
             _ => None,
         })
     }
@@ -775,6 +802,55 @@ mod tests {
         assert_eq!(back.0[0].lasts, Lasts::Until(410.0));
         // Back after it would have ended: gone.
         assert!(Conditions::from_saved(saved, 10.0, 6000).0.is_empty());
+    }
+
+    #[test]
+    fn resistances_and_immunities_follow_types_and_tags() {
+        let mut defs = defs_on_disk();
+        let charm = |modifiers| ConditionDef {
+            name: "warded against fire".into(),
+            description: "test".into(),
+            tags: vec!["magic".into()],
+            stacking: Stacking::Replace,
+            modifiers,
+            text: ConditionText::default(),
+        };
+        defs.0.insert(
+            "fireproof".into(),
+            charm(vec![
+                Modifier::Resist("fire".into(), 0.75),
+                Modifier::Resist("cold".into(), -0.5),
+                Modifier::Immune("poison".into()),
+            ]),
+        );
+        defs.0.insert(
+            "scaled".into(),
+            charm(vec![Modifier::Resist("fire".into(), 0.5)]),
+        );
+        let mut conditions = Conditions::default();
+        conditions.apply(&defs, "fireproof", 1, Lasts::Turns(5));
+        assert_eq!(conditions.resist(&defs, "fire"), 0.25, "75% resisted");
+        assert_eq!(conditions.resist(&defs, "cold"), 1.5, "a weakness");
+        assert_eq!(conditions.resist(&defs, "force"), 1.0);
+        conditions.apply(&defs, "scaled", 1, Lasts::Turns(5));
+        assert_eq!(
+            conditions.resist(&defs, "fire"),
+            0.125,
+            "resistances let through a share of a share"
+        );
+        assert!(
+            !conditions.apply(&defs, "poisoned", 1, Lasts::Turns(3)),
+            "immune"
+        );
+        assert!(!conditions.has("poisoned"));
+        assert!(
+            conditions.apply(&defs, "burning", 1, Lasts::Turns(3)),
+            "not immune to fire"
+        );
+        // Conditions' armour stops only what armour stops.
+        conditions.apply(&defs, "shielded", 2, Lasts::Turns(5));
+        assert_eq!(conditions.armour(&defs, "physical"), 2);
+        assert_eq!(conditions.armour(&defs, "force"), 0);
     }
 
     #[test]

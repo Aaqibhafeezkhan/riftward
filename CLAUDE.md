@@ -50,7 +50,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 - **Game events:** systems that make something happen write a `GameEvent` (`events.rs`); announcements, passive-skill triggers and world events listen to it. Add events rather than special cases.
 - **Time:** a one-second heartbeat drives spawns, wandering, recovery, the clock. Heartbeat systems must work from elapsed time and timestamps, never by counting beats.
 
-**Data split:** designed content is RON in `assets/` (zones with rooms/doors/item & mob templates/spawns/world events in `assets/zones/*.zone.ron`, skill trees in `assets/skills/*.skill.ron`, spell books in `assets/spells/*.spells.ron`, conditions in `assets/conditions/*.conditions.ron`, `races.ron`, `progression.ron` (Karma and experience numbers, read at startup), `backgrounds.ron`), hot-reloaded; `world.rs::sync_world` applies zone changes live. Anything that changes during play is in SQLite (`db.rs`). Items become "real" (persisted) the moment a player touches them; untouched spawns and mobs reset.
+**Data split:** designed content is RON in `assets/` (zones with rooms/doors/item & mob templates/spawns/world events in `assets/zones/*.zone.ron`, skill trees in `assets/skills/*.skill.ron`, spell books in `assets/spells/*.spells.ron`, conditions in `assets/conditions/*.conditions.ron`, `races.ron`, `damage_types.ron`, `progression.ron` (Karma and experience numbers, read at startup), `backgrounds.ron`), hot-reloaded; `world.rs::sync_world` applies zone changes live. Anything that changes during play is in SQLite (`db.rs`). Items become "real" (persisted) the moment a player touches them; untouched spawns and mobs reset.
 
 ## House rules
 

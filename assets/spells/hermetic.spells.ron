@@ -9,7 +9,7 @@
             drain: 2,
             aim: Foe,
             resist: Some(Dodge),
-            effects: [Harm(damage: (2, 5))],
+            effects: [Harm(damage: (2, 5), type: "force")],
             text: (
                 hit: (
                     actor: "Your spark {harm} {target}.",

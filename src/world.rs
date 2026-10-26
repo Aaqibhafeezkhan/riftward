@@ -39,6 +39,55 @@ pub fn zone_id(path: &std::path::Path) -> String {
         .to_string()
 }
 
+/// A kind of harm, from `assets/damage_types.ron`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct DamageType {
+    pub name: String,
+    /// Whether ordinary armour stops it. Others get through, unless a piece names them.
+    #[serde(default)]
+    pub armour: bool,
+}
+
+/// The damage type everything is, unless it says otherwise.
+pub const PHYSICAL: &str = "physical";
+
+/// Where the damage types live, from where the server runs.
+const DAMAGE_TYPES_FILE: &str = "assets/damage_types.ron";
+
+static DAMAGE_TYPES: std::sync::OnceLock<BTreeMap<String, DamageType>> = std::sync::OnceLock::new();
+
+/// Every damage type, by key, read from `assets/damage_types.ron` the first time they're needed.
+/// A file that's missing or wrong stops the server.
+pub fn damage_types() -> &'static BTreeMap<String, DamageType> {
+    DAMAGE_TYPES.get_or_init(|| {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(DAMAGE_TYPES_FILE);
+        let path = if path.exists() {
+            path
+        } else {
+            DAMAGE_TYPES_FILE.into()
+        };
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("can't read {DAMAGE_TYPES_FILE}: {err}"));
+        ron_options()
+            .from_str(&text)
+            .unwrap_or_else(|err| panic!("{DAMAGE_TYPES_FILE} doesn't parse: {err}"))
+    })
+}
+
+/// Whether ordinary armour stops damage of type `kind`. Unknown types get through.
+pub fn armour_stops(kind: &str) -> bool {
+    damage_types().get(kind).is_some_and(|t| t.armour)
+}
+
+/// The damage type everything is unless it says otherwise, for serde defaults.
+pub fn physical() -> String {
+    PHYSICAL.to_string()
+}
+
+fn is_physical(kind: &String) -> bool {
+    kind == PHYSICAL
+}
+
 /// Where new characters (and anyone whose room disappears) end up.
 pub const START_ROOM: &str = "riftwatch:market";
 
@@ -426,7 +475,7 @@ pub enum Consume {
 }
 
 /// Armour: worn pieces take damage off every hit and hamper dodging; a held shield blocks.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct ArmourDef {
     /// Taken off every hit, even to nothing.
     #[serde(default)]
@@ -437,6 +486,21 @@ pub struct ArmourDef {
     /// Added to the holder's defence, for a shield.
     #[serde(default)]
     pub block: i32,
+    /// The damage types its reduction stops. Without a list, what ordinary armour stops
+    /// (physical); a fire-proofed cloak lists `["physical", "fire"]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub against: Vec<String>,
+}
+
+impl ArmourDef {
+    /// Whether its reduction stops damage of type `kind`.
+    pub fn stops(&self, kind: &str) -> bool {
+        if self.against.is_empty() {
+            armour_stops(kind)
+        } else {
+            self.against.iter().any(|k| k == kind)
+        }
+    }
 }
 
 /// A weapon: the damage it does, and the skill it's used with. It does its damage in anyone's
@@ -447,6 +511,13 @@ pub struct WeaponDef {
     pub skill: String,
     /// Damage before the Strength bonus, low to high.
     pub damage: (u32, u32),
+    /// What kind of harm it does: physical, unless it says otherwise (a flaming sword).
+    #[serde(
+        rename = "type",
+        default = "physical",
+        skip_serializing_if = "is_physical"
+    )]
+    pub damage_type: String,
 }
 
 /// Size and awkwardness, as in Pathfinder 2e: 10 Light make 1 Bulk.
@@ -1545,6 +1616,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn armour_stops_physical_unless_it_says_more() {
+        assert!(damage_types().contains_key(PHYSICAL));
+        assert!(armour_stops("physical") && !armour_stops("fire"));
+        let mail = ArmourDef {
+            reduction: 3,
+            ..ArmourDef::default()
+        };
+        assert!(mail.stops("physical") && !mail.stops("fire"));
+        let cloak = ArmourDef {
+            reduction: 1,
+            against: vec!["physical".into(), "fire".into()],
+            ..ArmourDef::default()
+        };
+        assert!(cloak.stops("fire") && !cloak.stops("cold"));
+    }
+
+    #[test]
     fn plain_exits_stay_plain_in_zone_files() {
         let plain = ExitDef::To("gate".into());
         assert_eq!(ron::to_string(&plain).unwrap(), "\"gate\"");
@@ -1697,6 +1785,22 @@ mod tests {
                     && !item_exists(&ItemKey::parse(key, &zone.id))
                 {
                     problems.push(format!("item {}:{item_id}: no key item '{key}'", zone.id));
+                }
+            }
+            // Damage types an item names must be real ones.
+            for (item_id, item) in &zone.items {
+                let named = item
+                    .weapon
+                    .iter()
+                    .map(|w| &w.damage_type)
+                    .chain(item.armour.iter().flat_map(|a| &a.against));
+                for kind in named {
+                    if !damage_types().contains_key(kind) {
+                        problems.push(format!(
+                            "item {}:{item_id}: no damage type '{kind}'",
+                            zone.id
+                        ));
+                    }
                 }
             }
             // What an item grants must be a real condition.

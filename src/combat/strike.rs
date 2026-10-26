@@ -26,7 +26,7 @@ use crate::skills::{
 use crate::spells::{SpellDefs, Spells};
 use crate::targeting::Keywords;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
-use crate::world::{ArmourDef, InRoom, Player, WeaponDef};
+use crate::world::{ArmourDef, InRoom, Player, WeaponDef, armour_stops};
 
 /// The skill that helps avoid attacks.
 const DODGE: &str = "athletics:dodge";
@@ -100,7 +100,7 @@ pub(super) fn defence_rating(
     skills: &Skills,
     aura: Bonus,
     boosts: &Boosts,
-    gear: ArmourDef,
+    gear: &ArmourDef,
 ) -> Defence {
     let dodge = skills.0.get(DODGE).map_or(0, |s| s.level as i32);
     let penalty = (gear.penalty - boosts.armour_ease).max(0);
@@ -138,7 +138,7 @@ pub fn gear(who: Entity, items: &ItemQuery, templates: &ItemTemplates) -> Armour
         let Some(def) = templates.0.get(&item.key) else {
             continue;
         };
-        let Some(armour) = def.armour else {
+        let Some(armour) = &def.armour else {
             continue;
         };
         let on = match (*location, def.wear) {
@@ -154,6 +154,29 @@ pub fn gear(who: Entity, items: &ItemQuery, templates: &ItemTemplates) -> Armour
         }
     }
     total
+}
+
+/// What `who`'s armour takes off a blow of type `kind`: every piece on them, worn where it
+/// belongs or a shield in hand, that stops that type, for its quality.
+pub fn armour_against(
+    who: Entity,
+    items: &ItemQuery,
+    templates: &ItemTemplates,
+    kind: &str,
+) -> i32 {
+    items
+        .iter()
+        .filter_map(|(_, item, location)| {
+            let def = templates.0.get(&item.key)?;
+            let armour = def.armour.as_ref().filter(|a| a.stops(kind))?;
+            let on = match (*location, def.wear) {
+                (ItemLocation::Worn(holder, _), Some(_)) => holder == who,
+                (ItemLocation::Held(holder), None) => holder == who,
+                _ => false,
+            };
+            on.then(|| item.quality.protection(armour.reduction))
+        })
+        .sum()
 }
 
 /// How far each player is outmatched by the foe they fight, by the ratio rule: the foe's attack
@@ -189,7 +212,7 @@ pub fn outmatched(
             f.skills,
             aura,
             &boosts,
-            gear(entity, items, templates),
+            &gear(entity, items, templates),
         )
         .total();
         Some((f64::from(attack.max(1)), f64::from(defence.max(1))))
@@ -214,6 +237,8 @@ pub struct Strike {
     /// The skill it's made with, and practises.
     pub skill: String,
     pub damage: (u32, u32),
+    /// What kind of harm it does: the weapon's, or the attack's own.
+    pub damage_type: String,
     pub text: SkillText,
     /// Stamina it takes.
     pub cost: u32,
@@ -252,7 +277,12 @@ pub fn choose_attack(
     let weapon = weapon.as_ref();
     let strike = |key: &str| {
         let skill = defs.skills.get(key)?;
-        let SkillKind::Attack { damage, cost } = &skill.def.kind else {
+        let SkillKind::Attack {
+            damage,
+            cost,
+            damage_type,
+        } = &skill.def.kind
+        else {
             return None;
         };
         let text = skill.def.text.clone().unwrap_or_else(untrained);
@@ -270,12 +300,14 @@ pub fn choose_attack(
             Some(w) if w.skill == key => Some(Strike {
                 skill: key.to_string(),
                 damage: w.damage,
+                damage_type: w.damage_type.clone(),
                 text,
                 cost,
             }),
             _ => damage.map(|damage| Strike {
                 skill: key.to_string(),
                 damage,
+                damage_type: damage_type.clone(),
                 text,
                 cost,
             }),
@@ -290,6 +322,7 @@ pub fn choose_attack(
                 // Swung untrained: Brawling's aim, the weapon's damage.
                 Some(w) => Strike {
                     damage: w.damage,
+                    damage_type: w.damage_type.clone(),
                     text: untrained(),
                     ..brawl
                 },
@@ -741,6 +774,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let Some(Strike {
             skill: key,
             damage,
+            damage_type,
             text,
             cost,
         }) = choose_attack(
@@ -786,9 +820,10 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let d_aura = self.auras.get(&target).copied().unwrap_or_default();
         let d_boosts = boosts(&d_skills, self.defs);
         let d_gear = gear(target, self.items, self.templates);
-        let parts = defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts, d_gear);
+        let parts = defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts, &d_gear);
         let mut defence = d.conditions.defence(parts.total(), self.conditions);
-        let d_condition_armour = d.conditions.armour(self.conditions);
+        let d_condition_armour = d.conditions.armour(self.conditions, &damage_type);
+        let d_resist = d.conditions.resist(self.conditions, &damage_type);
         let d_damage_times = d.conditions.damage_taken(self.conditions);
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let opener = technique.as_ref().is_some_and(|m| m.technique.opener);
@@ -849,19 +884,25 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                             })
                             .sum()
                     });
+                // Armour stops what it stops: worn pieces by their `against`, natural armour
+                // and conditions only what armour stops.
+                let natural = if armour_stops(&damage_type) {
+                    d_aura.armour + d_boosts.armour
+                } else {
+                    0
+                };
+                let worn = armour_against(target, self.items, self.templates, &damage_type);
                 let armour = if ignores_armour {
                     0
                 } else {
-                    (d_aura.armour + d_boosts.armour + d_gear.reduction + d_condition_armour
-                        - pierce)
-                        .max(0)
+                    (natural + worn + d_condition_armour - pierce).max(0)
                 };
                 let force = rolled
                     + a_attributes.get(Attribute::Strength) / 2
                     + a_boosts.damage_with(&key)
                     + extra;
                 // Conditions on either side move it: weakened, strengthened, and the like.
-                let times = blow.multiplier() * a_damage_times * d_damage_times;
+                let times = blow.multiplier() * a_damage_times * d_damage_times * d_resist;
                 dealt = ((f64::from(force) * times).round() as i32 - armour).max(0);
                 // A ward takes what it can, told after the blow it stopped.
                 let mut ward = Telling::default();

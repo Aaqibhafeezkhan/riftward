@@ -508,6 +508,7 @@ mod tests {
         sword.weapon = Some(WeaponDef {
             skill: "swordplay:basics".into(),
             damage: (2, 5),
+            damage_type: "physical".into(),
         });
         sword.value = Some(100);
         let mut bread = ItemDef::named("a loaf of bread");

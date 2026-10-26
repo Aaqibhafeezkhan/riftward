@@ -1656,7 +1656,7 @@ pub fn describe_item(entity: Entity, items: &ItemQuery, templates: &ItemTemplate
         let (low, high) = item.quality.damage(weapon.damage);
         text += &format!("\r\nA weapon: {low}-{high} damage, used with {skill}.");
     }
-    if let Some(armour) = def.and_then(|d| d.armour) {
+    if let Some(armour) = def.and_then(|d| d.armour.as_ref()) {
         let mut parts = Vec::new();
         let (reduction, block) = (
             item.quality.protection(armour.reduction),

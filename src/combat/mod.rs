@@ -1327,6 +1327,7 @@ mod tests {
                     SkillKind::Attack {
                         damage: Some((2, 2)),
                         cost: Cost::Free,
+                        damage_type: "physical".into(),
                     },
                 ),
                 skill(
@@ -1578,7 +1579,10 @@ mod tests {
             "hermetic:spark",
             Aim::Foe,
             Some(Resist::Dodge),
-            vec![SpellEffect::Harm { damage: (2, 2) }],
+            vec![SpellEffect::Harm {
+                damage: (2, 2),
+                damage_type: "force".into(),
+            }],
         );
         caster(&mut world, mage, vec![spark]);
         world.entity_mut(mage).insert((
@@ -1597,6 +1601,47 @@ mod tests {
         );
         assert!(world.get::<Skills>(mage).unwrap().0[SCHOOL].practice > 0.0);
         assert!(world.get::<Casting>(mage).is_none(), "cast, and done");
+    }
+
+    #[test]
+    fn armour_stops_physical_harm_but_not_force() {
+        let hurt = |kind: &str| {
+            let (mut world, room) = world();
+            let mage = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+            let knight = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+            armour(
+                &mut world,
+                "plate",
+                Some(Slot::Body),
+                // Thick enough for a bolt from the test caster's great power.
+                ArmourDef {
+                    reduction: 10_000,
+                    ..ArmourDef::default()
+                },
+                ItemLocation::Worn(knight, Slot::Body),
+            );
+            let bolt = spell(
+                "hermetic:bolt",
+                Aim::Foe,
+                Some(Resist::Dodge),
+                vec![SpellEffect::Harm {
+                    damage: (5, 5),
+                    damage_type: kind.into(),
+                }],
+            );
+            caster(&mut world, mage, vec![bolt]);
+            world.entity_mut(mage).insert((
+                Fighting(knight),
+                Casting {
+                    spell: "hermetic:bolt".into(),
+                    target: knight,
+                },
+            ));
+            world.run_system_once(combat_round).unwrap();
+            100.0 - world.get::<Vitals>(knight).unwrap().health
+        };
+        assert_eq!(hurt("physical"), 0.0, "plate stops it all");
+        assert!(hurt("force") > 0.0, "force goes through plate");
     }
 
     #[test]
@@ -1764,11 +1809,13 @@ mod tests {
             reduction: 4,
             penalty: 3,
             block: 0,
+            against: Vec::new(),
         };
         let shield = ArmourDef {
             reduction: 0,
             penalty: 1,
             block: 4,
+            against: Vec::new(),
         };
         armour(
             &mut world,
@@ -1783,6 +1830,7 @@ mod tests {
             reduction: 1,
             penalty: 1,
             block: 0,
+            against: Vec::new(),
         };
         armour(
             &mut world,
@@ -1801,7 +1849,8 @@ mod tests {
             ArmourDef {
                 reduction: 4,
                 penalty: 4,
-                block: 4
+                block: 4,
+                against: Vec::new()
             }
         );
     }
@@ -1830,6 +1879,7 @@ mod tests {
             reduction: 4,
             penalty: 3,
             block: 0,
+            against: Vec::new(),
         };
         armour(
             &mut world,
@@ -1863,6 +1913,7 @@ mod tests {
             reduction: 0,
             penalty: 1,
             block: 50,
+            against: Vec::new(),
         };
         armour(
             &mut world,

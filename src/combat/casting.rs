@@ -5,7 +5,7 @@ use bevy::prelude::*;
 
 use super::Round;
 use super::states::{Conditions, Lasts};
-use super::strike::{Blow, Telling, defence_rating, gear, harm, name_of, told};
+use super::strike::{Blow, Telling, armour_against, defence_rating, gear, harm, name_of, told};
 use crate::attributes::{Attribute, Attributes};
 use crate::events::GameEvent;
 use crate::items::capitalized;
@@ -18,6 +18,7 @@ use crate::stealth::{Hidden, sees};
 use crate::targeting::Keywords;
 use crate::vitals::Maxima;
 use crate::world::MobKey;
+use crate::world::armour_stops;
 
 /// What came of a cast.
 #[derive(Debug, Default)]
@@ -125,7 +126,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                             &d.skills,
                             aura,
                             &boosts(&d.skills, self.defs),
-                            gear(target, self.items, self.templates),
+                            &gear(target, self.items, self.templates),
                         );
                         let evasion = d.conditions.defence(parts.evasion, self.conditions);
                         if self.resting.contains(&target) {
@@ -166,19 +167,27 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 match effect {
                     SpellEffect::Harm {
                         damage: (low, high),
+                        damage_type,
                     } => {
                         let (low, high) = (*low.min(high), *low.max(high));
                         let rolled = self.dice.range(luck, i64::from(low)..=i64::from(high)) as i32;
                         let force = rolled + power / 3;
-                        let armour = (self.auras.get(&target).map_or(0, |a| a.armour)
-                            + boosts(&d.skills, self.defs).armour
-                            + gear(target, self.items, self.templates).reduction
-                            + d.conditions.armour(conditions))
+                        // Armour stops what it stops, as against a blow.
+                        let natural = if armour_stops(damage_type) {
+                            self.auras.get(&target).map_or(0, |a| a.armour)
+                                + boosts(&d.skills, self.defs).armour
+                        } else {
+                            0
+                        };
+                        let armour = (natural
+                            + armour_against(target, self.items, self.templates, damage_type)
+                            + d.conditions.armour(conditions, damage_type))
                         .max(0);
                         // Conditions on either side move it, as they do a blow.
                         let times = blow.multiplier()
                             * c_damage_times
-                            * d.conditions.damage_taken(conditions);
+                            * d.conditions.damage_taken(conditions)
+                            * d.conditions.resist(conditions, damage_type);
                         let mut hurt = ((f64::from(force) * times).round() as i32 - armour).max(0);
                         hurt -= self.ward_off(target, caster, hurt, &d_name, &mut after);
                         dealt = Some(hurt);

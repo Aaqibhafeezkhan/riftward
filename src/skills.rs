@@ -336,6 +336,10 @@ pub enum SkillKind {
         /// What each use takes out of the attacker. Basic attacks are free; heavy blows aren't.
         #[serde(default)]
         cost: Cost,
+        /// What kind of harm it does without a weapon: physical, unless it says otherwise (a
+        /// fire beetle's bite). A weapon in hand does its own type.
+        #[serde(rename = "type", default = "crate::world::physical")]
+        damage_type: String,
     },
     /// While its holder is alive, mobs made from the `affects` template in the same zone fight
     /// better: the Rat King's command over his rats.
@@ -1999,6 +2003,7 @@ mod tests {
         skill.def.kind = SkillKind::Attack {
             damage: Some((1, 3)),
             cost: Cost::Free,
+            damage_type: "physical".into(),
         };
         assert!(skill.def.check().unwrap_err().contains("needs text"));
         let lines = |target: Option<&str>| Lines {
@@ -2094,6 +2099,13 @@ mod tests {
                 for (id, skill) in &tree.skills {
                     if let SkillKind::Active { command, .. } = &skill.kind {
                         assert!(!command.is_empty(), "{id} has no command");
+                    }
+                    if let SkillKind::Attack { damage_type, .. } = &skill.kind {
+                        assert!(
+                            crate::world::damage_types().contains_key(damage_type),
+                            "{} {id}: no damage type '{damage_type}'",
+                            path.display()
+                        );
                     }
                     // Every condition a technique leaves is a real one.
                     if let SkillKind::Technique(t) = &skill.kind {

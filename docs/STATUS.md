@@ -28,7 +28,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** one effect vocabulary and one ability shape for spells, techniques and active skills, and damage types. Step 1, conditions as data, is built.
+**Step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** one effect vocabulary and one ability shape for spells, techniques and active skills. Step 1, conditions as data, is built, and so are damage types (2a): typed weapons, attacks and spells, armour that says what it stops, and `Resist` and `Immune`.
 
 Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 

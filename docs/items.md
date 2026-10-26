@@ -43,11 +43,13 @@ Held in hand, it's what its holder fights with (see [Combat](architecture.md#com
 
 ## Armour
 
-A template can be armour: worn pieces take damage off every hit and cost some dodging, and a shield held in hand blocks. `examine` shows what a piece does. See [Armour](trees.md#armour) for how it fights.
+A template can be armour: worn pieces take damage off every hit and cost some dodging, and a shield held in hand blocks. Armour stops [physical damage](effects.md#damage-types) only, unless its `against` lists more types. `examine` shows what a piece does. See [Armour](trees.md#armour) for how it fights.
 
 ```ron
 "mail_shirt": (name: "a mail shirt", bulk: Bulk(3), wear: Body, armour: (reduction: 3, penalty: 2)),
 "round_shield": (name: "a round shield", bulk: Bulk(2), armour: (penalty: 1, block: 4)),
+"salamander_cloak": (name: "a salamander cloak", bulk: Bulk(1), wear: Back,
+    armour: (reduction: 2, against: ["physical", "fire"])),
 ```
 
 ## Quality and rarity
