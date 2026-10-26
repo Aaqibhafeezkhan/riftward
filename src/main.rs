@@ -30,6 +30,7 @@ mod targeting;
 mod telnet;
 mod time;
 mod tracking;
+mod trade;
 mod trainers;
 mod vitals;
 mod world;
@@ -97,7 +98,7 @@ fn add_game(app: &mut App, path: String, address: String) {
         stealth::StealthPlugin,
     ))
     // Magic and trade.
-    .add_plugins((spells::SpellsPlugin, shops::ShopsPlugin));
+    .add_plugins((spells::SpellsPlugin, shops::ShopsPlugin, trade::TradePlugin));
 }
 
 #[cfg(test)]

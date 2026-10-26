@@ -1,0 +1,42 @@
+// A skill tree. Its id is the file name: skills here are `trade:<id>`.
+(
+    name: "Trade",
+    rarity: Common,
+    attribute: Charisma,
+    skills: {
+        // Haggling works whenever its holder trades: the first dealing with a shopkeeper sets a
+        // deal that lasts a while. Its text fills in {target} as the shopkeeper and {deal} as how
+        // far they came down ("a tenth").
+        "haggling": (
+            name: "Haggling",
+            description: "Talking a shopkeeper round to a better price. The first time you deal with one (with 'list', 'buy', 'sell' or 'value'), your Haggling and Charisma are pitted against theirs; win, and for the next ten minutes you pay up to a fifth less and are paid up to a fifth of an item's value more, the more surely you won.",
+            kind: Passive(),
+            text: (
+                hit: (
+                    actor: "You haggle with {target}, who comes down {deal}.",
+                    room: "{actor} haggles with {target}.",
+                ),
+                miss: (
+                    actor: "You haggle with {target}, who won't budge.",
+                    room: "{actor} haggles with {target}.",
+                ),
+            ),
+        ),
+        // `appraise` fills in {item}, and {worth} as what it's worth.
+        "appraisal": (
+            name: "Appraisal",
+            description: "Knowing what a thing is worth, with 'appraise <item>'. The more valuable it is, the harder it is to judge.",
+            kind: Active(command: "appraise", cooldown: 2),
+            text: (
+                hit: (
+                    actor: "You turn {item} over in your hands: it's worth {worth}.",
+                    room: "{actor} turns {item} over, weighing its worth.",
+                ),
+                miss: (
+                    actor: "You turn {item} over in your hands, but can't put a price on it.",
+                    room: "{actor} turns {item} over, weighing its worth.",
+                ),
+            ),
+        ),
+    },
+)

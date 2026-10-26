@@ -51,7 +51,7 @@ use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_
 
 pub use casting::MobMove;
 pub use states::{Conditions, State};
-pub use strike::{Fighters, Move, Round, name_of};
+pub use strike::{Blow, Fighters, Move, Round, name_of};
 
 /// Seconds in a combat round, and between a player's actions.
 pub const ROUND_SECS: f64 = 3.0;

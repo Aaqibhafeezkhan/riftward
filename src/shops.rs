@@ -3,8 +3,9 @@
 //! `buy` and `sell` trade with them, and `value` asks what they'd pay.
 //!
 //! A shop sells at an item's value and buys at a third of it, and resells what it buys at full
-//! value until someone buys it back (unless it stocks that anyway). What a shop has bought isn't saved: a restart, or the
-//! shopkeeper's death, clears it. Haggling will move these prices, once it exists.
+//! value until someone buys it back (unless it stocks that anyway). What a shop has bought isn't
+//! saved: a restart, or the shopkeeper's death, clears it. A character who knows Haggling strikes
+//! a deal with each shopkeeper that moves both prices their way (see `trade.rs`).
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -15,11 +16,11 @@ use crate::items::{self, HANDS, ItemLocation, ItemQuery, ItemTemplates, Snapshot
 use crate::mobs::{MobQuery, MobTemplates};
 use crate::money::{self, Purse};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::skills::Practice;
 use crate::targeting::Keywords;
+use crate::trade::{self, Bargains};
 use crate::world::{Consume, ItemDef, ItemKey, ShopDef};
 
-/// What a shop pays for an item: this share of its value.
-const BUYING_SHARE: u64 = 3;
 /// The most a shop resells at once; the oldest goes first.
 const MAX_RESALE: usize = 20;
 
@@ -64,11 +65,6 @@ pub fn worth(def: &ItemDef) -> Option<u64> {
     def.value.map(u64::from).filter(|v| *v > 0)
 }
 
-/// What a shop pays for something worth `value`: a third, and at least a copper.
-pub fn offer(value: u64) -> u64 {
-    (value / BUYING_SHARE).max(1)
-}
-
 /// Whether a shop buys this kind of item: `anything`, one of its tags, or what it is (`weapon`,
 /// `armour`, `food`, `drink`, `container`).
 pub fn buys(shop: &ShopDef, def: &ItemDef) -> bool {
@@ -108,6 +104,9 @@ struct Counter<'w, 's> {
     resale: Query<'w, 's, &'static mut Resale>,
     rooms: RoomQuery<'w, 's>,
     db: Res<'w, Database>,
+    practice: Practice<'w, 's>,
+    bargains: Query<'w, 's, &'static mut Bargains>,
+    time: Res<'w, Time>,
 }
 
 /// A shopkeeper and their shop.
@@ -122,12 +121,28 @@ struct Keeper {
 struct Ware {
     key: ItemKey,
     def: ItemDef,
+    /// Its value: the price before any deal.
     price: u64,
     /// Bought from a player, at this place in the resale list.
     resale: Option<usize>,
 }
 
 impl Counter<'_, '_> {
+    /// The deal `actor` has with `keeper`, haggling for one if they can; how it went goes in `out`.
+    fn deal(&mut self, actor: &Actor, keeper: &Keeper, out: &mut Vec<Outgoing>) -> f64 {
+        let now = self.time.elapsed_secs_f64();
+        trade::bargain(
+            &mut self.practice,
+            &mut self.bargains,
+            &mut self.commands,
+            actor,
+            keeper.entity,
+            &keeper.name,
+            now,
+            out,
+        )
+    }
+
     /// The first shopkeeper in `room`, if any.
     fn keeper(&self, room: Entity) -> Result<Keeper, String> {
         let mut here: Vec<_> = self
@@ -207,24 +222,37 @@ impl Counter<'_, '_> {
 
 /// `list`: what the shopkeeper here sells.
 fn list(In(inv): In<Invocation>, mut counter: Counter) {
-    let text = counter
-        .keeper(Actor::get(&counter.players, inv.entity).map_or(Entity::PLACEHOLDER, |a| a.room))
-        .map(|keeper| {
+    let Some(actor) = Actor::get(&counter.players, inv.entity) else {
+        return;
+    };
+    let mut out = Vec::new();
+    let text = match counter.keeper(actor.room) {
+        Err(err) => err,
+        Ok(keeper) => {
+            let share = counter.deal(&actor, &keeper, &mut out);
             let wares = counter.wares(&keeper);
             if wares.is_empty() {
-                return format!("{} has nothing for sale.", capitalized(&keeper.name));
+                format!("{} has nothing for sale.", capitalized(&keeper.name))
+            } else {
+                let mut text = format!("{} sells:", capitalized(&keeper.name));
+                for ware in wares {
+                    let used = if ware.resale.is_some() { " (used)" } else { "" };
+                    let name = format!("{}{used}", ware.def.name);
+                    let price = trade::asking_price(ware.price, share);
+                    text += &format!("\r\n  {name:<34} {}", money::coins(price));
+                }
+                text + "\r\nType 'buy <item>' to buy, 'sell <item>' to sell, or 'value <item>' to \
+                        ask what they'd pay."
             }
-            let mut text = format!("{} sells:", capitalized(&keeper.name));
-            for ware in wares {
-                let used = if ware.resale.is_some() { " (used)" } else { "" };
-                let name = format!("{}{used}", ware.def.name);
-                text += &format!("\r\n  {name:<34} {}", money::coins(ware.price));
-            }
-            text + "\r\nType 'buy <item>' to buy, 'sell <item>' to sell, or 'value <item>' to ask \
-                    what they'd pay."
-        })
-        .unwrap_or_else(|err| err);
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut counter.players);
+        }
+    };
+    // How a haggle went comes first.
+    let at = out
+        .iter()
+        .take_while(|o| matches!(o, Outgoing::To(..)))
+        .count();
+    out.insert(at, Outgoing::line(inv.entity, text));
+    deliver(out, &mut counter.players);
 }
 
 /// `buy <item>`: buy something from the shopkeeper here. It goes into a free hand, or onto the
@@ -243,22 +271,27 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
         let ware = counter
             .wares(&keeper)
             .into_iter()
-            .find(|ware| ware.def.keywords().matches(wanted))
+            .find(|ware| {
+                // Every word must fit: `buy leather jerkin`.
+                let keywords = ware.def.keywords();
+                wanted.split_whitespace().all(|word| keywords.matches(word))
+            })
             .ok_or_else(|| {
                 format!(
                     "{} doesn't sell '{wanted}'. Type 'list' to see what's for sale.",
                     capitalized(&keeper.name)
                 )
             })?;
+        let price = trade::asking_price(ware.price, counter.deal(&actor, &keeper, &mut out));
         let mut purse = counter
             .purses
             .get_mut(actor.entity)
             .map_err(|_| String::new())?;
-        if !purse.pay(ware.price) {
+        if !purse.pay(price) {
             return Err(format!(
                 "{} costs {}, and you have {}.",
                 capitalized(&ware.def.name),
-                money::coins(ware.price),
+                money::coins(price),
                 money::coins(purse.0)
             ));
         }
@@ -318,12 +351,17 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
             "You buy {} from {} for {}.{where_to}",
             ware.def.name,
             crate::combat::the(&keeper.name),
-            money::coins(ware.price)
+            money::coins(price)
         ))
     })();
+    // How a haggle went comes first.
     match reply {
         Ok(text) | Err(text) if !text.is_empty() => {
-            out.insert(0, Outgoing::line(actor.entity, text))
+            let at = out
+                .iter()
+                .take_while(|o| matches!(o, Outgoing::To(..)))
+                .count();
+            out.insert(at, Outgoing::line(actor.entity, text))
         }
         _ => {}
     }
@@ -347,8 +385,8 @@ fn sell(In(inv): In<Invocation>, mut counter: Counter) {
                 capitalized(&keeper_name)
             ));
         }
-        let paid = offer(worth(def).unwrap_or_default());
-        let unique = def.unique;
+        let (value, unique) = (worth(def).unwrap_or_default(), def.unique);
+        let paid = trade::offer(value, counter.deal(&actor, &keeper, &mut out));
         let mut purse = counter
             .purses
             .get_mut(actor.entity)
@@ -395,9 +433,14 @@ fn sell(In(inv): In<Invocation>, mut counter: Counter) {
             money::coins(paid)
         ))
     })();
+    // How a haggle went comes first.
     match reply {
         Ok(text) | Err(text) if !text.is_empty() => {
-            out.insert(0, Outgoing::line(actor.entity, text))
+            let at = out
+                .iter()
+                .take_while(|o| matches!(o, Outgoing::To(..)))
+                .count();
+            out.insert(at, Outgoing::line(actor.entity, text))
         }
         _ => {}
     }
@@ -409,13 +452,15 @@ fn value(In(inv): In<Invocation>, mut counter: Counter) {
     let Some(actor) = Actor::get(&counter.players, inv.entity) else {
         return;
     };
+    let mut out = Vec::new();
     let text = (|| {
         let keeper = counter.keeper(actor.room)?;
         let (_, key, name) = counter.sellable(&actor, &inv.args)?;
         let def = counter.templates.0.get(&key).ok_or_else(String::new)?;
         let keeper_name = capitalized(&crate::combat::the(&keeper.name));
-        Ok(if buys(&keeper.shop, def) {
-            let paid = offer(worth(def).unwrap_or_default());
+        let (value, buys_it) = (worth(def).unwrap_or_default(), buys(&keeper.shop, def));
+        Ok(if buys_it {
+            let paid = trade::offer(value, counter.deal(&actor, &keeper, &mut out));
             format!(
                 "{keeper_name} would give you {} for {name}.",
                 money::coins(paid)
@@ -425,7 +470,12 @@ fn value(In(inv): In<Invocation>, mut counter: Counter) {
         })
     })()
     .unwrap_or_else(|err: String| err);
-    deliver(vec![Outgoing::line(inv.entity, text)], &mut counter.players);
+    let at = out
+        .iter()
+        .take_while(|o| matches!(o, Outgoing::To(..)))
+        .count();
+    out.insert(at, Outgoing::line(inv.entity, text));
+    deliver(out, &mut counter.players);
 }
 
 #[cfg(test)]
@@ -472,7 +522,5 @@ mod tests {
             buys(&tinker, &sword) && !buys(&tinker, &worthless),
             "nothing for no value"
         );
-        assert_eq!(offer(100), 33);
-        assert_eq!(offer(1), 1, "always something");
     }
 }

@@ -77,7 +77,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 
 | Tree | Attribute | Skills |
 | --- | --- | --- |
-| **Trade** | Charisma | **Haggling** (better prices), **Appraisal** (know an item's worth and quality) |
+| **Trade** ✓ | Charisma | **Haggling** ✓ (better prices), **Appraisal** ✓ (know an item's worth, and later its quality) |
 | **Crafting** | Logic (Strength for Smithing) | **Smithing**, **Leatherwork**, **Carpentry**, **Scribing** (copy scrolls), each a tree of its own later |
 | **Lore** | Logic | **Lore** (study a mob or item: what it is, how tough), **Bestiary**, **Rift Lore**, **Languages** |
 | **Performance** | Charisma | **Performance** (play for coin; inspire companions, as an aura) |
@@ -135,7 +135,7 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things. *Built:* loot tables, Foraging and Herbalism (see [Gathering](#gathering)), and Tracking, Climbing and Swimming (see [Climbing and swimming](world.md#climbing-and-swimming) and [Tracking](world.md#tracking)). Climbing and Swimming are Athletics skills, taught by the drill sergeant; Tracking is Survival's, taught by the hedge-shaman.
 5. **Seeing and being seen:** Stealth, and Backstab from hiding. *Built:* see [Stealth](#stealth).
 6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions. *Built:* see [Spells](magic.md#spells): Mend and Bless, Spark and Ward, Beast Speech and Spirit Grasp, taught by each tradition's teacher.
-7. **Money and shops,** then Trade and the crafts. *Built:* money and shops, see [Money and shops](economy.md); Trade (Haggling, Appraisal) and the crafts are next.
+7. **Money and shops,** then Trade and the crafts. *Built:* money and shops, see [Money and shops](economy.md); Trade's Haggling and Appraisal are built too ([Trade](economy.md#trade-haggling-and-appraisal)); the crafts are next.
 
 Each step adds its trees' entry skills to the trainers in Riftwatch: the drill sergeant teaches each weapon's basics, and new trainers appear for the rest (the herbalist for Herbalism and First Aid, someone in the Back Alley for Stealth and Thievery). Trainers teach only entry skills; the rest of each tree is [discovered](skills.md#discovery) or learned another way.
 

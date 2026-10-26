@@ -2007,6 +2007,8 @@ mod tests {
                                     ("item", "d"),
                                     ("direction", "e"),
                                     ("harm", "f"),
+                                    ("deal", "g"),
+                                    ("worth", "h"),
                                 ],
                             );
                             assert!(

@@ -64,7 +64,7 @@ Trees live in data files, one per tree, hot-reloaded like zones. The files end i
 Every skill says, in its own file, what it looks like. Nothing about a skill's wording lives in the code, so a new skill can't ship without it.
 
 - **`description`** (every skill) is what players read with `skills <skill>`: what it is and what it does.
-- **`text`** is what everyone sees when it's used, as templates: `{actor}` is the user and `{target}` what it's used on, and a command can offer more (`pick` gives `{door}`). Each moment has a line for the user (`actor`), for its target (`target`, when that's someone), for everyone else there (`room`), and, for skills used on doors, for whoever is on the other side (`beyond`). A line that starts with a name gets its capital letter. The game adds only what isn't flavour: the damage count, and conditions like "is bleeding!".
+- **`text`** is what everyone sees when it's used, as templates: `{actor}` is the user and `{target}` what it's used on, and a command can offer more (`pick` gives `{door}`, `appraise` `{item}` and `{worth}`, Haggling `{deal}`). Each moment has a line for the user (`actor`), for its target (`target`, when that's someone), for everyone else there (`room`), and, for skills used on doors, for whoever is on the other side (`beyond`). A line that starts with a name gets its capital letter. The game adds only what isn't flavour: the damage count, and conditions like "is bleeding!".
 - **`hit` and `miss`:** the moment it works (a blow lands, a lock gives) and the moment it doesn't.
 
   ```ron

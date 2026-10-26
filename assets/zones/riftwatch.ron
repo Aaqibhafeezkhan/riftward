@@ -465,6 +465,8 @@
             keywords: ["herbalist", "woman"],
             here: "The herbalist sorts dried leaves into bundles, muttering their names.",
             description: "A stooped woman with green-stained fingers and a sharp eye, who smells faintly of mint and something less pleasant underneath.",
+            attributes: {Charisma: 3},
+            skills: {"trade:haggling": 2},
             teaches: ["healing:first_aid", "nature:herbalism", "survival:foraging"],
             shop: (
                 sells: ["bandage", "healing_draught"],
@@ -476,6 +478,9 @@
             keywords: ["provisioner", "stallholder", "merchant"],
             here: "The provisioner leans on a counter stacked with loaves, packs and folded cloth, calling out prices.",
             description: "A round, red-cheeked man in a leather apron, with a pencil behind one ear and a ledger he never lets out of reach. He can tell you to the copper what anything in the market is worth, and what he'll pay for it, which is less.",
+            attributes: {Charisma: 4},
+            skills: {"trade:haggling": 4},
+            teaches: ["trade:haggling", "trade:appraisal"],
             shop: (
                 sells: [
                     "bread", "water_flask", "waterskin", "torch", "backpack", "belt_pouch",
@@ -490,6 +495,8 @@
             keywords: ["tinker", "mender"],
             here: "The tinker sits at a cluttered bench, hammering a dent out of a pot.",
             description: "A wiry woman with soot to her elbows and a dozen tools hung from her belt. Her bench is heaped with blades to sharpen, locks to mend and things nobody else wanted, and she'll buy almost anything if the price is low enough.",
+            attributes: {Charisma: 4},
+            skills: {"trade:haggling": 6},
             shop: (
                 sells: [
                     "knife", "hatchet", "quarterstaff", "smiths_hammer", "lockpicks", "sword_sheath",

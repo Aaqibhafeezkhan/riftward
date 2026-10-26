@@ -1,6 +1,6 @@
 # Money and shops
 
-[Design summary](README.md) · Status: built: the purse, coins from kills, shops that sell, buy and resell, and spell lessons that cost money. Haggling, Appraisal and the crafts are still to come.
+[Design summary](README.md) · Status: built: the purse, coins from kills, shops that sell, buy and resell, spell lessons that cost money, and Haggling and Appraisal. The crafts are still to come.
 
 Money is the first thing in Riftward that isn't a skill, an attribute or an item: a number in each character's purse, earned by fighting and selling, and spent on goods and spells.
 
@@ -72,9 +72,18 @@ A first pass, in copper (10 = 1 silver, 100 = 1 gold):
 - **Skill lessons are free,** so no one is locked out of a way to play.
 - **Spell lessons cost money,** as each spell says (`price`, in copper), except each tradition's starter spell: **Mend** (Divine), **Spark** (Hermetic) and **Spirit Grasp** (Shamanic) are free. Bless and Beast Speech cost 5 silver, and Ward 8 silver. `learn` lists each spell with its price, and a teacher won't teach one you can't pay for.
 
+## Trade: Haggling and Appraisal
+
+The Trade tree (Charisma) has two entry skills, both taught by the provisioner and granted by the Merchant's Child background. *Built* (`src/trade.rs`).
+
+- **Haggling** works on its own. The first time a character who knows it deals with a shopkeeper (`list`, `buy`, `sell` or `value`), their Haggling and Charisma are pitted against the shopkeeper's, by opposed roll. How surely they win sets a **deal** for the next ten minutes: a twentieth, a tenth, three twentieths or a fifth of an item's value, for the [blows](attributes.md#the-ratio-rule) from glancing to crushing; lost, nothing. ("You haggle with the herbalist, who comes down a fifth.")
+- **A deal moves both prices:** buying costs the value less the deal, and selling pays a third of the value plus the deal. At the best deal that's 80% and 53%, so the two never cross and nothing can be bought low and sold high. `list` and `value` show your prices once you have a deal.
+- **Without Haggling,** a character pays list price. Shopkeepers have Haggling of their own: the herbalist 5 (Haggling and Charisma together), the provisioner 8, the tinker 10, so a novice wins about one haggle in nine with the provisioner and gets better with practice. Each haggle practises the skill.
+- **Appraisal** is `appraise <item>`, on anything you can reach: what it's worth, against a difficulty of 2 + 2 × log₁₀(value + 1), so bread is about 3, a short sword 6, a breastplate 8. Failing, you can't put a price on it. Something with no value is easy: nothing a merchant would pay for.
+
 ## Planned
 
-- **Haggling** (Trade tree, Charisma) moves prices toward you, by opposed roll against the shopkeeper; **Appraisal** tells you an item's worth and quality.
+- **Appraisal of quality,** once items have it, and of what a shop would pay.
 - **Guild rates and better stock** for guild ranks ([Guild perks](quests.md)).
 - **A Fence** in the Back Alley, buying what honest shops won't, with Thievery.
 - **Stock that runs out and restocks,** for rarer goods.
