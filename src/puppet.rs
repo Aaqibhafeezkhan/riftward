@@ -29,13 +29,13 @@ impl Plugin for PuppetPlugin {
                     .shortcuts(&["possess"])
                     .usage("puppet <mob>")
                     .summary("play a mob here: your commands run as it, and you hear what it hears")
-                    .permission(Permission::Build),
+                    .permission(Permission::Puppet),
                 puppet,
             )
             .add_command(
                 CommandSpec::new("release", Category::Building)
                     .summary("stop puppeting a mob, and go back to your own body")
-                    .permission(Permission::Build),
+                    .permission(Permission::Puppet),
                 release,
             );
     }

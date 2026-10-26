@@ -214,27 +214,43 @@ pub struct RoomItemRow {
     pub quality: Quality,
 }
 
-/// What an account is allowed to do. Each role includes everything below it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+/// What an account is allowed to do. Builders and GMs sit side by side: a builder shapes the
+/// world's files, a GM runs what happens in it live, and an admin can do both and more. Each
+/// command names the permission it needs (see `Role::can`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
     Player,
     Builder,
+    /// A game master: runs live events, puppeting mobs and staging scenes, but can't change zone
+    /// files.
+    Gm,
     Admin,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Permission {
-    /// Create and edit rooms with the builder commands.
+    /// Create and edit the world's files with the builder commands. Builders and admins.
     Build,
-    /// Change other accounts' roles.
+    /// Move about the world and bring mobs in or clear them away, without touching its files:
+    /// `goto`, `where`, `summon`, `purge`. Builders, GMs and admins.
+    Stage,
+    /// Play a mob (`puppet`). GMs and admins.
+    Puppet,
+    /// Set off or reset world events, and heal or hurt players for a scene: `worldflag`,
+    /// `setvitals`. GMs and admins.
+    Events,
+    /// Change other accounts' roles, and admin testing tools. Admins.
     ManageRoles,
 }
 
 impl Role {
     pub fn can(self, permission: Permission) -> bool {
-        match permission {
-            Permission::Build => self >= Role::Builder,
-            Permission::ManageRoles => self >= Role::Admin,
+        use Permission::*;
+        match self {
+            Role::Admin => true,
+            Role::Builder => matches!(permission, Build | Stage),
+            Role::Gm => matches!(permission, Stage | Puppet | Events),
+            Role::Player => false,
         }
     }
 
@@ -242,6 +258,7 @@ impl Role {
         match self {
             Role::Player => "player",
             Role::Builder => "builder",
+            Role::Gm => "gm",
             Role::Admin => "admin",
         }
     }
@@ -250,6 +267,7 @@ impl Role {
         match s.to_ascii_lowercase().as_str() {
             "player" => Some(Role::Player),
             "builder" => Some(Role::Builder),
+            "gm" => Some(Role::Gm),
             "admin" => Some(Role::Admin),
             _ => None,
         }
@@ -832,5 +850,30 @@ impl Database {
             params![room, character_id],
         )?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builders_and_gms_sit_side_by_side() {
+        use Permission::*;
+        let can = |role: Role| {
+            [Build, Stage, Puppet, Events, ManageRoles]
+                .into_iter()
+                .filter(|p| role.can(*p))
+                .collect::<Vec<_>>()
+        };
+        assert!(can(Role::Player).is_empty());
+        assert_eq!(can(Role::Builder), [Build, Stage]);
+        assert_eq!(can(Role::Gm), [Stage, Puppet, Events]);
+        assert_eq!(
+            can(Role::Admin),
+            [Build, Stage, Puppet, Events, ManageRoles]
+        );
+        assert_eq!(Role::parse("GM"), Some(Role::Gm));
+        assert_eq!(Role::Gm.as_str(), "gm");
     }
 }

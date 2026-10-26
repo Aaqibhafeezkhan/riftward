@@ -68,7 +68,7 @@ pub fn look(
             actor.entity,
             &players,
             &view,
-            actor.role.can(Permission::Build),
+            actor.role.can(Permission::Stage),
         ),
         (_, Some((DoorLookup::Door { door, dir }, exits))) => match view.doors.get(door) {
             Ok(door) if door.is_open() => format!(
@@ -538,7 +538,7 @@ pub fn move_player(
     commands.entity(entity).insert(InRoom(to));
     let show_ids = players
         .get(entity)
-        .is_ok_and(|(_, player, _, _)| player.is_some_and(|p| p.role.can(Permission::Build)));
+        .is_ok_and(|(_, player, _, _)| player.is_some_and(|p| p.role.can(Permission::Stage)));
     if let (Some(character_id), Ok((_, key, _))) = (character_id, view.rooms.get(to))
         && let Err(err) = db.save_location(character_id, &key.to_string())
     {

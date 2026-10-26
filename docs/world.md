@@ -123,7 +123,7 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     loot: [[(None, 70), ("rat_tail", 30)]],  // one find per table, weighted, with the killer's Luck
     health: 3,                        // instead of 8 + Body / 2; Toughness still adds to it
     tactics: 25,                      // % chance a turn to use a combat skill instead (default 25)
-    aggressive: true,                 // attacks players in its room
+    aggressive: true,                 // attacks players in its room, with `kill`
 ),
 ```
 

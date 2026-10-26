@@ -43,14 +43,14 @@ impl Plugin for MobsPlugin {
                 CommandSpec::new("summon", Category::Building)
                     .usage("summon <mob>")
                     .summary("bring a mob here from a template (`mob` or `zone:mob`)")
-                    .permission(Permission::Build),
+                    .permission(Permission::Stage),
                 summon,
             )
             .add_command(
                 CommandSpec::new("purge", Category::Building)
                     .usage("purge [<mob>]")
                     .summary("remove a mob here, or every mob here; spawns refill as usual")
-                    .permission(Permission::Build),
+                    .permission(Permission::Stage),
                 purge,
             );
     }

@@ -31,7 +31,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
   Use a small Python socket client for things `nc` can't do (e.g. dropping the connection mid-fight).
 - **Builder/admin commands rewrite zone files in `assets/zones/`.** Back the folder up before a test that uses them and restore it after.
 - Stop a test server by the process on its port (`lsof -t -iTCP:4001 -sTCP:LISTEN`), never by name, so a real server on 4000 is left alone.
-- Admin testing commands: `grantskill`, `setattr`, `setvitals`, `worldflag`, `summon`, `purge`, `goto`, `create`. `create`/`summon` resolve templates in the current zone unless given `zone:id`.
+- Roles: player, builder, GM, admin; builders and GMs sit side by side, and each command names a `Permission` (`Role::can`, `docs/architecture.md#roles`). Admin testing commands: `grantskill`, `setattr`, `setvitals`, `worldflag`, `summon`, `purge`, `goto`, `create`. `create`/`summon` resolve templates in the current zone unless given `zone:id`.
 - Prefer deterministic tests over chasing dice live: combat tests build a tiny world and run one `combat_round` (see tests in `src/combat/mod.rs`).
 
 ## Architecture

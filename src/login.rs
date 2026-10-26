@@ -963,7 +963,7 @@ fn enter_game(
             entity,
             players,
             view,
-            account.role.can(Permission::Build),
+            account.role.can(Permission::Stage),
         ),
     ));
     out.push(Outgoing::Room {

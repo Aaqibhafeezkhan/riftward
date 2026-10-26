@@ -37,6 +37,13 @@ impl Plugin for BuildPlugin {
                 .summary(summary)
                 .permission(Permission::Build)
         };
+        // Getting about, for builders and GMs alike.
+        let stage = |name, usage, summary| {
+            CommandSpec::new(name, Category::Building)
+                .usage(usage)
+                .summary(summary)
+                .permission(Permission::Stage)
+        };
         let admin = |name, usage, summary| {
             CommandSpec::new(name, Category::Admin)
                 .usage(usage)
@@ -46,7 +53,7 @@ impl Plugin for BuildPlugin {
         app.init_resource::<PendingZones>()
             .add_systems(Update, announce_new_zones)
             .add_command(
-                build("where", "where", "show the current room's id"),
+                stage("where", "where", "show the current room's id"),
                 where_cmd,
             )
             .add_command(
@@ -54,7 +61,7 @@ impl Plugin for BuildPlugin {
                 rooms_cmd,
             )
             .add_command(
-                build(
+                stage(
                     "goto",
                     "goto <room>",
                     "teleport to a room (`room` or `zone:room`)",
@@ -157,7 +164,7 @@ impl Plugin for BuildPlugin {
             .add_command(
                 admin(
                     "role",
-                    "role <account> <player|builder|admin>",
+                    "role <account> <player|builder|gm|admin>",
                     "change an account's role",
                 ),
                 role_cmd,

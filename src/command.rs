@@ -214,6 +214,14 @@ pub struct CommandRegistry {
     commands: Vec<(CommandSpec, CommandId)>,
 }
 
+#[cfg(test)]
+impl CommandRegistry {
+    /// A registry of just these commands, for tests that run a world without an app.
+    pub fn of(commands: Vec<(CommandSpec, CommandId)>) -> Self {
+        Self { commands }
+    }
+}
+
 impl CommandRegistry {
     /// The command `verb` names, if this role may use it. Commands a role can't use are invisible.
     pub fn find(&self, verb: &str, role: Role) -> Option<&(CommandSpec, CommandId)> {

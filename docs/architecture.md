@@ -155,7 +155,7 @@ Built (`src/combat/`). The round loop, initiative, damage, death and respawn: in
 - **Blows:** how decisively the attack won (the opposed roll's margin) sets how hard it lands: under 1.15 a **glancing** blow (half damage), under 1.6 **solid** (full), under 2.5 **strong** (×1.5), beyond that **crushing** (×2, a critical hit). Skill shows in damage this way for every attack, unarmed included: twice the defender's match hits 89% of the time and about 50% harder on average.
 - **How a hit reads,** as in DikuMUD: a word for the share of the target's most health it took, from "scratches" and "grazes" through "wounds", "mauls", "decimates", "devastates" and "maims" to "MUTILATES", "EVISCERATES" and "MASSACRES", filled into the attack's own text ("Your slash decimates the rat."). The same 5 points graze a veteran and massacre a rat. A crushing blow ends with "!". The damage number follows in brackets, unless the player has turned them off with `numbers off`.
 - **Starting and ending fights:** `kill <mob>` (players can't fight each other yet). The target fights back. A fight ends when either side dies, leaves (`flee`: a random open exit, 60% before Luck, 2 stamina), or logs out. Walking away isn't possible mid-fight.
-- **Mobs fight by the same rules,** with attributes, skills, an attack and optionally a base health from their templates, and recover between fights like players. `aggressive: true` mobs attack players in their room; the rest only fight back. Mobs in a fight don't wander.
+- **Mobs fight by the same rules,** with attributes, skills, an attack and optionally a base health from their templates, and recover between fights like players. `aggressive: true` mobs attack players in their room, typing `kill` as a player would (just before each round, only players they've noticed, within their spawn's `pack`); the rest only fight back. Mobs in a fight don't wander.
 - **Mobs use their combat skills** as players do: each turn, with their template's `tactics` chance (25% by default), a technique skill they know and can use right then, picked at random, takes the place of their auto-attack. They never pick openers.
 - **A mob's death** leaves a corpse that rots in 5 minutes, and counts for its spawn like any death, so `AfterDeath` timers and breeding reseeds now matter.
 - **Leaving a fight is fatal.** A player who quits or disconnects while fighting is cut down as they go ("tries to slip away from the fight, and is cut down!"), and dies like anyone else, so logging out is never an escape.
@@ -168,7 +168,7 @@ Features that are designed but wait on other work.
 
 ### Game masters and puppeting
 
-*Built,* for builders and admins (`src/puppet.rs`), except the separate GM role. `puppet <mob>` (or `possess`) takes over a mob in the room; `release` lets go.
+*Built,* for GMs and admins (`src/puppet.rs`); see [Roles](#roles). `puppet <mob>` (or `possess`) takes over a mob in the room; `release` lets go.
 
 Admins, and a new **GM (game master) role**, can **puppet** any mob: take it over and play it themselves until they release it. A GM can voice the goblin king during a raid, have a town guard question a suspicious player, or walk the dragon out of its lair for an event.
 
@@ -188,7 +188,19 @@ You release the goblin king and return to yourself.
 - **Every puppeting session is logged** (who, which mob, when, and what they did), so the power is accountable.
 - **How it fits the code:** a `Puppeting(mob)` component on the GM makes the command dispatcher send each `Invocation` on behalf of the mob (all but `release` and `quit`), with the GM's permissions, and `PuppetedBy` on the mob routes what it's told back to them. While puppeting, the GM hears nothing of their own body. The puppet gets an `ActionQueue`, so in a fight it acts on what the GM queues, and its own choices (wandering, aggression, techniques and spells by chance) stop. The prompt shows whose vitals it is: `[the town guard] <11/11hp 9/9st>`. Starting, stopping and every command typed through a puppet are logged.
 
-**Waits on mobs.** The GM role itself, and the open question of where it sits among the roles, are in [Open questions](#open-questions).
+### Roles
+
+*Built.* Four roles, and builders and GMs sit side by side rather than one above the other: a builder shapes the world's files, a GM runs what happens in it live, and an admin can do everything. Each command names the permission it needs (`Role::can` in `db.rs`), and `help` shows only what a role can use.
+
+| Permission | Player | Builder | GM | Admin | Commands |
+| --- | --- | --- | --- | --- | --- |
+| Build | | ✓ | | ✓ | `dig`, `desc`, `link`, `door`, `item`, `mob`, `spawn`, `zone` and the other building commands, `create`, `destroy`, and unlocking any door for testing |
+| Stage | | ✓ | ✓ | ✓ | `goto`, `where`, `summon`, `purge`; room ids show in `look` |
+| Puppet | | | ✓ | ✓ | `puppet` (`possess`), `release` |
+| Events | | | ✓ | ✓ | `worldflag`, `setvitals` |
+| ManageRoles | | | | ✓ | `role`, `setattr`, `setcoins`, `grantskill` |
+
+`role <account> <player|builder|gm|admin>` sets one. The first account on a new server is an admin.
 
 ### Scripting
 
@@ -235,4 +247,4 @@ Then teaching, epiphany, trainers and loot follow: trainers are mobs, loot scrol
 
 ## Open questions
 
-- [ ] **Where does the GM role sit?** Roles are currently ordered (player < builder < admin), each including everything below it. A GM could slot in as player < builder < GM < admin, or be a separate permission, so a GM needn't be able to build and a builder needn't be able to puppet.
+- [x] **Where does the GM role sit?** Beside builder, not above or below it (2026-10-26): see [Roles](#roles).

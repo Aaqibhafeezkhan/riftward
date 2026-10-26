@@ -39,7 +39,7 @@ use crate::items::{
 use crate::mobs::{self, Mob, MobQuery, MobTemplates};
 use crate::money::{self, Purse};
 use crate::net::Connection;
-use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, PuppetedBy, RoomQuery, deliver};
 use crate::skills::{Bonus, Practice, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::spells::{Aim, Casting, SpellDefs};
@@ -74,7 +74,10 @@ impl Plugin for CombatPlugin {
             .add_systems(
                 Update,
                 (
-                    combat_round.run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
+                    // Aggressive mobs pick their fights just before each round.
+                    (aggression, combat_round)
+                        .chain()
+                        .run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
                     abandon_fights,
                     handle_deaths,
                 )
@@ -235,8 +238,6 @@ fn combat_round(
     time: Res<Time>,
     mut events: MessageWriter<GameEvent>,
     mut log: ResMut<Outbox>,
-    spawned: Query<&SpawnedBy>,
-    spawns: Res<Spawns>,
     resting_query: Query<Entity, With<Resting>>,
     (readied, casting): (Query<&Readied>, Query<&Casting>),
     rooms: RoomQuery,
@@ -257,46 +258,6 @@ fn combat_round(
         if fighter.player.is_some() {
             alive_players.push((fighter.entity, fighter.in_room.0));
         }
-    }
-
-    // Aggressive mobs pick on a player in their room, but no more of a spawn's mobs gang up on
-    // one player than its `pack` allows; the rest wait their turn.
-    let spawn_of = |entity: Entity| spawned.get(entity).ok().map(|s| &s.0);
-    for fighter in &fighters {
-        if !fighter.aggressive || fighter.dead || fighter.fighting.is_some() || fighter.puppeted {
-            continue;
-        }
-        let entity = fighter.entity;
-        let pack = spawn_of(entity)
-            .and_then(|key| spawns.0.get(key))
-            .and_then(|def| def.pack);
-        let room_for = |victim: Entity| {
-            pack.is_none_or(|limit| {
-                let ganging = targets
-                    .iter()
-                    .filter(|(a, t)| **t == victim && spawn_of(**a) == spawn_of(entity))
-                    .count();
-                (ganging as u32) < limit
-            })
-        };
-        let Some(&(victim, _)) = alive_players
-            .iter()
-            // Only players it has noticed: an unseen one slips past.
-            .find(|(victim, room)| {
-                *room == fighter.in_room.0
-                    && room_for(*victim)
-                    && sees(&hidden, fighter.entity, *victim)
-            })
-        else {
-            continue;
-        };
-        targets.insert(entity, victim);
-        commands.entity(entity).insert(Fighting(victim));
-        let name = name_of(None, fighter.mob);
-        log.0.push(Outgoing::line(
-            victim,
-            format!("\x1b[1;31m{} attacks you!\x1b[0m", capitalized(&name)),
-        ));
     }
 
     // Fights end when the target is gone, dead or elsewhere.
@@ -563,6 +524,72 @@ fn expire_conditions(
         }
     }
 }
+
+/// Aggressive mobs pick a fight with a player in their room, with `kill`, as a player would: only
+/// one they've noticed (an unseen one slips past), and no more of a spawn's mobs ganging up on one
+/// player than its `pack` allows; the rest wait their turn. A puppeted mob leaves it to whoever is
+/// playing it.
+#[allow(clippy::too_many_arguments)]
+fn aggression(
+    mut commands: Commands,
+    aggressors: Query<(Entity, &InRoom, Option<&SpawnedBy>), Aggressors>,
+    players: Query<(Entity, &InRoom, &Player), Without<Dead>>,
+    fights: Query<(Entity, &Fighting)>,
+    spawned: Query<&SpawnedBy>,
+    spawns: Res<Spawns>,
+    hidden: Query<&Hidden>,
+    registry: Res<CommandRegistry>,
+) {
+    let Some((kill, id)) = registry
+        .find("kill", crate::db::Role::Player)
+        .map(|(spec, id)| (spec.clone(), *id))
+    else {
+        return;
+    };
+    let spawn_of = |entity: Entity| spawned.get(entity).ok().map(|s| s.0.clone());
+    // Who's set on whom: those already fighting, and those picking a fight now.
+    let mut on: Vec<(Entity, Entity)> = fights.iter().map(|(a, f)| (a, f.0)).collect();
+    let mut players: Vec<_> = players.iter().collect();
+    players.sort_by_key(|(entity, ..)| *entity);
+    for (mob, in_room, spawned_by) in &aggressors {
+        let pack = spawned_by
+            .and_then(|s| spawns.0.get(&s.0))
+            .and_then(|def| def.pack);
+        let mine = spawned_by.map(|s| s.0.clone());
+        let room_for = |victim: Entity, on: &[(Entity, Entity)]| {
+            pack.is_none_or(|limit| {
+                let ganging = on
+                    .iter()
+                    .filter(|(a, t)| *t == victim && spawn_of(*a) == mine)
+                    .count();
+                (ganging as u32) < limit
+            })
+        };
+        let Some((victim, _, player)) = players.iter().find(|(victim, room, _)| {
+            room.0 == in_room.0 && room_for(*victim, &on) && sees(&hidden, mob, *victim)
+        }) else {
+            continue;
+        };
+        on.push((mob, *victim));
+        commands.run_system_with(
+            id,
+            Invocation {
+                entity: mob,
+                command: kill.name,
+                usage: kill.usage,
+                args: player.name.clone(),
+            },
+        );
+    }
+}
+
+/// Aggressive mobs free to pick a fight: alive, not in one, and not being played.
+type Aggressors = (
+    With<Aggressive>,
+    Without<Fighting>,
+    Without<Dead>,
+    Without<PuppetedBy>,
+);
 
 /// Let an animal out of its fights: it stops fighting, no one fights it, and it no longer
 /// attacks those who come near.
@@ -1661,13 +1688,23 @@ mod tests {
         world.entity_mut(rat).insert(Aggressive);
         let player = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
         as_player(&mut world, player);
+        world.entity_mut(player).insert(Keywords::from_name("Grok"));
         hide(&mut world, player);
-        world.run_system_once(combat_round).unwrap();
+        // Aggressive mobs pick their fights with `kill`, as a player would.
+        let kill_id = world.register_system(kill);
+        world.insert_resource(CommandRegistry::of(vec![(
+            CommandSpec::new("kill", Category::Interaction),
+            kill_id,
+        )]));
+        world.run_system_once(aggression).unwrap();
+        world.flush();
         assert!(world.get::<Fighting>(rat).is_none(), "slipped past");
         // Noticed, they're fair game.
         world.get_mut::<Hidden>(player).unwrap().seen_by.insert(rat);
-        world.run_system_once(combat_round).unwrap();
-        assert!(world.get::<Fighting>(rat).is_some());
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        assert_eq!(world.get::<Fighting>(rat).map(|f| f.0), Some(player));
+        assert!(said(&world, player, "attacks you!"));
     }
 
     #[test]

@@ -35,7 +35,7 @@ Each document below covers one area and can be read on its own. This page is the
 ## What exists today
 
 - Telnet server, one command handled per player per tick, in the order typed.
-- Accounts and characters in SQLite, with roles: player, builder, admin.
+- Accounts and characters in SQLite, with roles: player, builder, GM (game master: puppeting and live events) and admin.
 - Zone files in `assets/zones`, hot-reloaded, plus in-game building: `dig`, `desc`, `link`, `zone create`, and more.
 - Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
 - Riftwatch, the starting town, and the sewers beneath it ([map](riftwatch.md#map)).

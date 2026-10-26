@@ -72,7 +72,7 @@ impl Plugin for VitalsPlugin {
                 CommandSpec::new("setvitals", Category::Admin)
                     .usage("setvitals <player> <health> [<stamina>]")
                     .summary("set an online player's current health and stamina, for testing")
-                    .permission(Permission::ManageRoles),
+                    .permission(Permission::Events),
                 setvitals_cmd,
             );
     }

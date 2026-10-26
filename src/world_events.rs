@@ -31,7 +31,7 @@ impl Plugin for WorldEventsPlugin {
                 CommandSpec::new("worldflag", Category::Admin)
                     .usage("worldflag [<flag> on|off]")
                     .summary("list the world's flags, or set or clear one, to run events by hand")
-                    .permission(Permission::ManageRoles),
+                    .permission(Permission::Events),
                 worldflag,
             );
     }
