@@ -207,6 +207,7 @@ You release the goblin king and return to yourself.
 An escape hatch for behaviour that data can't express: bespoke unique items (Angorim glowing when orcs are near), unusual skill effects, quest logic, complex mob behaviour, odd easter eggs. Most content stays data; an item, skill, mob or world event can name a script instead of, or alongside, its data.
 
 - **Waits on what scripts would talk to:** the effect system, mobs, and game events. Embedding a language before those exist would mean designing its interface in a vacuum.
+- **Proposed in [Effects, conditions and scripting](effects.md#scripting):** Rhai, acting only through the effect verbs, built after conditions, effects, formulas and triggers.
 - **Language: to decide when it's built.** Candidates:
 
   | | [Steel](https://github.com/mattwparas/steel) (Scheme) | [Rhai](https://rhai.rs) | Lua ([mlua](https://github.com/mlua-rs/mlua)) |

@@ -27,7 +27,9 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**The crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
+**Proposed and up for review:** [Effects, conditions and scripting](effects.md), the plan for designers adding skills, spells and conditions without code. Its first step, conditions as data, would come before more content.
+
+Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 
 ## Small things noticed and not yet done
 

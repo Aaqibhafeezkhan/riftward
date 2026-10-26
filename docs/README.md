@@ -28,6 +28,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Designed |
+| [Effects, conditions and scripting](effects.md) | How designers will add skills, spells, conditions and items without code: conditions as data, one effect vocabulary, abilities, formulas, triggers, and Rhai scripting | Proposed |
 | [Money and shops](economy.md) | Copper, silver and gold in a purse, coins from kills, shops that sell, buy and resell, what lessons cost, Haggling and Appraisal | Built |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds as past lives, conditions | Built |
