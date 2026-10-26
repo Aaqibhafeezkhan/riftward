@@ -11,9 +11,9 @@
             kind: Attack(),
             text: (
                 hit: (
-                    actor: "You hack at {target}.",
-                    target: "{actor} hacks at you.",
-                    room: "{actor} hacks at {target}.",
+                    actor: "Your hack {harm} {target}.",
+                    target: "{actor}'s hack {harm} you.",
+                    room: "{actor}'s hack {harm} {target}.",
                 ),
                 miss: (
                     actor: "You hack at {target}, but miss.",
@@ -29,9 +29,9 @@
             requires: Skill("axes:basics", 15),
             text: (
                 hit: (
-                    actor: "You cleave into {target}.",
-                    target: "{actor} cleaves into you.",
-                    room: "{actor} cleaves into {target}.",
+                    actor: "Your cleave {harm} {target}.",
+                    target: "{actor}'s cleave {harm} you.",
+                    room: "{actor}'s cleave {harm} {target}.",
                 ),
                 miss: (
                     actor: "You swing wide at {target}, and miss.",
@@ -47,9 +47,9 @@
             requires: Skill("axes:basics", 15),
             text: (
                 hit: (
-                    actor: "You hew at {target}, and the blade bites deep.",
-                    target: "{actor} hews deep into you.",
-                    room: "{actor} hews deep into {target}.",
+                    actor: "Your hewing chop {harm} {target}.",
+                    target: "{actor}'s hewing chop {harm} you.",
+                    room: "{actor}'s hewing chop {harm} {target}.",
                 ),
                 miss: (
                     actor: "You hew at {target}, but the blow goes wide.",

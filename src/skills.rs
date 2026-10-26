@@ -172,6 +172,25 @@ impl SkillDef {
         let Some(text) = &self.text else {
             return Err("needs text: what it looks like when used".into());
         };
+        // A blow that does damage says how much, in Diku's words: "Your slash {harm} the rat."
+        let hurts = match &self.kind {
+            SkillKind::Attack { .. } => true,
+            SkillKind::Technique(t) => t.strike == StrikeKind::Hit,
+            _ => false,
+        };
+        let lines = [
+            Some(&text.hit.actor),
+            text.hit.target.as_ref(),
+            Some(&text.hit.room),
+        ];
+        if hurts
+            && lines
+                .into_iter()
+                .flatten()
+                .any(|line| !line.contains("{harm}"))
+        {
+            return Err("needs {harm} in every hit line, for how much it hurt".into());
+        }
         if target && text.hit.target.is_none() {
             return Err("needs text for its target (hit.target)".into());
         }
@@ -1662,23 +1681,30 @@ mod tests {
         };
         assert!(skill.def.check().unwrap_err().contains("needs text"));
         let lines = |target: Option<&str>| Lines {
-            actor: "You punch {target}.".into(),
+            actor: "Your punch {harm} {target}.".into(),
             target: target.map(String::from),
-            room: "{actor} punches {target}.".into(),
+            room: "{actor}'s punch {harm} {target}.".into(),
             beyond: None,
         };
+        // A hit that hurts must say how much.
         skill.def.text = Some(SkillText {
             hit: lines(Some("{actor} punches you.")),
             miss: None,
         });
+        assert!(skill.def.check().unwrap_err().contains("{harm}"));
+        let hurts = Some("{actor}'s punch {harm} you.");
+        skill.def.text = Some(SkillText {
+            hit: lines(hurts),
+            miss: None,
+        });
         assert!(skill.def.check().unwrap_err().contains("miss"));
         skill.def.text = Some(SkillText {
-            hit: lines(Some("{actor} punches you.")),
+            hit: lines(hurts),
             miss: Some(lines(None)),
         });
         assert!(skill.def.check().unwrap_err().contains("miss.target"));
         skill.def.text = Some(SkillText {
-            hit: lines(Some("{actor} punches you.")),
+            hit: lines(hurts),
             miss: Some(lines(Some("{actor} swings at you, but misses."))),
         });
         assert!(skill.def.check().is_ok());
@@ -1771,6 +1797,7 @@ mod tests {
                                     ("door", "c"),
                                     ("item", "d"),
                                     ("direction", "e"),
+                                    ("harm", "f"),
                                 ],
                             );
                             assert!(

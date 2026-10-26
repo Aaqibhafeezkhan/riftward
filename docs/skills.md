@@ -73,13 +73,14 @@ Every skill says, in its own file, what it looks like. Nothing about a skill's w
       description: "A swift kick that lands harder than a punch, for a little stamina.",
       kind: Technique((with: "brawling:basics", cost: Stamina(1), damage: 2)),
       text: (
-          hit: (actor: "You kick {target}.", target: "{actor} kicks you.", room: "{actor} kicks {target}."),
+          hit: (actor: "Your kick {harm} {target}.", target: "{actor}'s kick {harm} you.", room: "{actor}'s kick {harm} {target}."),
           miss: (actor: "You kick at {target}, but miss.", target: "{actor} kicks at you, but misses.",
               room: "{actor} kicks at {target}, but misses."),
       ),
   ),
   ```
 
+- **Damage reads in Diku's words.** Every hit line of an attack or a technique that does damage must hold `{harm}`, filled with how much of the target's health it took ("scratches", "decimates", "MASSACRES"): "Your slash {harm} {target}.", "{actor}'s slash {harm} you." See [Combat](architecture.md#combat).
 - **Required where it shows.** Attacks and techniques that strike need `hit` and `miss`, each with a `target` line; a technique that doesn't strike (Guard) needs `hit`; a counter (Riposte) needs `hit` with a `target` line; an active skill needs `hit` and `miss`. A tree with a skill missing any of these doesn't load, and the tests check every tree file, including that each `{placeholder}` is one the game fills in.
 - **Passives may have text too,** shown when they decide a moment. **Dodge** has: when an attack misses someone who knows it, they see "You dodge the town guard's attack!" instead of a plain miss. In a dodge's text `{actor}` is the dodger and `{target}` the attacker. Passives with nothing to show (Toughness, auras) have only a description, and ones that fire constantly (Endurance) shouldn't have text.
 - **A miss is credited to a defence,** in proportion to how much each adds to the defender's defence, so a big shield more often turns a blow ("The town guard turns your attack aside with a shield!", Block's text) than a sidestep dodges it. Someone with a shield and no Block says so plainly. Parries can join the same way later.

@@ -8,7 +8,8 @@ use bevy::prelude::*;
 
 use super::states::{Conditions, State};
 use super::{
-    ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, CombatLog, Dead, Fighting, Tactics,
+    ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, CombatLog, Dead, Fighting, HideNumbers,
+    Tactics,
 };
 use crate::attributes::{Attribute, Attributes};
 use crate::db::Database;
@@ -47,6 +48,7 @@ pub struct Fighter {
     pub queue: Option<&'static mut ActionQueue>,
     pub aggressive: Has<Aggressive>,
     pub dead: Has<Dead>,
+    pub hide_numbers: Has<HideNumbers>,
     pub player: Option<&'static Player>,
     pub mob: Option<&'static Mob>,
 }
@@ -282,6 +284,28 @@ pub fn choose_attack(
         })
 }
 
+/// What a hit did, by the share of its target's most health it took, from Diku's ladder: a blow
+/// that "scratches" a veteran might "massacre" a rat. The words fill `{harm}` in an attack's text.
+pub fn harm(dealt: i32, most: i32) -> &'static str {
+    if dealt <= 0 {
+        return "doesn't hurt";
+    }
+    match f64::from(dealt) / f64::from(most.max(1)) {
+        f if f < 0.05 => "scratches",
+        f if f < 0.10 => "grazes",
+        f if f < 0.15 => "hits",
+        f if f < 0.20 => "injures",
+        f if f < 0.30 => "wounds",
+        f if f < 0.40 => "mauls",
+        f if f < 0.50 => "decimates",
+        f if f < 0.65 => "devastates",
+        f if f < 0.80 => "maims",
+        f if f < 1.00 => "MUTILATES",
+        f if f < 1.50 => "EVISCERATES",
+        _ => "MASSACRES",
+    }
+}
+
 /// How hard a blow lands, from how decisively its attack won (the opposed roll's margin): a near
 /// thing glances, a decisive win crushes. Skill shows in damage this way, for every attack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -313,16 +337,6 @@ impl Blow {
             Blow::Crushing => 2.0,
         }
     }
-
-    /// Said after the damage: "(6, a strong blow)".
-    pub fn note(self) -> &'static str {
-        match self {
-            Blow::Glancing => ", a glancing blow",
-            Blow::Solid => "",
-            Blow::Strong => ", a strong blow",
-            Blow::Crushing => ", a crushing blow!",
-        }
-    }
 }
 
 /// What a weapon swung untrained looks like: there's no skill of its own to describe it.
@@ -335,9 +349,9 @@ fn untrained() -> SkillText {
     };
     SkillText {
         hit: lines(
-            "You hit {target}.",
-            "{actor} hits you.",
-            "{actor} hits {target}.",
+            "Your blow {harm} {target}.",
+            "{actor}'s blow {harm} you.",
+            "{actor}'s blow {harm} {target}.",
         ),
         miss: Some(lines(
             "You swing at {target}, but miss.",
@@ -606,6 +620,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         };
         let (room, a_name, is_player) = (a.in_room.0, name_of(a.player, a.mob), a.player.is_some());
         let chosen = a.auto.and_then(|auto| auto.0.clone());
+        let a_numbers = !a.hide_numbers;
         let stamina = a.vitals.stamina;
         let a_attributes = a.attributes.clone();
         let a_skills = a.skills.clone();
@@ -733,6 +748,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let d_attributes = d.attributes.clone();
         let d_skills = d.skills.clone();
         let d_mob = d.mob.map(|m| m.key.clone());
+        let d_numbers = !d.hide_numbers;
+        let d_most = Maxima::of(&d_attributes, &d_skills, self.defs, d.base).health;
         let d_aura = self.auras.get(&target).copied().unwrap_or_default();
         let d_boosts = boosts(&d_skills, self.defs);
         let d_gear = gear(target, self.items, self.templates);
@@ -770,8 +787,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let mut dealt = 0;
         let mut blocked = false;
         if hit {
-            let (mine, theirs, seen) = told(&text.hit, &a_name, &d_name);
             if harmless {
+                let (mine, theirs, seen) = told(&text.hit, &a_name, &d_name);
                 tell.lines.push((attacker, mine));
                 tell.lines
                     .push((target, format!("\x1b[31m{theirs}\x1b[0m")));
@@ -801,11 +818,35 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     + a_boosts.damage_with(&key)
                     + extra;
                 dealt = ((f64::from(force) * blow.multiplier()).round() as i32 - armour).max(0);
-                let note = blow.note();
+                // Told in the attack's words, with how much of them it took: "Your slash
+                // decimates the rat." A crushing blow ends with a bang.
+                let with = [
+                    ("actor", a_name.as_str()),
+                    ("target", d_name.as_str()),
+                    ("harm", harm(dealt, d_most)),
+                ];
+                let say = |template: &str| {
+                    let line = fill(template, &with);
+                    match (blow, line.strip_suffix('.')) {
+                        (Blow::Crushing, Some(line)) => format!("{line}!"),
+                        _ => line,
+                    }
+                };
+                let count = |shown: bool| {
+                    if shown {
+                        format!(" ({dealt})")
+                    } else {
+                        String::new()
+                    }
+                };
+                let (mine, seen) = (say(&text.hit.actor), say(&text.hit.room));
+                let theirs = text.hit.target.as_deref().map(say).unwrap_or_default();
                 tell.lines
-                    .push((attacker, format!("{mine} ({dealt}{note})")));
-                tell.lines
-                    .push((target, format!("\x1b[31m{theirs} ({dealt}{note})\x1b[0m")));
+                    .push((attacker, format!("{mine}{}", count(a_numbers))));
+                tell.lines.push((
+                    target,
+                    format!("\x1b[31m{theirs}{}\x1b[0m", count(d_numbers)),
+                ));
                 tell.room.push(seen);
                 if dealt == 0 {
                     let line = format!("The blow glances off {d_name}'s armour.");

@@ -11,9 +11,9 @@
             kind: Attack(),
             text: (
                 hit: (
-                    actor: "You slash {target}.",
-                    target: "{actor} slashes you.",
-                    room: "{actor} slashes {target}.",
+                    actor: "Your slash {harm} {target}.",
+                    target: "{actor}'s slash {harm} you.",
+                    room: "{actor}'s slash {harm} {target}.",
                 ),
                 miss: (
                     actor: "You slash at {target}, but miss.",
@@ -30,9 +30,9 @@
             requires: Skill("swordplay:basics", 15),
             text: (
                 hit: (
-                    actor: "You lunge at {target}, and the point goes home.",
-                    target: "{actor} lunges at you, and the point goes home.",
-                    room: "{actor} lunges at {target}, and the point goes home.",
+                    actor: "Your lunge {harm} {target}.",
+                    target: "{actor}'s lunge {harm} you.",
+                    room: "{actor}'s lunge {harm} {target}.",
                 ),
                 miss: (
                     actor: "You lunge at {target}, but the point goes wide.",

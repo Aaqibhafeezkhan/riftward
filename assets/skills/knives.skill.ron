@@ -11,9 +11,9 @@
             kind: Attack(),
             text: (
                 hit: (
-                    actor: "You stab {target}.",
-                    target: "{actor} stabs you.",
-                    room: "{actor} stabs {target}.",
+                    actor: "Your stab {harm} {target}.",
+                    target: "{actor}'s stab {harm} you.",
+                    room: "{actor}'s stab {harm} {target}.",
                 ),
                 miss: (
                     actor: "You stab at {target}, but miss.",
@@ -30,9 +30,9 @@
             requires: Skill("knives:basics", 15),
             text: (
                 hit: (
-                    actor: "You slip your knife into {target}'s back.",
-                    target: "{actor} slips a knife into your back!",
-                    room: "{actor} slips a knife into {target}'s back.",
+                    actor: "Your knife in the back {harm} {target}.",
+                    target: "{actor}'s knife in the back {harm} you.",
+                    room: "{actor}'s knife in the back {harm} {target}.",
                 ),
                 miss: (
                     actor: "You strike at {target}'s back, but they twist away.",
@@ -49,9 +49,9 @@
             requires: Skill("knives:basics", 15),
             text: (
                 hit: (
-                    actor: "You open a vein on {target}.",
-                    target: "{actor} opens a vein on you.",
-                    room: "{actor} opens a vein on {target}.",
+                    actor: "Your vein-opening slash {harm} {target}.",
+                    target: "{actor}'s vein-opening slash {harm} you.",
+                    room: "{actor}'s vein-opening slash {harm} {target}.",
                 ),
                 miss: (
                     actor: "You slash at {target}, but miss.",

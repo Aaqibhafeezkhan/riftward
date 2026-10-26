@@ -10,9 +10,9 @@
             kind: Attack(damage: (1, 3)),
             text: (
                 hit: (
-                    actor: "You punch {target}.",
-                    target: "{actor} punches you.",
-                    room: "{actor} punches {target}.",
+                    actor: "Your punch {harm} {target}.",
+                    target: "{actor}'s punch {harm} you.",
+                    room: "{actor}'s punch {harm} {target}.",
                 ),
                 miss: (
                     actor: "You swing at {target}, but miss.",
@@ -28,9 +28,9 @@
             requires: Skill("brawling:basics", 15),
             text: (
                 hit: (
-                    actor: "You kick {target}.",
-                    target: "{actor} kicks you.",
-                    room: "{actor} kicks {target}.",
+                    actor: "Your kick {harm} {target}.",
+                    target: "{actor}'s kick {harm} you.",
+                    room: "{actor}'s kick {harm} {target}.",
                 ),
                 miss: (
                     actor: "You kick at {target}, but miss.",

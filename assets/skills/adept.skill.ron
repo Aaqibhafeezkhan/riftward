@@ -30,9 +30,9 @@
             requires: Skill("adept:foundation", 0),
             text: (
                 hit: (
-                    actor: "You strike {target} with an open hand.",
-                    target: "{actor} strikes you with an open hand.",
-                    room: "{actor} strikes {target} with an open hand.",
+                    actor: "Your open-handed strike {harm} {target}.",
+                    target: "{actor}'s open-handed strike {harm} you.",
+                    room: "{actor}'s open-handed strike {harm} {target}.",
                 ),
                 miss: (
                     actor: "You strike at {target}, but miss.",

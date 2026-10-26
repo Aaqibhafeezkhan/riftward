@@ -11,9 +11,9 @@
             kind: Attack(damage: (1, 2)),
             text: (
                 hit: (
-                    actor: "You bite {target}.",
-                    target: "{actor} bites you.",
-                    room: "{actor} bites {target}.",
+                    actor: "Your bite {harm} {target}.",
+                    target: "{actor}'s bite {harm} you.",
+                    room: "{actor}'s bite {harm} {target}.",
                 ),
                 miss: (
                     actor: "You snap at {target}, but miss.",
@@ -28,9 +28,9 @@
             kind: Attack(damage: (1, 1)),
             text: (
                 hit: (
-                    actor: "You bite {target}.",
-                    target: "{actor} bites you.",
-                    room: "{actor} bites {target}.",
+                    actor: "Your bite {harm} {target}.",
+                    target: "{actor}'s bite {harm} you.",
+                    room: "{actor}'s bite {harm} {target}.",
                 ),
                 miss: (
                     actor: "You snap at {target}, but miss.",
@@ -45,9 +45,9 @@
             kind: Attack(damage: (1, 3)),
             text: (
                 hit: (
-                    actor: "You claw {target}.",
-                    target: "{actor} claws you.",
-                    room: "{actor} claws {target}.",
+                    actor: "Your claw {harm} {target}.",
+                    target: "{actor}'s claw {harm} you.",
+                    room: "{actor}'s claw {harm} {target}.",
                 ),
                 miss: (
                     actor: "You claw at {target}, but miss.",
@@ -64,9 +64,9 @@
                 effects: [Bleed(damage: 1, rounds: 3)])),
             text: (
                 hit: (
-                    actor: "You rake {target} open.",
-                    target: "{actor} rakes you open.",
-                    room: "{actor} rakes {target} open.",
+                    actor: "Your rake {harm} {target}.",
+                    target: "{actor}'s rake {harm} you.",
+                    room: "{actor}'s rake {harm} {target}.",
                 ),
                 miss: (
                     actor: "You rake at {target}, but miss.",

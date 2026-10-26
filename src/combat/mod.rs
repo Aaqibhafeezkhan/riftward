@@ -97,6 +97,12 @@ impl Plugin for CombatPlugin {
                 autoattack,
             )
             .add_command(
+                CommandSpec::new("numbers", Category::Character)
+                    .usage("numbers [on | off]")
+                    .summary("show or hide damage numbers in fights"),
+                numbers,
+            )
+            .add_command(
                 CommandSpec::new("stop", Category::Character)
                     .summary("forget the actions you've queued up"),
                 stop,
@@ -119,6 +125,10 @@ pub struct Fighting(pub Entity);
 /// The attack someone makes each round: `None` means the basic attack.
 #[derive(Component, Debug, Clone, Default)]
 pub struct AutoAttack(pub Option<String>);
+
+/// A player who'd rather fights didn't show damage numbers: the words say enough.
+#[derive(Component, Debug)]
+pub struct HideNumbers;
 
 /// A mob that attacks players who come near.
 #[derive(Component, Debug)]
@@ -900,6 +910,42 @@ fn flee(
     deliver(out, &mut players);
 }
 
+/// `numbers [on | off]`: show or hide damage numbers in fights, saved with the character.
+fn numbers(
+    In(inv): In<Invocation>,
+    mut commands: Commands,
+    mut players: PlayerQuery,
+    hidden: Query<(), With<HideNumbers>>,
+    db: Res<Database>,
+) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let shown = hidden.get(inv.entity).is_err();
+    let reply = match inv.args.trim().to_lowercase().as_str() {
+        "" if shown => "Fights show damage numbers. ('numbers off' to hide them.)".to_string(),
+        "" => "Fights don't show damage numbers. ('numbers on' to show them.)".to_string(),
+        word @ ("on" | "off") => {
+            let hide = word == "off";
+            if hide {
+                commands.entity(inv.entity).insert(HideNumbers);
+            } else {
+                commands.entity(inv.entity).remove::<HideNumbers>();
+            }
+            if let Err(err) = db.set_hide_numbers(actor.character_id, hide) {
+                error!("failed to save {}'s numbers setting: {err}", actor.name);
+            }
+            if hide {
+                "Damage numbers hidden: the words will have to say it.".into()
+            } else {
+                "Damage numbers shown.".into()
+            }
+        }
+        _ => inv.usage_error(),
+    };
+    deliver(vec![Outgoing::line(inv.entity, reply)], &mut players);
+}
+
 /// `autoattack [<skill>]`: see or choose the attack made each round.
 fn autoattack(
     In(inv): In<Invocation>,
@@ -1407,6 +1453,17 @@ mod tests {
     }
 
     #[test]
+    fn a_hit_reads_by_the_share_of_health_it_took() {
+        use strike::harm;
+        assert_eq!(harm(0, 10), "doesn't hurt");
+        assert_eq!(harm(1, 100), "scratches");
+        // The same five points: a graze to a veteran, a massacre to a rat.
+        assert_eq!(harm(5, 60), "grazes");
+        assert_eq!(harm(5, 3), "MASSACRES");
+        assert_eq!(harm(4, 10), "decimates");
+    }
+
+    #[test]
     fn decisive_wins_land_harder() {
         use strike::Blow;
         assert_eq!(Blow::of(1.0), Blow::Glancing);
@@ -1415,7 +1472,6 @@ mod tests {
         assert_eq!(Blow::of(10.0), Blow::Crushing);
         assert_eq!(Blow::Glancing.multiplier(), 0.5);
         assert_eq!(Blow::Crushing.multiplier(), 2.0);
-        assert_eq!(Blow::Solid.note(), "");
     }
 
     #[test]

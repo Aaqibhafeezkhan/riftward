@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use crate::aliases::Aliases;
 use crate::attributes::{Attribute, Attributes, experience_for};
 use crate::characters::{self, Backgrounds, RaceDef, Races, STARTING_ITEMS};
-use crate::combat::AutoAttack;
+use crate::combat::{AutoAttack, HideNumbers};
 use crate::command::{self, ActionQueue};
 use crate::commands::movement::{View, describe_room};
 use crate::db::{Account, CharacterRecord, Database, ItemPlace, Permission, Role};
@@ -913,6 +913,9 @@ fn enter_game(
         },
         InRoom(room),
     ));
+    if character.hide_numbers {
+        commands.entity(entity).insert(HideNumbers);
+    }
     info!("{name} entered the game (account '{}')", account.username);
 
     out.push(Outgoing::line(

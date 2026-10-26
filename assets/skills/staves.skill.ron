@@ -11,9 +11,9 @@
             kind: Attack(),
             text: (
                 hit: (
-                    actor: "You strike {target}.",
-                    target: "{actor} strikes you.",
-                    room: "{actor} strikes {target}.",
+                    actor: "Your strike {harm} {target}.",
+                    target: "{actor}'s strike {harm} you.",
+                    room: "{actor}'s strike {harm} {target}.",
                 ),
                 miss: (
                     actor: "You strike at {target}, but miss.",
@@ -29,9 +29,9 @@
             requires: Skill("staves:basics", 15),
             text: (
                 hit: (
-                    actor: "You sweep {target}'s legs from under them.",
-                    target: "{actor} sweeps the legs from under you.",
-                    room: "{actor} sweeps the legs from under {target}.",
+                    actor: "Your sweep {harm} {target}.",
+                    target: "{actor}'s sweep {harm} you.",
+                    room: "{actor}'s sweep {harm} {target}.",
                 ),
                 miss: (
                     actor: "You sweep at {target}'s legs, but miss.",

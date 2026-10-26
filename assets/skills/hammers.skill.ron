@@ -11,9 +11,9 @@
             kind: Attack(),
             text: (
                 hit: (
-                    actor: "You smash {target}.",
-                    target: "{actor} smashes you.",
-                    room: "{actor} smashes {target}.",
+                    actor: "Your smash {harm} {target}.",
+                    target: "{actor}'s smash {harm} you.",
+                    room: "{actor}'s smash {harm} {target}.",
                 ),
                 miss: (
                     actor: "You swing at {target}, but miss.",
@@ -29,9 +29,9 @@
             requires: Skill("hammers:basics", 15),
             text: (
                 hit: (
-                    actor: "You slam into {target}.",
-                    target: "{actor} slams into you.",
-                    room: "{actor} slams into {target}.",
+                    actor: "Your slam {harm} {target}.",
+                    target: "{actor}'s slam {harm} you.",
+                    room: "{actor}'s slam {harm} {target}.",
                 ),
                 miss: (
                     actor: "You swing hard at {target}, but miss.",
@@ -48,9 +48,9 @@
             requires: Skill("hammers:basics", 15),
             text: (
                 hit: (
-                    actor: "You bring a crushing blow down on {target}.",
-                    target: "{actor} brings a crushing blow down on you.",
-                    room: "{actor} brings a crushing blow down on {target}.",
+                    actor: "Your hammer blow {harm} {target}.",
+                    target: "{actor}'s hammer blow {harm} you.",
+                    room: "{actor}'s hammer blow {harm} {target}.",
                 ),
                 miss: (
                     actor: "You bring a blow down at {target}, but miss.",
