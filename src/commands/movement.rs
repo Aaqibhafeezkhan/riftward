@@ -7,6 +7,7 @@ use bevy::prelude::*;
 
 use crate::attributes::Attribute;
 use crate::characters::{Races, article};
+use crate::combat::{ConditionDefs, Conditions};
 use crate::combat::{Fighting, the};
 use crate::command::Invocation;
 use crate::commands::doors::{DoorLookup, find_door};
@@ -37,6 +38,22 @@ pub struct View<'w, 's> {
     /// Who is hidden, and from whom.
     pub hidden: Query<'w, 's, &'static Hidden>,
     pub sneaking: Query<'w, 's, (), With<Sneaking>>,
+    /// What's on everyone, for what stops them moving and what others see of them.
+    pub conditions: Query<'w, 's, &'static Conditions>,
+    pub condition_defs: Res<'w, ConditionDefs>,
+}
+
+impl View<'_, '_> {
+    /// What others see of `who`'s conditions, one hint a line: "A faint shimmer surrounds Grok."
+    pub fn hints(&self, who: Entity, name: &str) -> String {
+        self.conditions
+            .get(who)
+            .map(|c| c.hints(&self.condition_defs, &capitalized(name)))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|hint| hint + "\r\n")
+            .collect()
+    }
 }
 
 /// `look` describes the room; `look <target>` looks along an exit, at a door, at someone here, or
@@ -107,11 +124,14 @@ pub fn look(
                     format!("You look yourself over. {}", describe_player(me, &races))
                 }
                 Some((e, Some(other), _)) => {
-                    describe_player(other, &races) + &gear_lines(e, &view.items, &other.name)
+                    describe_player(other, &races)
+                        + &view.hints(e, &other.name)
+                        + &gear_lines(e, &view.items, &other.name)
                 }
                 Some((e, _, Some((_, mob, _)))) => {
                     mobs::describe(mob, &races)
                         + "\r\n"
+                        + &view.hints(e, &the(&mob.name))
                         + &gear_lines(e, &view.items, &the(&mob.name))
                 }
                 _ => match find_item(&inv.args, &actor, &view.items, &keywords, &templates) {
@@ -208,6 +228,15 @@ pub fn travel(
     let Some(actor) = Actor::get(players, entity) else {
         return out;
     };
+    // A rooted character goes nowhere.
+    if view
+        .conditions
+        .get(entity)
+        .is_ok_and(|c| !c.can_move(&view.condition_defs))
+    {
+        out.push(Outgoing::line(entity, "You can't move!"));
+        return out;
+    }
     let dir = full_direction(&dir.to_ascii_lowercase()).to_string();
     let Some(&exit) = view
         .rooms

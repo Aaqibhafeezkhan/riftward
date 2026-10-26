@@ -14,6 +14,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::attributes::{Attribute, Attributes};
+use crate::combat::Conditions;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, ItemPlace, Permission, RoomItemRow};
 use crate::dice::Dice;
@@ -27,8 +28,8 @@ use crate::stealth::{Hidden, visible};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::world::{
-    Capacity, DoorState, ItemDef, ItemKey, Player, RoomIndex, RoomKey, START_ROOM, Slot, ZoneDef,
-    format_bulk, without_article,
+    Capacity, DoorState, Having, ItemDef, ItemKey, Player, RoomIndex, RoomKey, START_ROOM, Slot,
+    ZoneDef, format_bulk, without_article,
 };
 
 pub struct ItemsPlugin;
@@ -43,6 +44,7 @@ impl Plugin for ItemsPlugin {
                 (
                     (sync_templates, restore_room_items, load_carried_items).chain(),
                     (rot, drop_orphaned).run_if(heartbeat()),
+                    sync_grants,
                 ),
             )
             .add_systems(
@@ -957,6 +959,74 @@ fn sync_templates(
                 item.name = name;
             }
             commands.entity(entity).insert(item.quality.keywords(def));
+        }
+    }
+}
+
+/// Give everyone the conditions their items grant (see `ItemDef::grants`), and take away those
+/// of items they no longer have: worn, held, or anywhere on them, as each grant says. It works
+/// whenever an item moves, appears or goes, and every second in case a template changed.
+#[allow(clippy::too_many_arguments)]
+fn sync_grants(
+    items: ItemQuery,
+    templates: Res<ItemTemplates>,
+    mut characters: Query<(Entity, &mut Conditions)>,
+    moved: Query<(), Changed<ItemLocation>>,
+    mut gone: RemovedComponents<ItemLocation>,
+    time: Res<Time>,
+    mut checked: Local<f64>,
+) {
+    let now = time.elapsed_secs_f64();
+    let changed = !moved.is_empty() || gone.read().count() > 0;
+    if !changed && now - *checked < 1.0 {
+        return;
+    }
+    *checked = now;
+    let locations: HashMap<Entity, ItemLocation> = items.iter().map(|(e, _, l)| (e, *l)).collect();
+    // Who has an item, and how: worn or held directly, or carried inside something they have.
+    let holder = |item: Entity| {
+        let mut at = *locations.get(&item)?;
+        let mut packed = false;
+        loop {
+            match at {
+                ItemLocation::Worn(who, _) if !packed => return Some((who, Having::Worn)),
+                ItemLocation::Held(who) if !packed => return Some((who, Having::Held)),
+                ItemLocation::Worn(who, _) | ItemLocation::Held(who) => {
+                    return Some((who, Having::Carried));
+                }
+                ItemLocation::Inside(container) => {
+                    at = *locations.get(&container)?;
+                    packed = true;
+                }
+                ItemLocation::Room(_) => return None,
+            }
+        }
+    };
+    let mut granted: HashMap<Entity, Vec<(String, i32, Entity)>> = HashMap::new();
+    for (entity, item, _) in &items {
+        let Some(def) = templates.0.get(&item.key).filter(|d| !d.grants.is_empty()) else {
+            continue;
+        };
+        let Some((who, having)) = holder(entity) else {
+            continue;
+        };
+        for grant in &def.grants {
+            if grant.when == having || grant.when == Having::Carried {
+                granted.entry(who).or_default().push((
+                    grant.condition.clone(),
+                    grant.strength,
+                    entity,
+                ));
+            }
+        }
+    }
+    for (who, mut conditions) in &mut characters {
+        let mut should = granted.remove(&who).unwrap_or_default();
+        should.sort_by_key(|(key, _, item)| (key.clone(), *item));
+        let mut has = conditions.grants();
+        has.sort_by_key(|(key, _, item)| (key.clone(), *item));
+        if should != has {
+            conditions.set_grants(should);
         }
     }
 }
@@ -2350,6 +2420,48 @@ fn destroy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn items_grant_their_conditions_while_worn() {
+        use crate::world::Grant;
+        use bevy::ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        world.insert_resource(crate::combat::defs_on_disk());
+        world.insert_resource(Time::<()>::default());
+        let ring_key = ItemKey::parse("amulet", "test");
+        let mut ring = ItemDef::named("a gold amulet");
+        ring.wear = Some(Slot::Neck);
+        ring.grants = vec![Grant {
+            condition: "blessed".into(),
+            strength: 2,
+            when: Having::Worn,
+        }];
+        let mut templates = ItemTemplates::default();
+        templates.0.insert(ring_key.clone(), ring);
+        world.insert_resource(templates);
+        let wearer = world.spawn(Conditions::default()).id();
+        let room = world.spawn_empty().id();
+        let item = world
+            .spawn((
+                Item {
+                    key: ring_key,
+                    name: "a gold amulet".into(),
+                    id: None,
+                    state: DoorState::Open,
+                    quality: Quality::Standard,
+                },
+                ItemLocation::Worn(wearer, Slot::Neck),
+            ))
+            .id();
+        let defs = crate::combat::defs_on_disk();
+        let attack = |world: &World| world.get::<Conditions>(wearer).unwrap().attack(&defs);
+        world.run_system_once(sync_grants).unwrap();
+        assert_eq!(attack(&world), 2, "worn, it blesses");
+        // Taken off and dropped, it doesn't.
+        *world.get_mut::<ItemLocation>(item).unwrap() = ItemLocation::Room(room);
+        world.run_system_once(sync_grants).unwrap();
+        assert_eq!(attack(&world), 0);
+    }
 
     #[test]
     fn quality_shows_in_names_after_the_article() {

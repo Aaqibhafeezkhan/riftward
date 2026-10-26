@@ -10,7 +10,10 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::{Conditions, State};
+use crate::combat::Conditions;
+
+/// The condition a bandage stops.
+const BLEEDING: &str = "bleeding";
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::dice::Dice;
@@ -246,9 +249,7 @@ fn bandage(
             let (vitals, max) = practice
                 .vitals(patient, bases.get(patient).ok())
                 .ok_or_else(String::new)?;
-            let bleeding = conditions
-                .get(patient)
-                .is_ok_and(|c| c.has(State::Bleeding(0)));
+            let bleeding = conditions.get(patient).is_ok_and(|c| c.has(BLEEDING));
             (max.health as f32 - vitals.health, bleeding)
         };
         if missing < 1.0 && !bleeding {
@@ -283,7 +284,7 @@ fn bandage(
                 vitals.clamp(max);
             }
             if let Ok(mut conditions) = conditions.get_mut(patient) {
-                conditions.remove(State::Bleeding(0));
+                conditions.remove(BLEEDING);
             }
             Some(healed)
         } else {

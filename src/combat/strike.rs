@@ -7,7 +7,7 @@ use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 
 use super::casting::MobMove;
-use super::states::{Conditions, State};
+use super::states::{ConditionDefs, Conditions, Lasts};
 use super::{
     ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, Dead, Fighting, HideNumbers, Tactics,
 };
@@ -413,6 +413,7 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub items: &'a ItemQuery<'iw, 'is>,
     pub templates: &'a ItemTemplates,
     pub defs: &'a SkillDefs,
+    pub conditions: &'a ConditionDefs,
     pub spells: &'a SpellDefs,
     pub dice: &'a mut Dice,
     pub db: &'a Database,
@@ -564,71 +565,79 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             || self
                 .fighters
                 .get(target)
-                .is_ok_and(|f| f.conditions.has(State::Down))
+                .is_ok_and(|f| f.conditions.has("down"))
     }
 
     /// Bleeding and the like at the start of a fighter's turn. Returns whether they keep their
     /// turn, and whether they died.
     pub fn start_turn(&mut self, who: Entity) -> (bool, bool) {
-        let name = self.name(who);
+        let name = capitalized(&self.name(who));
+        let conditions = self.conditions;
         let Ok(mut fighter) = self.fighters.get_mut(who) else {
             return (false, false);
         };
-        let start = fighter.conditions.start_turn();
+        let start = fighter.conditions.start_turn(conditions);
         let room = fighter.in_room.0;
-        let mut died = false;
-        if start.bleeding > 0 {
-            fighter.vitals.health -= start.bleeding as f32;
-            died = fighter.vitals.health <= 0.0;
-            self.say(
+        let most = Maxima::of(
+            &fighter.attributes,
+            &fighter.skills,
+            self.defs,
+            fighter.base,
+        )
+        .health;
+        let mut killed_by = None;
+        let mut told = Vec::new();
+        // What hurts or heals each turn, in each condition's words.
+        for (key, amount) in &start.health {
+            fighter.vitals.health = (fighter.vitals.health + *amount as f32).min(most as f32);
+            let text = conditions.get(key).map(|d| &d.text);
+            if let Some(each) = text.and_then(|t| t.each_turn.as_ref()) {
+                let colour = if *amount < 0 { "\x1b[31m" } else { "\x1b[32m" };
+                let (mine, theirs) = each.fill(&name, *amount);
+                told.push((format!("{colour}{mine}\x1b[0m"), theirs));
+            }
+            if fighter.vitals.health <= 0.0 && killed_by.is_none() {
+                killed_by = Some(key.clone());
+            }
+        }
+        let mob = fighter.mob.map(|m| m.key.clone());
+        for (mine, theirs) in told {
+            self.say(who, mine);
+            if let Some(theirs) = theirs {
+                self.tell_room(room, who, who, &theirs);
+            }
+        }
+        if let Some(key) = killed_by {
+            self.events.write(GameEvent::Died {
                 who,
-                format!("\x1b[31mYou bleed. ({})\x1b[0m", start.bleeding),
+                name: name.clone(),
+                room,
+                mob,
+            });
+            let kills = conditions.get(&key).and_then(|d| d.text.kills.as_ref());
+            let (mine, theirs) = kills.map_or_else(
+                || ("You die.".to_string(), Some(format!("{name} falls, dead."))),
+                |told| told.fill(&name, 0),
             );
-            self.tell_room(room, who, who, &format!("{} bleeds.", capitalized(&name)));
-            if died {
-                self.events.write(GameEvent::Died {
-                    who,
-                    name: name.clone(),
-                    room,
-                    mob: self
-                        .fighters
-                        .get(who)
-                        .ok()
-                        .and_then(|f| f.mob.map(|m| m.key.clone())),
-                });
-                self.say(who, "\x1b[1mYou bleed out.\x1b[0m");
-                self.tell_room(
-                    room,
-                    who,
-                    who,
-                    &format!("{} bleeds out and falls, dead.", capitalized(&name)),
-                );
-                return (false, true);
+            self.say(who, format!("\x1b[1m{mine}\x1b[0m"));
+            if let Some(theirs) = theirs {
+                self.tell_room(room, who, who, &theirs);
+            }
+            return (false, true);
+        }
+        // A condition that costs the turn says so, in its own words.
+        let Some(key) = start.lost_to else {
+            return (true, false);
+        };
+        let lost = conditions.get(&key).and_then(|d| d.text.lost_turn.as_ref());
+        if let Some(lost) = lost {
+            let (mine, theirs) = lost.fill(&name, 0);
+            self.say(who, format!("\x1b[1m{mine}\x1b[0m"));
+            if let Some(theirs) = theirs {
+                self.tell_room(room, who, who, &theirs);
             }
         }
-        match start.lost_to {
-            Some(State::Staggered) => {
-                self.say(who, "\x1b[1mYou reel, staggered, and can't act!\x1b[0m");
-                self.tell_room(
-                    room,
-                    who,
-                    who,
-                    &format!("{} reels, staggered.", capitalized(&name)),
-                );
-                (false, false)
-            }
-            Some(State::Down) => {
-                self.say(who, "\x1b[1mYou struggle back to your feet.\x1b[0m");
-                self.tell_room(
-                    room,
-                    who,
-                    who,
-                    &format!("{} struggles back up.", capitalized(&name)),
-                );
-                (false, false)
-            }
-            _ => (true, died),
-        }
+        (false, false)
     }
 
     /// Make an attack: a plain one, or `technique`. `counter` marks a riposte, which can't itself
@@ -647,7 +656,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let (room, a_name, is_player) = (a.in_room.0, name_of(a.player, a.mob), a.player.is_some());
         let chosen = a.auto.and_then(|auto| auto.0.clone());
         let a_numbers = !a.hide_numbers;
-        let blessing = a.conditions.blessing();
+        let blessing = a.conditions.attack(self.conditions);
+        let a_damage_times = a.conditions.damage_dealt(self.conditions);
         let stamina = a.vitals.stamina;
         let a_attributes = a.attributes.clone();
         let a_skills = a.skills.clone();
@@ -705,15 +715,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
 
         // The user's own effects happen whether or not the blow lands.
         if let Some(Move { technique: t, .. }) = &technique {
-            for effect in &t.effects {
-                let state = match *effect {
-                    Effect::Expose => Some((State::Exposed, 1)),
-                    Effect::Guard { defence, rounds } => Some((State::Guarding(defence), rounds)),
-                    _ => None,
-                };
-                if let (Some((state, turns)), Ok(mut f)) = (state, self.fighters.get_mut(attacker))
-                {
-                    f.conditions.add(state, turns);
+            let conditions = self.conditions;
+            for (key, strength, turns) in t.effects.iter().filter_map(Effect::on_user) {
+                if let Ok(mut f) = self.fighters.get_mut(attacker) {
+                    f.conditions
+                        .apply(conditions, key, strength, Lasts::Turns(turns.max(1)));
                 }
             }
             if t.strike == StrikeKind::None {
@@ -781,7 +787,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let d_boosts = boosts(&d_skills, self.defs);
         let d_gear = gear(target, self.items, self.templates);
         let parts = defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts, d_gear);
-        let mut defence = d.conditions.defence(parts.total());
+        let mut defence = d.conditions.defence(parts.total(), self.conditions);
+        let d_condition_armour = d.conditions.armour(self.conditions);
+        let d_damage_times = d.conditions.damage_taken(self.conditions);
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let opener = technique.as_ref().is_some_and(|m| m.technique.opener);
         if self.resting.contains(&target) || opener {
@@ -844,13 +852,17 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 let armour = if ignores_armour {
                     0
                 } else {
-                    (d_aura.armour + d_boosts.armour + d_gear.reduction - pierce).max(0)
+                    (d_aura.armour + d_boosts.armour + d_gear.reduction + d_condition_armour
+                        - pierce)
+                        .max(0)
                 };
                 let force = rolled
                     + a_attributes.get(Attribute::Strength) / 2
                     + a_boosts.damage_with(&key)
                     + extra;
-                dealt = ((f64::from(force) * blow.multiplier()).round() as i32 - armour).max(0);
+                // Conditions on either side move it: weakened, strengthened, and the like.
+                let times = blow.multiplier() * a_damage_times * d_damage_times;
+                dealt = ((f64::from(force) * times).round() as i32 - armour).max(0);
                 // A ward takes what it can, told after the blow it stopped.
                 let mut ward = Telling::default();
                 let warded = self.ward_off(target, attacker, dealt, &d_name, &mut ward);
@@ -914,35 +926,23 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             // The technique's effects on the target, if it's still standing.
             if let Some(Move { technique: t, .. }) = &technique {
                 let standing = !died.contains(&target);
-                for effect in t.effects.iter().filter(|_| standing) {
-                    let (state, turns, said) = match *effect {
-                        Effect::Stagger => (State::Staggered, 1, "is staggered"),
-                        Effect::KnockDown => (State::Down, 1, "goes down"),
-                        Effect::Bleed { damage, rounds } => {
-                            (State::Bleeding(damage), rounds, "is bleeding")
-                        }
-                        Effect::Hold { rounds } => (State::Held, rounds, "is caught in a hold"),
-                        _ => continue,
-                    };
+                let conditions = self.conditions;
+                let inflicted = t.effects.iter().filter_map(Effect::on_target);
+                for (key, strength, turns) in inflicted.filter(|_| standing) {
                     if let Ok(mut f) = self.fighters.get_mut(target) {
-                        f.conditions.add(state, turns);
+                        f.conditions
+                            .apply(conditions, key, strength, Lasts::Turns(turns.max(1)));
                     }
-                    let line = format!("{} {said}!", capitalized(&d_name));
-                    tell.lines.push((attacker, line.clone()));
-                    tell.room.push(line);
-                    tell.lines.push((
-                        target,
-                        format!(
-                            "\x1b[1mYou {}!\x1b[0m",
-                            match state {
-                                State::Staggered => "are staggered",
-                                State::Down => "go down",
-                                State::Bleeding(_) => "are bleeding",
-                                State::Held => "are caught in a hold",
-                                _ => "are hurt",
-                            }
-                        ),
-                    ));
+                    // Told in the condition's own words: "The rat is staggered!".
+                    let applied = conditions.get(key).and_then(|d| d.text.applied.as_ref());
+                    if let Some(applied) = applied {
+                        let (theirs, seen) = applied.fill(&capitalized(&d_name), strength);
+                        if let Some(seen) = seen {
+                            tell.lines.push((attacker, seen.clone()));
+                            tell.room.push(seen);
+                        }
+                        tell.lines.push((target, format!("\x1b[1m{theirs}\x1b[0m")));
+                    }
                 }
                 // Cleave: the blow carries on into another foe fighting the attacker, even
                 // when it fells the first.
@@ -1067,28 +1067,34 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         name: &str,
         tell: &mut Telling,
     ) -> i32 {
+        let conditions = self.conditions;
         let Ok(mut f) = self.fighters.get_mut(who) else {
             return 0;
         };
-        let taken = f.conditions.absorb(damage);
-        if taken > 0 {
-            let gone = if f.conditions.has(State::Warded(0)) {
-                ""
-            } else {
-                ", and fails"
+        let hide_numbers = f.hide_numbers;
+        let absorbed = f.conditions.absorb_by(damage, conditions);
+        let name = capitalized(name);
+        for by in &absorbed {
+            // In the condition's own words: "Your ward takes the blow (3)." and, spent, "Your
+            // ward fails!".
+            let Some(text) = conditions.get(&by.key).map(|d| &d.text) else {
+                continue;
             };
-            let count = if f.hide_numbers {
-                String::new()
-            } else {
-                format!(" ({taken})")
-            };
-            tell.lines
-                .push((who, format!("Your ward takes the blow{count}{gone}.")));
-            let seen = format!("{}'s ward takes the blow{gone}.", capitalized(name));
-            tell.lines.push((attacker, seen.clone()));
-            tell.room.push(seen);
+            let breaks = text.breaks.as_ref().filter(|_| by.spent);
+            for told in text.absorbs.iter().chain(breaks) {
+                let mut told = told.clone();
+                if hide_numbers {
+                    told.bearer = told.bearer.replace(" ({amount})", "");
+                }
+                let (mine, seen) = told.fill(&name, by.taken);
+                tell.lines.push((who, mine));
+                if let Some(seen) = seen {
+                    tell.lines.push((attacker, seen.clone()));
+                    tell.room.push(seen);
+                }
+            }
         }
-        taken
+        absorbed.iter().map(|by| by.taken).sum()
     }
 
     /// Take damage. Returns whether it killed them.

@@ -50,7 +50,9 @@ use crate::vitals::{Maxima, Resting, Vitals};
 use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_article};
 
 pub use casting::MobMove;
-pub use states::{Conditions, State};
+#[cfg(test)]
+pub use states::defs_on_disk;
+pub use states::{ConditionDefs, Conditions, Lasts};
 pub use strike::{Blow, Fighters, Move, Round, name_of};
 
 /// Seconds in a combat round, and between a player's actions.
@@ -68,7 +70,8 @@ pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, expire_conditions.run_if(heartbeat()))
+        app.add_plugins(states::ConditionsPlugin)
+            .add_systems(Update, expire_conditions.run_if(heartbeat()))
             .add_systems(
                 Update,
                 (
@@ -230,7 +233,7 @@ fn combat_round(
     mut fighters: Fighters,
     items: ItemQuery,
     templates: Res<ItemTemplates>,
-    (defs, spells): (Res<SkillDefs>, Res<SpellDefs>),
+    (defs, spells, condition_defs): (Res<SkillDefs>, Res<SpellDefs>, Res<ConditionDefs>),
     mut dice: ResMut<Dice>,
     db: Res<Database>,
     time: Res<Time>,
@@ -323,6 +326,7 @@ fn combat_round(
         templates: &templates,
         defs: &defs,
         spells: &spells,
+        conditions: &condition_defs,
         dice: &mut dice,
         db: &db,
         events: &mut events,
@@ -485,16 +489,23 @@ fn combat_round(
     }
 }
 
-/// `affects`: what's affecting you, and for how long.
+/// `affects`: what's affecting you, and for how long; what an item grants, while you have it.
 fn affects(
     In(inv): In<Invocation>,
     mut outbox: ResMut<Outbox>,
     conditions: Query<&Conditions>,
+    defs: Res<ConditionDefs>,
+    items: ItemQuery,
     time: Res<Time>,
 ) {
+    let name = |item: Entity| {
+        items
+            .get(item)
+            .map_or("something".into(), |(_, i, _)| i.name.clone())
+    };
     let lines = conditions
         .get(inv.entity)
-        .map(|c| c.listed(time.elapsed_secs_f64()))
+        .map(|c| c.listed(time.elapsed_secs_f64(), &defs, name))
         .unwrap_or_default();
     let text = if lines.is_empty() {
         "Nothing is affecting you.".to_string()
@@ -504,21 +515,33 @@ fn affects(
     deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
 }
 
-/// End conditions whose time is up, in a fight or out of one, and tell their bearers.
+/// End conditions whose time is up, in a fight or out of one, and tell their bearers, and those
+/// around them, in each condition's words.
 fn expire_conditions(
     mut conditions: Query<(Entity, &mut Conditions)>,
+    characters: Characters,
+    defs: Res<ConditionDefs>,
     time: Res<Time>,
     mut log: ResMut<Outbox>,
 ) {
     let now = time.elapsed_secs_f64();
     for (who, mut conditions) in &mut conditions {
-        for state in conditions.expire(now) {
-            let line = match state {
-                State::Blessed(_) => "The warm light of your blessing fades.",
-                State::Warded(_) => "Your ward flickers and fades.",
-                _ => continue,
+        for over in conditions.expire(now) {
+            let Some(fades) = defs.get(&over.key).and_then(|d| d.text.fades.as_ref()) else {
+                continue;
             };
-            log.0.push(Outgoing::line(who, line));
+            let Some(bearer) = Actor::get(&characters, who) else {
+                continue;
+            };
+            let (mine, theirs) = fades.fill(&bearer.name, over.strength);
+            log.0.push(Outgoing::line(who, mine));
+            if let Some(theirs) = theirs {
+                log.0.push(Outgoing::Room {
+                    room: bearer.room,
+                    except: who,
+                    text: theirs + "\r\n",
+                });
+            }
         }
     }
 }
@@ -1038,7 +1061,7 @@ fn flee(
     fighting: Query<&Fighting>,
     mut practice: Practice,
     db: Res<Database>,
-    conditions: Query<&Conditions>,
+    (conditions, condition_defs): (Query<&Conditions>, Res<ConditionDefs>),
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -1048,7 +1071,10 @@ fn flee(
     let mut escape = None;
     let mut out = if fighting.get(inv.entity).is_err() {
         reply("You aren't fighting anyone.")
-    } else if conditions.get(inv.entity).is_ok_and(|c| !c.can_flee()) {
+    } else if conditions
+        .get(inv.entity)
+        .is_ok_and(|c| !c.can_flee(&condition_defs))
+    {
         reply("You're held fast and can't break away!")
     } else if let Some((_, mut vitals, attributes)) = practice.sheet(inv.entity) {
         let luck = attributes.get(Attribute::Luck);
@@ -1328,6 +1354,7 @@ mod tests {
         };
         world.insert_resource(defs);
         world.insert_resource(SpellDefs::default());
+        world.insert_resource(states::defs_on_disk());
         world.insert_resource(ItemTemplates::default());
         world.insert_resource(Dice::seeded(7));
         world.insert_resource(Database::open(":memory:").unwrap());
@@ -1578,10 +1605,13 @@ mod tests {
         let brute = fighter(&mut world, room, 5, 1, &[BASIC_ATTACK]);
         let warded = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
         sure_hands(&mut world, brute);
-        world
-            .get_mut::<Conditions>(warded)
-            .unwrap()
-            .add(State::Warded(1000), 5);
+        let defs = states::defs_on_disk();
+        world.get_mut::<Conditions>(warded).unwrap().apply(
+            &defs,
+            "warded",
+            1000,
+            Lasts::Until(1e9),
+        );
         world.entity_mut(brute).insert(Fighting(warded));
         world.run_system_once(combat_round).unwrap();
         assert_eq!(world.get::<Vitals>(warded).unwrap().health, 100.0);
@@ -1641,17 +1671,31 @@ mod tests {
     fn a_blessing_wears_off_in_time_fighting_or_not() {
         let (mut world, room) = world();
         let resting = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
-        world
-            .get_mut::<Conditions>(resting)
-            .unwrap()
-            .add_until(State::Blessed(2), 600.0);
+        world.get_mut::<Conditions>(resting).unwrap().apply(
+            &states::defs_on_disk(),
+            "blessed",
+            2,
+            Lasts::Until(600.0),
+        );
         world.run_system_once(expire_conditions).unwrap();
-        assert_eq!(world.get::<Conditions>(resting).unwrap().blessing(), 2);
+        assert_eq!(
+            world
+                .get::<Conditions>(resting)
+                .unwrap()
+                .attack(&states::defs_on_disk()),
+            2
+        );
         world
             .resource_mut::<Time>()
             .advance_by(std::time::Duration::from_secs(600));
         world.run_system_once(expire_conditions).unwrap();
-        assert_eq!(world.get::<Conditions>(resting).unwrap().blessing(), 0);
+        assert_eq!(
+            world
+                .get::<Conditions>(resting)
+                .unwrap()
+                .attack(&states::defs_on_disk()),
+            0
+        );
         assert!(said(&world, resting, "blessing fades"));
     }
 

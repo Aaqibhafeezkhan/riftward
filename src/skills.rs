@@ -500,8 +500,9 @@ pub enum StrikeKind {
     None,
 }
 
-/// What a technique does besides damage.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+/// What a technique does besides damage. The ones that leave a condition name it in
+/// `assets/conditions`; `Inflict` and `Gain` put any condition there is on the target or the user.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
     /// The target loses their next turn.
     Stagger,
@@ -521,6 +522,56 @@ pub enum Effect {
     Expose,
     /// The user defends better for `rounds` turns.
     Guard { defence: i32, rounds: u32 },
+    /// Puts a condition on the target, at `strength`, for `rounds` of their turns.
+    Inflict {
+        condition: String,
+        #[serde(default = "one")]
+        strength: i32,
+        rounds: u32,
+    },
+    /// Puts a condition on the user, at `strength`, for `rounds` of their turns.
+    Gain {
+        condition: String,
+        #[serde(default = "one")]
+        strength: i32,
+        rounds: u32,
+    },
+}
+
+fn one() -> i32 {
+    1
+}
+
+impl Effect {
+    /// The condition it leaves on the target, if any: (condition, strength, turns).
+    pub fn on_target(&self) -> Option<(&str, i32, u32)> {
+        match self {
+            Effect::Stagger => Some(("staggered", 1, 1)),
+            Effect::KnockDown => Some(("down", 1, 1)),
+            Effect::Bleed { damage, rounds } => Some(("bleeding", *damage as i32, *rounds)),
+            Effect::Hold { rounds } => Some(("held", 1, *rounds)),
+            Effect::Inflict {
+                condition,
+                strength,
+                rounds,
+            } => Some((condition.as_str(), *strength, *rounds)),
+            _ => None,
+        }
+    }
+
+    /// The condition it leaves on the user, if any: (condition, strength, turns).
+    pub fn on_user(&self) -> Option<(&str, i32, u32)> {
+        match self {
+            Effect::Expose => Some(("exposed", 1, 1)),
+            Effect::Guard { defence, rounds } => Some(("guarding", *defence, *rounds)),
+            Effect::Gain {
+                condition,
+                strength,
+                rounds,
+            } => Some((condition.as_str(), *strength, *rounds)),
+            _ => None,
+        }
+    }
 }
 
 /// What an aura adds to the mobs it affects.
@@ -2039,9 +2090,23 @@ mod tests {
                 let tree: SkillTreeDef = ron_options()
                     .from_str(&text)
                     .unwrap_or_else(|err| panic!("{} doesn't parse: {err}", path.display()));
+                let conditions = crate::combat::defs_on_disk();
                 for (id, skill) in &tree.skills {
                     if let SkillKind::Active { command, .. } = &skill.kind {
                         assert!(!command.is_empty(), "{id} has no command");
+                    }
+                    // Every condition a technique leaves is a real one.
+                    if let SkillKind::Technique(t) = &skill.kind {
+                        for effect in &t.effects {
+                            let left = effect.on_target().or(effect.on_user());
+                            if let Some((key, _, _)) = left {
+                                assert!(
+                                    conditions.get(key).is_some(),
+                                    "{} {id}: no condition '{key}'",
+                                    path.display()
+                                );
+                            }
+                        }
                     }
                     // Its text is all there, and every placeholder is one the game fills in.
                     if let Err(err) = skill.check() {

@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::{Fighters, Fighting, Round, the};
+use crate::combat::{ConditionDefs, Conditions, Fighters, Fighting, Lasts, Round, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::dice::Dice;
@@ -127,7 +127,7 @@ pub enum Resist {
 }
 
 /// What a spell does. Amounts rolled get a third of the spell's power on top.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum SpellEffect {
     /// Damage, landing harder the more decisively the spell won. Armour takes its share.
     Harm { damage: (u32, u32) },
@@ -141,24 +141,46 @@ pub enum SpellEffect {
     Hold { rounds: u32 },
     /// An animal stops fighting and stops attacking those who come near.
     Calm,
+    /// Puts a condition (`assets/conditions`) on the target, at `strength`, for as long as it
+    /// `lasts`: any condition there is, so a designer can make a poison or a silence in data.
+    Apply {
+        condition: String,
+        #[serde(default = "one")]
+        strength: i32,
+        lasts: Lasting,
+    },
 }
 
-/// How long a spell's effect lasts, in game time: a game hour is 7.5 real minutes. It counts down
-/// in a fight or out of one.
+fn one() -> i32 {
+    1
+}
+
+/// How long a spell's effect lasts: in game time (a game hour is 7.5 real minutes), counting down
+/// in a fight or out of one, or in the bearer's turns, for what only matters in a fight.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lasting {
     Minutes(u32),
     Hours(u32),
+    Turns(u32),
 }
 
 impl Lasting {
-    /// The same time in real seconds.
+    /// The same time in real seconds; nothing for turns.
     pub fn real_secs(self) -> f64 {
         let minutes = match self {
             Lasting::Minutes(n) => n,
             Lasting::Hours(n) => n * 60,
+            Lasting::Turns(_) => 0,
         };
         f64::from(minutes) * REAL_SECS_PER_GAME_DAY as f64 / (24.0 * 60.0)
+    }
+
+    /// How long a condition cast at `now` (seconds since the server started) lasts.
+    pub fn lasts(self, now: f64) -> Lasts {
+        match self {
+            Lasting::Turns(n) => Lasts::Turns(n.max(1)),
+            time => Lasts::Until(now + time.real_secs()),
+        }
     }
 }
 
@@ -307,13 +329,21 @@ pub fn drain_paid(dice: &mut Dice, spell: &SpellDef, resistance: i32, luck: i32)
     }
 }
 
-/// Whether a caster with these skills and this much stamina can cast `spell` now; if not, why.
+/// Whether a caster with these skills, this much stamina and these conditions can cast `spell`
+/// now; if not, why.
 pub fn can_cast(
     spell: &SpellDef,
     skills: &Skills,
     stamina: f32,
     defs: &SkillDefs,
+    (conditions, condition_defs): (&Conditions, &ConditionDefs),
 ) -> Result<(), String> {
+    if !conditions.can_cast(condition_defs) {
+        return Err(format!(
+            "You can't cast {}: something stops the words.",
+            spell.name
+        ));
+    }
     let school = defs
         .skills
         .get(&spell.school)
@@ -456,7 +486,7 @@ fn cast(
     mut log: ResMut<Outbox>,
     hidden: Query<&Hidden>,
     resting: Query<Entity, With<Resting>>,
-    time: Res<Time>,
+    (time, condition_defs): (Res<Time>, Res<ConditionDefs>),
 ) {
     let Ok(caster) = fighters.get(inv.entity) else {
         return;
@@ -477,7 +507,13 @@ fn cast(
             format!("You don't know a spell called '{}'.", inv.args.trim()),
         );
     };
-    if let Err(refusal) = can_cast(&spell.def, caster.skills, caster.vitals.stamina, &defs) {
+    if let Err(refusal) = can_cast(
+        &spell.def,
+        caster.skills,
+        caster.vitals.stamina,
+        &defs,
+        (caster.conditions, &condition_defs),
+    ) {
         return said(&mut log, refusal);
     }
     let candidates: Vec<(Entity, &Keywords)> = fighters
@@ -555,6 +591,7 @@ fn cast(
         templates: &templates,
         defs: &defs,
         spells: &spells,
+        conditions: &condition_defs,
         dice: &mut dice,
         db: &db,
         events: &mut events,
@@ -688,6 +725,18 @@ mod tests {
                 .from_bytes(&std::fs::read(&path).unwrap())
                 .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
             for (id, spell) in &book.spells {
+                // Every condition it puts on someone is a real one.
+                let conditions = crate::combat::defs_on_disk();
+                for effect in &spell.effects {
+                    let key = match effect {
+                        SpellEffect::Apply { condition, .. } => condition.as_str(),
+                        SpellEffect::Bless { .. } => "blessed",
+                        SpellEffect::Ward { .. } => "warded",
+                        SpellEffect::Hold { .. } => "held",
+                        _ => continue,
+                    };
+                    assert!(conditions.get(key).is_some(), "{id}: no condition '{key}'");
+                }
                 spell
                     .check()
                     .unwrap_or_else(|err| panic!("{}: {id} {err}", path.display()));

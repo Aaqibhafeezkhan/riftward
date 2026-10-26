@@ -1,206 +1,621 @@
-//! Conditions: short-lived states on a fighter. A technique's last some of their own turns; a
-//! spell's last a while, counted in time, in a fight or out of one.
+//! Conditions: states on a character, made of data. Each condition is defined in
+//! `assets/conditions/*.conditions.ron` (see `docs/effects.md#conditions`): what it does, as a
+//! list of modifiers, how it stacks, and what it says. Blessed, Warded, Held and Bleeding are data,
+//! and so is every new condition a designer adds.
 //!
-//! Every fighter has a `Conditions` component (it comes with `Vitals`). At the start of each of
-//! their turns, bleeding hurts, a stagger or a fall costs them the turn, and conditions counted in
-//! turns count down. Conditions counted in time end when their time is up (`expire`), whether or
-//! not anyone is fighting, so a blessing can't be cast and saved for later.
+//! Every character has a `Conditions` component (it comes with `Vitals`): the conditions on them,
+//! each with a strength and how long it lasts. Additive modifiers count once per point of
+//! strength (Blessed at strength 2 attacks 2 better); multipliers don't. A technique's conditions
+//! last some of the bearer's turns; a spell's last a while, counted in time, in a fight or out of
+//! one; an item's last while it's worn, held or carried.
+//!
+//! At the start of each of their turns in a fight, conditions that hurt or heal each turn do, one
+//! that costs the turn costs it, and those counted in turns count down. Those counted in time end
+//! when their time is up (`expire`).
 
+use std::collections::{BTreeMap, HashMap};
+
+use bevy::asset::io::Reader;
+use bevy::asset::{AssetLoader, LoadContext, LoadedFolder};
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
+use crate::skills::fill;
 use crate::time::span;
+use crate::world::ron_options;
 
-/// A short-lived state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum State {
-    /// Loses their next turn.
-    Staggered,
-    /// Loses their next turn, and defends at half until then.
-    Down,
-    /// Loses this much health at the start of each turn.
-    Bleeding(u32),
-    /// Can't flee, and defends at half.
-    Held,
-    /// Defends this much better.
-    Guarding(i32),
-    /// Defends at half until their next turn.
-    Exposed,
-    /// Attacks this much better: a blessing.
-    Blessed(i32),
-    /// A ward that takes this much more damage in their place.
-    Warded(u32),
+/// Asset folder holding the condition files.
+const CONDITIONS_PATH: &str = "conditions";
+/// The extension condition files use.
+const CONDITIONS_EXTENSION: &str = "conditions.ron";
+
+pub struct ConditionsPlugin;
+
+impl Plugin for ConditionsPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_asset::<ConditionBook>()
+            .register_asset_loader(ConditionBookLoader)
+            .init_resource::<ConditionDefs>()
+            .add_systems(Startup, load_condition_books)
+            .add_systems(Update, sync_condition_defs);
+    }
 }
 
-impl State {
-    /// What it's called, and what it does: ("blessed", "attacking 2 better").
-    pub fn describe(self) -> (&'static str, String) {
-        match self {
-            State::Staggered => ("staggered", "losing your next turn".into()),
-            State::Down => (
-                "down",
-                "losing your next turn, and defending at half".into(),
-            ),
-            State::Bleeding(n) => ("bleeding", format!("losing {n} health each turn")),
-            State::Held => ("held", "unable to flee, and defending at half".into()),
-            State::Guarding(n) => ("guarding", format!("defending {n} better")),
-            State::Exposed => ("exposed", "defending at half until your next turn".into()),
-            State::Blessed(n) => ("blessed", format!("attacking {n} better")),
-            State::Warded(n) => ("warded", format!("a ward that will take {n} more damage")),
-        }
-    }
+/// A condition, as a designer writes it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ConditionDef {
+    /// What it's called: "blessed".
+    pub name: String,
+    /// What it does, for `affects`, with `{strength}` filled in: "attacking {strength} better".
+    pub description: String,
+    /// Kinds, for cures, immunities and dispels later: `magic`, `poison`, `physical`.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub stacking: Stacking,
+    pub modifiers: Vec<Modifier>,
+    #[serde(default)]
+    pub text: ConditionText,
+}
 
-    /// Whether two states are the same kind, so a new one replaces the old.
-    fn same_kind(self, other: State) -> bool {
-        std::mem::discriminant(&self) == std::mem::discriminant(&other)
+/// What happens when a condition is put on someone who already has it.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Stacking {
+    /// The new one replaces the old.
+    #[default]
+    Replace,
+    /// The stronger stays, and the longer.
+    Strongest,
+    /// Their strengths add up, to at most this many times the new one's: doses of poison.
+    Stack(u32),
+}
+
+/// What a condition does. Amounts on additive modifiers count once per point of strength.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub enum Modifier {
+    /// Attacks better, or worse.
+    Attack(i32),
+    /// Defends better, or worse.
+    Defence(i32),
+    /// Defence multiplied: half for someone down, held or exposed.
+    DefenceTimes(f64),
+    /// Takes this much more off every blow, like armour.
+    Armour(i32),
+    /// Damage they deal, multiplied.
+    DamageDealt(f64),
+    /// Damage they take, multiplied.
+    DamageTaken(f64),
+    /// Health at the start of each of their turns in a fight: lost if negative (bleeding,
+    /// poison), gained if positive (regenerating).
+    HealthEachTurn(i32),
+    /// Takes damage in their place, up to its strength, which wears down as it does: a ward.
+    Absorb,
+    /// Loses their next turn.
+    LosesTurn,
+    /// Can't run from a fight.
+    CantFlee,
+    /// Can't walk anywhere.
+    CantMove,
+    /// Can't cast spells.
+    CantCast,
+}
+
+/// What a condition says. Bearer lines are the bearer's own; room lines are what everyone else
+/// there sees, with `{bearer}` and `{amount}` filled in.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct ConditionText {
+    /// When it takes hold, from a blow or a technique: "You are staggered!".
+    #[serde(default)]
+    pub applied: Option<Told>,
+    /// When it hurts or heals at the start of a turn: "You bleed. ({amount})".
+    #[serde(default)]
+    pub each_turn: Option<Told>,
+    /// When it costs them their turn: "You reel, staggered, and can't act!".
+    #[serde(default)]
+    pub lost_turn: Option<Told>,
+    /// When its hurt kills them: "You bleed out.".
+    #[serde(default)]
+    pub kills: Option<Told>,
+    /// When its time runs out: "The warm light of your blessing fades.".
+    #[serde(default)]
+    pub fades: Option<Told>,
+    /// When it takes damage in its bearer's place: "Your ward takes the blow ({amount}).".
+    #[serde(default)]
+    pub absorbs: Option<Told>,
+    /// When it has taken all it can: "Your ward fails!".
+    #[serde(default)]
+    pub breaks: Option<Told>,
+    /// What others see when they look at the bearer: one hint, or several from strongest to
+    /// weakest, chosen by how much of its strength is left. "A faint shimmer surrounds {bearer}."
+    #[serde(default)]
+    pub looks: Vec<String>,
+}
+
+/// One moment, for its bearer and for the room.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Told {
+    pub bearer: String,
+    #[serde(default)]
+    pub room: Option<String>,
+}
+
+impl Told {
+    /// Its lines filled in for a bearer called `name`, with `amount`.
+    pub fn fill(&self, name: &str, amount: i32) -> (String, Option<String>) {
+        let amount = amount.abs().to_string();
+        let with = [("bearer", name), ("amount", amount.as_str())];
+        (
+            fill(&self.bearer, &with),
+            self.room.as_ref().map(|room| fill(room, &with)),
+        )
+    }
+}
+
+/// Every condition from every loaded file, by key.
+#[derive(Resource, Default)]
+pub struct ConditionDefs(pub HashMap<String, ConditionDef>);
+
+impl ConditionDefs {
+    pub fn get(&self, key: &str) -> Option<&ConditionDef> {
+        self.0.get(key)
     }
 }
 
 /// How long a condition lasts.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Lasts {
-    /// This many more of the fighter's turns.
+    /// This many more of the bearer's turns in a fight.
     Turns(u32),
     /// Until this time, in seconds since the server started.
     Until(f64),
+    /// While this item is worn, held or carried, as its template says.
+    Granted(Entity),
 }
 
-/// A fighter's current conditions, each with how long it has left.
-#[derive(Component, Clone, Debug, Default)]
-pub struct Conditions(pub Vec<(State, Lasts)>);
+/// One condition on someone: which, how strong, how strong it started, and for how long.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Active {
+    pub key: String,
+    pub strength: i32,
+    /// Its strength when it began, for hints that follow what's left (a ward's shimmer).
+    pub most: i32,
+    pub lasts: Lasts,
+}
 
-/// What the start of a fighter's turn brings.
+/// Someone's current conditions.
+#[derive(Component, Clone, Debug, Default)]
+pub struct Conditions(pub Vec<Active>);
+
+/// A condition that took damage in its bearer's place.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Absorbed {
+    pub key: String,
+    pub taken: i32,
+    /// Whether it took all it could, and is gone.
+    pub spent: bool,
+}
+
+/// What the start of someone's turn brings, condition by condition.
 #[derive(Debug, Default, PartialEq)]
 pub struct TurnStart {
-    /// Health lost to bleeding.
-    pub bleeding: u32,
-    /// The state that costs them this turn, if any.
-    pub lost_to: Option<State>,
+    /// Health lost (negative) or gained, and which conditions did it, with how much.
+    pub health: Vec<(String, i32)>,
+    /// The condition that costs them this turn, if any.
+    pub lost_to: Option<String>,
 }
 
 impl Conditions {
-    /// Add a state for `turns` of the fighter's turns, replacing one of the same kind.
-    pub fn add(&mut self, state: State, turns: u32) {
-        self.0.retain(|(s, _)| !s.same_kind(state));
-        self.0.push((state, Lasts::Turns(turns.max(1))));
+    /// Put a condition on them, by its stacking rule.
+    pub fn apply(&mut self, defs: &ConditionDefs, key: &str, strength: i32, lasts: Lasts) {
+        let stacking = defs.get(key).map_or(Stacking::Replace, |d| d.stacking);
+        let mine = |a: &Active| a.key == key && !matches!(a.lasts, Lasts::Granted(_));
+        let new = Active {
+            key: key.to_string(),
+            strength,
+            most: strength,
+            lasts,
+        };
+        match (stacking, self.0.iter_mut().find(|a| mine(a))) {
+            (Stacking::Strongest, Some(old)) => {
+                old.strength = old.strength.max(strength);
+                old.most = old.most.max(strength);
+                old.lasts = longer(old.lasts, lasts);
+            }
+            (Stacking::Stack(most), Some(old)) => {
+                let cap = strength.saturating_mul(most as i32);
+                old.strength = (old.strength + strength).min(cap);
+                old.most = old.most.max(old.strength);
+                old.lasts = longer(old.lasts, lasts);
+            }
+            _ => {
+                self.0.retain(|a| !mine(a));
+                self.0.push(new);
+            }
+        }
     }
 
-    /// Add a state until `until` (seconds since the server started), replacing one of the same
-    /// kind.
-    pub fn add_until(&mut self, state: State, until: f64) {
-        self.0.retain(|(s, _)| !s.same_kind(state));
-        self.0.push((state, Lasts::Until(until)));
+    pub fn has(&self, key: &str) -> bool {
+        self.0.iter().any(|a| a.key == key)
     }
 
-    /// End the states whose time is up at `now`. Returns them.
-    pub fn expire(&mut self, now: f64) -> Vec<State> {
-        let (over, left) = self
-            .0
-            .drain(..)
-            .partition(|(_, lasts)| matches!(lasts, Lasts::Until(until) if *until <= now));
-        self.0 = left;
-        over.into_iter().map(|(state, _)| state).collect()
-    }
-
-    pub fn has(&self, state: State) -> bool {
-        self.0.iter().any(|(s, _)| s.same_kind(state))
-    }
-
-    /// Their defence once conditions are counted: guarding adds to it; being down, held or
-    /// exposed halves it.
-    pub fn defence(&self, base: i32) -> i32 {
-        let guard: i32 = self
-            .0
-            .iter()
-            .map(|(s, _)| match s {
-                State::Guarding(n) => *n,
-                _ => 0,
-            })
-            .sum();
-        let halved = self
-            .0
-            .iter()
-            .any(|(s, _)| matches!(s, State::Down | State::Held | State::Exposed));
-        let defence = base + guard;
-        if halved { defence / 2 } else { defence }
-    }
-
-    /// How much better they attack: a blessing's worth.
-    pub fn blessing(&self) -> i32 {
+    /// End a condition early, whatever its turns or strength: bandaged bleeding stops. Item
+    /// grants stay while the item does.
+    pub fn remove(&mut self, key: &str) {
         self.0
-            .iter()
-            .map(|(s, _)| match s {
-                State::Blessed(n) => *n,
-                _ => 0,
-            })
+            .retain(|a| a.key != key || matches!(a.lasts, Lasts::Granted(_)));
+    }
+
+    /// End every condition but those items grant: death clears them.
+    pub fn clear(&mut self) {
+        self.0.retain(|a| matches!(a.lasts, Lasts::Granted(_)));
+    }
+
+    /// Each of their modifiers, with the strength it counts at.
+    fn modifiers<'a>(
+        &'a self,
+        defs: &'a ConditionDefs,
+    ) -> impl Iterator<Item = (Modifier, i32)> + 'a {
+        self.0.iter().flat_map(move |active| {
+            defs.get(&active.key)
+                .into_iter()
+                .flat_map(|def| def.modifiers.iter().copied())
+                .map(move |m| (m, active.strength))
+        })
+    }
+
+    /// The sum of an additive modifier, each counted per point of strength.
+    fn total(&self, defs: &ConditionDefs, pick: impl Fn(Modifier) -> Option<i32>) -> i32 {
+        self.modifiers(defs)
+            .filter_map(|(m, strength)| pick(m).map(|n| n * strength))
             .sum()
     }
 
-    /// Let a ward take what it can of `damage`. Returns how much it took; a ward that's taken all
-    /// it can is gone.
-    pub fn absorb(&mut self, damage: i32) -> i32 {
-        let mut taken = 0;
-        for (state, _) in &mut self.0 {
-            if let State::Warded(left) = state {
-                taken = damage.clamp(0, *left as i32);
-                *left -= taken as u32;
-            }
-        }
-        self.0.retain(|(s, _)| *s != State::Warded(0));
-        taken
+    /// The product of a multiplier.
+    fn product(&self, defs: &ConditionDefs, pick: impl Fn(Modifier) -> Option<f64>) -> f64 {
+        self.modifiers(defs).filter_map(|(m, _)| pick(m)).product()
     }
 
-    /// Each state, what it does and how long it has left at `now`, for `affects`: "blessed:
-    /// attacking 2 better, for 1 hour 20 minutes (10 real minutes)".
-    pub fn listed(&self, now: f64) -> Vec<String> {
+    fn any(&self, defs: &ConditionDefs, flag: Modifier) -> bool {
+        self.modifiers(defs).any(|(m, _)| m == flag)
+    }
+
+    /// How much better they attack.
+    pub fn attack(&self, defs: &ConditionDefs) -> i32 {
+        self.total(defs, |m| match m {
+            Modifier::Attack(n) => Some(n),
+            _ => None,
+        })
+    }
+
+    /// Their defence from `base`, once conditions are counted: added to, then multiplied.
+    pub fn defence(&self, base: i32, defs: &ConditionDefs) -> i32 {
+        let added = base
+            + self.total(defs, |m| match m {
+                Modifier::Defence(n) => Some(n),
+                _ => None,
+            });
+        let times = self.product(defs, |m| match m {
+            Modifier::DefenceTimes(x) => Some(x),
+            _ => None,
+        });
+        (f64::from(added) * times).floor() as i32
+    }
+
+    /// How much more they take off every blow.
+    pub fn armour(&self, defs: &ConditionDefs) -> i32 {
+        self.total(defs, |m| match m {
+            Modifier::Armour(n) => Some(n),
+            _ => None,
+        })
+    }
+
+    /// What the damage they deal is multiplied by.
+    pub fn damage_dealt(&self, defs: &ConditionDefs) -> f64 {
+        self.product(defs, |m| match m {
+            Modifier::DamageDealt(x) => Some(x),
+            _ => None,
+        })
+    }
+
+    /// What the damage they take is multiplied by.
+    pub fn damage_taken(&self, defs: &ConditionDefs) -> f64 {
+        self.product(defs, |m| match m {
+            Modifier::DamageTaken(x) => Some(x),
+            _ => None,
+        })
+    }
+
+    /// Whether they can run from a fight.
+    pub fn can_flee(&self, defs: &ConditionDefs) -> bool {
+        !self.any(defs, Modifier::CantFlee)
+    }
+
+    /// Whether they can walk anywhere.
+    pub fn can_move(&self, defs: &ConditionDefs) -> bool {
+        !self.any(defs, Modifier::CantMove)
+    }
+
+    /// Whether they can cast.
+    pub fn can_cast(&self, defs: &ConditionDefs) -> bool {
+        !self.any(defs, Modifier::CantCast)
+    }
+
+    /// Let what absorbs damage take what it can of `damage`. Returns how much it took.
+    #[cfg(test)]
+    pub fn absorb(&mut self, damage: i32, defs: &ConditionDefs) -> i32 {
+        self.absorb_by(damage, defs).iter().map(|a| a.taken).sum()
+    }
+
+    /// Let what absorbs damage take what it can of `damage`, and say which did: each condition,
+    /// how much it took, and whether it's spent. One that's taken all it can is gone.
+    pub fn absorb_by(&mut self, damage: i32, defs: &ConditionDefs) -> Vec<Absorbed> {
+        let absorbs = |key: &str| {
+            defs.get(key)
+                .is_some_and(|d| d.modifiers.contains(&Modifier::Absorb))
+        };
+        let mut left = damage.max(0);
+        let mut by = Vec::new();
+        for active in &mut self.0 {
+            if absorbs(&active.key) && left > 0 {
+                let taken = left.min(active.strength.max(0));
+                active.strength -= taken;
+                left -= taken;
+                by.push(Absorbed {
+                    key: active.key.clone(),
+                    taken,
+                    spent: active.strength <= 0,
+                });
+            }
+        }
+        self.0
+            .retain(|active| active.strength > 0 || !absorbs(&active.key));
+        by
+    }
+
+    /// The start of their turn in a fight: what hurts or heals does, a condition that costs the
+    /// turn costs it, and everything counted in turns counts down.
+    pub fn start_turn(&mut self, defs: &ConditionDefs) -> TurnStart {
+        let mut start = TurnStart::default();
+        for active in &mut self.0 {
+            let Some(def) = defs.get(&active.key) else {
+                continue;
+            };
+            for modifier in &def.modifiers {
+                match *modifier {
+                    Modifier::HealthEachTurn(n) => {
+                        start.health.push((active.key.clone(), n * active.strength));
+                    }
+                    Modifier::LosesTurn if start.lost_to.is_none() => {
+                        start.lost_to = Some(active.key.clone());
+                    }
+                    _ => {}
+                }
+            }
+            if let Lasts::Turns(turns) = &mut active.lasts {
+                *turns = turns.saturating_sub(1);
+            }
+        }
+        self.0.retain(|active| active.lasts != Lasts::Turns(0));
+        start
+    }
+
+    /// End the conditions whose time is up at `now`. Returns them.
+    pub fn expire(&mut self, now: f64) -> Vec<Active> {
+        let (over, left) = self
+            .0
+            .drain(..)
+            .partition(|a| matches!(a.lasts, Lasts::Until(until) if until <= now));
+        self.0 = left;
+        over
+    }
+
+    /// Each condition, what it does and how long it has left at `now`, for `affects`:
+    /// "blessed: attacking 2 better, for 1 hour 20 minutes (10 real minutes)". `item` names the
+    /// item behind a granted one.
+    pub fn listed(
+        &self,
+        now: f64,
+        defs: &ConditionDefs,
+        item: impl Fn(Entity) -> String,
+    ) -> Vec<String> {
         self.0
             .iter()
-            .map(|(state, lasts)| {
-                let (name, what) = state.describe();
-                let left = match *lasts {
+            .filter_map(|active| {
+                let def = defs.get(&active.key)?;
+                let strength = active.strength.to_string();
+                let what = fill(&def.description, &[("strength", strength.as_str())]);
+                let left = match active.lasts {
                     Lasts::Until(until) => format!("for {}", span((until - now).max(0.0))),
                     Lasts::Turns(1) => "for 1 more turn".into(),
                     Lasts::Turns(n) => format!("for {n} more turns"),
+                    Lasts::Granted(by) => format!("from {}", item(by)),
                 };
-                format!("{name}: {what}, {left}")
+                // `fill` capitalises; a description reads mid-sentence here.
+                Some(format!("{}: {}, {left}", def.name, lower_first(&what)))
             })
             .collect()
     }
 
-    /// Whether they can run from a fight.
-    pub fn can_flee(&self) -> bool {
-        !self.has(State::Held)
+    /// Their conditions' names, for `score`.
+    pub fn names(&self, defs: &ConditionDefs) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .0
+            .iter()
+            .filter_map(|a| defs.get(&a.key).map(|d| d.name.clone()))
+            .collect();
+        names.dedup();
+        names
     }
 
-    /// The start of their turn: bleeding hurts, a stagger or a fall costs the turn, and
-    /// everything counts down.
-    pub fn start_turn(&mut self) -> TurnStart {
-        let mut start = TurnStart::default();
-        for (state, lasts) in &mut self.0 {
-            match state {
-                State::Bleeding(damage) => start.bleeding += *damage,
-                State::Staggered | State::Down if start.lost_to.is_none() => {
-                    start.lost_to = Some(*state);
-                }
-                _ => {}
-            }
-            if let Lasts::Turns(turns) = lasts {
-                *turns = turns.saturating_sub(1);
-            }
-        }
-        // Exposure only lasts until the fighter acts again.
+    /// What others see of them: each condition's hint, by how much of its strength is left.
+    pub fn hints(&self, defs: &ConditionDefs, name: &str) -> Vec<String> {
         self.0
-            .retain(|(state, lasts)| *lasts != Lasts::Turns(0) && *state != State::Exposed);
-        start
+            .iter()
+            .filter_map(|active| {
+                let looks = &defs.get(&active.key)?.text.looks;
+                if looks.is_empty() {
+                    return None;
+                }
+                let spent = 1.0 - f64::from(active.strength) / f64::from(active.most.max(1));
+                let at = ((spent * looks.len() as f64) as usize).min(looks.len() - 1);
+                Some(fill(&looks[at], &[("bearer", name)]))
+            })
+            .collect()
     }
 
-    /// End a state early, whatever its turns or strength: bandaged bleeding stops.
-    pub fn remove(&mut self, state: State) {
-        self.0.retain(|(s, _)| !s.same_kind(state));
+    /// The conditions worth saving: those lasting in time, as the real time (unix seconds) each
+    /// ends. `now` is seconds since the server started, and `unix_now` the time it is.
+    pub fn to_saved(&self, now: f64, unix_now: i64) -> Vec<crate::db::SavedCondition> {
+        self.0
+            .iter()
+            .filter_map(|active| match active.lasts {
+                Lasts::Until(until) if until > now => Some((
+                    active.key.clone(),
+                    active.strength,
+                    active.most,
+                    unix_now + (until - now).ceil() as i64,
+                )),
+                _ => None,
+            })
+            .collect()
     }
 
-    pub fn clear(&mut self) {
-        self.0.clear();
+    /// Conditions from saved ones, as they stand at `now`: those already over are gone.
+    pub fn from_saved(saved: Vec<crate::db::SavedCondition>, now: f64, unix_now: i64) -> Self {
+        Self(
+            saved
+                .into_iter()
+                .filter(|(_, _, _, ends_at)| *ends_at > unix_now)
+                .map(|(key, strength, most, ends_at)| Active {
+                    key,
+                    strength,
+                    most,
+                    lasts: Lasts::Until(now + (ends_at - unix_now) as f64),
+                })
+                .collect(),
+        )
     }
+
+    /// Replace what items grant them with `granted`: (condition, strength, item).
+    pub fn set_grants(&mut self, granted: Vec<(String, i32, Entity)>) {
+        self.0
+            .retain(|active| !matches!(active.lasts, Lasts::Granted(_)));
+        self.0
+            .extend(granted.into_iter().map(|(key, strength, item)| Active {
+                key,
+                strength,
+                most: strength,
+                lasts: Lasts::Granted(item),
+            }));
+    }
+
+    /// What items grant them now, to compare with what they should.
+    pub fn grants(&self) -> Vec<(String, i32, Entity)> {
+        self.0
+            .iter()
+            .filter_map(|active| match active.lasts {
+                Lasts::Granted(item) => Some((active.key.clone(), active.strength, item)),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+/// The longer of two durations: the later end, or the more turns.
+fn longer(a: Lasts, b: Lasts) -> Lasts {
+    match (a, b) {
+        (Lasts::Turns(x), Lasts::Turns(y)) => Lasts::Turns(x.max(y)),
+        (Lasts::Until(x), Lasts::Until(y)) => Lasts::Until(x.max(y)),
+        (_, b) => b,
+    }
+}
+
+fn lower_first(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_lowercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+// Loading condition files, like skill trees.
+
+/// A file of conditions, by key.
+#[derive(Asset, TypePath, Serialize, Deserialize, Debug, Clone)]
+#[serde(transparent)]
+pub struct ConditionBook(pub BTreeMap<String, ConditionDef>);
+
+#[derive(Resource)]
+struct ConditionBooksHandle(#[allow(dead_code)] Handle<LoadedFolder>);
+
+fn load_condition_books(mut commands: Commands, assets: Res<AssetServer>) {
+    commands.insert_resource(ConditionBooksHandle(assets.load_folder(CONDITIONS_PATH)));
+}
+
+/// Rebuild the condition table whenever a file loads, changes or goes away.
+fn sync_condition_defs(
+    mut events: MessageReader<AssetEvent<ConditionBook>>,
+    books: Res<Assets<ConditionBook>>,
+    mut defs: ResMut<ConditionDefs>,
+) {
+    if events.read().count() == 0 {
+        return;
+    }
+    defs.0.clear();
+    for (_, book) in books.iter() {
+        defs.0
+            .extend(book.0.iter().map(|(key, def)| (key.clone(), def.clone())));
+    }
+    info!("loaded {} conditions", defs.0.len());
+}
+
+#[derive(TypePath)]
+struct ConditionBookLoader;
+
+#[derive(Debug, Error)]
+enum ConditionBookLoaderError {
+    #[error("could not read conditions: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("could not parse conditions: {0}")]
+    Ron(#[from] ron::error::SpannedError),
+}
+
+impl AssetLoader for ConditionBookLoader {
+    type Asset = ConditionBook;
+    type Settings = ();
+    type Error = ConditionBookLoaderError;
+
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        _settings: &(),
+        _load_context: &mut LoadContext<'_>,
+    ) -> Result<ConditionBook, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+        Ok(ron_options().from_bytes(&bytes)?)
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &[CONDITIONS_EXTENSION]
+    }
+}
+
+/// Every condition in the files on disk, for tests: they must parse, and other files' references
+/// to conditions must be to real ones.
+#[cfg(test)]
+pub fn defs_on_disk() -> ConditionDefs {
+    let mut defs = ConditionDefs::default();
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/conditions");
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let book: ConditionBook = ron_options()
+            .from_bytes(&std::fs::read(&path).unwrap())
+            .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+        defs.0.extend(book.0);
+    }
+    defs
 }
 
 #[cfg(test)]
@@ -208,89 +623,171 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_state_can_be_ended_early() {
-        let mut conditions = Conditions::default();
-        conditions.add(State::Bleeding(2), 3);
-        conditions.add(State::Held, 2);
-        // However hard and long the bleeding, a bandage stops it.
-        conditions.remove(State::Bleeding(0));
-        assert!(!conditions.has(State::Bleeding(0)));
-        assert!(conditions.has(State::Held));
-        assert_eq!(conditions.start_turn().bleeding, 0);
+    fn the_condition_files_parse_and_say_what_they_do() {
+        let defs = defs_on_disk();
+        for key in [
+            "staggered",
+            "down",
+            "bleeding",
+            "held",
+            "guarding",
+            "exposed",
+            "blessed",
+            "warded",
+        ] {
+            let def = defs
+                .get(key)
+                .unwrap_or_else(|| panic!("no condition {key}"));
+            assert!(
+                !def.description.trim().is_empty(),
+                "{key} needs a description"
+            );
+        }
+        for (key, def) in &defs.0 {
+            assert!(
+                !def.description.trim().is_empty(),
+                "{key} needs a description"
+            );
+        }
     }
 
     #[test]
-    fn states_count_down_in_turns() {
+    fn a_condition_can_be_ended_early() {
+        let defs = defs_on_disk();
         let mut conditions = Conditions::default();
-        conditions.add(State::Bleeding(1), 2);
-        conditions.add(State::Staggered, 1);
-        conditions.add(State::Held, 2);
-        assert!(!conditions.can_flee());
-        assert_eq!(
-            conditions.start_turn(),
-            TurnStart {
-                bleeding: 1,
-                lost_to: Some(State::Staggered)
-            }
-        );
-        assert_eq!(
-            conditions.start_turn(),
-            TurnStart {
-                bleeding: 1,
-                lost_to: None
-            }
-        );
-        assert!(conditions.can_flee(), "the hold is over");
-        assert_eq!(conditions.start_turn(), TurnStart::default());
+        conditions.apply(&defs, "bleeding", 2, Lasts::Turns(3));
+        conditions.apply(&defs, "held", 1, Lasts::Turns(2));
+        // However hard and long the bleeding, a bandage stops it.
+        conditions.remove("bleeding");
+        assert!(!conditions.has("bleeding"));
+        assert!(conditions.has("held"));
+        assert!(conditions.start_turn(&defs).health.is_empty());
+    }
+
+    #[test]
+    fn conditions_count_down_in_turns() {
+        let defs = defs_on_disk();
+        let mut conditions = Conditions::default();
+        conditions.apply(&defs, "bleeding", 1, Lasts::Turns(2));
+        conditions.apply(&defs, "staggered", 1, Lasts::Turns(1));
+        conditions.apply(&defs, "held", 1, Lasts::Turns(2));
+        assert!(!conditions.can_flee(&defs));
+        let first = conditions.start_turn(&defs);
+        assert_eq!(first.health, vec![("bleeding".to_string(), -1)]);
+        assert_eq!(first.lost_to.as_deref(), Some("staggered"));
+        let second = conditions.start_turn(&defs);
+        assert_eq!(second.lost_to, None);
+        assert!(conditions.can_flee(&defs), "the hold is over");
+        assert_eq!(conditions.start_turn(&defs), TurnStart::default());
         assert!(conditions.0.is_empty());
     }
 
     #[test]
     fn defence_follows_conditions() {
+        let defs = defs_on_disk();
         let mut conditions = Conditions::default();
-        assert_eq!(conditions.defence(6), 6);
-        conditions.add(State::Guarding(4), 2);
-        assert_eq!(conditions.defence(6), 10);
-        conditions.add(State::Down, 1);
-        assert_eq!(conditions.defence(6), 5);
+        assert_eq!(conditions.defence(6, &defs), 6);
+        conditions.apply(&defs, "guarding", 4, Lasts::Turns(2));
+        assert_eq!(conditions.defence(6, &defs), 10);
+        conditions.apply(&defs, "down", 1, Lasts::Turns(1));
+        assert_eq!(conditions.defence(6, &defs), 5);
         // A new guard replaces the old one.
-        conditions.add(State::Guarding(2), 2);
-        assert_eq!(conditions.defence(6), 4);
+        conditions.apply(&defs, "guarding", 2, Lasts::Turns(2));
+        assert_eq!(conditions.defence(6, &defs), 4);
     }
 
     #[test]
     fn a_ward_takes_what_it_can_and_then_is_gone() {
+        let defs = defs_on_disk();
         let mut conditions = Conditions::default();
-        conditions.add(State::Warded(5), 3);
-        assert_eq!(conditions.absorb(3), 3);
-        assert_eq!(conditions.absorb(4), 2, "only 2 left in it");
-        assert!(!conditions.has(State::Warded(0)));
-        assert_eq!(conditions.absorb(4), 0);
+        conditions.apply(&defs, "warded", 5, Lasts::Until(600.0));
+        assert_eq!(conditions.absorb(3, &defs), 3);
+        assert_eq!(conditions.absorb(4, &defs), 2, "only 2 left in it");
+        assert!(!conditions.has("warded"));
+        assert_eq!(conditions.absorb(4, &defs), 0);
     }
 
     #[test]
-    fn timed_states_last_their_time_whatever_the_turns() {
+    fn timed_conditions_last_their_time_whatever_the_turns() {
+        let defs = defs_on_disk();
         let mut conditions = Conditions::default();
-        conditions.add_until(State::Blessed(2), 600.0);
-        conditions.add(State::Held, 1);
+        conditions.apply(&defs, "blessed", 2, Lasts::Until(600.0));
+        conditions.apply(&defs, "held", 1, Lasts::Turns(1));
         // Fighting doesn't wear a blessing down...
         for _ in 0..10 {
-            conditions.start_turn();
+            conditions.start_turn(&defs);
         }
-        assert_eq!(conditions.blessing(), 2);
-        assert!(!conditions.has(State::Held));
+        assert_eq!(conditions.attack(&defs), 2);
+        assert!(!conditions.has("held"));
         // ...time does, in a fight or out.
         assert!(conditions.expire(599.0).is_empty());
-        assert_eq!(conditions.expire(600.0), vec![State::Blessed(2)]);
-        assert_eq!(conditions.blessing(), 0);
+        assert_eq!(conditions.expire(600.0)[0].key, "blessed");
+        assert_eq!(conditions.attack(&defs), 0);
     }
 
     #[test]
     fn exposure_ends_at_the_next_turn() {
+        let defs = defs_on_disk();
         let mut conditions = Conditions::default();
-        conditions.add(State::Exposed, 5);
-        assert_eq!(conditions.defence(8), 4);
-        conditions.start_turn();
-        assert_eq!(conditions.defence(8), 8);
+        conditions.apply(&defs, "exposed", 1, Lasts::Turns(1));
+        assert_eq!(conditions.defence(8, &defs), 4);
+        conditions.start_turn(&defs);
+        assert_eq!(conditions.defence(8, &defs), 8);
+    }
+
+    #[test]
+    fn poison_stacks_in_doses_and_hints_follow_a_ward() {
+        let defs = defs_on_disk();
+        let mut conditions = Conditions::default();
+        for _ in 0..10 {
+            conditions.apply(&defs, "poisoned", 1, Lasts::Turns(3));
+        }
+        let Stacking::Stack(most) = defs.get("poisoned").unwrap().stacking else {
+            panic!("poison stacks");
+        };
+        let start = conditions.start_turn(&defs);
+        assert!(start.health[0].1 < -1, "doses add up");
+        assert_eq!(start.health[0].1, -(most as i32), "to a limit");
+
+        let mut warded = Conditions::default();
+        warded.apply(&defs, "warded", 10, Lasts::Until(60.0));
+        let fresh = warded.hints(&defs, "Grok");
+        warded.absorb(9, &defs);
+        let spent = warded.hints(&defs, "Grok");
+        assert_ne!(fresh, spent, "a nearly spent ward looks it");
+    }
+
+    #[test]
+    fn timed_conditions_save_as_when_they_end() {
+        let defs = defs_on_disk();
+        let mut conditions = Conditions::default();
+        conditions.apply(&defs, "blessed", 2, Lasts::Until(700.0));
+        conditions.apply(&defs, "held", 1, Lasts::Turns(2));
+        // At 100 seconds in, unix time 5000: the blessing has 600 seconds left.
+        let saved = conditions.to_saved(100.0, 5000);
+        assert_eq!(
+            saved,
+            vec![("blessed".to_string(), 2, 2, 5600)],
+            "a fight's hold isn't kept"
+        );
+        // Back after a restart, 10 seconds in, 200 seconds later: 400 left.
+        let back = Conditions::from_saved(saved.clone(), 10.0, 5200);
+        assert_eq!(back.0[0].lasts, Lasts::Until(410.0));
+        // Back after it would have ended: gone.
+        assert!(Conditions::from_saved(saved, 10.0, 6000).0.is_empty());
+    }
+
+    #[test]
+    fn items_grant_conditions_beside_the_rest() {
+        let defs = defs_on_disk();
+        let mut conditions = Conditions::default();
+        let ring = Entity::PLACEHOLDER;
+        conditions.apply(&defs, "blessed", 1, Lasts::Until(60.0));
+        conditions.set_grants(vec![("blessed".into(), 2, ring)]);
+        assert_eq!(conditions.attack(&defs), 3, "both count");
+        conditions.remove("blessed");
+        assert_eq!(conditions.attack(&defs), 2, "the ring's stays");
+        conditions.set_grants(Vec::new());
+        assert_eq!(conditions.attack(&defs), 0);
     }
 }

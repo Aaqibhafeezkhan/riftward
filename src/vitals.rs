@@ -274,7 +274,7 @@ fn recover(
 fn save_vitals(
     time: Res<Time>,
     mut last: Local<f64>,
-    players: Query<(&Player, &Vitals)>,
+    players: Query<(&Player, &Vitals, &Conditions)>,
     db: Res<Database>,
 ) {
     let now = time.elapsed_secs_f64();
@@ -283,23 +283,38 @@ fn save_vitals(
     }
     *last = now;
     let at = unix_now();
-    for (player, vitals) in &players {
-        save(&db, player, vitals, at);
+    for (player, vitals, conditions) in &players {
+        save(&db, player, vitals, conditions, now, at);
     }
 }
 
-fn save_on_logout(players: Query<(&Connection, &Player, &Vitals)>, db: Res<Database>) {
+fn save_on_logout(
+    players: Query<(&Connection, &Player, &Vitals, &Conditions)>,
+    db: Res<Database>,
+    time: Res<Time>,
+) {
     let at = unix_now();
-    for (conn, player, vitals) in &players {
+    for (conn, player, vitals, conditions) in &players {
         if conn.closing {
-            save(&db, player, vitals, at);
+            save(&db, player, vitals, conditions, time.elapsed_secs_f64(), at);
         }
     }
 }
 
-fn save(db: &Database, player: &Player, vitals: &Vitals, at: i64) {
+/// Save a player's vitals, and the conditions on them that last in time.
+fn save(
+    db: &Database,
+    player: &Player,
+    vitals: &Vitals,
+    conditions: &Conditions,
+    now: f64,
+    at: i64,
+) {
     if let Err(err) = db.save_vitals(player.character_id, vitals.health, vitals.stamina, at) {
         error!("failed to save vitals for {}: {err}", player.name);
+    }
+    if let Err(err) = db.save_conditions(player.character_id, &conditions.to_saved(now, at)) {
+        error!("failed to save conditions for {}: {err}", player.name);
     }
 }
 

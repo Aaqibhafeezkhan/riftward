@@ -352,9 +352,37 @@ pub struct ItemDef {
     /// and multiplies its value. Common when not given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rarity: Option<Rarity>,
+    /// Conditions (`assets/conditions`) it gives whoever wears, holds or carries it: a ring that
+    /// lets you see in the dark, a sword that strengthens its wielder.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grants: Vec<Grant>,
     /// What eating or drinking it does, if it's food, drink or a draught. It's used up.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consumable: Option<ConsumableDef>,
+}
+
+/// A condition an item gives whoever has it, and how they must have it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Grant {
+    pub condition: String,
+    #[serde(default = "full_strength")]
+    pub strength: i32,
+    /// Worn, held in hand, or carried anywhere on them.
+    #[serde(rename = "while")]
+    pub when: Having,
+}
+
+fn full_strength() -> i32 {
+    1
+}
+
+/// How someone must have an item for it to grant its conditions.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Having {
+    Worn,
+    Held,
+    /// Anywhere on them, packed away or not: a lucky charm.
+    Carried,
 }
 
 /// Food, drink or a draught: how it's taken, and what it does. A draught gives back health or
@@ -555,6 +583,7 @@ impl ItemDef {
             armour: None,
             value: None,
             rarity: None,
+            grants: Vec::new(),
             consumable: None,
         }
     }
@@ -1659,6 +1688,18 @@ mod tests {
                     && !item_exists(&ItemKey::parse(key, &zone.id))
                 {
                     problems.push(format!("item {}:{item_id}: no key item '{key}'", zone.id));
+                }
+            }
+            // What an item grants must be a real condition.
+            let conditions = crate::combat::defs_on_disk();
+            for (item_id, item) in &zone.items {
+                for grant in &item.grants {
+                    if conditions.get(&grant.condition).is_none() {
+                        problems.push(format!(
+                            "item {}:{item_id}: grants no condition '{}'",
+                            zone.id, grant.condition
+                        ));
+                    }
                 }
             }
             // A mob's race must be one of the races.

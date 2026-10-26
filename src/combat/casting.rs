@@ -4,7 +4,7 @@
 use bevy::prelude::*;
 
 use super::Round;
-use super::states::{Conditions, State};
+use super::states::{Conditions, Lasts};
 use super::strike::{Blow, Telling, defence_rating, gear, harm, name_of, told};
 use crate::attributes::{Attribute, Attributes};
 use crate::events::GameEvent;
@@ -66,7 +66,14 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let (room, c_name) = (c.in_room.0, name_of(c.player, c.mob));
         let (c_attributes, c_skills) = (c.attributes.clone(), c.skills.clone());
         let c_numbers = !c.hide_numbers;
-        if let Err(refusal) = can_cast(spell, &c_skills, c.vitals.stamina, self.defs) {
+        let c_damage_times = c.conditions.damage_dealt(self.conditions);
+        if let Err(refusal) = can_cast(
+            spell,
+            &c_skills,
+            c.vitals.stamina,
+            self.defs,
+            (c.conditions, self.conditions),
+        ) {
             self.say(caster, refusal);
             return cast;
         }
@@ -120,7 +127,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                             &boosts(&d.skills, self.defs),
                             gear(target, self.items, self.templates),
                         );
-                        let evasion = d.conditions.defence(parts.evasion);
+                        let evasion = d.conditions.defence(parts.evasion, self.conditions);
                         if self.resting.contains(&target) {
                             evasion / 2
                         } else {
@@ -151,28 +158,33 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         if hit {
             let mut dealt = None;
             let mut healed = None;
+            let conditions = self.conditions;
             for effect in &spell.effects {
                 let Ok(mut f) = self.fighters.get_mut(target) else {
                     continue;
                 };
-                match *effect {
+                match effect {
                     SpellEffect::Harm {
                         damage: (low, high),
                     } => {
-                        let (low, high) = (low.min(high), low.max(high));
+                        let (low, high) = (*low.min(high), *low.max(high));
                         let rolled = self.dice.range(luck, i64::from(low)..=i64::from(high)) as i32;
                         let force = rolled + power / 3;
                         let armour = (self.auras.get(&target).map_or(0, |a| a.armour)
                             + boosts(&d.skills, self.defs).armour
-                            + gear(target, self.items, self.templates).reduction)
-                            .max(0);
-                        let mut hurt =
-                            ((f64::from(force) * blow.multiplier()).round() as i32 - armour).max(0);
+                            + gear(target, self.items, self.templates).reduction
+                            + d.conditions.armour(conditions))
+                        .max(0);
+                        // Conditions on either side move it, as they do a blow.
+                        let times = blow.multiplier()
+                            * c_damage_times
+                            * d.conditions.damage_taken(conditions);
+                        let mut hurt = ((f64::from(force) * times).round() as i32 - armour).max(0);
                         hurt -= self.ward_off(target, caster, hurt, &d_name, &mut after);
                         dealt = Some(hurt);
                     }
                     SpellEffect::Heal { heal: (low, high) } => {
-                        let (low, high) = (low.min(high), low.max(high));
+                        let (low, high) = (*low.min(high), *low.max(high));
                         let rolled = self.dice.range(luck, i64::from(low)..=i64::from(high)) as i32;
                         let most = Maxima::of(&f.attributes, &f.skills, self.defs, f.base).health;
                         let before = f.vitals.health;
@@ -180,16 +192,27 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                         healed = Some((f.vitals.health - before).round() as i32);
                     }
                     SpellEffect::Bless { attack, lasts } => {
-                        let until = self.now + lasts.real_secs();
-                        f.conditions.add_until(State::Blessed(attack), until);
+                        let lasts = lasts.lasts(self.now);
+                        f.conditions.apply(conditions, "blessed", *attack, lasts);
                     }
                     SpellEffect::Ward { absorb, lasts } => {
-                        let strength = absorb + (power / 3).max(0) as u32;
-                        let until = self.now + lasts.real_secs();
-                        f.conditions.add_until(State::Warded(strength), until);
+                        let strength = *absorb as i32 + (power / 3).max(0);
+                        let lasts = lasts.lasts(self.now);
+                        f.conditions.apply(conditions, "warded", strength, lasts);
                     }
-                    SpellEffect::Hold { rounds } => f.conditions.add(State::Held, rounds),
+                    SpellEffect::Hold { rounds } => {
+                        let lasts = Lasts::Turns((*rounds).max(1));
+                        f.conditions.apply(conditions, "held", 1, lasts);
+                    }
                     SpellEffect::Calm => cast.calmed = Some(target),
+                    SpellEffect::Apply {
+                        condition,
+                        strength,
+                        lasts,
+                    } => {
+                        let lasts = lasts.lasts(self.now);
+                        f.conditions.apply(conditions, condition, *strength, lasts);
+                    }
                 }
             }
             let most = d.most;
@@ -308,7 +331,14 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             .iter()
             .filter_map(|key| {
                 let spell = &self.spells.0.get(key)?.def;
-                can_cast(spell, f.skills, f.vitals.stamina, self.defs).ok()?;
+                can_cast(
+                    spell,
+                    f.skills,
+                    f.vitals.stamina,
+                    self.defs,
+                    (f.conditions, self.conditions),
+                )
+                .ok()?;
                 let target = match spell.aim {
                     Aim::Foe | Aim::Other => foe,
                     Aim::Ally => mob,
@@ -317,8 +347,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 let useful = takes_hold(spell, target_skills)
                     && spell.effects.iter().all(|effect| match effect {
                         SpellEffect::Heal { .. } => hurt,
-                        SpellEffect::Bless { .. } => !f.conditions.has(State::Blessed(0)),
-                        SpellEffect::Ward { .. } => !f.conditions.has(State::Warded(0)),
+                        SpellEffect::Bless { .. } => !f.conditions.has("blessed"),
+                        SpellEffect::Ward { .. } => !f.conditions.has("warded"),
+                        // Not twice on itself; at a foe, not on one that already has it.
+                        SpellEffect::Apply { condition, .. } => self
+                            .fighters
+                            .get(target)
+                            .is_ok_and(|t| !t.conditions.has(condition)),
                         _ => true,
                     });
                 useful.then(|| MobMove::Spell(key.clone(), target))

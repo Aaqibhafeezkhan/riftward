@@ -5,8 +5,8 @@ use bevy::prelude::*;
 use crate::aliases::{self, Aliases};
 use crate::attributes::{self, Attributes};
 use crate::characters::{Backgrounds, Races};
-use crate::combat::Conditions;
 use crate::combat::the;
+use crate::combat::{ConditionDefs, Conditions};
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
 use crate::items::capitalized;
@@ -41,7 +41,7 @@ pub fn score(
     sheets: Query<Sheet>,
     races: Res<Races>,
     backgrounds: Res<Backgrounds>,
-    defs: Res<SkillDefs>,
+    (defs, condition_defs): (Res<SkillDefs>, Res<ConditionDefs>),
 ) {
     let (Ok((_, player, mob, _)), Ok((attributes, vitals, skills, conditions, purse, base))) =
         (players.get(inv.entity), sheets.get(inv.entity))
@@ -78,10 +78,7 @@ pub fn score(
     if let Some(purse) = purse {
         text += &format!("    Purse: {}", money::coins(purse.0));
     }
-    let affected: Vec<&str> = conditions
-        .into_iter()
-        .flat_map(|c| c.0.iter().map(|(state, _)| state.describe().0))
-        .collect();
+    let affected = conditions.map_or_else(Vec::new, |c| c.names(&condition_defs));
     if !affected.is_empty() {
         text += &format!(
             "\r\n  Affected by: {} (type 'affects' to see for how long)",

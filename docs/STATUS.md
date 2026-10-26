@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells, then money and shops, then Karma's new costs and unlocking skills with it, then Haggling and Appraisal, then item quality and rarity, then players and mobs as one kind of character, with puppeting, then the GM role
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells, then money and shops, then Karma's new costs and unlocking skills with it, then Haggling and Appraisal, then item quality and rarity, then players and mobs as one kind of character, with puppeting, then the GM role, then conditions as data
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -17,6 +17,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Karma:** attributes cost the rating they reach (3 to 4 costs 4); characters start with 20 (humans 32); `karma <skill>` unlocks a priced skill in a tree the character has, once its requirements are met.
 - **Characters:** players and mobs share commands, output and rules. Mobs can have races; wandering mobs walk with `go`, and aggressive ones start fights with `kill`; GMs can `puppet` a mob and play it.
 - **Roles:** player, builder, GM and admin, with builders and GMs side by side: builders edit the world's files, GMs run live events (puppeting, summoning, world flags).
+- **Conditions** are data (`assets/conditions/`): seventeen, made of modifiers, with their own wording and hints; techniques, spells and items can apply or grant any of them, and timed ones are saved.
 - **Items** also have quality (crude to masterwork, per item) and rarity (common to legendary, per template), which set their worth and, for quality, a weapon's damage or armour's protection.
 - **Money and shops:** a copper, silver and gold purse, coins from kills, three Riftwatch shops that sell, buy and resell, spell lessons that cost money, and the Trade tree: Haggling (a deal with each shopkeeper) and Appraisal.
 - **Spells:** spell books as data (`assets/spells/`), `cast` and `spells`, Drain resisted by Willpower, the first two spells of each casting tradition taught by its teacher, cast in or out of fights by players and mobs alike, and the blessed and warded conditions.
@@ -27,7 +28,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Proposed and up for review:** [Effects, conditions and scripting](effects.md), the plan for designers adding skills, spells and conditions without code. Its first step, conditions as data, would come before more content.
+**Step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** one effect vocabulary and one ability shape for spells, techniques and active skills, and damage types. Step 1, conditions as data, is built.
 
 Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 
@@ -37,7 +38,6 @@ Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order
 - Trained mobs now land mostly strong and crushing blows on a novice: a town guard hits a new character for up to 14. Guards aren't aggressive, but this needs a look in play.
 - Experience and level numbers are first guesses: 50 for an even fight, nothing below a one-in-ten risk, 1,000 a level, 5 Karma a level. With levels no longer slowing on their own, the soft cap (10 + 2 × level) and how high levels go both depend on how hard the world's fights get, which needs watching as content grows.
 - Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
-- Blessings and wards aren't saved: logging out or a restart ends them, along with every other condition.
 - A calmed animal stays calm until it dies or resets: there's no time limit yet.
 - Spells come only from teachers: scrolls and grimoires, a spell-holding limit, more schools and great spells costing health are still to come. An admin can know every tradition's foundation; players can't yet, an open question.
 - Spell numbers are first guesses: Drain 2 or 3, resisted at twice that, power = school level + its attribute + Magic, a third of which adds to damage, healing and wards. A teacher at school 20 with Magic 4 casts a Spark or Ward that a new character can't match.
@@ -48,6 +48,7 @@ Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order
 - Haggling's numbers are first guesses: deals of a twentieth to a fifth, lasting ten minutes, and shopkeepers at 5 to 10. Deals aren't saved, and a deal is only struck by those who know Haggling.
 - Prices are first guesses (see [Prices](economy.md#prices)), and so is buying at a third. A shop's resale stock and a player's money on death are open questions.
 - Puppeting is for GMs and admins (builders can't). `help` still lists GM commands under "Building" and "Admin". While puppeting, the builder hears nothing of their own body, even if it's attacked. Lessons (`learn`) and account commands (`raise`, `alias`, `describe`) are for players only.
+- Conditions: Hidden and Nourished are still their own components, not data. Modifiers beyond the twelve built (initiative, attributes, blind, fear, haste…) come when something needs them. No content uses the nine new conditions yet; designers can, with `Inflict`, `Apply` and `grants`.
 - No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built).
 - Hiding isn't saved: logging out shows you, and a restart forgets everyone's hiding.
 - Herbs, rat tails and the Rat King's tooth can only be sold until Brewing and quests use them.

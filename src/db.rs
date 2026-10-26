@@ -103,6 +103,17 @@ const SCHEMA: &str = "
         PRIMARY KEY (character_id, skill)
     );
 
+    -- Conditions on a character that last in time (a blessing, a ward), saved as when they end,
+    -- so logging out or a restart doesn't cut them short or stretch them.
+    CREATE TABLE IF NOT EXISTS character_conditions (
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        condition    TEXT NOT NULL,
+        strength     INTEGER NOT NULL,
+        most         INTEGER NOT NULL,
+        ends_at      INTEGER NOT NULL,     -- unix seconds
+        PRIMARY KEY (character_id, condition)
+    );
+
     -- The spells each character knows.
     CREATE TABLE IF NOT EXISTS character_spells (
         character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
@@ -195,6 +206,9 @@ impl ItemPlace {
 
 /// A saved item on a character: its id, template, slot (`held` in their hands) and quality.
 pub type SavedItem = (i64, String, String, Quality);
+
+/// A saved condition: which, its strength, its strength at first, and when it ends (unix seconds).
+pub type SavedCondition = (String, i32, i32, i64);
 
 /// An item's quality as saved: its word, or NULL for standard.
 fn quality(word: Option<String>) -> Quality {
@@ -823,6 +837,43 @@ impl Database {
                 state.karma_paid
             ],
         )?;
+        Ok(())
+    }
+
+    /// A character's saved conditions: (condition, strength, most, ends at in unix seconds).
+    pub fn conditions(&self, character_id: i64) -> DbResult<Vec<SavedCondition>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT condition, strength, most, ends_at FROM character_conditions
+             WHERE character_id = ?1",
+        )?;
+        let rows = stmt.query_map([character_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Replace a character's saved conditions with `conditions`.
+    pub fn save_conditions(
+        &self,
+        character_id: i64,
+        conditions: &[SavedCondition],
+    ) -> DbResult<()> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM character_conditions WHERE character_id = ?1",
+            [character_id],
+        )?;
+        for (condition, strength, most, ends_at) in conditions {
+            tx.execute(
+                "INSERT OR REPLACE INTO character_conditions
+                     (character_id, condition, strength, most, ends_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![character_id, condition, strength, most, ends_at],
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     }
 

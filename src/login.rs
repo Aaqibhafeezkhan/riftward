@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use crate::aliases::Aliases;
 use crate::attributes::{Attribute, Attributes, experience_for};
 use crate::characters::{self, Backgrounds, RaceDef, Races, STARTING_ITEMS};
-use crate::combat::{AutoAttack, HideNumbers};
+use crate::combat::{AutoAttack, Conditions, HideNumbers};
 use crate::command::{self, ActionQueue};
 use crate::commands::movement::{View, describe_room};
 use crate::db::{Account, CharacterRecord, Database, ItemPlace, Permission, Role};
@@ -152,6 +152,7 @@ fn handle_login(
     players: Characters,
     mut outbox: ResMut<Outbox>,
     mut connections: Query<&mut Connection>,
+    time: Res<Time>,
     view: View,
     index: Res<RoomIndex>,
     db: Res<Database>,
@@ -230,6 +231,7 @@ fn handle_login(
                     &index,
                     &choices,
                     &db,
+                    time.elapsed_secs_f64(),
                     &mut out,
                 ) {
                     Some(next) => *state = next,
@@ -784,6 +786,7 @@ fn enter_game(
     index: &RoomIndex,
     choices: &Choices,
     db: &Database,
+    now: f64,
     out: &mut Vec<Outgoing>,
 ) -> Option<LoginState> {
     let back_to_menu = |out: &mut Vec<Outgoing>, reason: &str| {
@@ -858,6 +861,16 @@ fn enter_game(
             .into_iter()
             .collect(),
     );
+    // What was on them when they left and still lasts.
+    let saved = db.conditions(character.id).unwrap_or_else(|err| {
+        error!("failed to load conditions for {}: {err}", character.name);
+        Vec::new()
+    });
+    let unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_default();
+    let conditions = Conditions::from_saved(saved, now, unix);
     let background = character.background.clone().unwrap_or_default();
     let starting = choices
         .races
@@ -914,6 +927,7 @@ fn enter_game(
         prompt,
         skills,
         spells,
+        conditions,
         Purse(character.coins),
         ActionQueue::default(),
         AutoAttack(character.autoattack.clone()),

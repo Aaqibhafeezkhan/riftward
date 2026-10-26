@@ -1,0 +1,198 @@
+// Conditions: states on a character, as data. See docs/effects.md#conditions.
+//
+// Each has a name and a description (for `affects`, with {strength}), its tags, how it stacks
+// (Replace, Strongest, or Stack(n) doses), its modifiers, and its text. Additive modifiers count
+// once per point of strength: Blessed at strength 2 is Attack(1) twice. Text fills in {bearer},
+// and {amount} for what hurt or healed. `looks` is what others see: several hints go from fresh to
+// nearly spent, chosen by how much strength is left.
+//
+// How long a condition lasts is up to whatever puts it on: a technique's last turns, a spell's a
+// game-time span, an item's while it's worn or held.
+{
+    // From blows and techniques.
+    "staggered": (
+        name: "staggered",
+        description: "losing your next turn",
+        tags: ["physical"],
+        modifiers: [LosesTurn],
+        text: (
+            applied: (bearer: "You are staggered!", room: "{bearer} is staggered!"),
+            lost_turn: (bearer: "You reel, staggered, and can't act!", room: "{bearer} reels, staggered."),
+        ),
+    ),
+    "down": (
+        name: "down",
+        description: "losing your next turn, and defending at half",
+        tags: ["physical"],
+        modifiers: [LosesTurn, DefenceTimes(0.5)],
+        text: (
+            applied: (bearer: "You go down!", room: "{bearer} goes down!"),
+            lost_turn: (bearer: "You struggle back to your feet.", room: "{bearer} struggles back up."),
+            looks: ["{bearer} is down on the ground."],
+        ),
+    ),
+    "bleeding": (
+        name: "bleeding",
+        description: "losing {strength} health each turn",
+        tags: ["physical"],
+        modifiers: [HealthEachTurn(-1)],
+        text: (
+            applied: (bearer: "You are bleeding!", room: "{bearer} is bleeding!"),
+            each_turn: (bearer: "You bleed. ({amount})", room: "{bearer} bleeds."),
+            kills: (bearer: "You bleed out.", room: "{bearer} bleeds out and falls, dead."),
+            looks: ["{bearer} is bleeding."],
+        ),
+    ),
+    "held": (
+        name: "held",
+        description: "unable to flee, and defending at half",
+        tags: ["physical"],
+        modifiers: [CantFlee, DefenceTimes(0.5)],
+        text: (
+            applied: (bearer: "You are caught in a hold!", room: "{bearer} is caught in a hold!"),
+            looks: ["{bearer} is held fast."],
+        ),
+    ),
+    "guarding": (
+        name: "guarding",
+        description: "defending {strength} better",
+        tags: ["physical"],
+        modifiers: [Defence(1)],
+    ),
+    "exposed": (
+        name: "exposed",
+        description: "defending at half until your next turn",
+        tags: ["physical"],
+        modifiers: [DefenceTimes(0.5)],
+    ),
+    "stunned": (
+        name: "stunned",
+        description: "unable to act",
+        tags: ["physical"],
+        modifiers: [LosesTurn],
+        text: (
+            applied: (bearer: "You are stunned!", room: "{bearer} is stunned!"),
+            lost_turn: (bearer: "You're stunned, and can't act!", room: "{bearer} stands dazed."),
+            looks: ["{bearer} looks dazed."],
+        ),
+    ),
+
+    // Harm that lingers.
+    "poisoned": (
+        name: "poisoned",
+        description: "losing {strength} health each turn to poison",
+        tags: ["poison", "physical"],
+        stacking: Stack(5),
+        modifiers: [HealthEachTurn(-1)],
+        text: (
+            applied: (bearer: "Poison burns in your veins!", room: "{bearer} is poisoned!"),
+            each_turn: (bearer: "The poison burns. ({amount})", room: "{bearer} shudders, sick with poison."),
+            kills: (bearer: "The poison takes you.", room: "{bearer} falls, dead of poison."),
+            looks: ["{bearer} looks pale and sweating."],
+        ),
+    ),
+    "burning": (
+        name: "burning",
+        description: "losing {strength} health each turn to fire",
+        tags: ["fire"],
+        stacking: Strongest,
+        modifiers: [HealthEachTurn(-2)],
+        text: (
+            applied: (bearer: "You catch fire!", room: "{bearer} catches fire!"),
+            each_turn: (bearer: "You burn! ({amount})", room: "{bearer} burns!"),
+            kills: (bearer: "The flames take you.", room: "{bearer} burns, and falls, dead."),
+            looks: ["Flames lick at {bearer}."],
+        ),
+    ),
+
+    // Magic.
+    "blessed": (
+        name: "blessed",
+        description: "attacking {strength} better",
+        tags: ["magic", "blessing"],
+        modifiers: [Attack(1)],
+        text: (
+            fades: (bearer: "The warm light of your blessing fades."),
+            looks: ["A warm light clings to {bearer}."],
+        ),
+    ),
+    "warded": (
+        name: "warded",
+        description: "a ward that will take {strength} more damage",
+        tags: ["magic"],
+        modifiers: [Absorb],
+        text: (
+            absorbs: (bearer: "Your ward takes the blow ({amount}).", room: "{bearer}'s ward takes the blow."),
+            breaks: (bearer: "Your ward fails!", room: "{bearer}'s ward fails."),
+            fades: (bearer: "Your ward flickers and fades."),
+            looks: [
+                "A bright shimmer surrounds {bearer}.",
+                "A faint shimmer surrounds {bearer}.",
+                "A thin, flickering shimmer clings to {bearer}.",
+            ],
+        ),
+    ),
+    "regenerating": (
+        name: "regenerating",
+        description: "healing {strength} each turn",
+        tags: ["magic"],
+        modifiers: [HealthEachTurn(1)],
+        text: (
+            each_turn: (bearer: "Your wounds knit. ({amount})"),
+            fades: (bearer: "Your wounds stop knitting."),
+            looks: ["{bearer}'s wounds are closing before your eyes."],
+        ),
+    ),
+    "rooted": (
+        name: "rooted",
+        description: "unable to move or flee",
+        tags: ["magic"],
+        modifiers: [CantMove, CantFlee],
+        text: (
+            applied: (bearer: "Your feet are held fast!", room: "{bearer}'s feet are held fast!"),
+            fades: (bearer: "Your feet are your own again."),
+            looks: ["{bearer}'s feet are held fast to the ground."],
+        ),
+    ),
+    "silenced": (
+        name: "silenced",
+        description: "unable to cast",
+        tags: ["magic"],
+        modifiers: [CantCast],
+        text: (
+            applied: (bearer: "Your voice is gone!", room: "{bearer}'s voice is gone!"),
+            fades: (bearer: "Your voice comes back."),
+        ),
+    ),
+    "shielded": (
+        name: "shielded",
+        description: "taking {strength} more off every blow",
+        tags: ["magic"],
+        modifiers: [Armour(1)],
+        text: (
+            fades: (bearer: "Your skin is your own again."),
+            looks: ["{bearer}'s skin has a dull, stony sheen."],
+        ),
+    ),
+    "weakened": (
+        name: "weakened",
+        description: "dealing a quarter less damage",
+        tags: ["magic"],
+        modifiers: [DamageDealt(0.75)],
+        text: (
+            applied: (bearer: "Your strength drains away!", room: "{bearer} sags, weakened."),
+            fades: (bearer: "Your strength comes back."),
+            looks: ["{bearer} looks drained."],
+        ),
+    ),
+    "strengthened": (
+        name: "strengthened",
+        description: "dealing a quarter more damage",
+        tags: ["magic"],
+        modifiers: [DamageDealt(1.25)],
+        text: (
+            fades: (bearer: "Your borrowed strength ebbs."),
+            looks: ["{bearer}'s muscles stand out like cords."],
+        ),
+    ),
+}

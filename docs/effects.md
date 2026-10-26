@@ -1,6 +1,6 @@
 # Effects, conditions and scripting
 
-[Design summary](README.md) · Status: proposed, for review. Nothing here is built yet beyond what's marked ✓ (built today in a hard-coded form, to become data)
+[Design summary](README.md) · Status: step 1, conditions as data, is built (see [Conditions, as built](#conditions-as-built)); the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
 
 **The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, a new active skill (each has its own command, like `pick` or `track`), a new trigger, or a formula other than the built-in ones.
 
@@ -20,7 +20,7 @@ This doc proposes the vocabulary that removes those needs: **conditions as data*
 
 ## Conditions
 
-A condition is data, in `assets/conditions.ron`: a name, what it does (a list of [modifiers](#modifiers)), how long it lasts, and what it says. Blessed, Warded, Held and Bleeding stop being code.
+A condition is data, in `assets/conditions/*.conditions.ron`: a name, what it does (a list of [modifiers](#modifiers)), how long it lasts, and what it says. Blessed, Warded, Held and Bleeding stop being code.
 
 ```ron
 "poisoned": (
@@ -174,6 +174,19 @@ Conditions on items come in two kinds, which behave differently.
 | Already built (to move into data) | New |
 | --- | --- |
 | Staggered, Down, Bleeding, Held, Guarding, Exposed, Blessed, Warded, Hidden, Nourished | Poisoned, Burning, Chilled (slowed), Stunned, Asleep, Rooted, Silenced, Blinded, Weakened, Strengthened, Hasted, Slowed, Shielded (armour), Invisible, Feared, Taunted, Calmed, Regenerating, Inspired, Exhausted, Sanctuary |
+
+### Conditions, as built
+
+*Built* (step 1). Conditions are data in `assets/conditions/*.conditions.ron` (a folder, since zone files already claim plain `.ron`), hot-reloaded; the code is `src/combat/states.rs`.
+
+- **Seventeen conditions:** the eight that were code (staggered, down, bleeding, held, guarding, exposed, blessed, warded) with their wording unchanged, and nine new ones: poisoned (stacks to 5 doses), burning, stunned, regenerating, rooted, silenced, shielded, weakened, strengthened. Hidden and Nourished stay as they were for now.
+- **Modifiers built:** `Attack`, `Defence`, `DefenceTimes`, `Armour`, `DamageDealt`, `DamageTaken`, `HealthEachTurn`, `Absorb`, `LosesTurn`, `CantFlee`, `CantMove`, `CantCast`. Additive ones count once per point of strength. The rest of the list above arrives as something needs it.
+- **Stacking:** `Replace`, `Strongest`, `Stack(n)`. **Tags** are kept for cures and immunities to come.
+- **Text from data:** applied (to the target of a technique), each turn, a lost turn, death, fading, a ward taking a blow and breaking, and `looks` hints, chosen by strength left. `affects` lists names, what each does and how long, and `score` the names.
+- **Using any condition:** techniques have `Inflict(condition, strength, rounds)` for the target and `Gain(...)` for the user; spells have `Apply(condition, strength, lasts)`, where `lasts` is `Minutes(n)`, `Hours(n)` or `Turns(n)`. Stagger, Bleed, Bless, Ward and the rest are now shorthands for these.
+- **Items grant conditions:** `grants: [(condition: "shielded", strength: 1, while: Worn)]` on a template, `Worn`, `Held` or `Carried`, kept in step whenever items move.
+- **Saved:** conditions lasting in time are saved with players (`character_conditions`), as when they end, every minute and at logout, and restored at login if they still last.
+- **Checked:** tests fail if a technique, spell or item names a condition that doesn't exist.
 
 ## Damage types
 
@@ -360,7 +373,7 @@ reactions: [(on: Hit, effects: [Damage(amount: "2", type: piercing, armour: fals
 
 Each step leaves the game working and designers with more they can do alone.
 
-1. **Conditions as data.** The ten built conditions move to `assets/conditions.ron`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
+1. **Conditions as data** (*built*). The built conditions move to `assets/conditions/`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
 2. **Effects and abilities.** One effect vocabulary and one ability shape; spells and techniques become abilities, and damage types arrive. `Imbue` and saved item conditions come with it.
 3. **Formulas.** The expression evaluator, and every amount moved into data.
 4. **Triggers and reactions.** More game events; reactions on conditions, skills and items.
