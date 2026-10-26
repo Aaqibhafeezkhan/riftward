@@ -244,7 +244,7 @@ Skill content lives in hot-reloaded RON files and each character's progress in S
 
 | Path or table | Contents |
 | --- | --- |
-| `assets/skills/<tree>.ron` | One tree and its skills, loaded as a `SkillTreeDef` asset; the tree id is the file name |
+| `assets/skills/<tree>.skill.ron` | One tree and its skills, loaded as a `SkillTreeDef` asset; the tree id is the file name |
 | `assets/config/rarity.ron` | Drop rates and colours per tier |
 | `character_skills` table | `character_id`, `skill` (`tree:skill`), `level`, `practice`, `last_used`, `next_gain_at`, `learned_via` (`Starting`, `Taught`, `Discovered`, `Loot`, `Epiphany`, `Admin`), `learned_at`. Written on every gain and learn, not on every use |
 | `character_flags` table | `character_id`, `flag`, `set_at`. The easter egg hook |

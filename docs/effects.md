@@ -177,7 +177,7 @@ Conditions on items come in two kinds, which behave differently.
 
 ### Conditions, as built
 
-*Built* (step 1). Conditions are data in `assets/conditions/*.conditions.ron` (a folder, since zone files already claim plain `.ron`), hot-reloaded; the code is `src/combat/states.rs`.
+*Built* (step 1). Conditions are data in `assets/conditions/*.conditions.ron`, hot-reloaded; the code is `src/combat/states.rs`.
 
 - **Seventeen conditions:** the eight that were code (staggered, down, bleeding, held, guarding, exposed, blessed, warded) with their wording unchanged, and nine new ones: poisoned (stacks to 5 doses), burning, stunned, regenerating, rooted, silenced, shielded, weakened, strengthened. Hidden and Nourished stay as they were for now.
 - **Modifiers built:** `Attack`, `Defence`, `DefenceTimes`, `Armour`, `DamageDealt`, `DamageTaken`, `HealthEachTurn`, `Absorb`, `LosesTurn`, `CantFlee`, `CantMove`, `CantCast`. Additive ones count once per point of strength. The rest of the list above arrives as something needs it.

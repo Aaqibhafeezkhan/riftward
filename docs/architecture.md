@@ -83,7 +83,7 @@ flowchart LR
 
 | Kind | Where | Reloads |
 | --- | --- | --- |
-| World | `assets/zones/<zone>.ron`, one file per zone; builder commands write back to them | Live, on file change |
+| World | `assets/zones/<zone>.zone.ron`, one file per zone; builder commands write back to them | Live, on file change |
 | Accounts, characters, roles | `accounts`, `characters` tables | n/a |
 | Aliases | `character_aliases` table | n/a |
 | Attributes | `character_attributes` table | n/a |

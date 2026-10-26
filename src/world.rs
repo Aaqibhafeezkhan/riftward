@@ -1,6 +1,6 @@
 //! The game world: rooms are entities, and players point at the room they're in.
 //!
-//! Rooms are defined in zone files, `assets/zones/<zone>.ron`, each loaded as a Bevy asset. Room
+//! Rooms are defined in zone files, `assets/zones/<zone>.zone.ron`, each loaded as a Bevy asset. Room
 //! ids only need to be unique within their zone; elsewhere a room is referred to by its full id,
 //! `zone:room`. When a zone file is added, changed, or removed on disk (or edited in game by a
 //! builder), the room entities are updated in place: existing rooms keep their entity (so players
@@ -24,8 +24,20 @@ use crate::skills::Rarity;
 use crate::targeting::Keywords;
 use crate::world_events::{When, WorldEventDef};
 
-/// Asset folder holding one `.ron` file per zone.
+/// Asset folder holding one `.zone.ron` file per zone.
 pub const ZONES_PATH: &str = "zones";
+/// The extension zone files use: double, like skills' and spells', so every kind of file names
+/// itself.
+pub const ZONE_EXTENSION: &str = "zone.ron";
+
+/// A zone's id from its file: `zones/riftwatch.zone.ron` is `riftwatch`.
+pub fn zone_id(path: &std::path::Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_suffix(&format!(".{ZONE_EXTENSION}")))
+        .unwrap_or_default()
+        .to_string()
+}
 
 /// Where new characters (and anyone whose room disappears) end up.
 pub const START_ROOM: &str = "riftwatch:market";
@@ -43,10 +55,10 @@ impl Plugin for WorldPlugin {
     }
 }
 
-/// The contents of a zone `.ron` file.
+/// The contents of a zone `.zone.ron` file.
 #[derive(Asset, TypePath, Serialize, Deserialize, Debug, Clone)]
 pub struct ZoneDef {
-    /// Taken from the file name, e.g. `town` for `zones/town.ron`.
+    /// Taken from the file name, e.g. `town` for `zones/town.zone.ron`.
     #[serde(skip)]
     pub id: String,
     /// Asset path of the file this zone was loaded from, used when saving builder edits.
@@ -1020,7 +1032,7 @@ impl ZoneDef {
         };
         Self {
             id: id.into(),
-            path: PathBuf::from(ZONES_PATH).join(format!("{id}.ron")),
+            path: PathBuf::from(ZONES_PATH).join(format!("{id}.{ZONE_EXTENSION}")),
             name: name.into(),
             doors: BTreeMap::new(),
             items: BTreeMap::new(),
@@ -1102,16 +1114,13 @@ impl AssetLoader for ZoneDefLoader {
         reader.read_to_end(&mut bytes).await?;
         let mut zone: ZoneDef = ron_options().from_bytes(&bytes)?;
         let path = load_context.path().path();
-        zone.id = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        zone.id = zone_id(path);
         zone.path = path.to_path_buf();
         Ok(zone)
     }
 
     fn extensions(&self) -> &[&str] {
-        &["ron"]
+        &[ZONE_EXTENSION]
     }
 }
 
@@ -1640,12 +1649,12 @@ mod tests {
         let mut zones = Vec::new();
         for entry in std::fs::read_dir(&dir).unwrap() {
             let path = entry.unwrap().path();
-            if path.extension().is_some_and(|e| e == "ron") {
+            if path.to_string_lossy().ends_with(ZONE_EXTENSION) {
                 let text = std::fs::read_to_string(&path).unwrap();
                 let mut zone: ZoneDef = ron_options()
                     .from_str(&text)
                     .unwrap_or_else(|err| panic!("{} doesn't parse: {err}", path.display()));
-                zone.id = path.file_stem().unwrap().to_string_lossy().into_owned();
+                zone.id = zone_id(&path);
                 zones.push(zone);
             }
         }

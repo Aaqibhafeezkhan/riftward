@@ -130,7 +130,7 @@ A `character_guild` table holds rank, merit, and the number of contracts complet
 A quest is a RON file in `assets/quests/`, hot-reloaded like zones. Guild contracts are quests with `guild: Contract(rank, merit)`.
 
 ```ron
-// assets/quests/sewer_rats.ron
+// assets/quests/sewer_rats.quest.ron
 (
     name: "Rats in the Drains",
     summary: "The guild wants the rats in the sewers thinned out before they reach the streets.",

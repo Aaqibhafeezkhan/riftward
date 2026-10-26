@@ -395,7 +395,7 @@ mod tests {
             let zone: ZoneDef = ron_options()
                 .from_str(&std::fs::read_to_string(&path).unwrap())
                 .unwrap();
-            let id = path.file_stem().unwrap().to_string_lossy().into_owned();
+            let id = crate::world::zone_id(&path);
             for (item, def) in zone.items {
                 items.insert(ItemKey::parse(&item, &id), def);
             }

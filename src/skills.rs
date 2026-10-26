@@ -1,7 +1,7 @@
 //! Skills: what a character can do, learned and improved only by use.
 //!
 //! Skill trees are data, one file per tree in `assets/skills/` (`thievery.skill.ron`; the double
-//! extension keeps Bevy from mistaking them for zone files), hot-reloaded like zones. A skill is
+//! extension tells Bevy which loader reads them), hot-reloaded like zones. A skill is
 //! active (used with a command, costing stamina, with a cooldown) or passive (practised whenever
 //! a game event it listens for happens). Every use builds practice and may roll for a level; see
 //! `docs/progression.md` for the formulas. Levels have no cap, but each is harder to reach than
