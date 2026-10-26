@@ -2,6 +2,37 @@
 // This file is rewritten by in-game builder commands, so comments other than this header are lost.
 (
     name: "Riftwatch Sewers",
+    items: {
+        "stale_crust": (
+            name: "a stale crust",
+            keywords: ["crust", "stale", "bread"],
+            description: "A heel of bread, hard as wood and only a little nibbled.",
+            bulk: Negligible,
+            tags: ["food"],
+            consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
+        ),
+        "glowcap": (
+            name: "a glowcap",
+            keywords: ["glowcap", "fungus", "mushroom"],
+            description: "A spongy fungus that glows a faint, sickly green in the dark. Not for eating.",
+            bulk: Negligible,
+            tags: ["herb"],
+        ),
+        "rat_tail": (
+            name: "a rat's tail",
+            keywords: ["tail", "rat"],
+            description: "A long, scaly rat's tail. Someone in town probably pays for these.",
+            bulk: Negligible,
+            tags: ["trophy"],
+        ),
+        "kings_tooth": (
+            name: "a yellowed tooth of the Rat King",
+            keywords: ["tooth", "yellowed", "king"],
+            description: "A long, curved incisor, yellow as old ivory and still sharp. Proof that the Rat King has fallen, for now.",
+            bulk: Negligible,
+            tags: ["trophy"],
+        ),
+    },
     mobs: {
         "sewer_rat": (
             name: "a sewer rat",
@@ -12,6 +43,7 @@
             skills: {"beast:rat_bite": 2},
             attack: "beast:rat_bite",
             health: 3,
+            loot: [[(None, 70), ("rat_tail", 30)]],
             aggressive: true,
         ),
         "rat_king": (
@@ -22,6 +54,10 @@
             attributes: {Body: 6, Strength: 4, Agility: 5, Reaction: 5},
             skills: {"beast:bite": 8, "beast:claw": 8, "beast:rend": 8, "beast:rat_kings_command": 1},
             attack: "beast:claw",
+            loot: [
+                [("rat_tail", 60), ("kings_tooth", 40)],
+                [(None, 70), ("riftwatch:healing_draught", 30)],
+            ],
             health: 30,
             tactics: 30,
             aggressive: true,
@@ -65,6 +101,12 @@
             ],
         ),
     },
+    finds: {
+        Sewer: (
+            forage: [(None, 60), ("stale_crust", 40)],
+            herbs: [("glowcap", 1)],
+        ),
+    },
     rooms: {
         "outflow_arch": (
             name: "Outflow Arch",
@@ -74,6 +116,7 @@
             exits: {
                 "south": "north_trunk",
             },
+            environment: Sewer,
         ),
         "north_trunk": (
             name: "North Trunk",
@@ -86,6 +129,7 @@
                 "east": "smugglers_nook",
                 "up": (to: "riftwatch:north_gate", door: "riftwatch:gate_grate"),
             },
+            environment: Sewer,
         ),
         "smugglers_nook": (
             name: "Smugglers' Nook",
@@ -95,6 +139,7 @@
             exits: {
                 "west": "north_trunk",
             },
+            environment: Sewer,
         ),
         "market_drain": (
             name: "Market Drain",
@@ -108,6 +153,7 @@
                 "west": "guild_tunnel",
                 "up": (to: "riftwatch:market", door: "riftwatch:market_grate"),
             },
+            environment: Sewer,
         ),
         "stalls_culvert": (
             name: "Stalls Culvert",
@@ -120,6 +166,7 @@
                 "south": "outfall",
                 "up": (to: "riftwatch:stalls", door: "riftwatch:stalls_grate"),
             },
+            environment: Sewer,
         ),
         "outfall": (
             name: "Sewer Outfall",
@@ -132,6 +179,7 @@
                 "west": "great_drain",
                 "south": "garrison_drain",
             },
+            environment: Sewer,
         ),
         "guild_tunnel": (
             name: "Guild Tunnel",
@@ -144,6 +192,7 @@
                 "west": "tunnel_west",
                 "up": (to: "riftwatch:guild_row", door: "riftwatch:guild_grate"),
             },
+            environment: Sewer,
         ),
         "guild_drain": (
             name: "Guild Drain",
@@ -154,6 +203,7 @@
                 "south": "guild_tunnel",
                 "up": (to: "riftwatch:guild_cellar", door: "riftwatch:guild_hatch"),
             },
+            environment: Sewer,
         ),
         "tunnel_west": (
             name: "Western Tunnel",
@@ -165,6 +215,7 @@
                 "west": "cistern",
                 "south": "ossuary",
             },
+            environment: Sewer,
         ),
         "cistern": (
             name: "Old Cistern",
@@ -175,6 +226,7 @@
                 "east": "tunnel_west",
                 "down": "drowned_stair",
             },
+            environment: Sewer,
         ),
         "drowned_stair": (
             name: "Drowned Stair",
@@ -184,6 +236,7 @@
             exits: {
                 "up": "cistern",
             },
+            environment: Sewer,
         ),
         "ossuary": (
             name: "Ossuary",
@@ -194,6 +247,7 @@
                 "north": "tunnel_west",
                 "east": "great_drain",
             },
+            environment: Sewer,
         ),
         "great_drain": (
             name: "Great Drain",
@@ -207,6 +261,7 @@
                 "south": "keep_drain",
                 "up": (to: "riftwatch:high_street", door: "riftwatch:high_street_grate"),
             },
+            environment: Sewer,
         ),
         "keep_drain": (
             name: "Keep Drain",
@@ -218,6 +273,7 @@
                 "east": "garrison_drain",
                 "south": "sluice",
             },
+            environment: Sewer,
         ),
         "sluice": (
             name: "Sluice",
@@ -228,6 +284,7 @@
                 "north": "keep_drain",
                 "up": (to: "riftwatch:keep_dungeon", door: "riftwatch:dungeon_door"),
             },
+            environment: Sewer,
         ),
         "garrison_drain": (
             name: "Garrison Drain",
@@ -240,6 +297,7 @@
                 "west": "keep_drain",
                 "east": "flooded_tunnel",
             },
+            environment: Sewer,
         ),
         "flooded_tunnel": (
             name: "Flooded Tunnel",
@@ -250,6 +308,7 @@
                 "west": "garrison_drain",
                 "north": "tunnel_east",
             },
+            environment: Sewer,
         ),
         "tunnel_east": (
             name: "Eastern Tunnel",
@@ -261,6 +320,7 @@
                 "south": "flooded_tunnel",
                 "east": "rat_runs",
             },
+            environment: Sewer,
         ),
         "rat_runs": (
             name: "Rat Runs",
@@ -272,6 +332,7 @@
                 "east": "collapsed_gallery",
                 "south": "overflow_chamber",
             },
+            environment: Sewer,
         ),
         "collapsed_gallery": (
             name: "Collapsed Gallery",
@@ -282,6 +343,7 @@
                 "west": "rat_runs",
                 "south": "nest",
             },
+            environment: Sewer,
         ),
         "overflow_chamber": (
             name: "Overflow Chamber",
@@ -292,6 +354,7 @@
                 "north": "rat_runs",
                 "east": "nest",
             },
+            environment: Sewer,
         ),
         "nest": (
             name: "The Warren",
@@ -302,6 +365,7 @@
                 "north": "collapsed_gallery",
                 "west": "overflow_chamber",
             },
+            environment: Sewer,
         ),
     },
 )

@@ -21,9 +21,9 @@ use crate::output::{
 use crate::spawns::SpawnTimers;
 use crate::targeting::{Keywords, Target};
 use crate::world::{
-    Bulk, Capacity, ContainerDef, DoorDef, DoorKey, DoorState, Every, ExitDef, ItemDef, ItemKey,
-    LockDef, MobDef, MobKey, Refill, RoomDef, RoomIndex, RoomKey, Slot, SpawnDef, SpawnKey,
-    Spawned, Terrain, Wander, ZONE_ENTRANCE, ZoneDef, format_bulk, without_article,
+    Bulk, Capacity, ContainerDef, DoorDef, DoorKey, DoorState, Environment, Every, ExitDef,
+    ItemDef, ItemKey, LockDef, MobDef, MobKey, Refill, RoomDef, RoomIndex, RoomKey, Slot, SpawnDef,
+    SpawnKey, Spawned, Terrain, Wander, ZONE_ENTRANCE, ZoneDef, format_bulk, without_article,
 };
 
 pub struct BuildPlugin;
@@ -91,6 +91,14 @@ impl Plugin for BuildPlugin {
                     "show or set what this room's ground is like, and so how tiring it is to enter",
                 ),
                 terrain_cmd,
+            )
+            .add_command(
+                build(
+                    "environment",
+                    "environment [town | field | forest | water | sewer | cave]",
+                    "show or set what kind of place this room is, for what can be found here",
+                ),
+                environment_cmd,
             )
             .add_command(
                 build(
@@ -251,6 +259,7 @@ zone_edit_command!(rename_cmd, rename);
 zone_edit_command!(desc_cmd, describe);
 zone_edit_command!(flag_cmd, room_flag);
 zone_edit_command!(terrain_cmd, room_terrain);
+zone_edit_command!(environment_cmd, room_environment);
 zone_edit_command!(unlink_cmd, unlink);
 
 fn link_cmd(
@@ -493,6 +502,8 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
         }
 
         let id = unique_room_id(&slugify(name), zone);
+        // A room dug out of a forest is forest too.
+        let from_environment = room_mut(zone, here)?.environment;
         let mut exits = BTreeMap::new();
         let way_back = opposite_direction(&dir);
         if let Some(back) = way_back {
@@ -507,6 +518,8 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
                 no_wander: false,
                 indoors: false,
                 terrain: Terrain::Paved,
+                environment: from_environment,
+                finds: None,
             },
         );
         room_mut(zone, here)?
@@ -603,6 +616,24 @@ fn room_terrain(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -
     edit_zone(zones, &here.zone, |zone| {
         room_mut(zone, here)?.terrain = terrain;
         Ok(show(terrain))
+    })
+}
+
+fn room_environment(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    let show = |environment: Environment| format!("[{here}] is {}.", environment.name());
+    let wanted = inv.args.trim();
+    if wanted.is_empty() {
+        let zone = zone_def(zones, &here.zone)?;
+        let room = zone
+            .rooms
+            .get(&here.room)
+            .ok_or("This room no longer exists in its zone file.")?;
+        return Ok(show(room.environment));
+    }
+    let environment = Environment::parse(wanted).ok_or_else(|| inv.usage_error())?;
+    edit_zone(zones, &here.zone, |zone| {
+        room_mut(zone, here)?.environment = environment;
+        Ok(show(environment))
     })
 }
 

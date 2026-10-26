@@ -68,7 +68,68 @@ pub struct ZoneDef {
     /// How the world reacts to what happens, by id (see `world_events.rs`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub events: BTreeMap<String, WorldEventDef>,
+    /// What can be gathered in this zone's rooms, by environment. A room can have its own.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub finds: BTreeMap<Environment, FindsDef>,
     pub rooms: BTreeMap<String, RoomDef>,
+}
+
+/// A weighted table of items (`item` or `zone:item`), ordered worst to best, so Luck's second
+/// roll favours the better end. `None` is nothing at all.
+pub type Table = Vec<(Option<String>, u32)>;
+
+/// What can be found in a room: by `forage` with Foraging, and by `gather` with Herbalism.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct FindsDef {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forage: Table,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub herbs: Table,
+}
+
+/// What kind of place a room is, for what grows and lives there: separate from its terrain, so a
+/// road through the Darkwood is forest to forage and road to walk.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum Environment {
+    #[default]
+    Town,
+    Field,
+    Forest,
+    Water,
+    Sewer,
+    Cave,
+}
+
+impl Environment {
+    pub const ALL: [Environment; 6] = [
+        Environment::Town,
+        Environment::Field,
+        Environment::Forest,
+        Environment::Water,
+        Environment::Sewer,
+        Environment::Cave,
+    ];
+
+    fn is_town(&self) -> bool {
+        *self == Environment::Town
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Environment::Town => "town",
+            Environment::Field => "field",
+            Environment::Forest => "forest",
+            Environment::Water => "water",
+            Environment::Sewer => "sewer",
+            Environment::Cave => "cave",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Environment::ALL
+            .into_iter()
+            .find(|e| e.name() == s.to_ascii_lowercase())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -86,6 +147,12 @@ pub struct RoomDef {
     /// What the ground is like, and so how tiring it is to walk into.
     #[serde(default, skip_serializing_if = "Terrain::is_paved")]
     pub terrain: Terrain,
+    /// What kind of place it is, for what can be found here.
+    #[serde(default, skip_serializing_if = "Environment::is_town")]
+    pub environment: Environment,
+    /// What can be found here, instead of what its zone has for its environment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finds: Option<FindsDef>,
 }
 
 /// What a room's ground is like. Walking into a room costs its terrain's stamina, doubled for
@@ -477,6 +544,10 @@ pub struct MobDef {
     /// The attack it makes each round; without one, the basic attack.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attack: Option<String>,
+    /// What its corpse holds besides its gear: one item from each table, by weight, with its
+    /// killer's Luck.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub loot: Vec<Table>,
     /// Items it's made with (`item` or `zone:item` templates): wearable ones worn, the rest held,
     /// two at most. It fights with a weapon in hand, and its gear falls into its corpse.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -507,6 +578,7 @@ impl MobDef {
             attributes: BTreeMap::new(),
             skills: BTreeMap::new(),
             attack: None,
+            loot: Vec::new(),
             equipment: Vec::new(),
             health: None,
             tactics: None,
@@ -837,6 +909,8 @@ impl ZoneDef {
             no_wander: false,
             indoors: false,
             terrain: Terrain::Paved,
+            environment: Environment::Town,
+            finds: None,
         };
         Self {
             id: id.into(),
@@ -847,6 +921,7 @@ impl ZoneDef {
             mobs: BTreeMap::new(),
             spawns: BTreeMap::new(),
             events: BTreeMap::new(),
+            finds: BTreeMap::new(),
             rooms: BTreeMap::from([(ZONE_ENTRANCE.into(), entrance)]),
         }
     }
@@ -972,6 +1047,14 @@ pub struct Room {
     /// The sky can't be seen from here.
     pub indoors: bool,
     pub terrain: Terrain,
+}
+
+/// What can be found in a room, from its own finds or its zone's for its environment. Item ids
+/// are local to `zone`.
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct Finds {
+    pub zone: String,
+    pub def: FindsDef,
 }
 
 /// Direction name -> where that exit leads.
@@ -1262,6 +1345,24 @@ fn sync_world(
         }
         commands.entity(entity).despawn();
         index.0.remove(&key);
+    }
+
+    // What each room's ground yields: its own finds, or its zone's for its environment.
+    for (key, def) in &defs {
+        let Some(&entity) = index.0.get(key) else {
+            continue;
+        };
+        let zone_finds = zones
+            .iter()
+            .find(|(_, z)| z.id == key.zone)
+            .and_then(|(_, z)| z.finds.get(&def.environment));
+        match def.finds.as_ref().or(zone_finds) {
+            Some(finds) => commands.entity(entity).insert(Finds {
+                zone: key.zone.clone(),
+                def: finds.clone(),
+            }),
+            None => commands.entity(entity).remove::<Finds>(),
+        };
     }
 
     sync_doors(&mut commands, &zones, &mut door_index, &mut doors);

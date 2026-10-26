@@ -1,0 +1,24 @@
+// A skill tree. Its id is the file name: skills here are `nature:<id>`.
+(
+    name: "Nature",
+    rarity: Common,
+    attribute: Intuition,
+    skills: {
+        // `gather` fills in {item} with what was found.
+        "herbalism": (
+            name: "Herbalism",
+            description: "Knowing which plants heal and which harm, and finding them, with 'gather'. What grows depends on the place. Herbs are the makings of draughts and poultices.",
+            kind: Active(command: "gather", cooldown: 3),
+            text: (
+                hit: (
+                    actor: "You search among the plants and find {item}.",
+                    room: "{actor} searches among the plants and gathers {item}.",
+                ),
+                miss: (
+                    actor: "You search among the plants, but find nothing useful.",
+                    room: "{actor} searches among the plants, but finds nothing.",
+                ),
+            ),
+        ),
+    },
+)

@@ -119,13 +119,14 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     skills: {"beast:bite": 2},       // levels; mobs don't improve
     attack: "beast:bite",            // without one, a weapon in hand, then Brawling
     equipment: ["rusty_knife"],      // item templates: worn if wearable, else held (two hands)
+    loot: [[(None, 70), ("rat_tail", 30)]],  // one find per table, weighted, with the killer's Luck
     health: 3,                        // instead of 8 + Body / 2; Toughness still adds to it
     tactics: 25,                      // % chance a turn to use a combat skill instead (default 25)
     aggressive: true,                 // attacks players in its room
 ),
 ```
 
-Mobs use equipment as players do: a mob holding a sword fights with it (and its Swordplay), its weapon techniques work, and `look` shows what it holds and wears. When it dies, its gear falls into its corpse, which makes equipment the first source of [drops](items.md). Loot tables will add to it.
+Mobs use equipment as players do: a mob holding a sword fights with it (and its Swordplay), its weapon techniques work, and `look` shows what it holds and wears. When it dies, its gear falls into its corpse, with one find from each of its **loot tables**: weighted, ordered worst to best, rolled with the Luck of whoever struck the killing blow, `None` for nothing. Sewer rats sometimes leave a tail; the Rat King leaves a tail or his tooth, and sometimes a healing draught.
 
 Mobs share players' vitals and recover by the same rules, at their own maximums: out of a fight, a hurt or winded mob gets its health and stamina back. Mobs use their skills the way players do. Besides its auto-attack, a mob uses the other combat skills it knows (technique skills like Cleave or Guard): each turn, with its `tactics` chance, it uses one it can right then (its attack ready, the stamina for it), picked at random, in place of its auto-attack. Openers like Backstab are for starting fights, so a mob already in one never picks them.
 
@@ -170,7 +171,32 @@ Every room has a `terrain` saying what its ground is like, and walking into a ro
 - **Fleeing pays its own way** (2 stamina, see [Combat](architecture.md#combat)) rather than the terrain's, so a fight can always be escaped while there's stamina for it.
 - **Walking practises Endurance,** like any stamina spent, so long treks build it.
 - **Builders** set it with `terrain <kind>`, or in the zone file. The sewers are uneven, with rough rubble in the Collapsed Gallery and the Warren and waist-deep water in the Flooded Tunnel, Overflow Chamber and Drowned Stair; the Darkwood's roads are roads, and the track to the Hermit's Clearing is uneven.
-- **Terrain will also feed** foraging, tracking, climbing and swimming (see [Skill trees](trees.md#what-the-engine-needs)).
+- **Terrain will also feed** tracking, climbing and swimming (see [Skill trees](trees.md#what-the-engine-needs)).
+
+### Environment and finds
+
+Separately from its footing, every room has an **environment**: what kind of place it is, and so what can be found there. A road through the Darkwood is forest to forage and road to walk.
+
+| Environment | Rooms today |
+| --- | --- |
+| `Town` (the default) | Riftwatch: nothing to gather |
+| `Field`, `Water`, `Cave` | None yet |
+| `Forest` | The Darkwood |
+| `Sewer` | The sewers |
+
+- **A zone says what each environment yields** in its `finds`, and a room can have its own instead. Each is two weighted tables, ordered worst to best: `forage` for Foraging, `herbs` for Herbalism. `None` is nothing at all.
+
+  ```ron
+  finds: {
+      Forest: (
+          forage: [("wild_berries", 50), ("mushrooms", 35), ("hazelnuts", 15)],
+          herbs: [("yarrow", 50), ("kingsfoil", 35), ("moonpetal", 15)],
+      ),
+  },
+  ```
+
+- **`forage` and `gather`** search the room (see [Gathering](trees.md#gathering)). Each room holds three finds of each kind, and grows one back every 10 minutes, so no one strips one bush forever. Finds aren't saved: a restart lets everything grow back.
+- **Builders** set a room's environment with `environment <kind>`, or in the zone file; a room dug out of another takes its environment.
 
 ### Weather (planned)
 

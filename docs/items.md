@@ -1,6 +1,6 @@
 # Items, containers and locks
 
-[Design summary](README.md) · Status: built, except decay, loot tables and traps. Item spawns and unique items are built (see [The living world](world.md#items))
+[Design summary](README.md) · Status: built, except decay and traps. Item spawns and unique items are built (see [The living world](world.md#items))
 
 Items are entities defined by templates in zone files. They can be carried, worn, dropped, or put inside containers. An item becomes **real**, saved to the database, the moment a player touches it, and most items slowly **decay** when left lying around. Doors and containers share one **lock** model: open, closed or locked, with keys, lockpicking, bashing and traps.
 
@@ -189,7 +189,7 @@ A container is an item with a `container` section. Worn containers carry your th
 - **Fixed containers belong to their spawn and are never real.** A chest's name is stable (its spawn's id), and each reset refills its contents and resets its lock. Until spawns exist, builders `create` them, which places a fixed item in the room.
 - **Contents follow the usual rule:** temporary until a player takes them, then real. Real items saved inside a fixed chest survive restarts, which is the basis for player storage later.
 - **A mob's gear is its first drop.** Mobs hold and wear items from their template's `equipment` (see [Mobs](world.md)); when one dies, its gear falls into its corpse, temporary like any untouched item until a player takes it. A guard killed in the market leaves its short sword behind. A mob removed any other way (purged, its template deleted) takes its gear with it.
-- **Loot tables** roll through [`Dice.pick`](attributes.md#the-dice-service), so Luck applies; for a group, the group's average Luck. They come with spawns, and add to what a mob's gear already drops.
+- **Loot tables** on mob templates roll through [`Dice.pick`](attributes.md#the-dice-service) when the mob dies, with the killer's Luck (for a group, later, the group's average), and add to what its gear already drops. See [Mobs](world.md). *Built.*
 - **Corpses** will be portable containers with perishable decay.
 
 ## Locks and keys

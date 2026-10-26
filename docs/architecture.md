@@ -41,6 +41,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
 | `vitals.rs` | Current health and stamina for players and mobs alike, their maximums, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `healing.rs` | `eat` and `drink` for consumables, and `bandage`, First Aid's command |
+| `gathering.rs` | `forage` and `gather`, from a room's finds, and how finds deplete and grow back |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |

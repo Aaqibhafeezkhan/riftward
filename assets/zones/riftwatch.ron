@@ -429,7 +429,7 @@
             keywords: ["herbalist", "woman"],
             here: "The herbalist sorts dried leaves into bundles, muttering their names.",
             description: "A stooped woman with green-stained fingers and a sharp eye, who smells faintly of mint and something less pleasant underneath.",
-            teaches: ["healing:first_aid"],
+            teaches: ["healing:first_aid", "nature:herbalism", "survival:foraging"],
         ),
         "drill_sergeant": (
             name: "the drill sergeant",

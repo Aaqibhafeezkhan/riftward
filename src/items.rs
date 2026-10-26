@@ -1974,31 +1974,53 @@ fn create(
         }
         let (_, here, _) = rooms.get(actor.room).map_err(|_| String::new())?;
         let key = ItemKey::parse(&inv.args, &here.zone);
-        let def = templates
-            .0
-            .get(&key)
-            .ok_or_else(|| format!("There's no item template [{key}]."))?;
-        // Fixed things go in the room; anything else goes in the builder's hand, or at their
-        // feet if their hands are full.
-        let held = items
-            .iter()
-            .filter(|(_, _, loc)| **loc == ItemLocation::Held(actor.entity))
-            .count();
-        let (location, place, where_to) = if def.fixed || held >= HANDS {
-            let place = ItemPlace::Room(here.to_string());
-            (ItemLocation::Room(actor.room), place, "here")
-        } else {
-            let place = ItemPlace::Held(actor.character_id);
-            (ItemLocation::Held(actor.entity), place, "in your hand")
-        };
-        let id = db
-            .create_item(&key.to_string(), &place)
-            .map_err(|err| format!("Couldn't save the item: {err}"))?;
-        let name = def.name.clone();
-        spawn_item(&mut commands, &templates, key.clone(), Some(id), location);
+        let (name, where_to) = make_for(
+            &mut commands,
+            &templates,
+            &db,
+            &items,
+            &actor,
+            here,
+            key.clone(),
+        )?;
         Ok(format!("You create {name} [{key}] {where_to}."))
     })();
     deliver(vec![reply_line(actor.entity, reply)], &mut players);
+}
+
+/// Make a new item from template `key` for `actor`, standing in `here`: in their hand, or at
+/// their feet if their hands are full or it's fixed. It's real from the start, so it's never lost.
+/// Returns its name and where it went ("in your hand", "here").
+pub fn make_for(
+    commands: &mut Commands,
+    templates: &ItemTemplates,
+    db: &Database,
+    items: &ItemQuery,
+    actor: &Actor,
+    here: &RoomKey,
+    key: ItemKey,
+) -> Result<(String, &'static str), String> {
+    let def = templates
+        .0
+        .get(&key)
+        .ok_or_else(|| format!("There's no item template [{key}]."))?;
+    let held = items
+        .iter()
+        .filter(|(_, _, loc)| **loc == ItemLocation::Held(actor.entity))
+        .count();
+    let (location, place, where_to) = if def.fixed || held >= HANDS {
+        let place = ItemPlace::Room(here.to_string());
+        (ItemLocation::Room(actor.room), place, "here")
+    } else {
+        let place = ItemPlace::Held(actor.character_id);
+        (ItemLocation::Held(actor.entity), place, "in your hand")
+    };
+    let id = db
+        .create_item(&key.to_string(), &place)
+        .map_err(|err| format!("Couldn't save the item: {err}"))?;
+    let name = def.name.clone();
+    spawn_item(commands, templates, key, Some(id), location);
+    Ok((name, where_to))
 }
 
 fn destroy(

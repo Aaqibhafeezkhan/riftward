@@ -35,14 +35,14 @@ use crate::items::{
     self, ItemLocation, ItemMutQuery, ItemQuery, ItemTemplates, MOB_CORPSE_SECS,
     PLAYER_CORPSE_SECS, capitalized,
 };
-use crate::mobs::{self, Mob, MobQuery};
+use crate::mobs::{self, Mob, MobQuery, MobTemplates};
 use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::skills::{Bonus, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::{Maxima, Resting, Vitals};
-use crate::world::{InRoom, MobKey, Player, RoomIndex, RoomKey, without_article};
+use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_article};
 
 pub use states::{Conditions, State};
 pub use strike::{Fighters, Move, Round, name_of};
@@ -135,6 +135,10 @@ pub struct Tactics(pub u32);
 /// Killed this round, waiting for `handle_deaths`.
 #[derive(Component, Debug)]
 pub struct Dead;
+
+/// Who struck the killing blow, whose Luck the loot is rolled with.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Slayer(pub Entity);
 
 /// What combat has to say, delivered after each round.
 #[derive(Resource, Default)]
@@ -396,7 +400,12 @@ fn combat_round(
             });
         for died in round.strike(attacker, target, moves, false) {
             fallen.insert(died);
-            commands.entity(died).insert(Dead).remove::<Fighting>();
+            // A riposte can fell the attacker; then the target struck the blow.
+            let slayer = if died == attacker { target } else { attacker };
+            commands
+                .entity(died)
+                .insert((Dead, Slayer(slayer)))
+                .remove::<Fighting>();
             for (who, whom) in &targets {
                 if *whom == died {
                     commands.entity(*who).remove::<Fighting>();
@@ -501,13 +510,27 @@ fn abandon_fights(
     }
 }
 
+/// Mobs killed this round, with who killed them.
+type DeadMobs<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Mob,
+        &'static InRoom,
+        Option<&'static Slayer>,
+    ),
+    (With<Dead>, mobs::OnlyMobs),
+>;
+
 /// Lay out the dead: mobs leave a corpse, and players leave one with everything they carried,
 /// then wake at the shrine.
 #[allow(clippy::too_many_arguments)]
 fn handle_deaths(
     mut commands: Commands,
-    dead_mobs: Query<(Entity, &Mob, &InRoom), (With<Dead>, mobs::OnlyMobs)>,
+    dead_mobs: DeadMobs,
     dead_players: Query<Entity, (With<Dead>, With<Player>)>,
+    (mob_templates, mut dice): (Res<MobTemplates>, ResMut<Dice>),
     mut players: PlayerQuery,
     mut sheets: Query<(
         &mut Vitals,
@@ -530,7 +553,7 @@ fn handle_deaths(
         deliver(std::mem::take(&mut log.0), &mut players);
     }
     let now = unix_now();
-    for (entity, mob, in_room) in &dead_mobs {
+    for (entity, mob, in_room, slayer) in &dead_mobs {
         let corpse = items::spawn_corpse(
             &mut commands,
             &templates,
@@ -539,11 +562,28 @@ fn handle_deaths(
             in_room.0,
             now + MOB_CORPSE_SECS,
         );
-        // Its gear falls with it, for whoever wants it.
+        // Its gear falls with it, for whoever wants it, and its loot, one find from each table
+        // with its slayer's Luck.
         if let Some(corpse) = corpse {
             for (_, _, mut location) in &mut items {
                 if location.holder() == Some(entity) {
                     *location = ItemLocation::Inside(corpse);
+                }
+            }
+            let luck = slayer
+                .and_then(|s| sheets.get(s.0).ok())
+                .map_or(0, |(_, attributes, ..)| attributes.get(Attribute::Luck));
+            let tables = mob_templates.0.get(&mob.key).map(|def| &def.loot);
+            for table in tables.into_iter().flatten() {
+                if let Some(Some(id)) = dice.pick(luck, table) {
+                    let key = ItemKey::parse(id, &mob.key.zone);
+                    items::spawn_item(
+                        &mut commands,
+                        &templates,
+                        key,
+                        None,
+                        ItemLocation::Inside(corpse),
+                    );
                 }
             }
         }

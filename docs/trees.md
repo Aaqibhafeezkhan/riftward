@@ -132,7 +132,7 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 1. **Combat techniques, conditions and passive bonuses together.** *Built:* see [Step 1, as built](#step-1-as-built).
 2. **Armour:** damage reduction, at a cost to dodging. *Built:* see [Armour](#armour).
 3. **Healing and consumables:** First Aid and bandages, so fighters can patch up without walking to town; herbs come with step 4. *Built:* see [Healing](#healing).
-4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things.
+4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things. *Built:* loot tables, Foraging and Herbalism (see [Gathering](#gathering)). Tracking, Climbing and Swimming are next.
 5. **Seeing and being seen:** Stealth, and Backstab from hiding.
 6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions.
 7. **Money and shops,** then Trade and the crafts.
@@ -199,6 +199,16 @@ Built.
 - **Consumables** are items with a `consumable` section, used up by `eat` or `drink` (also actions). **Food and drink don't heal**; they speed recovery of health and stamina for a while, on top of resting and never in a fight: a loaf of bread 1.5 times as fast for 10 minutes, a flask of water 1.25 times for 5. Another meal keeps the better speed and the later end, so eating more makes it last, not faster. The feeling is gone at logout. **Healing draughts** work at once, 4 to 8 health rolled with Luck, so they're what to drink in a fight.
 - **Where to find them:** the herbalist's stall keeps three bandages and a healing draught; the guild cellar's chest has bread and water.
 - **Later:** Treat Poison and Surgery (expert), Herbalism and Brewing to make draughts and poultices, and waterskins that refill (they're carried but can't yet be drunk from).
+
+## Gathering
+
+Built.
+
+- **Foraging** (the Survival tree's entry, Intuition) finds food with `forage`; **Herbalism** (the Nature tree's entry, Intuition) finds herbs with `gather`. The herbalist teaches both, and the Poacher, Farmhand and Herbalist's Apprentice backgrounds start with them.
+- **What there is** comes from the room's [environment](world.md#environment-and-finds). The chance of finding anything is your skill (level plus Intuition) against 5, by the ratio rule; what you find is picked from the room's table with Luck, so luck favours the rarer end. It goes to your hand, or your feet if your hands are full, and is saved at once.
+- **Each room holds three finds** of each kind, growing one back every 10 minutes.
+- **Finds today:** the Darkwood has wild berries, mushrooms and hazelnuts (food that speeds recovery), and yarrow, kingsfoil and moonpetal (herbs); the sewers have the odd stale crust, and glowcap.
+- **Herbs have no use yet:** they're the makings of Brewing, draughts and poultices, which come later.
 
 ## Open questions
 

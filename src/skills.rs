@@ -750,6 +750,11 @@ impl Practice<'_, '_> {
         self.dice.chance(luck, p)
     }
 
+    /// Pick from a weighted table ordered worst to best, with `who`'s Luck.
+    pub fn pick<'t, T>(&mut self, luck: i32, table: &'t [(T, u32)]) -> Option<&'t T> {
+        self.dice.pick(luck, table)
+    }
+
     /// Roll a value in `range`, higher being better, with `who`'s Luck.
     pub fn roll(&mut self, luck: i32, range: std::ops::RangeInclusive<i64>) -> i64 {
         self.dice.range(luck, range)
@@ -1739,8 +1744,15 @@ mod tests {
                             .chain([lines.beyond.as_ref()])
                             .flatten()
                         {
-                            let filled =
-                                fill(template, &[("actor", "a"), ("target", "b"), ("door", "c")]);
+                            let filled = fill(
+                                template,
+                                &[
+                                    ("actor", "a"),
+                                    ("target", "b"),
+                                    ("door", "c"),
+                                    ("item", "d"),
+                                ],
+                            );
                             assert!(
                                 !filled.contains('{'),
                                 "{} {id}: unknown placeholder in {template:?}",

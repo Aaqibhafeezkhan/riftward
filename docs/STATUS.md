@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -21,12 +21,14 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Room terrain and loot tables** (Foraging, Herbalism, Tracking, mob drops), step 4 of the plan in [Skill trees](trees.md#proposed-order). Armour and healing, steps 2 and 3, are built: see [Armour](trees.md#armour) and [Healing](trees.md#healing).
+**Tracking, Climbing and Swimming,** the rest of step 4 of the plan in [Skill trees](trees.md#proposed-order): tracking needs a memory of who passed through each room, and climbing and swimming need exits that ask for a skill. Loot tables, Foraging and Herbalism are built: see [Gathering](trees.md#gathering).
 
-After that, in order ([Proposed order](trees.md#proposed-order)): room terrain uses and loot tables (Foraging, Herbalism, mob drops), stealth, spells (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
+After that, in order ([Proposed order](trees.md#proposed-order)): stealth, spells (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
 
 ## Small things noticed and not yet done
 
+- Herbs have no use until Brewing; rat tails and the Rat King's tooth have none until quests or shops.
+- Foraging's numbers are first guesses: difficulty 5, three finds a room, one back every 10 minutes.
 - First Aid's numbers are first guesses too: a novice (Intuition 3) heals 2 to 4, and treats a badly hurt patient about a third of the time.
 - Waterskins can't be drunk from; they need refilling, so they wait for wells and rivers.
 - Armour's numbers are first guesses. Guards in studded leather and a helm (3 armour) shrug off most of a new character's punches.

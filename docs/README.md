@@ -51,6 +51,7 @@ Each document below covers one area and can be read on its own. This page is the
 - World events: saved world flags, and events in zone files that react to mobs entering zones and dying. A rat breakout raises the Rat King, whose aura toughens every sewer rat until he dies.
 - Techniques and conditions: every weapon tree's journeyman techniques (Kick, Grapple, Lunge, Riposte, Backstab, Open Vein, Cleave, Hew, Stagger, Crush, Sweep, Guard), staggers, falls, bleeding, holds and guards, and passive bonuses (Toughness, Endurance, the Adept's Killing Hands and Quickened Reflexes).
 - Combat: 3-second rounds in initiative order, auto-attacks chosen by the player, attack skills (Brawling, Swordplay with a blade, beasts' bites), Dodge, aggressive mobs with pack limits, auras, resting (faster recovery, but dangerous), corpses, death and respawn at the shrine, `kill` and `flee`. Action commands queue, one per round.
+- Gathering: `forage` (Foraging) and `gather` (Herbalism), from what each room's environment yields, depleting and growing back; mob loot tables, rolled with the killer's Luck.
 - Healing: First Aid with bandages (`bandage`, in a fight or out), food and drink that speed recovery, and healing draughts (`eat`, `drink`).
 - Vitals: current health and stamina that recover over time (offline too), and a customisable status prompt, `<7/10hp 9/9st>`.
 

@@ -2,6 +2,53 @@
 // This file is rewritten by in-game builder commands, so comments other than this header are lost.
 (
     name: "Darkwood Forest",
+    items: {
+        "wild_berries": (
+            name: "a handful of wild berries",
+            keywords: ["berries", "wild", "handful"],
+            description: "Small dark berries, tart and a little bitter, stained purple at the stems.",
+            bulk: Negligible,
+            tags: ["food"],
+            consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
+        ),
+        "mushrooms": (
+            name: "a cluster of mushrooms",
+            keywords: ["mushrooms", "cluster"],
+            description: "Pale, fleshy caps with brown gills, smelling of damp earth.",
+            bulk: Negligible,
+            tags: ["food"],
+            consumable: (by: Eat, recovery: (speed: 1.5, minutes: 5)),
+        ),
+        "hazelnuts": (
+            name: "a pouchful of hazelnuts",
+            keywords: ["hazelnuts", "nuts", "pouchful"],
+            description: "A double handful of hazelnuts, cracked and ready to eat.",
+            bulk: Negligible,
+            tags: ["food"],
+            consumable: (by: Eat, recovery: (speed: 1.5, minutes: 10)),
+        ),
+        "yarrow": (
+            name: "a sprig of yarrow",
+            keywords: ["yarrow", "sprig"],
+            description: "Feathery leaves and a flat head of tiny white flowers. Herbalists pack it into wounds.",
+            bulk: Negligible,
+            tags: ["herb"],
+        ),
+        "kingsfoil": (
+            name: "a sprig of kingsfoil",
+            keywords: ["kingsfoil", "sprig"],
+            description: "Long green leaves that smell sweet and clean when crushed.",
+            bulk: Negligible,
+            tags: ["herb"],
+        ),
+        "moonpetal": (
+            name: "a moonpetal blossom",
+            keywords: ["moonpetal", "blossom"],
+            description: "A pale flower whose petals hold a faint silver sheen, even in shadow.",
+            bulk: Negligible,
+            tags: ["herb"],
+        ),
+    },
     mobs: {
         "hedge_shaman": (
             name: "the hedge-shaman",
@@ -19,6 +66,12 @@
             refill: Keep(1),
         ),
     },
+    finds: {
+        Forest: (
+            forage: [("wild_berries", 50), ("mushrooms", 35), ("hazelnuts", 15)],
+            herbs: [("yarrow", 50), ("kingsfoil", 35), ("moonpetal", 15)],
+        ),
+    },
     rooms: {
         "clearing": (
             name: "Hermit's Clearing",
@@ -27,6 +80,7 @@
             exits: {
                 "south": "north_road",
             },
+            environment: Forest,
         ),
         "bend": (
             name: "bend",
@@ -37,6 +91,7 @@
                 "north": "north_road",
                 "south": "road",
             },
+            environment: Forest,
         ),
         "east_road": (
             name: "east road",
@@ -45,6 +100,7 @@
             exits: {
                 "west": "bend",
             },
+            environment: Forest,
         ),
         "north_road": (
             name: "North Road",
@@ -54,6 +110,7 @@
                 "north": "clearing",
                 "south": "bend",
             },
+            environment: Forest,
         ),
         "road": (
             name: "Forest Road",
@@ -63,6 +120,7 @@
                 "north": "bend",
                 "south": "riftwatch:north_gate",
             },
+            environment: Forest,
         ),
     },
 )
