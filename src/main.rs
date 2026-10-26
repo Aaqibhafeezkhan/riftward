@@ -22,6 +22,7 @@ mod net;
 mod output;
 mod skills;
 mod spawns;
+mod stealth;
 mod targeting;
 mod telnet;
 mod time;
@@ -80,6 +81,7 @@ fn main() {
             healing::HealingPlugin,
             gathering::GatheringPlugin,
             tracking::TrackingPlugin,
+            stealth::StealthPlugin,
         ))
         .run();
 }

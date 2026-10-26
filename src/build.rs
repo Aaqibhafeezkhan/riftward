@@ -474,6 +474,7 @@ fn goto(
         name: name.clone(),
         room: from,
         way: Way::Teleported,
+        witnesses: None,
     });
     move_player(entity, actor.character_id, to, players, view, db, out);
     events.write(GameEvent::Entered {
@@ -481,6 +482,7 @@ fn goto(
         name: name.clone(),
         room: to,
         way: Way::Teleported,
+        witnesses: None,
     });
     Ok(())
 }

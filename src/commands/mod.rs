@@ -91,7 +91,8 @@ impl Plugin for CommandsPlugin {
             .add_command(
                 CommandSpec::new("whisper", Communication)
                     .usage("whisper <player> <text>")
-                    .summary("speak privately to someone in the room"),
+                    .summary("speak privately to someone in the room")
+                    .quiet(),
                 communication::whisper,
             )
             .add_command(

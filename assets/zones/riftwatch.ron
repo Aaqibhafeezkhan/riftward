@@ -431,6 +431,15 @@
             description: "A stooped woman with green-stained fingers and a sharp eye, who smells faintly of mint and something less pleasant underneath.",
             teaches: ["healing:first_aid", "nature:herbalism", "survival:foraging"],
         ),
+        "hooded_figure": (
+            name: "a hooded figure",
+            keywords: ["hooded", "figure", "stranger"],
+            here: "A hooded figure leans in a doorway, so still you almost missed them.",
+            description: "A slight figure in a patched grey cloak, hood drawn low. Their hands never stop moving: a coin walking across the knuckles, a pick turning in the fingers. For the right price, or the right reason, they teach what they know.",
+            attributes: {Agility: 7, Reaction: 6, Intuition: 6},
+            skills: {"brawling:basics": 10, "athletics:dodge": 15, "stealth:basics": 20},
+            teaches: ["stealth:basics", "thievery:lockpicking", "thievery:pickpocketing"],
+        ),
         "drill_sergeant": (
             name: "the drill sergeant",
             keywords: ["drill", "sergeant"],
@@ -581,6 +590,12 @@
         "contract_clerk": (
             mob: "contract_clerk",
             room: "contract_hall",
+            every: Minutes(10),
+            refill: Keep(1),
+        ),
+        "alley_figure": (
+            mob: "hooded_figure",
+            room: "back_alley",
             every: Minutes(10),
             refill: Keep(1),
         ),

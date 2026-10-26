@@ -133,7 +133,7 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 2. **Armour:** damage reduction, at a cost to dodging. *Built:* see [Armour](#armour).
 3. **Healing and consumables:** First Aid and bandages, so fighters can patch up without walking to town; herbs come with step 4. *Built:* see [Healing](#healing).
 4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things. *Built:* loot tables, Foraging and Herbalism (see [Gathering](#gathering)), and Tracking, Climbing and Swimming (see [Climbing and swimming](world.md#climbing-and-swimming) and [Tracking](world.md#tracking)). Climbing and Swimming are Athletics skills, taught by the drill sergeant; Tracking is Survival's, taught by the hedge-shaman.
-5. **Seeing and being seen:** Stealth, and Backstab from hiding.
+5. **Seeing and being seen:** Stealth, and Backstab from hiding. *Built:* see [Stealth](#stealth).
 6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions.
 7. **Money and shops,** then Trade and the crafts.
 
@@ -190,6 +190,16 @@ Built. Armour is **damage reduction**: every hit loses its wearer's armour, **ev
   The training yard keeps a padded jack, a leather cap and a buckler; the locked armory keeps mail, a helm, a round shield, gauntlets and greaves. Town guards wear studded leather and an iron helm, and carry a round shield.
 - **Skills work both sides of it.** In armour: **Heavy Armour** (the Armour tree's entry, practised by taking hits in armour; eases the penalty by 1 per 10 levels) and **Block** (the Shields tree's entry, practised by blocking; adds 1 to a shield's block per 10 levels). Out of it: the Adept's Quickened Reflexes, and an unarmoured Evasion later. Both entries are taught by the drill sergeant; their higher skills are to come.
 - **Piercing answers armour.** `Pierce(n)`, a technique effect, ignores `n` points of armour: **Lunge** has 1 (the point finds a gap), **Backstab** 2 (between the plates). A passive can add piercing too, `(stat: Pierce, per: 10, with: "knives:basics")`. **Crush** ignores armour entirely, so it's the answer to plate.
+
+## Stealth
+
+Built.
+
+- **Stealth** (`stealth:basics`, Agility) is its tree's entry: `hide` to slip out of sight, `sneak` to stay hidden on the move. The hooded figure in Riftwatch's Back Alley teaches it (and Lockpicking and Pickpocketing), and the Poacher and Street Urchin backgrounds start with it. **Shadowing** (follow someone unseen) is its journeyman skill and **Vanish** (hide mid-fight) its capstone, both to come.
+- **Noticing** is an opposed roll: an observer's Intuition against the hider's Stealth plus Agility, rolled when they hide, when anyone walks into the room, and when someone `search`es, with double their Intuition. Those who notice still see them; to everyone else they're gone: not listed, not targetable, and their comings and goings unannounced. Mobs see by the same rules, so aggressive mobs leave unnoticed players alone.
+- **Acting openly shows you** ("Grok steps out of the shadows."): any interaction or communication, unless it's quiet (whispering, searching, hiding, tracking), and walking away. Looking, checking your inventory and other character commands don't. **Sneaking** keeps you hidden as you move: those who noticed you see you go, and in each new room everyone rolls again.
+- **From hiding, an opener can't be avoided:** a Backstab on someone who hasn't noticed you can't be dodged or blocked. Once blows are struck, everyone in the fight is seen.
+- **Later:** skills that add to Backstab, such as more damage from hiding or an easier crushing blow; mobs that hide and ambush; hidden doors found with `search`.
 
 ## Healing
 

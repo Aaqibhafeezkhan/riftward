@@ -1,0 +1,25 @@
+// A skill tree. Its id is the file name: skills here are `stealth:<id>`.
+(
+    name: "Stealth",
+    rarity: Common,
+    attribute: Agility,
+    skills: {
+        // `hide` shows the room line only to those who noticed; the miss is when everyone there
+        // saw it. `sneak` keeps a character hidden as they move, practising this too.
+        "basics": (
+            name: "Stealth",
+            description: "Going unseen: 'hide' to slip out of sight, 'sneak' to stay hidden as you move. Anyone may notice you, by their Intuition against your Stealth and Agility; acting openly or walking away shows you, unless you're sneaking. A Backstab from hiding can't be avoided.",
+            kind: Active(command: "hide", cooldown: 3),
+            text: (
+                hit: (
+                    actor: "You slip into the shadows.",
+                    room: "{actor} slips into the shadows.",
+                ),
+                miss: (
+                    actor: "You try to slip out of sight, but every eye here is on you.",
+                    room: "{actor} tries to hide, and fails to.",
+                ),
+            ),
+        ),
+    },
+)

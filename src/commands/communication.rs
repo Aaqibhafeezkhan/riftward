@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::characters::Races;
 use crate::command::Invocation;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
+use crate::stealth::{Hidden, sees, visible};
 use crate::targeting::{Keywords, Target};
 
 pub fn say(In(inv): In<Invocation>, mut players: PlayerQuery) {
@@ -28,7 +29,12 @@ pub fn say(In(inv): In<Invocation>, mut players: PlayerQuery) {
 }
 
 /// Only the target hears the words; everyone else in the room just sees that a whisper happened.
-pub fn whisper(In(inv): In<Invocation>, mut players: PlayerQuery, keywords: Query<&Keywords>) {
+pub fn whisper(
+    In(inv): In<Invocation>,
+    mut players: PlayerQuery,
+    keywords: Query<&Keywords>,
+    hidden: Query<&Hidden>,
+) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
@@ -42,6 +48,7 @@ pub fn whisper(In(inv): In<Invocation>, mut players: PlayerQuery, keywords: Quer
     match parsed {
         Some((Some(target), text)) => {
             let candidates = targets_in_room(actor.room, &players, &keywords);
+            let candidates = visible(actor.entity, candidates, &hidden);
             match target.find_one(actor.entity, candidates) {
                 Some(e) if e == actor.entity => {
                     out.push(Outgoing::line(
@@ -63,8 +70,10 @@ pub fn whisper(In(inv): In<Invocation>, mut players: PlayerQuery, keywords: Quer
                         "{} whispers something into {target_name}'s ear.\r\n",
                         actor.name
                     );
+                    // Only those who can see the whisperer notice the whisper.
                     for (other, _) in targets_in_room(actor.room, &players, &keywords) {
-                        if other != actor.entity && other != e {
+                        if other != actor.entity && other != e && sees(&hidden, other, actor.entity)
+                        {
                             out.push(Outgoing::To(other, seen.clone()));
                         }
                     }

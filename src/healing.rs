@@ -18,6 +18,7 @@ use crate::items::{self, Item, ItemLocation, ItemQuery, ItemTemplates, Snapshot,
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, deliver, targets_in_room};
 use crate::skills::{Learner, Practice, SkillDefs, Skills, fill};
+use crate::stealth::{Hidden, visible};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::{BaseHealth, Maxima, Nourished, Vitals};
 use crate::world::{Consume, Player};
@@ -203,6 +204,7 @@ fn bandage(
     mut practice: Practice,
     mut conditions: Query<&mut Conditions>,
     bases: Query<&BaseHealth>,
+    hidden: Query<&Hidden>,
     db: Res<Database>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
@@ -218,6 +220,7 @@ fn bandage(
             let target = Target::parse(inv.args.trim()).ok_or_else(|| inv.usage_error())?;
             let mut candidates = targets_in_room(actor.room, &players, &keywords);
             candidates.extend(mobs::targets_in(actor.room, &mobs, &keywords));
+            let candidates = visible(actor.entity, candidates, &hidden);
             target
                 .find_one(actor.entity, candidates)
                 .ok_or_else(|| format!("You don't see {} here.", target.describe()))?

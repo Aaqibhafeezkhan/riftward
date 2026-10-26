@@ -86,6 +86,7 @@ impl Plugin for SkillsPlugin {
                 CommandSpec::new("use", Category::Interaction)
                     .usage("use <skill> [<target>]")
                     .summary("use an active skill, like 'use lockpicking north'")
+                    .quiet()
                     .action(),
                 use_cmd,
             )

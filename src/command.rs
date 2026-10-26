@@ -18,9 +18,11 @@ use bevy::prelude::*;
 
 use crate::aliases::Aliases;
 use crate::db::{Permission, Role};
+use crate::events::GameEvent;
 use crate::net::{Connection, PlayerInput};
 use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
-use crate::world::Player;
+use crate::stealth::{Hidden, reveal};
+use crate::world::{InRoom, Player};
 
 pub struct CommandPlugin;
 
@@ -78,6 +80,10 @@ pub struct CommandSpec {
     pub listed: bool,
     /// Takes a round: at most one per round, queued if typed sooner.
     pub action: bool,
+    /// Can be done while hidden without being seen, like `whisper` or `search`. Information,
+    /// character, movement, building and admin commands are always quiet; anything else shows a
+    /// hidden player unless it says it's quiet, so a new command can't forget to.
+    pub quiet: bool,
 }
 
 impl CommandSpec {
@@ -91,12 +97,27 @@ impl CommandSpec {
             summary: "",
             listed: true,
             action: false,
+            quiet: false,
         }
     }
 
     pub fn action(mut self) -> Self {
         self.action = true;
         self
+    }
+
+    pub fn quiet(mut self) -> Self {
+        self.quiet = true;
+        self
+    }
+
+    /// Whether doing it shows someone hidden.
+    fn reveals(&self) -> bool {
+        !self.quiet
+            && matches!(
+                self.category,
+                Category::Interaction | Category::Communication
+            )
     }
 
     pub fn shortcuts(mut self, shortcuts: &'static [&'static str]) -> Self {
@@ -283,22 +304,34 @@ pub fn split_verb(line: &str) -> (String, &str) {
     (verb.to_ascii_lowercase(), rest.trim())
 }
 
+/// Logged-in players as the dispatcher sees them: where their output goes, what their words
+/// expand to, their queued actions, and where they are and whether they're hiding.
+type Speakers<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Connection,
+        &'static Player,
+        Option<&'static Aliases>,
+        Option<&'static mut ActionQueue>,
+        Option<&'static InRoom>,
+        Has<Hidden>,
+    ),
+>;
+
 /// Turn each logged-in player's line into a command invocation. Lines from connections that
 /// haven't logged in yet are left to `login.rs`.
 pub fn dispatch(
     mut commands: Commands,
     mut inputs: MessageReader<PlayerInput>,
-    mut players: Query<(
-        &mut Connection,
-        &Player,
-        Option<&Aliases>,
-        Option<&mut ActionQueue>,
-    )>,
+    mut players: Speakers,
     registry: Res<CommandRegistry>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     for PlayerInput { entity, line } in inputs.read() {
         let entity = *entity;
-        let Ok((mut conn, player, aliases, queue)) = players.get_mut(entity) else {
+        let Ok((mut conn, player, aliases, queue, in_room, hidden)) = players.get_mut(entity)
+        else {
             continue;
         };
         if conn.closing {
@@ -321,6 +354,13 @@ pub fn dispatch(
             conn.send("Huh? Type 'help' for a list of commands.");
             continue;
         };
+        // Acting openly shows someone hiding.
+        if hidden
+            && spec.reveals()
+            && let Some(in_room) = in_room
+        {
+            reveal(&mut commands, &mut events, entity, &player.name, in_room.0);
+        }
         let invocation = Invocation {
             entity,
             command: spec.name,

@@ -21,19 +21,28 @@ impl Plugin for EventsPlugin {
 
 #[derive(Message, Clone, Debug)]
 pub enum GameEvent {
-    /// A player or mob left a room.
+    /// A player or mob left a room. `witnesses` are the only ones who saw, for someone sneaking;
+    /// `None` means everyone there.
     Left {
         who: Entity,
         name: String,
         room: Entity,
         way: Way,
+        witnesses: Option<Vec<Entity>>,
     },
-    /// A player or mob arrived in a room.
+    /// A player or mob arrived in a room, seen by `witnesses` if they were sneaking.
     Entered {
         who: Entity,
         name: String,
         room: Entity,
         way: Way,
+        witnesses: Option<Vec<Entity>>,
+    },
+    /// Someone hidden was seen again, by acting or moving openly.
+    Revealed {
+        who: Entity,
+        name: String,
+        room: Entity,
     },
     /// A new part of the day began.
     PhaseChanged(Phase),
@@ -101,6 +110,7 @@ fn text(event: &GameEvent) -> Option<String> {
             Way::Teleported => format!("{name} appears out of thin air."),
         },
         GameEvent::PhaseChanged(phase) => phase.arrives().into(),
+        GameEvent::Revealed { name, .. } => format!("{name} steps out of the shadows."),
         GameEvent::StaminaSpent { .. }
         | GameEvent::Dodged { .. }
         | GameEvent::Blocked { .. }
@@ -119,7 +129,24 @@ fn announce(mut events: MessageReader<GameEvent>, rooms: RoomQuery, mut players:
             continue;
         };
         match event {
-            GameEvent::Left { who, room, .. } | GameEvent::Entered { who, room, .. } => {
+            // Someone sneaking is seen only by those who noticed.
+            GameEvent::Left {
+                witnesses: Some(witnesses),
+                ..
+            }
+            | GameEvent::Entered {
+                witnesses: Some(witnesses),
+                ..
+            } => {
+                for &witness in witnesses {
+                    if players.get(witness).is_ok_and(|(_, _, p, _)| p.is_some()) {
+                        out.push(Outgoing::To(witness, text.clone()));
+                    }
+                }
+            }
+            GameEvent::Left { who, room, .. }
+            | GameEvent::Entered { who, room, .. }
+            | GameEvent::Revealed { who, room, .. } => {
                 out.push(Outgoing::Room {
                     room: *room,
                     except: *who,
@@ -160,12 +187,14 @@ mod tests {
             name: "A stray dog".into(),
             room: who,
             way,
+            witnesses: None,
         };
         let entered = |way| GameEvent::Entered {
             who,
             name: "Gandalf".into(),
             room: who,
             way,
+            witnesses: None,
         };
         let says = |event| text(&event).unwrap();
         assert_eq!(

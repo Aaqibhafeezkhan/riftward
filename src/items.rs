@@ -19,6 +19,7 @@ use crate::net::{self, Connection};
 use crate::output::{
     Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_in_room,
 };
+use crate::stealth::{Hidden, visible};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::world::{
@@ -1653,6 +1654,7 @@ fn give(
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
     sheets: Query<&Attributes>,
+    hidden: Query<&Hidden>,
     db: Res<Database>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
@@ -1660,7 +1662,7 @@ fn give(
     };
     let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
     let me = mover.me();
-    let out = give_item(&inv, &mut mover, &players, &keywords, &sheets)
+    let out = give_item(&inv, &mut mover, &players, &keywords, &sheets, &hidden)
         .unwrap_or_else(|err| vec![Outgoing::line(me, err)]);
     deliver(out, &mut players);
 }
@@ -1671,6 +1673,7 @@ fn give_item(
     players: &PlayerQuery,
     keywords: &Query<&Keywords>,
     sheets: &Query<&Attributes>,
+    hidden: &Query<&Hidden>,
 ) -> Result<Vec<Outgoing>, String> {
     let me = mover.me();
     let (what, who) = inv
@@ -1686,7 +1689,11 @@ fn give_item(
         .filter(|e| *e != me)
         .ok_or_else(|| format!("You aren't carrying {}.", what.describe()))?;
     let who = Target::parse(who).ok_or_else(|| inv.usage_error())?;
-    let here = targets_in_room(mover.actor.room, players, keywords);
+    let here = visible(
+        me,
+        targets_in_room(mover.actor.room, players, keywords),
+        hidden,
+    );
     let bystanders: Vec<Entity> = here.iter().map(|(e, _)| *e).collect();
     let receiver = who
         .find_one(me, here)

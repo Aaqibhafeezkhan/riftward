@@ -43,6 +43,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `healing.rs` | `eat` and `drink` for consumables, and `bandage`, First Aid's command |
 | `gathering.rs` | `forage` and `gather`, from a room's finds, and how finds deplete and grow back |
 | `tracking.rs` | Tracks left in rooms by whoever walks through, and `track` |
+| `stealth.rs` | Hiding, sneaking and noticing: `hide`, `sneak`, `search`, who sees whom, and revealing |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |

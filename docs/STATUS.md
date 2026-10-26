@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -21,9 +21,9 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Stealth,** step 5 of the plan in [Skill trees](trees.md#proposed-order): seeing and being seen, and Backstab from hiding. Step 4 is built: loot, gathering, tracking, climbing and swimming (see [Gathering](trees.md#gathering), [Climbing and swimming](world.md#climbing-and-swimming), [Tracking](world.md#tracking)).
+**Spells,** step 6 of the plan in [Skill trees](trees.md#proposed-order): the spell category, `cast` and Drain, and the first two spells per tradition. Stealth, step 5, is built: see [Stealth](trees.md#stealth).
 
-After that, in order ([Proposed order](trees.md#proposed-order)): spells (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
+After that, in order ([Proposed order](trees.md#proposed-order)): (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
 
 ## Small things noticed and not yet done
 
@@ -32,6 +32,8 @@ After that, in order ([Proposed order](trees.md#proposed-order)): spells (their 
 - Experience and level numbers are first guesses: 50 for an even fight, 100 × 1.25ⁿ per level.
 - The silver locket from the Sunken Hall has no use until shops.
 - Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
+- No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built).
+- Hiding isn't saved: logging out shows you, and a restart forgets everyone's hiding.
 - Herbs have no use until Brewing; rat tails and the Rat King's tooth have none until quests or shops.
 - Foraging's patch numbers are first guesses: three finds a room, one back every 10 minutes.
 - First Aid's numbers are first guesses too: a novice (Intuition 3) heals 2 to 4, and treats a badly hurt patient about a third of the time.

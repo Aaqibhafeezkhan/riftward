@@ -415,6 +415,8 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub resting: &'a HashSet<Entity>,
     /// How far each player is outmatched, for the boost a tough fight gives their learning.
     pub outmatched: &'a HashMap<Entity, f64>,
+    /// Attackers their targets haven't noticed, striking from hiding.
+    pub ambushers: &'a HashSet<Entity>,
 }
 
 /// Messages for a strike: the attacker, the target, and everyone else there.
@@ -772,7 +774,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             f64::from(defence.max(1)),
             d_luck,
         );
-        let (hit, blow) = (contest.won, Blow::of(contest.margin));
+        // An opener from hiding can't be dodged or blocked: Backstab from the shadows lands.
+        let ambush = self.ambushers.contains(&attacker)
+            && technique.as_ref().is_some_and(|m| m.technique.opener);
+        let (hit, blow) = match (ambush, contest.won) {
+            (true, false) => (true, Blow::Solid),
+            (_, won) => (won, Blow::of(contest.margin)),
+        };
 
         let mut tell = Telling {
             lines: Vec::new(),

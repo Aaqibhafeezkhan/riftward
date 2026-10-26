@@ -1,5 +1,7 @@
 //! Looking around and moving between rooms.
 
+use std::collections::HashSet;
+
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -18,6 +20,7 @@ use crate::items::{Snapshot, bulk_limits};
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::skills::{Learner, Practice, fill};
+use crate::stealth::{Hidden, STEALTH, Sneaking, sees, stealth_rating, visible};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::Resting;
 use crate::world::{Door, DoorState, Obstacle, Player};
@@ -31,6 +34,9 @@ pub struct View<'w, 's> {
     pub items: ItemQuery<'w, 's>,
     pub templates: Res<'w, ItemTemplates>,
     pub mobs: MobQuery<'w, 's>,
+    /// Who is hidden, and from whom.
+    pub hidden: Query<'w, 's, &'static Hidden>,
+    pub sneaking: Query<'w, 's, (), With<Sneaking>>,
 }
 
 /// `look` describes the room; `look <target>` looks along an exit, at a door, at someone here, or
@@ -88,6 +94,7 @@ pub fn look(
         (Some(target), _) => {
             let mut candidates = targets_in_room(actor.room, &players, &keywords);
             candidates.extend(mobs::targets_in(actor.room, &view.mobs, &keywords));
+            let candidates = visible(actor.entity, candidates, &view.hidden);
             match target.find_one(actor.entity, candidates).map(|e| {
                 (
                     e,
@@ -137,6 +144,7 @@ pub fn go(
             &view,
             &db,
             &mut practice,
+            &mut commands,
             true,
         )
     };
@@ -165,6 +173,7 @@ pub fn walk(
         &view,
         &db,
         &mut practice,
+        &mut commands,
         true,
     );
     deliver(out, &mut players);
@@ -177,6 +186,7 @@ const IN_A_FIGHT: &str = "You're fighting for your life! Type 'flee' to try to e
 /// the stamina its terrain asks (doubled, and never free, for someone carrying too much); without
 /// it they can't go. An exit to climb or swim has to be crossed first (see [`cross`]). `pay` is
 /// false when something else has already paid, as fleeing does.
+#[allow(clippy::too_many_arguments)]
 pub fn travel(
     entity: Entity,
     dir: &str,
@@ -184,6 +194,7 @@ pub fn travel(
     view: &View,
     db: &Database,
     practice: &mut Practice,
+    commands: &mut Commands,
     pay: bool,
 ) -> Vec<Outgoing> {
     let mut out = Vec::new();
@@ -248,11 +259,23 @@ pub fn travel(
         }
     }
 
+    // Sneaking, they stay hidden: only those who'd noticed them see them go, and only those in
+    // the next room who notice them see them come. Walking openly shows them.
+    let (left_seen_by, entered_seen_by) = if view.sneaking.get(entity).is_ok() {
+        sneak_through(&actor, to, players, view, practice, commands, &mut out)
+    } else {
+        if view.hidden.get(entity).is_ok() {
+            commands.entity(entity).remove::<Hidden>();
+        }
+        (None, None)
+    };
+
     practice.events.write(GameEvent::Left {
         who: entity,
         name: actor.name.clone(),
         room: actor.room,
         way: Way::Walked(Some(dir)),
+        witnesses: left_seen_by,
     });
     move_player(entity, actor.character_id, to, players, view, db, &mut out);
     practice.events.write(GameEvent::Entered {
@@ -260,8 +283,76 @@ pub fn travel(
         name: actor.name.clone(),
         room: to,
         way: Way::Walked(way_back(&view.rooms, to, actor.room)),
+        witnesses: entered_seen_by,
     });
     out
+}
+
+/// Sneak into `to`: everyone there rolls their Intuition against the sneaker's Stealth, and the
+/// sneaker arrives hidden from those who failed. Practises Stealth. Returns who saw them leave
+/// (whoever had noticed them, or everyone if they weren't hidden) and who saw them arrive.
+#[allow(clippy::type_complexity)]
+fn sneak_through(
+    actor: &Actor,
+    to: Entity,
+    players: &PlayerQuery,
+    view: &View,
+    practice: &mut Practice,
+    commands: &mut Commands,
+    out: &mut Vec<Outgoing>,
+) -> (Option<Vec<Entity>>, Option<Vec<Entity>>) {
+    let Some((skills, _, attributes)) = practice.sheet(actor.entity) else {
+        return (None, None);
+    };
+    let (stealth, luck) = (
+        stealth_rating(&skills, &attributes),
+        attributes.get(Attribute::Luck),
+    );
+    let left = view
+        .hidden
+        .get(actor.entity)
+        .ok()
+        .map(|h| h.seen_by.iter().copied().collect());
+    let watchers: Vec<Entity> = players
+        .iter()
+        .filter(|(_, _, p, r)| p.is_some() && r.is_some_and(|r| r.0 == to))
+        .map(|(e, ..)| e)
+        .chain(
+            view.mobs
+                .iter()
+                .filter(|(_, _, r)| r.0 == to)
+                .map(|(e, ..)| e),
+        )
+        .filter(|e| *e != actor.entity)
+        .collect();
+    let mut seen_by = HashSet::new();
+    for watcher in watchers {
+        let Some((_, _, attributes)) = practice.sheet(watcher) else {
+            continue;
+        };
+        let (intuition, their_luck) = (
+            f64::from(attributes.get(Attribute::Intuition).max(1)),
+            attributes.get(Attribute::Luck),
+        );
+        if practice.opposed(intuition, their_luck, stealth, luck).won {
+            seen_by.insert(watcher);
+        }
+    }
+    let entered = seen_by.iter().copied().collect();
+    commands.entity(actor.entity).insert(Hidden {
+        stealth,
+        luck,
+        seen_by,
+    });
+    let learner = Learner {
+        character_id: actor.character_id,
+        race: &actor.race,
+        boost: 1.0,
+    };
+    for line in practice.exercise(actor.entity, learner, STEALTH) {
+        out.push(Outgoing::line(actor.entity, line));
+    }
+    (left, Some(entered))
 }
 
 /// The skill that climbs, and the one that swims.
@@ -449,13 +540,15 @@ fn glimpse(room: Entity, viewer: Entity, players: &PlayerQuery, view: &View) -> 
         .map(|(room, _, _)| room.name.clone())
         .unwrap_or_default();
     let mut text = format!("{name}.\r\n");
-    for name in mobs::names_in(room, &view.mobs) {
+    let shown = |who: Entity| sees(&view.hidden, viewer, who);
+    for name in mobs::names_in(room, &view.mobs, shown) {
         text += &format!("  {} is there.\r\n", capitalized(&name));
     }
     for (other, _, player, in_room) in players.iter() {
         if let (Some(player), Some(in_room)) = (player, in_room)
             && other != viewer
             && in_room.0 == room
+            && shown(other)
         {
             text += &format!("  {} is there.\r\n", player.name);
         }
@@ -545,7 +638,8 @@ pub fn describe_room(
     for name in counted(loose) {
         text += &format!("{} lies here.\r\n", capitalized(&name));
     }
-    for line in mobs::here_lines(room, &view.mobs) {
+    let shown = |who: Entity| sees(&view.hidden, viewer, who);
+    for line in mobs::here_lines(room, &view.mobs, shown) {
         text += &format!("{line}\r\n");
     }
 
@@ -553,6 +647,7 @@ pub fn describe_room(
         if let (Some(player), Some(in_room)) = (player, in_room)
             && other != viewer
             && in_room.0 == room
+            && shown(other)
         {
             text += &format!("{} is here.\r\n", player.name);
         }

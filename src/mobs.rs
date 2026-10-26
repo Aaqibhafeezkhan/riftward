@@ -325,27 +325,35 @@ pub fn wander(
             name: name.clone(),
             room: in_room.0,
             way: Way::Walked(Some(dir.clone())),
+            witnesses: None,
         });
         events.write(GameEvent::Entered {
             who: entity,
             name,
             room: to,
             way: Way::Walked(way_back(&rooms, to, in_room.0)),
+            witnesses: None,
         });
         in_room.0 = to;
     }
 }
 
 /// The lines a room shows for the mobs in it, with repeats counted.
-pub fn here_lines(room: Entity, mobs: &MobQuery) -> Vec<String> {
-    let mut here: Vec<_> = mobs.iter().filter(|(_, _, r)| r.0 == room).collect();
+pub fn here_lines(room: Entity, mobs: &MobQuery, shown: impl Fn(Entity) -> bool) -> Vec<String> {
+    let mut here: Vec<_> = mobs
+        .iter()
+        .filter(|(e, _, r)| r.0 == room && shown(*e))
+        .collect();
     here.sort_by_key(|(entity, _, _)| *entity);
     counted(here.iter().map(|(_, mob, _)| mob.here.as_str()))
 }
 
 /// Mob names in a room, with repeats counted, for a glimpse through an exit.
-pub fn names_in(room: Entity, mobs: &MobQuery) -> Vec<String> {
-    let mut here: Vec<_> = mobs.iter().filter(|(_, _, r)| r.0 == room).collect();
+pub fn names_in(room: Entity, mobs: &MobQuery, shown: impl Fn(Entity) -> bool) -> Vec<String> {
+    let mut here: Vec<_> = mobs
+        .iter()
+        .filter(|(e, _, r)| r.0 == room && shown(*e))
+        .collect();
     here.sort_by_key(|(entity, _, _)| *entity);
     counted(here.iter().map(|(_, mob, _)| mob.name.as_str()))
 }

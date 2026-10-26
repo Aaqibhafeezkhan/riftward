@@ -40,6 +40,7 @@ use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::skills::{Bonus, Practice, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
+use crate::stealth::{Hidden, reveal, sees};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::{Maxima, Resting, Vitals};
 use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_article};
@@ -81,6 +82,7 @@ impl Plugin for CombatPlugin {
                     .shortcuts(&["attack", "k"])
                     .usage("kill <target>")
                     .summary("attack something; you fight each round until one of you falls")
+                    .quiet()
                     .action(),
                 kill,
             )
@@ -112,6 +114,7 @@ impl Plugin for CombatPlugin {
                 CommandSpec::new("technique", Category::Interaction)
                     .usage("use <technique> [<target>]")
                     .summary("make a technique: in a fight, or an opener to start one")
+                    .quiet()
                     .unlisted(),
                 technique,
             );
@@ -229,6 +232,7 @@ fn combat_round(
     resting_query: Query<Entity, With<Resting>>,
     readied: Query<&Readied>,
     rooms: RoomQuery,
+    hidden: Query<&Hidden>,
 ) {
     let now = time.elapsed_secs_f64();
     let auras = auras(&fighters, &rooms, &defs);
@@ -269,7 +273,12 @@ fn combat_round(
         };
         let Some(&(victim, _)) = alive_players
             .iter()
-            .find(|(victim, room)| *room == fighter.in_room.0 && room_for(*victim))
+            // Only players it has noticed: an unseen one slips past.
+            .find(|(victim, room)| {
+                *room == fighter.in_room.0
+                    && room_for(*victim)
+                    && sees(&hidden, fighter.entity, *victim)
+            })
         else {
             continue;
         };
@@ -332,6 +341,13 @@ fn combat_round(
         };
     }
 
+    // Attackers their targets haven't noticed: an opener from hiding can't be avoided.
+    let ambushers: HashSet<Entity> = targets
+        .iter()
+        .filter(|(a, t)| hidden.get(**a).is_ok() && !sees(&hidden, **t, **a))
+        .map(|(a, _)| *a)
+        .collect();
+
     let mut fallen: HashSet<Entity> = HashSet::new();
     let mut round = Round {
         fighters: &mut fighters,
@@ -348,6 +364,7 @@ fn combat_round(
         auras: &auras,
         resting: &resting,
         outmatched: &outmatched,
+        ambushers: &ambushers,
     };
     for (_, attacker) in order {
         let Some(&target) = targets.get(&attacker) else {
@@ -426,6 +443,8 @@ fn combat_round(
         }
     }
 
+    reveal_fighters(&mut commands, &mut events, &fighters, &targets, &hidden);
+
     // Experience for every player who fought a fallen foe: the risk they overcame.
     for &died in &fallen {
         let Some(name) = fighters
@@ -452,6 +471,25 @@ fn combat_round(
     }
 }
 
+/// Once blows are struck, no one in a fight stays hidden.
+fn reveal_fighters(
+    commands: &mut Commands,
+    events: &mut MessageWriter<GameEvent>,
+    fighters: &Fighters,
+    targets: &HashMap<Entity, Entity>,
+    hidden: &Query<&Hidden>,
+) {
+    let fighting: HashSet<Entity> = targets.keys().chain(targets.values()).copied().collect();
+    for who in fighting {
+        if hidden.get(who).is_ok()
+            && let Ok(f) = fighters.get(who)
+        {
+            let name = capitalized(&name_of(f.player, f.mob));
+            reveal(commands, events, who, &name, f.in_room.0);
+        }
+    }
+}
+
 /// Experience for a victory: 100 times the chance of having lost, from how outmatched the victor
 /// was (see `strike::outmatched`). An even fight gives 50; a foe you'd never lose to, nothing.
 pub fn victory_experience(outmatched: f64) -> u64 {
@@ -470,6 +508,7 @@ fn technique(
     keywords: Query<&Keywords>,
     fighting: Query<&Fighting>,
     dead: Query<(), With<Dead>>,
+    hidden: Query<&Hidden>,
     defs: Res<SkillDefs>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
@@ -493,7 +532,7 @@ fn technique(
     } else {
         let candidates: Vec<_> = mobs::targets_in(actor.room, &mobs, &keywords)
             .into_iter()
-            .filter(|(entity, _)| dead.get(*entity).is_err())
+            .filter(|(entity, _)| dead.get(*entity).is_err() && sees(&hidden, inv.entity, *entity))
             .collect();
         match Target::parse(target)
             .and_then(|t| t.find_one(inv.entity, candidates))
@@ -761,6 +800,7 @@ fn unix_now() -> i64 {
 }
 
 /// `kill <target>`: start a fight with a mob here.
+#[allow(clippy::too_many_arguments)]
 fn kill(
     In(inv): In<Invocation>,
     mut commands: Commands,
@@ -769,6 +809,7 @@ fn kill(
     keywords: Query<&Keywords>,
     fighting: Query<&Fighting>,
     dead: Query<(), With<Dead>>,
+    hidden: Query<&Hidden>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -776,7 +817,7 @@ fn kill(
     let mut out = Vec::new();
     let candidates: Vec<_> = mobs::targets_in(actor.room, &mobs, &keywords)
         .into_iter()
-        .filter(|(entity, _)| dead.get(*entity).is_err())
+        .filter(|(entity, _)| dead.get(*entity).is_err() && sees(&hidden, inv.entity, *entity))
         .collect();
     let target = Target::parse(&inv.args).and_then(|t| t.find_one(inv.entity, candidates));
     match target.and_then(|e| mobs.get(e).ok()) {
@@ -904,6 +945,7 @@ fn flee(
             &view,
             &db,
             &mut practice,
+            &mut commands,
             false,
         ));
     }
@@ -1037,6 +1079,7 @@ mod tests {
         Cost, Effect, Lines, Skill, SkillDef, SkillKind, SkillState, SkillText, StrikeKind,
         Technique,
     };
+    use crate::stealth::Hidden;
     use crate::vitals::BaseHealth;
     use crate::world::{ArmourDef, DoorState, Exits, ItemDef, ItemKey, Room, Slot, Terrain};
     use bevy::ecs::message::Messages;
@@ -1236,6 +1279,75 @@ mod tests {
     fn sure_hands(world: &mut World, who: Entity) {
         let mut skills = world.get_mut::<Skills>(who).unwrap();
         skills.0.get_mut(BASIC_ATTACK).unwrap().level = 1000;
+    }
+
+    /// Make `who` a player, as far as combat cares.
+    fn as_player(world: &mut World, who: Entity) {
+        world.entity_mut(who).insert(Player {
+            name: "Grok".into(),
+            character_id: 1,
+            account: "grok".into(),
+            role: crate::db::Role::Player,
+            race: "human".into(),
+            background: String::new(),
+            description: String::new(),
+        });
+    }
+
+    /// Hide `who` from everyone.
+    fn hide(world: &mut World, who: Entity) {
+        world.entity_mut(who).insert(Hidden {
+            stealth: 10.0,
+            luck: 0,
+            seen_by: HashSet::new(),
+        });
+    }
+
+    #[test]
+    fn a_backstab_from_hiding_cant_be_avoided() {
+        let (mut world, room) = world();
+        world.resource_mut::<SkillDefs>().skills.extend([skill(
+            "brawling:backstab",
+            SkillKind::Technique(Technique {
+                with: BASIC_ATTACK.into(),
+                cost: Cost::Free,
+                accuracy: 0,
+                damage: 0,
+                strike: StrikeKind::Hit,
+                effects: Vec::new(),
+                opener: true,
+            }),
+        )]);
+        // A defender who dodges everything, against a weak attacker hiding in the shadows.
+        let assassin = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK, "brawling:backstab"]);
+        let mark = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
+        hide(&mut world, assassin);
+        world.entity_mut(assassin).insert((
+            Fighting(mark),
+            Readied {
+                skill: "brawling:backstab".into(),
+            },
+        ));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Vitals>(mark).unwrap().health < 100.0);
+        // Blows have been struck: the assassin is seen now.
+        assert!(world.get::<Hidden>(assassin).is_none());
+    }
+
+    #[test]
+    fn aggressive_mobs_ignore_players_they_havent_noticed() {
+        let (mut world, room) = world();
+        let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(rat).insert(Aggressive);
+        let player = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, player);
+        hide(&mut world, player);
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Fighting>(rat).is_none(), "slipped past");
+        // Noticed, they're fair game.
+        world.get_mut::<Hidden>(player).unwrap().seen_by.insert(rat);
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Fighting>(rat).is_some());
     }
 
     #[test]

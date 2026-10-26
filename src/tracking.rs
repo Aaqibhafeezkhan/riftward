@@ -35,6 +35,7 @@ impl Plugin for TrackingPlugin {
                 CommandSpec::new("track", Category::Interaction)
                     .usage("track [<who>]")
                     .summary("read the tracks here, or only those of someone, if you know Tracking")
+                    .quiet()
                     .action(),
                 track,
             );
