@@ -50,6 +50,27 @@ A template can be armour: worn pieces take damage off every hit and cost some do
 "round_shield": (name: "a round shield", bulk: Bulk(2), armour: (penalty: 1, block: 4)),
 ```
 
+## Quality and rarity
+
+*Built.* Two item stats, set differently:
+
+- **Rarity belongs to the template** (`rarity: Rare`), on the same scale as skills: common, uncommon, rare, epic, legendary. It colours the item's name in lists (green uncommon, blue rare, magenta epic, gold legendary), `look` says so ("It's rare."), and it multiplies the item's value: ×1, ×1.5, ×3, ×6, ×12. Today the Rat King's tooth is rare, and the silver locket, moonpetal and glowcap uncommon.
+- **Quality belongs to each item:** crude, poor, standard, fine or masterwork, saved with it (`items.quality`). It shows in the name ("a fine knife"; standard has no word) and can be called by (`look fine`), and `look` says it. Things that grow (food, drink and herbs) are withered or perfect instead of crude or masterwork.
+
+| Quality | Value | Weapon damage, armour's reduction and block |
+| --- | --- | --- |
+| Crude (withered) | ×0.5 | −2 |
+| Poor | ×0.75 | −1 |
+| Standard | ×1 | 0 |
+| Fine | ×1.5 | +1 |
+| Masterwork (perfect) | ×3 | +2 |
+
+Damage never drops below 0 to 1, armour never below nothing, and armour with no reduction or block gains none.
+
+- **Where quality comes from:** only items with a value have one. Loot rolls it with the killer's Luck, mobs' gear and spawned items with a plain roll (mostly standard: 10% crude, 20% poor, 50% standard, 15% fine, 5% masterwork). Gathering sets it by how surely the search won: a near thing finds a poor one, a decisive win a perfect one. What shops sell is standard, though they resell whatever quality they bought. Crafting will set it by skill.
+- **Worth:** an item's `value` is for a common, standard one; rarity and quality multiply it, and shops and Appraisal use the result.
+- **Testing:** `create <item> [crude|poor|fine|masterwork]`.
+
 ## Bulk
 
 Bulk works as in Pathfinder 2e. It measures size and awkwardness together, not weight alone.

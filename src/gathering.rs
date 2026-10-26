@@ -8,9 +8,10 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
+use crate::combat::Blow;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
-use crate::items::{ItemQuery, ItemTemplates, make_for};
+use crate::items::{ItemQuery, ItemTemplates, Quality, make_for};
 use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
 use crate::skills::{Learner, Practice, fill};
 use crate::world::{Finds, ItemKey, RoomKey, Table};
@@ -152,7 +153,9 @@ fn gather_from(inv: Invocation, kind: Kind, mut g: Gatherer) {
         }
         let ready = g.practice.begin(actor.entity, kind.skill())?;
         let skill = f64::from(ready.effectiveness.max(1));
-        let found = if g.practice.opposed(skill, ready.luck, DIFFICULTY, 0).won {
+        // How surely the search won is how good a find it is.
+        let contest = g.practice.opposed(skill, ready.luck, DIFFICULTY, 0);
+        let found = if contest.won {
             g.practice
                 .pick(ready.luck, kind.table(finds))
                 .cloned()
@@ -160,6 +163,7 @@ fn gather_from(inv: Invocation, kind: Kind, mut g: Gatherer) {
         } else {
             None
         };
+        let quality = Quality::of_find(Blow::of(contest.margin));
         let learner = Learner {
             character_id: actor.character_id,
             race: &actor.race,
@@ -187,6 +191,7 @@ fn gather_from(inv: Invocation, kind: Kind, mut g: Gatherer) {
                     &actor,
                     here,
                     key,
+                    quality,
                 )?;
                 let note = if where_to == "here" {
                     " Your hands are full, so it's on the ground."

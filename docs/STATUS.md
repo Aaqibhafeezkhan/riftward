@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells, then money and shops, then Karma's new costs and unlocking skills with it, then Haggling and Appraisal
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells, then money and shops, then Karma's new costs and unlocking skills with it, then Haggling and Appraisal, then item quality and rarity
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -15,6 +15,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Characters:** creation (race with Earthdawn-style shifts, starting Karma, a background as a past life, a description), vitals that recover (faster resting, offline too, never in a fight), `score`, `describe`, aliases, a custom prompt.
 - **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, uncapped levels with a soft cap from character level, experience and character levels that earn Karma, opposed-roll contests, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`, entry skills only), discovery of a tree's other skills through use, a tough-fight boost to learning, Awakening to the four magic traditions.
 - **Karma:** attributes cost the rating they reach (3 to 4 costs 4); characters start with 20 (humans 32); `karma <skill>` unlocks a priced skill in a tree the character has, once its requirements are met.
+- **Items** also have quality (crude to masterwork, per item) and rarity (common to legendary, per template), which set their worth and, for quality, a weapon's damage or armour's protection.
 - **Money and shops:** a copper, silver and gold purse, coins from kills, three Riftwatch shops that sell, buy and resell, spell lessons that cost money, and the Trade tree: Haggling (a deal with each shopkeeper) and Appraisal.
 - **Spells:** spell books as data (`assets/spells/`), `cast` and `spells`, Drain resisted by Willpower, the first two spells of each casting tradition taught by its teacher, cast in or out of fights by players and mobs alike, and the blessed and warded conditions.
 - **Combat:** rounds in initiative order, auto-attacks, weapons (trained and untrained), techniques for every weapon tree's journeyman tier, conditions (staggered, down, bleeding, held, guarding, exposed), stamina costs, fleeing, death and respawn at the shrine, corpses that keep a player's gear, and death for anyone who quits or disconnects mid-fight.
@@ -28,7 +29,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Small things noticed and not yet done
 
-- Attacks use the margin as blows (glancing to crushing); other contests don't yet: quiet picks, finds of better quality. Later Stealth and Knife skills could add Backstab damage, or make crushing blows easier for it.
+- Attacks use the margin as blows (glancing to crushing), and so does gathering for the quality of what's found; quiet picks don't yet. Later Stealth and Knife skills could add Backstab damage, or make crushing blows easier for it.
 - Trained mobs now land mostly strong and crushing blows on a novice: a town guard hits a new character for up to 14. Guards aren't aggressive, but this needs a look in play.
 - Experience and level numbers are first guesses: 50 for an even fight, 100 × 1.25ⁿ per level.
 - Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
@@ -39,6 +40,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 - A spell readied out of a fight (`Casting`), like an opener, lingers if the fight never starts, and fires at the next one.
 - Races are uneven at the new Karma prices (shifts worth 14 to 22 Karma, humans 12 and Versatility), left until racial skills are built and each race can be balanced as a whole ([Races](characters.md#races)). No racial skill exists yet, Versatility included.
 - Karma numbers are first guesses: 20 starting (32 for humans), 2 a level, and skill prices from 6 to 16. At 2 a level, Karma is slow to come by at the new attribute prices.
+- Quality odds and multipliers are first guesses (half of found things standard, masterwork ×3 and +2), and so are the rarity multipliers.
 - Haggling's numbers are first guesses: deals of a twentieth to a fifth, lasting ten minutes, and shopkeepers at 5 to 10. Deals aren't saved, and a deal is only struck by those who know Haggling.
 - Prices are first guesses (see [Prices](economy.md#prices)), and so is buying at a third. A shop's resale stock and a player's money on death are open questions.
 - No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built).

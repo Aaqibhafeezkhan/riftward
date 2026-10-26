@@ -26,7 +26,7 @@ use crate::skills::{
 use crate::spells::{SpellDefs, Spells};
 use crate::targeting::Keywords;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
-use crate::world::{ArmourDef, InRoom, Player};
+use crate::world::{ArmourDef, InRoom, Player, WeaponDef};
 
 /// The skill that helps avoid attacks.
 const DODGE: &str = "athletics:dodge";
@@ -144,10 +144,11 @@ pub fn gear(who: Entity, items: &ItemQuery, templates: &ItemTemplates) -> Armour
             (ItemLocation::Held(holder), None) => holder == who,
             _ => false,
         };
+        // How well it's made moves what it stops.
         if on {
-            total.reduction += armour.reduction;
+            total.reduction += item.quality.protection(armour.reduction);
             total.penalty += armour.penalty;
-            total.block += armour.block;
+            total.block += item.quality.protection(armour.block);
         }
     }
     total
@@ -236,11 +237,17 @@ pub fn choose_attack(
     templates: &ItemTemplates,
     defs: &SkillDefs,
 ) -> Option<Strike> {
+    // The weapon in hand, its damage moved by how well it's made.
     let weapon = items.iter().find_map(|(_, item, location)| {
-        (*location == ItemLocation::Held(entity))
-            .then(|| templates.0.get(&item.key)?.weapon.as_ref())
-            .flatten()
+        let w = (*location == ItemLocation::Held(entity))
+            .then(|| templates.0.get(&item.key)?.weapon.clone())
+            .flatten()?;
+        Some(WeaponDef {
+            damage: item.quality.damage(w.damage),
+            ..w
+        })
     });
+    let weapon = weapon.as_ref();
     let strike = |key: &str| {
         let skill = defs.skills.get(key)?;
         let SkillKind::Attack { damage, cost } = &skill.def.kind else {

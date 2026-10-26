@@ -11,15 +11,18 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::attributes::{Attribute, Attributes};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, ItemPlace, Permission, RoomItemRow};
+use crate::dice::Dice;
 use crate::money::{self, Purse};
 use crate::net::{self, Connection};
 use crate::output::{
     Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_in_room,
 };
+use crate::skills::Rarity;
 use crate::stealth::{Hidden, visible};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
@@ -119,7 +122,7 @@ impl Plugin for ItemsPlugin {
             )
             .add_command(
                 CommandSpec::new("create", Building)
-                    .usage("create <item>")
+                    .usage("create <item> [crude|poor|fine|masterwork]")
                     .summary("make an item from a template (`item` or `zone:item`)")
                     .permission(Permission::Build),
                 create,
@@ -147,6 +150,172 @@ pub struct Item {
     pub id: Option<i64>,
     /// Open, closed or locked, for containers that close. Other items are always open.
     pub state: DoorState,
+    /// How well it's made. Only items with a value have a quality other than standard.
+    pub quality: Quality,
+}
+
+/// How well an item is made: it changes what it's worth, how hard a weapon hits and how much
+/// armour stops, and shows in its name ("a fine knife"). Each item has its own; found items roll
+/// it (see `Quality::roll`), and what shops sell is standard.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+pub enum Quality {
+    Crude,
+    Poor,
+    #[default]
+    Standard,
+    Fine,
+    Masterwork,
+}
+
+impl Quality {
+    pub const ALL: [Quality; 5] = [
+        Quality::Crude,
+        Quality::Poor,
+        Quality::Standard,
+        Quality::Fine,
+        Quality::Masterwork,
+    ];
+
+    /// The word in an item's name; standard has none.
+    pub fn word(self) -> Option<&'static str> {
+        match self {
+            Quality::Crude => Some("crude"),
+            Quality::Poor => Some("poor"),
+            Quality::Standard => None,
+            Quality::Fine => Some("fine"),
+            Quality::Masterwork => Some("masterwork"),
+        }
+    }
+
+    /// How it's saved: its word, or `standard`.
+    pub fn as_str(self) -> &'static str {
+        self.word().unwrap_or("standard")
+    }
+
+    pub fn parse(s: &str) -> Quality {
+        Quality::ALL
+            .into_iter()
+            .find(|q| q.as_str() == s)
+            .unwrap_or_default()
+    }
+
+    /// What it does to an item's value.
+    pub fn value_factor(self) -> f64 {
+        match self {
+            Quality::Crude => 0.5,
+            Quality::Poor => 0.75,
+            Quality::Standard => 1.0,
+            Quality::Fine => 1.5,
+            Quality::Masterwork => 3.0,
+        }
+    }
+
+    /// A weapon's damage, low to high, at this quality.
+    pub fn damage(self, (low, high): (u32, u32)) -> (u32, u32) {
+        let bonus = self.bonus();
+        (
+            (low as i32 + bonus).max(0) as u32,
+            (high as i32 + bonus).max(1) as u32,
+        )
+    }
+
+    /// An armour's reduction or block at this quality: moved by it, never below nothing, and
+    /// nothing stays nothing.
+    pub fn protection(self, n: i32) -> i32 {
+        if n > 0 { (n + self.bonus()).max(0) } else { n }
+    }
+
+    /// What it adds to a weapon's damage and to armour's reduction and block.
+    pub fn bonus(self) -> i32 {
+        match self {
+            Quality::Crude => -2,
+            Quality::Poor => -1,
+            Quality::Standard => 0,
+            Quality::Fine => 1,
+            Quality::Masterwork => 2,
+        }
+    }
+
+    /// A found item's quality, rolled with the finder's Luck: mostly standard, with a tail either
+    /// way. Items with no value are always standard.
+    pub fn roll(dice: &mut Dice, luck: i32, def: &ItemDef) -> Quality {
+        if def.value.is_none_or(|v| v == 0) {
+            return Quality::Standard;
+        }
+        let table = [
+            (Quality::Crude, 10),
+            (Quality::Poor, 20),
+            (Quality::Standard, 50),
+            (Quality::Fine, 15),
+            (Quality::Masterwork, 5),
+        ];
+        dice.pick(luck, &table).copied().unwrap_or_default()
+    }
+
+    /// The quality something gathered comes out at, from how surely the gathering roll won: a
+    /// near thing finds a poor one, a decisive win a masterwork.
+    pub fn of_find(blow: crate::combat::Blow) -> Quality {
+        match blow {
+            crate::combat::Blow::Glancing => Quality::Poor,
+            crate::combat::Blow::Solid => Quality::Standard,
+            crate::combat::Blow::Strong => Quality::Fine,
+            crate::combat::Blow::Crushing => Quality::Masterwork,
+        }
+    }
+
+    /// The word for this quality on `def`: things that grow (food, drink and herbs) are withered
+    /// or perfect, not crude or masterwork.
+    pub fn word_for(self, def: &ItemDef) -> Option<&'static str> {
+        let grown = def.consumable.is_some()
+            || def
+                .tags
+                .iter()
+                .any(|t| matches!(t.as_str(), "food" | "drink" | "herb"));
+        match (self, grown) {
+            (Quality::Crude, true) => Some("withered"),
+            (Quality::Masterwork, true) => Some("perfect"),
+            _ => self.word(),
+        }
+    }
+
+    /// `def`'s name with this quality in it: "a knife" becomes "a fine knife", "an iron helm" "a
+    /// crude iron helm", and mushrooms "a perfect cluster of mushrooms".
+    pub fn named(self, def: &ItemDef) -> String {
+        let name = &def.name;
+        let Some(word) = self.word_for(def) else {
+            return name.to_string();
+        };
+        let bare = without_article(name);
+        if bare.len() == name.trim().len() {
+            format!("{word} {bare}")
+        } else {
+            format!("{} {word} {bare}", crate::characters::article(word))
+        }
+    }
+
+    /// The words to call an item of this quality by, besides its template's.
+    pub fn keywords(self, def: &ItemDef) -> Keywords {
+        let mut keywords = def.keywords();
+        keywords.0.extend(self.word_for(def).map(String::from));
+        keywords
+    }
+}
+
+/// What an item is worth, in copper, with its quality and its template's rarity, if anything.
+pub fn worth(def: &ItemDef, quality: Quality) -> Option<u64> {
+    let value = def.value.filter(|v| *v > 0)?;
+    let rarity = def.rarity.unwrap_or_default().value_factor();
+    Some(((f64::from(value) * rarity * quality.value_factor()).round() as u64).max(1))
+}
+
+/// An item's name in its rarity's colour, for lists: green for uncommon, blue for rare.
+pub fn coloured(name: &str, def: Option<&ItemDef>) -> String {
+    match def.and_then(|d| d.rarity).and_then(Rarity::colour) {
+        Some(colour) => format!("{colour}{name}\x1b[0m"),
+        None => name.to_string(),
+    }
 }
 
 /// Where an item is.
@@ -244,6 +413,7 @@ pub fn spawn_corpse(
         corpse_key(),
         id,
         ItemLocation::Room(room),
+        Quality::Standard,
     )?;
     let name = format!("the corpse of {of}");
     let keywords = Keywords(
@@ -259,6 +429,7 @@ pub fn spawn_corpse(
             name,
             id,
             state: DoorState::Open,
+            quality: Quality::Standard,
         },
         OwnName,
         keywords,
@@ -634,6 +805,21 @@ pub fn with_keywords<'a>(
 }
 
 /// Names with repeats counted, in first-seen order: "a torch (x2)".
+/// Like `counted`, keeping each name beside its line, to look things up by.
+pub fn counted_with<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<(String, String)> {
+    let names: Vec<&str> = names.into_iter().collect();
+    let mut seen: Vec<&str> = Vec::new();
+    for name in &names {
+        if !seen.contains(name) {
+            seen.push(name);
+        }
+    }
+    seen.into_iter()
+        .map(|name| name.to_string())
+        .zip(counted(names))
+        .collect()
+}
+
 pub fn counted<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<String> {
     let mut counts: Vec<(&str, usize)> = Vec::new();
     for name in names {
@@ -695,6 +881,7 @@ pub fn spawn_item(
     key: ItemKey,
     id: Option<i64>,
     location: ItemLocation,
+    quality: Quality,
 ) -> Option<Entity> {
     let Some(def) = templates.0.get(&key) else {
         warn!("no item template [{key}]");
@@ -706,11 +893,12 @@ pub fn spawn_item(
         .map_or(DoorState::Open, |container| container.state);
     let item = Item {
         key,
-        name: def.name.clone(),
+        name: quality.named(def),
         id,
         state,
+        quality,
     };
-    Some(commands.spawn((item, def.keywords(), location)).id())
+    Some(commands.spawn((item, quality.keywords(def), location)).id())
 }
 
 /// Spawn a saved item and, recursively, everything saved inside it. Returns the item.
@@ -721,14 +909,15 @@ fn spawn_saved(
     id: i64,
     template: &str,
     location: ItemLocation,
+    quality: Quality,
 ) -> Option<Entity> {
     let key = ItemKey::parse(template, "");
-    let entity = spawn_item(commands, templates, key, Some(id), location)?;
+    let entity = spawn_item(commands, templates, key, Some(id), location, quality)?;
     match db.items_inside(id) {
         Ok(contents) => {
-            for (child, template) in contents {
+            for (child, template, quality) in contents {
                 let inside = ItemLocation::Inside(entity);
-                spawn_saved(commands, templates, db, child, &template, inside);
+                spawn_saved(commands, templates, db, child, &template, inside, quality);
             }
         }
         Err(err) => error!("failed to load the contents of item {id}: {err}"),
@@ -763,10 +952,11 @@ fn sync_templates(
             continue;
         }
         if let Some(def) = templates.0.get(&item.key) {
-            if item.name != def.name {
-                item.name = def.name.clone();
+            let name = item.quality.named(def);
+            if item.name != name {
+                item.name = name;
             }
-            commands.entity(entity).insert(def.keywords());
+            commands.entity(entity).insert(item.quality.keywords(def));
         }
     }
 }
@@ -867,6 +1057,7 @@ pub fn restore_room_items(
             room,
             name,
             dropped_at,
+            quality,
         } = row;
         let room = match index.0.get(&RoomKey::parse(&room, "")) {
             Some(&room) => room,
@@ -879,8 +1070,15 @@ pub fn restore_room_items(
             }
         };
         let location = ItemLocation::Room(room);
-        let Some(entity) = spawn_saved(&mut commands, &templates, &db, id, &template, location)
-        else {
+        let Some(entity) = spawn_saved(
+            &mut commands,
+            &templates,
+            &db,
+            id,
+            &template,
+            location,
+            quality,
+        ) else {
             continue;
         };
         if let Some(name) = name {
@@ -891,6 +1089,7 @@ pub fn restore_room_items(
                     name,
                     id: Some(id),
                     state: DoorState::Open,
+                    quality,
                 },
                 OwnName,
             ));
@@ -914,12 +1113,20 @@ fn load_carried_items(
     for (entity, player) in &entered {
         match db.items_on_character(player.character_id) {
             Ok(rows) => {
-                for (id, template, slot) in rows {
+                for (id, template, slot, quality) in rows {
                     let location = match Slot::parse(&slot) {
                         Some(slot) => ItemLocation::Worn(entity, slot),
                         None => ItemLocation::Held(entity),
                     };
-                    spawn_saved(&mut commands, &templates, &db, id, &template, location);
+                    spawn_saved(
+                        &mut commands,
+                        &templates,
+                        &db,
+                        id,
+                        &template,
+                        location,
+                        quality,
+                    );
                 }
             }
             Err(err) => error!("failed to load items for {}: {err}", player.name),
@@ -1027,7 +1234,10 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         let location = *location;
         let place = self.place(location)?;
         let (_, mut item, _) = self.items.get_mut(entity).ok()?;
-        match self.db.create_item(&item.key.to_string(), &place) {
+        match self
+            .db
+            .create_item(&item.key.to_string(), &place, item.quality)
+        {
             Ok(id) => {
                 item.id = Some(id);
                 Some(id)
@@ -1051,7 +1261,7 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
             Some(id) => self.db.move_item(id, &place),
             None => self
                 .db
-                .create_item(&item.key.to_string(), &place)
+                .create_item(&item.key.to_string(), &place, item.quality)
                 .map(|id| item.id = Some(id)),
         };
         if let Err(err) = result {
@@ -1186,7 +1396,8 @@ fn inventory(
     } else {
         text += "You are holding:\r\n";
         for info in held {
-            text += &format!("  {}{}\r\n", info.name, fill_note(&snapshot, info.entity));
+            let name = coloured(&info.name, info.def.as_ref());
+            text += &format!("  {name}{}\r\n", fill_note(&snapshot, info.entity));
             for line in contents_lines(&snapshot, info.entity, 4) {
                 text += &format!("{line}\r\n");
             }
@@ -1204,7 +1415,8 @@ fn inventory(
             };
             let slot = format!("<{}>", slot.name());
             let note = fill_note(&snapshot, info.entity);
-            text += &format!("  {slot:<7} {}{note}\r\n", info.name);
+            let name = coloured(&info.name, info.def.as_ref());
+            text += &format!("  {slot:<7} {name}{note}\r\n");
             for line in contents_lines(&snapshot, info.entity, 12) {
                 text += &format!("{line}\r\n");
             }
@@ -1261,14 +1473,20 @@ fn contents_lines(snapshot: &Snapshot, container: Entity, indent: usize) -> Vec<
     }
     let pad = " ".repeat(indent);
     let inside: Vec<_> = snapshot.at(ItemLocation::Inside(container)).collect();
-    let mut lines: Vec<String> = counted(
+    let mut lines: Vec<String> = counted_with(
         inside
             .iter()
             .filter(|info| !snapshot.is_container(info.entity))
             .map(|info| info.name.as_str()),
     )
     .into_iter()
-    .map(|name| format!("{pad}{name}"))
+    .map(|(name, line)| {
+        let def = inside
+            .iter()
+            .find(|info| info.name == name)
+            .and_then(|info| info.def.as_ref());
+        format!("{pad}{}", coloured(&line, def))
+    })
     .collect();
     for info in inside
         .iter()
@@ -1276,7 +1494,7 @@ fn contents_lines(snapshot: &Snapshot, container: Entity, indent: usize) -> Vec<
     {
         lines.push(format!(
             "{pad}{}{}",
-            info.name,
+            coloured(&info.name, info.def.as_ref()),
             fill_note(snapshot, info.entity)
         ));
         lines.extend(contents_lines(snapshot, info.entity, indent + 2));
@@ -1346,23 +1564,38 @@ pub fn describe_item(entity: Entity, items: &ItemQuery, templates: &ItemTemplate
         Some(def) if !def.description.is_empty() => def.description.clone(),
         _ => format!("You see nothing special about {}.", item.name),
     };
+    // How scarce it is, and how well made, when that's anything but ordinary.
+    let rarity = def.and_then(|d| d.rarity).filter(|r| *r != Rarity::Common);
+    let make = def.and_then(|d| item.quality.word_for(d));
+    let notes: Vec<String> = [
+        rarity.map(|r| coloured(&format!("It's {}.", r.name()), def)),
+        make.map(|word| format!("It's {word}.")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !notes.is_empty() {
+        text += &format!("\r\n{}", notes.join(" "));
+    }
     if let Some(weapon) = def.and_then(|d| d.weapon.as_ref()) {
         let skill = weapon
             .skill
             .split_once(':')
             .map_or(weapon.skill.as_str(), |(tree, _)| tree);
-        text += &format!(
-            "\r\nA weapon: {}-{} damage, used with {skill}.",
-            weapon.damage.0, weapon.damage.1
-        );
+        let (low, high) = item.quality.damage(weapon.damage);
+        text += &format!("\r\nA weapon: {low}-{high} damage, used with {skill}.");
     }
     if let Some(armour) = def.and_then(|d| d.armour) {
         let mut parts = Vec::new();
-        if armour.reduction > 0 {
-            parts.push(format!("takes {} off every blow", armour.reduction));
+        let (reduction, block) = (
+            item.quality.protection(armour.reduction),
+            item.quality.protection(armour.block),
+        );
+        if reduction > 0 {
+            parts.push(format!("takes {reduction} off every blow"));
         }
-        if armour.block > 0 {
-            parts.push(format!("blocks for {} defence", armour.block));
+        if block > 0 {
+            parts.push(format!("blocks for {block} defence"));
         }
         if armour.penalty > 0 {
             parts.push(format!("costs {} defence in dodging", armour.penalty));
@@ -2002,7 +2235,14 @@ fn create(
             return Err(inv.usage_error());
         }
         let (_, here, _) = rooms.get(actor.room).map_err(|_| String::new())?;
-        let key = ItemKey::parse(&inv.args, &here.zone);
+        // `create knife fine` makes a fine one.
+        let (id, quality) = match inv.args.trim().rsplit_once(' ') {
+            Some((id, word)) if Quality::ALL.iter().any(|q| q.as_str() == word) => {
+                (id, Quality::parse(word))
+            }
+            _ => (inv.args.trim(), Quality::Standard),
+        };
+        let key = ItemKey::parse(id, &here.zone);
         let (name, where_to) = make_for(
             &mut commands,
             &templates,
@@ -2011,6 +2251,7 @@ fn create(
             &actor,
             here,
             key.clone(),
+            quality,
         )?;
         Ok(format!("You create {name} [{key}] {where_to}."))
     })();
@@ -2020,6 +2261,7 @@ fn create(
 /// Make a new item from template `key` for `actor`, standing in `here`: in their hand, or at
 /// their feet if their hands are full or it's fixed. It's real from the start, so it's never lost.
 /// Returns its name and where it went ("in your hand", "here").
+#[allow(clippy::too_many_arguments)]
 pub fn make_for(
     commands: &mut Commands,
     templates: &ItemTemplates,
@@ -2028,6 +2270,7 @@ pub fn make_for(
     actor: &Actor,
     here: &RoomKey,
     key: ItemKey,
+    quality: Quality,
 ) -> Result<(String, &'static str), String> {
     let def = templates
         .0
@@ -2045,10 +2288,10 @@ pub fn make_for(
         (ItemLocation::Held(actor.entity), place, "in your hand")
     };
     let id = db
-        .create_item(&key.to_string(), &place)
+        .create_item(&key.to_string(), &place, quality)
         .map_err(|err| format!("Couldn't save the item: {err}"))?;
-    let name = def.name.clone();
-    spawn_item(commands, templates, key, Some(id), location);
+    let name = quality.named(def);
+    spawn_item(commands, templates, key, Some(id), location, quality);
     Ok((name, where_to))
 }
 
@@ -2087,6 +2330,63 @@ fn destroy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quality_shows_in_names_after_the_article() {
+        let named = |quality: Quality, name: &str| quality.named(&ItemDef::named(name));
+        assert_eq!(named(Quality::Fine, "a knife"), "a fine knife");
+        assert_eq!(named(Quality::Crude, "an iron helm"), "a crude iron helm");
+        assert_eq!(named(Quality::Standard, "a knife"), "a knife");
+        assert_eq!(named(Quality::Poor, "bread"), "poor bread");
+        // Things that grow get their own words.
+        let mut mushrooms = ItemDef::named("a cluster of mushrooms");
+        mushrooms.tags = vec!["food".into()];
+        assert_eq!(
+            Quality::Masterwork.named(&mushrooms),
+            "a perfect cluster of mushrooms"
+        );
+        assert_eq!(
+            Quality::Crude.named(&mushrooms),
+            "a withered cluster of mushrooms"
+        );
+        for quality in Quality::ALL {
+            assert_eq!(Quality::parse(quality.as_str()), quality);
+        }
+    }
+
+    #[test]
+    fn quality_and_rarity_set_worth_and_quality_sets_stats() {
+        let mut tooth = ItemDef::named("a tooth");
+        assert_eq!(worth(&tooth, Quality::Standard), None, "no value, no worth");
+        tooth.value = Some(100);
+        assert_eq!(worth(&tooth, Quality::Standard), Some(100));
+        assert_eq!(worth(&tooth, Quality::Masterwork), Some(300));
+        tooth.rarity = Some(Rarity::Rare);
+        assert_eq!(worth(&tooth, Quality::Crude), Some(150));
+        assert_eq!(Quality::Fine.damage((2, 5)), (3, 6));
+        assert_eq!(Quality::Crude.damage((1, 2)), (0, 1), "never below nothing");
+        assert_eq!(Quality::Crude.protection(1), 0);
+        assert_eq!(Quality::Masterwork.protection(0), 0, "no armour stays none");
+    }
+
+    #[test]
+    fn found_things_are_mostly_standard_and_luck_finds_better() {
+        let mut def = ItemDef::named("a knife");
+        assert_eq!(
+            Quality::roll(&mut Dice::seeded(1), 0, &def),
+            Quality::Standard,
+            "worthless things have no quality"
+        );
+        def.value = Some(20);
+        let average = |luck: i32| {
+            let mut dice = Dice::seeded(7);
+            (0..4000)
+                .map(|_| Quality::roll(&mut dice, luck, &def).bonus())
+                .sum::<i32>()
+        };
+        let (unlucky, lucky) = (average(0), average(10));
+        assert!(lucky > unlucky, "{lucky} > {unlucky}");
+    }
     use crate::world::{Bulk, ContainerDef};
 
     fn def(name: &str, bulk: Bulk) -> ItemDef {
@@ -2118,6 +2418,7 @@ mod tests {
             name: name.into(),
             id: None,
             state: DoorState::Open,
+            quality: Quality::Standard,
         };
         let (gone, here) = (world.spawn_empty().id(), world.spawn_empty().id());
         let pack = world

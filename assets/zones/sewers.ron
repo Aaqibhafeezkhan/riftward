@@ -18,7 +18,8 @@
             description: "A heavy silver locket on a broken chain, black with tarnish. The clasp is rusted shut.",
             bulk: Negligible,
             tags: ["valuable"],
-            value: 300,
+            value: 200,
+            rarity: Uncommon,
         ),
         "glowcap": (
             name: "a glowcap",
@@ -26,7 +27,8 @@
             description: "A spongy fungus that glows a faint, sickly green in the dark. Not for eating.",
             bulk: Negligible,
             tags: ["herb"],
-            value: 6,
+            value: 4,
+            rarity: Uncommon,
         ),
         "rat_tail": (
             name: "a rat's tail",
@@ -42,7 +44,8 @@
             description: "A long, curved incisor, yellow as old ivory and still sharp. Proof that the Rat King has fallen, for now.",
             bulk: Negligible,
             tags: ["trophy"],
-            value: 200,
+            value: 67,
+            rarity: Rare,
         ),
     },
     mobs: {

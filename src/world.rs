@@ -20,6 +20,7 @@ use thiserror::Error;
 
 use crate::attributes::Attribute;
 use crate::net::Connection;
+use crate::skills::Rarity;
 use crate::targeting::Keywords;
 use crate::world_events::{When, WorldEventDef};
 
@@ -343,9 +344,14 @@ pub struct ItemDef {
     /// What it does as armour, if it is some: worn in its slot, or held, like a shield.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub armour: Option<ArmourDef>,
-    /// What it's worth, in copper: what shops sell it for. Without one, no shop buys or sells it.
+    /// What it's worth, in copper, when common and of standard quality; rarity and quality
+    /// multiply it. Without one, no shop buys or sells it, and it has no quality.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<u32>,
+    /// How scarce it is: common, uncommon, rare, epic or legendary. It colours the item's name
+    /// and multiplies its value. Common when not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rarity: Option<Rarity>,
     /// What eating or drinking it does, if it's food, drink or a draught. It's used up.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consumable: Option<ConsumableDef>,
@@ -548,6 +554,7 @@ impl ItemDef {
             weapon: None,
             armour: None,
             value: None,
+            rarity: None,
             consumable: None,
         }
     }

@@ -52,7 +52,8 @@
             description: "A pale flower whose petals hold a faint silver sheen, even in shadow.",
             bulk: Negligible,
             tags: ["herb"],
-            value: 15,
+            value: 10,
+            rarity: Uncommon,
         ),
     },
     mobs: {

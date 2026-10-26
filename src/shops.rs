@@ -12,7 +12,9 @@ use bevy::prelude::*;
 
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, ItemPlace};
-use crate::items::{self, HANDS, ItemLocation, ItemQuery, ItemTemplates, Snapshot, capitalized};
+use crate::items::{
+    self, HANDS, ItemLocation, ItemQuery, ItemTemplates, Quality, Snapshot, capitalized, worth,
+};
 use crate::mobs::{MobQuery, MobTemplates};
 use crate::money::{self, Purse};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
@@ -56,14 +58,10 @@ impl Plugin for ShopsPlugin {
     }
 }
 
-/// What a shopkeeper has bought from players and will sell again, oldest first.
+/// What a shopkeeper has bought from players and will sell again, oldest first, with each one's
+/// quality.
 #[derive(Component, Debug, Default)]
-pub struct Resale(pub Vec<ItemKey>);
-
-/// What an item is worth to a shop, if anything.
-pub fn worth(def: &ItemDef) -> Option<u64> {
-    def.value.map(u64::from).filter(|v| *v > 0)
-}
+pub struct Resale(pub Vec<(ItemKey, Quality)>);
 
 /// Whether a shop buys this kind of item: `anything`, one of its tags, or what it is (`weapon`,
 /// `armour`, `food`, `drink`, `container`).
@@ -83,7 +81,7 @@ pub fn buys(shop: &ShopDef, def: &ItemDef) -> bool {
         Some(Consume::Drink) => kinds.push("drink"),
         None => {}
     }
-    worth(def).is_some()
+    worth(def, Quality::Standard).is_some()
         && shop
             .buys
             .iter()
@@ -109,6 +107,9 @@ struct Counter<'w, 's> {
     time: Res<'w, Time>,
 }
 
+/// Something a player could sell: the item, its template, its name and its quality.
+type Sellable = (Entity, ItemKey, String, Quality);
+
 /// A shopkeeper and their shop.
 struct Keeper {
     entity: Entity,
@@ -121,6 +122,9 @@ struct Keeper {
 struct Ware {
     key: ItemKey,
     def: ItemDef,
+    quality: Quality,
+    /// Its name, with its quality.
+    name: String,
     /// Its value: the price before any deal.
     price: u64,
     /// Bought from a player, at this place in the resale list.
@@ -171,7 +175,7 @@ impl Counter<'_, '_> {
             .shop
             .sells
             .iter()
-            .map(|id| (ItemKey::parse(id, &keeper.zone), None));
+            .map(|id| (ItemKey::parse(id, &keeper.zone), Quality::Standard, None));
         let resale = self
             .resale
             .get(keeper.entity)
@@ -180,15 +184,17 @@ impl Counter<'_, '_> {
         let bought = resale
             .into_iter()
             .enumerate()
-            .map(|(i, key)| (key, Some(i)));
+            .map(|(i, (key, quality))| (key, quality, Some(i)));
         stock
             .chain(bought)
-            .filter_map(|(key, resale)| {
+            .filter_map(|(key, quality, resale)| {
                 let def = self.templates.0.get(&key)?.clone();
-                let price = worth(&def)?;
+                let price = worth(&def, quality)?;
                 Some(Ware {
                     key,
+                    name: quality.named(&def),
                     def,
+                    quality,
                     price,
                     resale,
                 })
@@ -197,7 +203,7 @@ impl Counter<'_, '_> {
     }
 
     /// An item `actor` carries, by name, ready to sell: not worn, and empty if it's a container.
-    fn sellable(&self, actor: &Actor, words: &str) -> Result<(Entity, ItemKey, String), String> {
+    fn sellable(&self, actor: &Actor, words: &str) -> Result<Sellable, String> {
         if words.trim().is_empty() {
             return Err("Sell what?".into());
         }
@@ -216,7 +222,7 @@ impl Counter<'_, '_> {
         if snapshot.at(ItemLocation::Inside(entity)).next().is_some() {
             return Err(format!("You'd have to empty {} first.", item.name));
         }
-        Ok((entity, item.key.clone(), item.name.clone()))
+        Ok((entity, item.key.clone(), item.name.clone(), item.quality))
     }
 }
 
@@ -237,9 +243,12 @@ fn list(In(inv): In<Invocation>, mut counter: Counter) {
                 let mut text = format!("{} sells:", capitalized(&keeper.name));
                 for ware in wares {
                     let used = if ware.resale.is_some() { " (used)" } else { "" };
-                    let name = format!("{}{used}", ware.def.name);
+                    let name = format!("{}{used}", ware.name);
                     let price = trade::asking_price(ware.price, share);
-                    text += &format!("\r\n  {name:<34} {}", money::coins(price));
+                    // Padded before it's coloured, so the colour doesn't count as width.
+                    let pad = " ".repeat(34usize.saturating_sub(name.chars().count()));
+                    let name = items::coloured(&name, Some(&ware.def));
+                    text += &format!("\r\n  {name}{pad} {}", money::coins(price));
                 }
                 text + "\r\nType 'buy <item>' to buy, 'sell <item>' to sell, or 'value <item>' to \
                         ask what they'd pay."
@@ -290,7 +299,7 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
         if !purse.pay(price) {
             return Err(format!(
                 "{} costs {}, and you have {}.",
-                capitalized(&ware.def.name),
+                capitalized(&ware.name),
                 money::coins(price),
                 money::coins(purse.0)
             ));
@@ -327,7 +336,7 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
         };
         let id = counter
             .db
-            .create_item(&ware.key.to_string(), &place)
+            .create_item(&ware.key.to_string(), &place, ware.quality)
             .map_err(|err| error!("failed to save a bought item [{}]: {err}", ware.key))
             .ok();
         items::spawn_item(
@@ -336,6 +345,7 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
             ware.key.clone(),
             id,
             location,
+            ware.quality,
         );
         out.push(Outgoing::Room {
             room: actor.room,
@@ -376,7 +386,7 @@ fn sell(In(inv): In<Invocation>, mut counter: Counter) {
     let mut out = Vec::new();
     let reply = (|| {
         let keeper = counter.keeper(actor.room)?;
-        let (entity, key, name) = counter.sellable(&actor, &inv.args)?;
+        let (entity, key, name, quality) = counter.sellable(&actor, &inv.args)?;
         let def = counter.templates.0.get(&key).ok_or_else(String::new)?;
         let keeper_name = crate::combat::the(&keeper.name);
         if !buys(&keeper.shop, def) {
@@ -385,7 +395,7 @@ fn sell(In(inv): In<Invocation>, mut counter: Counter) {
                 capitalized(&keeper_name)
             ));
         }
-        let (value, unique) = (worth(def).unwrap_or_default(), def.unique);
+        let (value, unique) = (worth(def, quality).unwrap_or_default(), def.unique);
         let paid = trade::offer(value, counter.deal(&actor, &keeper, &mut out));
         let mut purse = counter
             .purses
@@ -401,16 +411,18 @@ fn sell(In(inv): In<Invocation>, mut counter: Counter) {
             error!("failed to delete sold item {id}: {err}");
         }
         counter.commands.entity(entity).despawn();
-        // A shop resells what it bought, unless it stocks it anyway, or there's only ever one.
-        let stocked = keeper
-            .shop
-            .sells
-            .iter()
-            .any(|id| ItemKey::parse(id, &keeper.zone) == key);
+        // A shop resells what it bought, unless it stocks it anyway (of standard quality), or
+        // there's only ever one.
+        let stocked = quality == Quality::Standard
+            && keeper
+                .shop
+                .sells
+                .iter()
+                .any(|id| ItemKey::parse(id, &keeper.zone) == key);
         if !unique && !stocked {
             match counter.resale.get_mut(keeper.entity) {
                 Ok(mut resale) => {
-                    resale.0.push(key);
+                    resale.0.push((key, quality));
                     if resale.0.len() > MAX_RESALE {
                         resale.0.remove(0);
                     }
@@ -419,7 +431,7 @@ fn sell(In(inv): In<Invocation>, mut counter: Counter) {
                     counter
                         .commands
                         .entity(keeper.entity)
-                        .insert(Resale(vec![key]));
+                        .insert(Resale(vec![(key, quality)]));
                 }
             }
         }
@@ -455,10 +467,13 @@ fn value(In(inv): In<Invocation>, mut counter: Counter) {
     let mut out = Vec::new();
     let text = (|| {
         let keeper = counter.keeper(actor.room)?;
-        let (_, key, name) = counter.sellable(&actor, &inv.args)?;
+        let (_, key, name, quality) = counter.sellable(&actor, &inv.args)?;
         let def = counter.templates.0.get(&key).ok_or_else(String::new)?;
         let keeper_name = capitalized(&crate::combat::the(&keeper.name));
-        let (value, buys_it) = (worth(def).unwrap_or_default(), buys(&keeper.shop, def));
+        let (value, buys_it) = (
+            worth(def, quality).unwrap_or_default(),
+            buys(&keeper.shop, def),
+        );
         Ok(if buys_it {
             let paid = trade::offer(value, counter.deal(&actor, &keeper, &mut out));
             format!(

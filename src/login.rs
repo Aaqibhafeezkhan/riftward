@@ -16,7 +16,7 @@ use crate::combat::{AutoAttack, HideNumbers};
 use crate::command::{self, ActionQueue};
 use crate::commands::movement::{View, describe_room};
 use crate::db::{Account, CharacterRecord, Database, ItemPlace, Permission, Role};
-use crate::items::{HANDS, ItemTemplates};
+use crate::items::{HANDS, ItemTemplates, Quality};
 use crate::money::Purse;
 use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::output::{Outgoing, PlayerQuery, deliver};
@@ -747,7 +747,7 @@ fn give_kit(character_id: i64, kit: &[String], templates: &ItemTemplates, db: &D
                 }
             },
         };
-        match db.create_item(&template, &place) {
+        match db.create_item(&template, &place, Quality::Standard) {
             Ok(id) => {
                 if pouch.is_none()
                     && def.container.is_some()

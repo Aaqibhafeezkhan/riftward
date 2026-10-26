@@ -34,7 +34,7 @@ use crate::dice::Dice;
 use crate::events::GameEvent;
 use crate::items::{
     self, ItemLocation, ItemMutQuery, ItemQuery, ItemTemplates, MOB_CORPSE_SECS,
-    PLAYER_CORPSE_SECS, capitalized,
+    PLAYER_CORPSE_SECS, Quality, capitalized,
 };
 use crate::mobs::{self, Mob, MobQuery, MobTemplates};
 use crate::money::{self, Purse};
@@ -787,12 +787,18 @@ fn handle_deaths(
             for table in tables.into_iter().flatten() {
                 if let Some(Some(id)) = dice.pick(luck, table) {
                     let key = ItemKey::parse(id, &mob.key.zone);
+                    // Found with the slayer's Luck, which helps its quality too.
+                    let quality = templates
+                        .0
+                        .get(&key)
+                        .map_or(Quality::Standard, |def| Quality::roll(&mut dice, luck, def));
                     items::spawn_item(
                         &mut commands,
                         &templates,
                         key,
                         None,
                         ItemLocation::Inside(corpse),
+                        quality,
                     );
                 }
             }
@@ -813,6 +819,7 @@ fn handle_deaths(
         let corpse_id = match db.create_item(
             &items::corpse_key().to_string(),
             &ItemPlace::Room(room_key.clone()),
+            Quality::Standard,
         ) {
             Ok(id) => Some(id),
             Err(err) => {
@@ -846,7 +853,7 @@ fn handle_deaths(
                 let saved = match item.id {
                     Some(id) => db.move_item(id, &place),
                     None => db
-                        .create_item(&item.key.to_string(), &place)
+                        .create_item(&item.key.to_string(), &place, item.quality)
                         .map(|id| item.id = Some(id)),
                 };
                 if let Err(err) = saved {
@@ -1400,6 +1407,7 @@ mod tests {
                 name: id.into(),
                 id: None,
                 state: DoorState::Open,
+                quality: Quality::Standard,
             },
             at,
         ));

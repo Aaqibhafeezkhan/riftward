@@ -16,7 +16,7 @@ use crate::items::{
     ItemLocation, ItemQuery, ItemTemplates, capitalized, counted, describe_item, find_item,
     gear_lines,
 };
-use crate::items::{Snapshot, bulk_limits};
+use crate::items::{Snapshot, bulk_limits, coloured, counted_with};
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
 use crate::skills::{Learner, Practice, fill};
@@ -635,8 +635,19 @@ pub fn describe_room(
                 .map(|(_, item, _)| item.name.as_str())
         })
         .collect();
-    for name in counted(loose) {
-        text += &format!("{} lies here.\r\n", capitalized(&name));
+    // Names show in their rarity's colour.
+    let paint = |name: &str, line: String| {
+        let def = here.iter().find_map(|e| {
+            let (_, item, _) = view.items.get(*e).ok()?;
+            (item.name == name).then(|| view.templates.0.get(&item.key))?
+        });
+        coloured(&line, def)
+    };
+    for (name, line) in counted_with(loose) {
+        text += &format!(
+            "{}\r\n",
+            paint(&name, format!("{} lies here.", capitalized(&line)))
+        );
     }
     let shown = |who: Entity| sees(&view.hidden, viewer, who);
     for line in mobs::here_lines(room, &view.mobs, shown) {

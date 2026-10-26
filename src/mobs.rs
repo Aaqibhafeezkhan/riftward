@@ -151,6 +151,7 @@ pub fn spawn_mob(
     defs: &SkillDefs,
     key: &MobKey,
     room: Entity,
+    dice: &mut Dice,
 ) -> Option<Entity> {
     let Some(def) = templates.0.get(key) else {
         warn!("no mob template [{key}]");
@@ -224,7 +225,9 @@ pub fn spawn_mob(
                 continue;
             }
         };
-        items::spawn_item(commands, item_templates, item, None, location);
+        // Its gear is of whatever quality it happened to find.
+        let quality = items::Quality::roll(dice, 0, item_def);
+        items::spawn_item(commands, item_templates, item, None, location, quality);
     }
     Some(id)
 }
@@ -387,6 +390,7 @@ pub fn describe(mob: &Mob) -> String {
 }
 
 /// `summon <mob>`: a builder brings a mob from a template into the room. It belongs to no spawn.
+#[allow(clippy::too_many_arguments)]
 fn summon(
     In(inv): In<Invocation>,
     mut commands: Commands,
@@ -395,6 +399,7 @@ fn summon(
     templates: Res<MobTemplates>,
     item_templates: Res<ItemTemplates>,
     defs: Res<SkillDefs>,
+    mut dice: ResMut<Dice>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -419,6 +424,7 @@ fn summon(
                 &defs,
                 &key,
                 actor.room,
+                &mut dice,
             );
             out.push(Outgoing::line(
                 inv.entity,
@@ -506,14 +512,16 @@ mod tests {
         world.insert_resource(MobTemplates(HashMap::from([(key.clone(), guard)])));
         world.insert_resource(items);
         world.insert_resource(SkillDefs::default());
+        world.insert_resource(Dice::seeded(1));
         let room = world.spawn_empty().id();
         let mob = world
             .run_system_once(
                 move |mut commands: Commands,
                       mobs: Res<MobTemplates>,
                       items: Res<ItemTemplates>,
-                      defs: Res<SkillDefs>| {
-                    spawn_mob(&mut commands, &mobs, &items, &defs, &key, room)
+                      defs: Res<SkillDefs>,
+                      mut dice: ResMut<Dice>| {
+                    spawn_mob(&mut commands, &mobs, &items, &defs, &key, room, &mut dice)
                 },
             )
             .unwrap()

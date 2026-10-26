@@ -17,10 +17,9 @@ use crate::attributes::Attribute;
 use crate::combat::{Blow, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::dice::Contest;
-use crate::items::{self, ItemQuery, ItemTemplates};
+use crate::items::{self, ItemQuery, ItemTemplates, worth};
 use crate::money;
 use crate::output::{Actor, Outgoing, PlayerQuery, deliver};
-use crate::shops::worth;
 use crate::skills::{Learner, Practice, fill};
 use crate::targeting::Keywords;
 
@@ -194,7 +193,10 @@ fn appraise(
         let entity = items::find_item(&inv.args, &actor, &items, &keywords, &templates)?;
         let (_, item, _) = items.get(entity).map_err(|_| String::new())?;
         let ready = practice.begin(actor.entity, APPRAISAL)?;
-        let value = templates.0.get(&item.key).and_then(worth);
+        let value = templates
+            .0
+            .get(&item.key)
+            .and_then(|def| worth(def, item.quality));
         let skill = f64::from(ready.effectiveness.max(1));
         // Something with no value is easy to judge.
         let judged = match value {

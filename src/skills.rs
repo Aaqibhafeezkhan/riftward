@@ -130,6 +130,40 @@ pub enum Rarity {
     Legendary,
 }
 
+impl Rarity {
+    pub fn name(self) -> &'static str {
+        match self {
+            Rarity::Common => "common",
+            Rarity::Uncommon => "uncommon",
+            Rarity::Rare => "rare",
+            Rarity::Epic => "epic",
+            Rarity::Legendary => "legendary",
+        }
+    }
+
+    /// What it does to an item's value.
+    pub fn value_factor(self) -> f64 {
+        match self {
+            Rarity::Common => 1.0,
+            Rarity::Uncommon => 1.5,
+            Rarity::Rare => 3.0,
+            Rarity::Epic => 6.0,
+            Rarity::Legendary => 12.0,
+        }
+    }
+
+    /// The colour names of this rarity show in; common things are uncoloured.
+    pub fn colour(self) -> Option<&'static str> {
+        match self {
+            Rarity::Common => None,
+            Rarity::Uncommon => Some("\x1b[32m"),
+            Rarity::Rare => Some("\x1b[1;34m"),
+            Rarity::Epic => Some("\x1b[1;35m"),
+            Rarity::Legendary => Some("\x1b[1;33m"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SkillDef {
     pub name: String,

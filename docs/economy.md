@@ -37,7 +37,7 @@ A shopkeeper is a mob whose template has a `shop`:
 ),
 ```
 
-- **Items have a value** (`value`, in copper) on their template. Only items with a value are bought or sold.
+- **Items have a value** (`value`, in copper) on their template, for a common item of standard quality; [rarity and quality](items.md#quality-and-rarity) multiply it. Only items with a value are bought or sold.
 - **Selling to you:** at the item's value. `list` shows a shop's goods and prices; `buy <item>` takes the first that matches. A bought item goes into a free hand, or is set down at your feet if both are full; either way it's real (saved) from that moment.
 - **Buying from you:** at a third of the value, at least a copper. `sell <item>` sells something you carry (not worn, and empty if it's a container); `value <item>` asks first.
 - **What a shop buys** is a list of kinds: item tags (`herb`, `potion`, `bandage`), or what an item is (`weapon`, `armour`, `food`, `drink`, `container`), or `anything`. A shop that doesn't deal in something says it isn't interested.
@@ -83,7 +83,7 @@ The Trade tree (Charisma) has two entry skills, both taught by the provisioner a
 
 ## Planned
 
-- **Appraisal of quality,** once items have it, and of what a shop would pay.
+- **Appraisal of what a shop would pay,** and of hidden qualities, if items get any.
 - **Guild rates and better stock** for guild ranks ([Guild perks](quests.md)).
 - **A Fence** in the Back Alley, buying what honest shops won't, with Thievery.
 - **Stock that runs out and restocks,** for rarer goods.

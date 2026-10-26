@@ -16,7 +16,7 @@ use bevy::prelude::*;
 
 use crate::db::Database;
 use crate::dice::Dice;
-use crate::items::{self, Item, ItemLocation, ItemTemplates};
+use crate::items::{self, Item, ItemLocation, ItemTemplates, Quality};
 use crate::mobs::{self, MobTemplates, Wanderer};
 use crate::output::RoomQuery;
 use crate::skills::SkillDefs;
@@ -461,6 +461,7 @@ fn run_spawns(
                         &defs,
                         &mob,
                         room,
+                        &mut dice,
                     ) else {
                         break;
                     };
@@ -498,12 +499,17 @@ fn run_spawns(
                 };
                 for _ in 0..make {
                     let location = ItemLocation::Room(room);
+                    let quality = item_templates
+                        .0
+                        .get(item)
+                        .map_or(Quality::Standard, |def| Quality::roll(&mut dice, 0, def));
                     let Some(entity) = items::spawn_item(
                         &mut commands,
                         &item_templates,
                         item.clone(),
                         None,
                         location,
+                        quality,
                     ) else {
                         break;
                     };
@@ -519,12 +525,17 @@ fn run_spawns(
                         .collect();
                     for inside in missing(&contents, &has) {
                         let location = ItemLocation::Inside(container);
+                        let quality = item_templates
+                            .0
+                            .get(inside)
+                            .map_or(Quality::Standard, |def| Quality::roll(&mut dice, 0, def));
                         if let Some(entity) = items::spawn_item(
                             &mut commands,
                             &item_templates,
                             inside.clone(),
                             None,
                             location,
+                            quality,
                         ) {
                             commands.entity(entity).insert(SpawnedBy(key.clone()));
                         }

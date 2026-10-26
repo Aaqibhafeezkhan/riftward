@@ -13,6 +13,7 @@ use bevy::prelude::*;
 use rusqlite::{Connection, OptionalExtension, params};
 use thiserror::Error;
 
+use crate::items::Quality;
 use crate::skills::SkillState;
 
 /// Database file, unless overridden by the `MUD_DB` environment variable.
@@ -83,7 +84,9 @@ const SCHEMA: &str = "
         slot         TEXT,
         container_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
         -- Its own name, when it isn't its template's: 'the corpse of Grok'.
-        name         TEXT
+        name         TEXT,
+        -- How well it's made: 'crude', 'poor', 'fine' or 'masterwork'; NULL is standard.
+        quality      TEXT
     );
 
     -- What each character has learned, and how far they've got.
@@ -190,6 +193,14 @@ impl ItemPlace {
     }
 }
 
+/// A saved item on a character: its id, template, slot (`held` in their hands) and quality.
+pub type SavedItem = (i64, String, String, Quality);
+
+/// An item's quality as saved: its word, or NULL for standard.
+fn quality(word: Option<String>) -> Quality {
+    word.map_or(Quality::Standard, |w| Quality::parse(&w))
+}
+
 /// A real item lying in a room, as saved.
 pub struct RoomItemRow {
     pub id: i64,
@@ -200,6 +211,7 @@ pub struct RoomItemRow {
     pub name: Option<String>,
     /// When it was put down, in unix seconds.
     pub dropped_at: Option<i64>,
+    pub quality: Quality,
 }
 
 /// What an account is allowed to do. Each role includes everything below it.
@@ -301,6 +313,7 @@ impl Database {
             ("items", "slot", "TEXT"),
             ("items", "container_id", "INTEGER REFERENCES items(id)"),
             ("items", "name", "TEXT"),
+            ("items", "quality", "TEXT"),
             ("characters", "race", "TEXT"),
             ("characters", "background", "TEXT"),
             ("characters", "description", "TEXT NOT NULL DEFAULT ''"),
@@ -590,19 +603,26 @@ impl Database {
     }
 
     /// Save a new real item at `location` and return its id.
-    pub fn create_item(&self, template: &str, location: &ItemPlace) -> DbResult<i64> {
+    pub fn create_item(
+        &self,
+        template: &str,
+        location: &ItemPlace,
+        quality: Quality,
+    ) -> DbResult<i64> {
         let conn = self.conn();
         let (room, character, slot, container) = location.columns();
         conn.execute(
-            "INSERT INTO items (template, room, character_id, slot, container_id, dropped_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO items
+                 (template, room, character_id, slot, container_id, dropped_at, quality)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 template,
                 room,
                 character,
                 slot,
                 container,
-                location.dropped_at()
+                location.dropped_at(),
+                quality.word()
             ],
         )?;
         Ok(conn.last_insert_rowid())
@@ -628,8 +648,8 @@ impl Database {
     pub fn items_in_rooms(&self) -> DbResult<Vec<RoomItemRow>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, template, room, name, dropped_at FROM items WHERE room IS NOT NULL
-             ORDER BY id",
+            "SELECT id, template, room, name, dropped_at, quality FROM items
+             WHERE room IS NOT NULL ORDER BY id",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(RoomItemRow {
@@ -638,6 +658,7 @@ impl Database {
                 room: row.get(2)?,
                 name: row.get(3)?,
                 dropped_at: row.get(4)?,
+                quality: quality(row.get(5)?),
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -652,26 +673,29 @@ impl Database {
         Ok(())
     }
 
-    /// Every item a character holds or wears: (id, template, slot). The slot is `held` for
-    /// items in their hands.
-    pub fn items_on_character(&self, character_id: i64) -> DbResult<Vec<(i64, String, String)>> {
+    /// Every item a character holds or wears: (id, template, slot, quality). The slot is `held`
+    /// for items in their hands.
+    pub fn items_on_character(&self, character_id: i64) -> DbResult<Vec<SavedItem>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, template, COALESCE(slot, 'held') FROM items
+            "SELECT id, template, COALESCE(slot, 'held'), quality FROM items
              WHERE character_id = ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([character_id], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, quality(row.get(3)?)))
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    /// Every item inside a container: (id, template).
-    pub fn items_inside(&self, container_id: i64) -> DbResult<Vec<(i64, String)>> {
+    /// Every item inside a container: (id, template, quality).
+    pub fn items_inside(&self, container_id: i64) -> DbResult<Vec<(i64, String, Quality)>> {
         let conn = self.conn();
-        let mut stmt =
-            conn.prepare("SELECT id, template FROM items WHERE container_id = ?1 ORDER BY id")?;
-        let rows = stmt.query_map([container_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut stmt = conn.prepare(
+            "SELECT id, template, quality FROM items WHERE container_id = ?1 ORDER BY id",
+        )?;
+        let rows = stmt.query_map([container_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, quality(row.get(2)?)))
+        })?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
