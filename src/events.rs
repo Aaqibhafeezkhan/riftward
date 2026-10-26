@@ -79,7 +79,7 @@ pub fn way_back(rooms: &RoomQuery, room: Entity, from: Entity) -> Option<String>
 }
 
 /// Where a direction is, as somewhere someone comes from: "from the west", "from above".
-fn from(dir: &str) -> String {
+pub fn from(dir: &str) -> String {
     match dir {
         "up" => "from above".into(),
         "down" => "from below".into(),

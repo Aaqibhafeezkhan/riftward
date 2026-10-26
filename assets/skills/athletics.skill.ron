@@ -28,6 +28,41 @@
                 bonuses: [(stat: MaxStamina, per: 5)],
             ),
         ),
+        // Climbing and swimming are tried by walking through an exit that needs them; anyone can
+        // try, but only the trained practise. {direction} is the exit. A success is told only
+        // to the climber, since leaving tells the room; a failure to everyone.
+        "climbing": (
+            name: "Climbing",
+            description: "Getting up and down walls, cliffs and ropes. Some exits need a climb: anyone can try, on Strength alone, but a fall hurts.",
+            attribute: Strength,
+            kind: Passive(triggers: []),
+            text: (
+                hit: (
+                    actor: "You climb {direction}.",
+                    room: "{actor} climbs {direction}.",
+                ),
+                miss: (
+                    actor: "You lose your grip and fall!",
+                    room: "{actor} tries to climb {direction}, and falls.",
+                ),
+            ),
+        ),
+        "swimming": (
+            name: "Swimming",
+            description: "Keeping afloat and getting somewhere in deep water. Some exits need a swim: anyone can try, on Body alone, but floundering is exhausting.",
+            attribute: Body,
+            kind: Passive(triggers: []),
+            text: (
+                hit: (
+                    actor: "You swim {direction}.",
+                    room: "{actor} swims {direction}.",
+                ),
+                miss: (
+                    actor: "You flounder, swallow a mouthful of water, and come up coughing.",
+                    room: "{actor} tries to swim {direction}, and comes up coughing.",
+                ),
+            ),
+        ),
         "toughness": (
             name: "Toughness",
             description: "Taking a beating and staying up. The damage you take trains it, and it raises your health by 1 for every 5 levels.",

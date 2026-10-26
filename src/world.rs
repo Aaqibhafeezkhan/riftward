@@ -227,12 +227,27 @@ impl Terrain {
 }
 
 /// Where an exit leads: a room id in this zone, or `zone:room` for another zone. Plain exits are
-/// written as just the target (`"north": "gate"`); exits with a door name it too.
+/// written as just the target (`"north": "gate"`); the long form adds a door, or something to
+/// climb or swim (`(to: "grotto", needs: Climb(6))`), or both.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum ExitDef {
     To(String),
-    Door { to: String, door: String },
+    Door {
+        to: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        door: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        needs: Option<Obstacle>,
+    },
+}
+
+/// What it takes to go through an exit: a climb or a swim, of this difficulty, against Climbing
+/// (with Strength) or Swimming (with Body) by the ratio rule.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Obstacle {
+    Climb(u32),
+    Swim(u32),
 }
 
 impl ExitDef {
@@ -246,7 +261,27 @@ impl ExitDef {
     pub fn door(&self) -> Option<&str> {
         match self {
             ExitDef::To(_) => None,
-            ExitDef::Door { door, .. } => Some(door),
+            ExitDef::Door { door, .. } => door.as_deref(),
+        }
+    }
+
+    /// What it takes to go through.
+    pub fn needs(&self) -> Option<Obstacle> {
+        match self {
+            ExitDef::To(_) => None,
+            ExitDef::Door { needs, .. } => *needs,
+        }
+    }
+
+    /// This exit with `door` on it (or none), keeping where it leads and what it takes.
+    pub fn with_door(&self, door: Option<String>) -> ExitDef {
+        match (door, self.needs()) {
+            (None, None) => ExitDef::To(self.to().into()),
+            (door, needs) => ExitDef::Door {
+                to: self.to().into(),
+                door,
+                needs,
+            },
         }
     }
 }
@@ -1065,6 +1100,7 @@ pub struct Exits(pub BTreeMap<String, Exit>);
 pub struct Exit {
     pub to: Entity,
     pub door: Option<Entity>,
+    pub needs: Option<Obstacle>,
 }
 
 /// A door's full id: its zone and its id there. Written `zone:door`.
@@ -1386,7 +1422,8 @@ fn sync_world(
                 }
                 found
             });
-            exits.insert(dir.clone(), Exit { to, door });
+            let needs = exit.needs();
+            exits.insert(dir.clone(), Exit { to, door, needs });
         }
         let exits = Exits(exits);
         let entity = index.0[key];
@@ -1433,11 +1470,30 @@ mod tests {
         assert_eq!(ron::to_string(&plain).unwrap(), "\"gate\"");
         let door = ExitDef::Door {
             to: "cellar".into(),
-            door: "cellar_door".into(),
+            door: Some("cellar_door".into()),
+            needs: None,
         };
         let written = ron::to_string(&door).unwrap();
         assert_eq!(ron::from_str::<ExitDef>(&written).unwrap(), door);
         assert_eq!(ron::from_str::<ExitDef>("\"gate\"").unwrap(), plain);
+        // Zone files written before exits could need a climb still read the same.
+        assert_eq!(
+            ron_options()
+                .from_str::<ExitDef>("(to: \"cellar\", door: \"cellar_door\")")
+                .unwrap(),
+            door
+        );
+        let climb = ExitDef::Door {
+            to: "grotto".into(),
+            door: None,
+            needs: Some(Obstacle::Climb(6)),
+        };
+        let written = ron_options().to_string(&climb).unwrap();
+        assert_eq!(written, "(to:\"grotto\",needs:Climb(6))");
+        assert_eq!(ron_options().from_str::<ExitDef>(&written).unwrap(), climb);
+        // Taking the door off keeps the climb; with neither, it's plain again.
+        assert_eq!(climb.with_door(None), climb);
+        assert_eq!(door.with_door(None), ExitDef::To("cellar".into()));
     }
 
     #[test]

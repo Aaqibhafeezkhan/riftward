@@ -25,6 +25,7 @@ mod spawns;
 mod targeting;
 mod telnet;
 mod time;
+mod tracking;
 mod trainers;
 mod vitals;
 mod world;
@@ -78,6 +79,7 @@ fn main() {
             trainers::TrainersPlugin,
             healing::HealingPlugin,
             gathering::GatheringPlugin,
+            tracking::TrackingPlugin,
         ))
         .run();
 }

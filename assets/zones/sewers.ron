@@ -11,6 +11,13 @@
             tags: ["food"],
             consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
         ),
+        "silver_locket": (
+            name: "a tarnished silver locket",
+            keywords: ["locket", "silver", "tarnished"],
+            description: "A heavy silver locket on a broken chain, black with tarnish. The clasp is rusted shut.",
+            bulk: Negligible,
+            tags: ["valuable"],
+        ),
         "glowcap": (
             name: "a glowcap",
             keywords: ["glowcap", "fungus", "mushroom"],
@@ -64,6 +71,18 @@
         ),
     },
     spawns: {
+        "sunken_locket": (
+            item: "silver_locket",
+            room: "sunken_hall",
+            every: Hours(2),
+            refill: Keep(1),
+        ),
+        "sunken_draught": (
+            item: "riftwatch:healing_draught",
+            room: "sunken_hall",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
         "sewer_rats": (
             mob: "sewer_rat",
             room: "nest",
@@ -234,7 +253,18 @@
             terrain: Wading,
             indoors: true,
             exits: {
+                "down": (to: "sunken_hall", needs: Swim(6)),
                 "up": "cistern",
+            },
+            environment: Sewer,
+        ),
+        "sunken_hall": (
+            name: "Sunken Hall",
+            description: "You surface in a pocket of stale air beneath a vaulted ceiling. Pillars carved with the same strange script march away into the dark, and the water here is still and cold as a tomb. Whoever built this place, the city above was laid on top of it and forgotten.",
+            terrain: Wading,
+            indoors: true,
+            exits: {
+                "up": (to: "drowned_stair", needs: Swim(6)),
             },
             environment: Sewer,
         ),

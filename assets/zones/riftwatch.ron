@@ -446,7 +446,8 @@
             tactics: 40,
             teaches: [
                 "swordplay:basics", "knives:basics", "axes:basics", "hammers:basics", "staves:basics",
-                "athletics:toughness", "armour:heavy_armour", "shields:block",
+                "athletics:toughness", "athletics:climbing", "athletics:swimming",
+                "armour:heavy_armour", "shields:block",
             ],
         ),
         "shrine_keeper": (

@@ -20,5 +20,21 @@
                 ),
             ),
         ),
+        // `track` lists what was read after the actor's line.
+        "tracking": (
+            name: "Tracking",
+            description: "Reading who passed this way, and which way they went, with 'track [<who>]'. Soft ground and fresh tracks are easy; stone and old tracks hard; water holds none.",
+            kind: Active(command: "track", cooldown: 3),
+            text: (
+                hit: (
+                    actor: "You study the ground and read the signs:",
+                    room: "{actor} studies the ground.",
+                ),
+                miss: (
+                    actor: "You study the ground, but can't make out any tracks.",
+                    room: "{actor} studies the ground.",
+                ),
+            ),
+        ),
     },
 )

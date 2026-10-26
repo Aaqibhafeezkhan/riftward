@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -21,12 +21,14 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Tracking, Climbing and Swimming,** the rest of step 4 of the plan in [Skill trees](trees.md#proposed-order): tracking needs a memory of who passed through each room, and climbing and swimming need exits that ask for a skill. Loot tables, Foraging and Herbalism are built: see [Gathering](trees.md#gathering).
+**Stealth,** step 5 of the plan in [Skill trees](trees.md#proposed-order): seeing and being seen, and Backstab from hiding. Step 4 is built: loot, gathering, tracking, climbing and swimming (see [Gathering](trees.md#gathering), [Climbing and swimming](world.md#climbing-and-swimming), [Tracking](world.md#tracking)).
 
-After that, in order ([Proposed order](trees.md#proposed-order)): stealth, spells (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
+After that, in order ([Proposed order](trees.md#proposed-order)): spells (their own category: known, cast through a school skill, see [Spells](magic.md#spells)), then money, shops and crafts.
 
 ## Small things noticed and not yet done
 
+- The silver locket from the Sunken Hall has no use until shops.
+- Climb and swim difficulties (6) are first guesses: about one try in three succeeds untrained.
 - Herbs have no use until Brewing; rat tails and the Rat King's tooth have none until quests or shops.
 - Foraging's numbers are first guesses: difficulty 5, three finds a room, one back every 10 minutes.
 - First Aid's numbers are first guesses too: a novice (Intuition 3) heals 2 to 4, and treats a badly hurt patient about a third of the time.

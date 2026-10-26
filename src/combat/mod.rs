@@ -38,7 +38,7 @@ use crate::items::{
 use crate::mobs::{self, Mob, MobQuery, MobTemplates};
 use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
-use crate::skills::{Bonus, SkillDefs, SkillKind, Skills, boosts};
+use crate::skills::{Bonus, Practice, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::{Maxima, Resting, Vitals};
@@ -788,10 +788,8 @@ fn flee(
     mut players: PlayerQuery,
     view: View,
     fighting: Query<&Fighting>,
-    mut sheets: Query<(&mut Vitals, &Attributes)>,
-    mut dice: ResMut<Dice>,
+    mut practice: Practice,
     db: Res<Database>,
-    mut events: MessageWriter<GameEvent>,
     conditions: Query<&Conditions>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
@@ -804,12 +802,13 @@ fn flee(
         reply("You aren't fighting anyone.")
     } else if conditions.get(inv.entity).is_ok_and(|c| !c.can_flee()) {
         reply("You're held fast and can't break away!")
-    } else if let Ok((mut vitals, attributes)) = sheets.get_mut(inv.entity) {
+    } else if let Some((_, mut vitals, attributes)) = practice.sheet(inv.entity) {
+        let luck = attributes.get(Attribute::Luck);
         if vitals.stamina < FLEE_COST {
             reply("You're too exhausted to run!")
         } else {
             vitals.stamina -= FLEE_COST;
-            events.write(GameEvent::StaminaSpent {
+            practice.events.write(GameEvent::StaminaSpent {
                 who: inv.entity,
                 amount: FLEE_COST,
             });
@@ -820,19 +819,21 @@ fn flee(
                     exits
                         .0
                         .iter()
+                        // No one flees up a cliff or into deep water.
                         .filter(|(_, exit)| {
-                            exit.door
-                                .and_then(|d| view.doors.get(d).ok())
-                                .is_none_or(|d| d.is_open())
+                            exit.needs.is_none()
+                                && exit
+                                    .door
+                                    .and_then(|d| view.doors.get(d).ok())
+                                    .is_none_or(|d| d.is_open())
                         })
                         .map(|(dir, _)| dir.clone())
                         .collect()
                 })
                 .unwrap_or_default();
-            let luck = attributes.get(Attribute::Luck);
             if exits.is_empty() {
                 reply("There's nowhere to run!")
-            } else if !dice.chance(luck, FLEE_CHANCE) {
+            } else if !practice.chance(luck, FLEE_CHANCE) {
                 let mut out = reply("You try to break away, but can't get clear!");
                 out.push(Outgoing::Room {
                     room: actor.room,
@@ -841,7 +842,7 @@ fn flee(
                 });
                 out
             } else {
-                let pick = dice.range(0, 0..=(exits.len() as i64 - 1)) as usize;
+                let pick = practice.roll(0, 0..=(exits.len() as i64 - 1)) as usize;
                 commands.entity(inv.entity).remove::<Fighting>();
                 escape = Some(exits[pick].clone());
                 reply("You flee in a panic!")
@@ -858,8 +859,7 @@ fn flee(
             &mut players,
             &view,
             &db,
-            &mut events,
-            &mut sheets,
+            &mut practice,
             false,
         ));
     }

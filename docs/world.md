@@ -171,7 +171,24 @@ Every room has a `terrain` saying what its ground is like, and walking into a ro
 - **Fleeing pays its own way** (2 stamina, see [Combat](architecture.md#combat)) rather than the terrain's, so a fight can always be escaped while there's stamina for it.
 - **Walking practises Endurance,** like any stamina spent, so long treks build it.
 - **Builders** set it with `terrain <kind>`, or in the zone file. The sewers are uneven, with rough rubble in the Collapsed Gallery and the Warren and waist-deep water in the Flooded Tunnel, Overflow Chamber and Drowned Stair; the Darkwood's roads are roads, and the track to the Hermit's Clearing is uneven.
-- **Terrain will also feed** tracking, climbing and swimming (see [Skill trees](trees.md#what-the-engine-needs)).
+- **Terrain sets how well tracks read** (see [Tracking](#tracking)): mud is easiest, then uneven ground, rough ground, roads and paving; wading water holds none.
+
+### Climbing and swimming
+
+An exit can need a climb or a swim, written in its long form: `"down": (to: "ravine", needs: Climb(6))`, alone or with a door.
+
+- **Crossing is a roll:** Climbing plus Strength, or Swimming plus Body, against the exit's difficulty, by the ratio rule, with Luck. Anyone can try on their attribute alone; only the trained practise.
+- **Failing keeps you where you are.** A failed climb is a fall, hurting 1 to half the difficulty, but never to death; a failed swim costs half the difficulty in stamina. The room sees it ("Grok tries to climb down, and falls.").
+- **Mobs never wander, and no one flees,** through an exit that needs a climb or a swim.
+- **The wording** is the skills' own (see [Skill text](skills.md#skill-text)): `{direction}` is the exit.
+- **Places today:** the Darkwood's East Road climbs down to the Ravine Floor, where moonpetal grows thick (Climb 6, each way); the sewers' Drowned Stair swims down to the Sunken Hall, under the city, where a silver locket and a healing draught wait (Swim 6, each way).
+
+### Tracking
+
+Every room remembers the tracks of whoever walks in or out, player or mob, for 30 minutes, up to 20 of them, the oldest going first. A teleport leaves none, wading water holds none, and they aren't saved.
+
+- **`track [<who>]`** reads them with Tracking (Intuition): each track is found by your skill against the ground's difficulty (mud 1, uneven 3, rough 5, road 6, paved 8), which doubles every ten minutes of the track's age. `track rat` reads only tracks whose maker matches.
+- **Tracks show what made them, not who:** "a sewer rat headed west (fresh)", "a human came in from the south (old)". Your own tracks aren't shown. Ages read as fresh (under 5 minutes), recent (under 15) and old.
 
 ### Environment and finds
 

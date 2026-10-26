@@ -132,7 +132,7 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 1. **Combat techniques, conditions and passive bonuses together.** *Built:* see [Step 1, as built](#step-1-as-built).
 2. **Armour:** damage reduction, at a cost to dodging. *Built:* see [Armour](#armour).
 3. **Healing and consumables:** First Aid and bandages, so fighters can patch up without walking to town; herbs come with step 4. *Built:* see [Healing](#healing).
-4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things. *Built:* loot tables, Foraging and Herbalism (see [Gathering](#gathering)). Tracking, Climbing and Swimming are next.
+4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things. *Built:* loot tables, Foraging and Herbalism (see [Gathering](#gathering)), and Tracking, Climbing and Swimming (see [Climbing and swimming](world.md#climbing-and-swimming) and [Tracking](world.md#tracking)). Climbing and Swimming are Athletics skills, taught by the drill sergeant; Tracking is Survival's, taught by the hedge-shaman.
 5. **Seeing and being seen:** Stealth, and Backstab from hiding.
 6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions.
 7. **Money and shops,** then Trade and the crafts.

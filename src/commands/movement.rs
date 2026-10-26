@@ -3,7 +3,7 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-use crate::attributes::{Attribute, Attributes};
+use crate::attributes::Attribute;
 use crate::characters::{Races, article};
 use crate::combat::{Fighting, the};
 use crate::command::Invocation;
@@ -17,9 +17,10 @@ use crate::items::{
 use crate::items::{Snapshot, bulk_limits};
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver, targets_in_room};
+use crate::skills::{Learner, Practice, fill};
 use crate::targeting::{Keywords, Target};
-use crate::vitals::{Resting, Vitals};
-use crate::world::{Door, DoorState, Player};
+use crate::vitals::Resting;
+use crate::world::{Door, DoorState, Obstacle, Player};
 
 /// Everything a room shows a player besides other players: the room itself, its doors, and the
 /// items lying in it.
@@ -114,16 +115,14 @@ pub fn look(
 }
 
 /// `go <direction>`.
-#[allow(clippy::too_many_arguments)]
 pub fn go(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
     view: View,
     db: Res<Database>,
-    mut events: MessageWriter<GameEvent>,
     fighting: Query<(), With<Fighting>>,
     mut commands: Commands,
-    mut sheets: Query<(&mut Vitals, &Attributes)>,
+    mut practice: Practice,
 ) {
     commands.entity(inv.entity).remove::<Resting>();
     let out = if inv.args.is_empty() {
@@ -137,8 +136,7 @@ pub fn go(
             &mut players,
             &view,
             &db,
-            &mut events,
-            &mut sheets,
+            &mut practice,
             true,
         )
     };
@@ -146,16 +144,14 @@ pub fn go(
 }
 
 /// `north`, `south`, ... and their short forms: the command's name is the direction.
-#[allow(clippy::too_many_arguments)]
 pub fn walk(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
     view: View,
     db: Res<Database>,
-    mut events: MessageWriter<GameEvent>,
     fighting: Query<(), With<Fighting>>,
     mut commands: Commands,
-    mut sheets: Query<(&mut Vitals, &Attributes)>,
+    mut practice: Practice,
 ) {
     commands.entity(inv.entity).remove::<Resting>();
     if fighting.get(inv.entity).is_ok() {
@@ -168,8 +164,7 @@ pub fn walk(
         &mut players,
         &view,
         &db,
-        &mut events,
-        &mut sheets,
+        &mut practice,
         true,
     );
     deliver(out, &mut players);
@@ -178,19 +173,17 @@ pub fn walk(
 /// What someone in a fight is told when they try to walk away.
 const IN_A_FIGHT: &str = "You're fighting for your life! Type 'flee' to try to escape.";
 
-/// Move someone through the exit in direction `dir`, telling both rooms.
 /// Move someone through the exit in direction `dir`, telling both rooms. Walking into a room costs
 /// the stamina its terrain asks (doubled, and never free, for someone carrying too much); without
-/// it they can't go. `pay` is false when something else has already paid, as fleeing does.
-#[allow(clippy::too_many_arguments)]
+/// it they can't go. An exit to climb or swim has to be crossed first (see [`cross`]). `pay` is
+/// false when something else has already paid, as fleeing does.
 pub fn travel(
     entity: Entity,
     dir: &str,
     players: &mut PlayerQuery,
     view: &View,
     db: &Database,
-    events: &mut MessageWriter<GameEvent>,
-    sheets: &mut Query<(&mut Vitals, &Attributes)>,
+    practice: &mut Practice,
     pay: bool,
 ) -> Vec<Outgoing> {
     let mut out = Vec::new();
@@ -217,10 +210,15 @@ pub fn travel(
         return out;
     }
     let to = exit.to;
+    if let Some(needs) = exit.needs
+        && !cross(&actor, needs, &dir, practice, &mut out)
+    {
+        return out;
+    }
 
     if pay
         && let Ok(terrain) = view.rooms.get(to).map(|(room, _, _)| room.terrain)
-        && let Ok((mut vitals, attributes)) = sheets.get_mut(entity)
+        && let Some((_, mut vitals, attributes)) = practice.sheet(entity)
     {
         let snapshot = Snapshot::new(
             view.items.iter().map(|(e, i, l)| (e, i, *l)),
@@ -243,27 +241,127 @@ pub fn travel(
                 return out;
             }
             vitals.stamina -= cost;
-            events.write(GameEvent::StaminaSpent {
+            practice.events.write(GameEvent::StaminaSpent {
                 who: entity,
                 amount: cost,
             });
         }
     }
 
-    events.write(GameEvent::Left {
+    practice.events.write(GameEvent::Left {
         who: entity,
         name: actor.name.clone(),
         room: actor.room,
         way: Way::Walked(Some(dir)),
     });
     move_player(entity, actor.character_id, to, players, view, db, &mut out);
-    events.write(GameEvent::Entered {
+    practice.events.write(GameEvent::Entered {
         who: entity,
         name: actor.name.clone(),
         room: to,
         way: Way::Walked(way_back(&view.rooms, to, actor.room)),
     });
     out
+}
+
+/// The skill that climbs, and the one that swims.
+const CLIMBING: &str = "athletics:climbing";
+const SWIMMING: &str = "athletics:swimming";
+
+/// Try to climb or swim through an exit: Climbing plus Strength, or Swimming plus Body, against
+/// its difficulty, by the ratio rule. Anyone can try on their attribute alone; only the trained
+/// practise. A fall hurts (never to death) and a flounder tires, and either way they stay put.
+/// Told in the skill's words. Returns whether they made it.
+fn cross(
+    actor: &Actor,
+    needs: Obstacle,
+    dir: &str,
+    practice: &mut Practice,
+    out: &mut Vec<Outgoing>,
+) -> bool {
+    let (key, attribute, difficulty) = match needs {
+        Obstacle::Climb(d) => (CLIMBING, Attribute::Strength, d),
+        Obstacle::Swim(d) => (SWIMMING, Attribute::Body, d),
+    };
+    let Some((skills, _, attributes)) = practice.sheet(actor.entity) else {
+        return false;
+    };
+    let known = skills.0.contains_key(key);
+    let rating = skills.0.get(key).map_or(0, |s| s.level as i32) + attributes.get(attribute);
+    let luck = attributes.get(Attribute::Luck);
+    let rating = f64::from(rating.max(1));
+    let made_it = practice.chance(luck, rating / (rating + f64::from(difficulty.max(1))));
+
+    // What a failure costs.
+    let mut cost = String::new();
+    if !made_it {
+        let hurt = match needs {
+            Obstacle::Climb(d) => practice.roll(0, 1..=i64::from((d / 2).max(1))) as f32,
+            Obstacle::Swim(_) => 0.0,
+        };
+        let tired = match needs {
+            Obstacle::Swim(d) => (d / 2).max(1) as f32,
+            Obstacle::Climb(_) => 0.0,
+        };
+        if let Some((_, mut vitals, _)) = practice.sheet(actor.entity) {
+            vitals.health = (vitals.health - hurt).max(1.0);
+            vitals.stamina = (vitals.stamina - tired).max(0.0);
+        }
+        if hurt > 0.0 {
+            cost = format!(" ({hurt})");
+            practice.events.write(GameEvent::Damaged {
+                who: actor.entity,
+                amount: hurt,
+            });
+        }
+        if tired > 0.0 {
+            practice.events.write(GameEvent::StaminaSpent {
+                who: actor.entity,
+                amount: tired,
+            });
+        }
+    }
+    let gains = if known {
+        let learner = Learner {
+            character_id: actor.character_id,
+            race: &actor.race,
+            boost: 1.0,
+        };
+        practice.exercise(actor.entity, learner, key)
+    } else {
+        Vec::new()
+    };
+
+    // A success is told to them alone, since leaving tells the room; a failure to everyone.
+    if let Some(text) = practice
+        .defs
+        .skills
+        .get(key)
+        .and_then(|s| s.def.text.clone())
+    {
+        let lines = match (made_it, &text.miss) {
+            (false, Some(miss)) => miss,
+            _ => &text.hit,
+        };
+        let with = [("actor", actor.name.as_str()), ("direction", dir)];
+        out.push(Outgoing::line(
+            actor.entity,
+            fill(&lines.actor, &with) + &cost,
+        ));
+        if !made_it {
+            out.push(Outgoing::Room {
+                room: actor.room,
+                except: actor.entity,
+                text: fill(&lines.room, &with) + "\r\n",
+            });
+        }
+    }
+    out.extend(
+        gains
+            .into_iter()
+            .map(|line| Outgoing::line(actor.entity, line)),
+    );
+    made_it
 }
 
 /// What someone sees looking at a player: their race, and their own description.

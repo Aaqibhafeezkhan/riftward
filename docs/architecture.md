@@ -42,6 +42,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `vitals.rs` | Current health and stamina for players and mobs alike, their maximums, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `healing.rs` | `eat` and `drink` for consumables, and `bandage`, First Aid's command |
 | `gathering.rs` | `forage` and `gather`, from a room's finds, and how finds deplete and grow back |
+| `tracking.rs` | Tracks left in rooms by whoever walks through, and `track` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |

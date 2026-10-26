@@ -292,10 +292,13 @@ pub fn wander(
         let mut choices: Vec<(&String, Entity)> = exits
             .0
             .iter()
+            // Mobs keep to where they can walk: no climbing or swimming.
             .filter(|(_, exit)| {
-                exit.door
-                    .and_then(|d| doors.get(d).ok())
-                    .is_none_or(Door::is_open)
+                exit.needs.is_none()
+                    && exit
+                        .door
+                        .and_then(|d| doors.get(d).ok())
+                        .is_none_or(Door::is_open)
             })
             .filter(|(_, exit)| {
                 rooms.get(exit.to).is_ok_and(|(room, key, _)| {

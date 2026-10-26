@@ -55,7 +55,7 @@
             keywords: ["hedge", "shaman", "hermit"],
             here: "The hedge-shaman crouches by a smoking fire, talking quietly to no one you can see.",
             description: "A wiry figure in layers of moss-dyed cloth, hung with feathers, bones and tiny clay charms. Their eyes are bright and a little wild, and they answer questions you haven't asked aloud.",
-            teaches: ["shamanic:foundation"],
+            teaches: ["shamanic:foundation", "survival:tracking"],
         ),
     },
     spawns: {
@@ -94,13 +94,27 @@
             environment: Forest,
         ),
         "east_road": (
-            name: "east road",
-            description: "An unfinished room. (Use \'desc\' to describe it.)",
+            name: "East Road",
+            description: "The road runs along the lip of a steep ravine. Below, through a tangle of roots and ferns, something pale glimmers among the rocks. The way down is a hard climb.",
             terrain: Road,
             exits: {
+                "down": (to: "ravine", needs: Climb(6)),
                 "west": "bend",
             },
             environment: Forest,
+        ),
+        "ravine": (
+            name: "Ravine Floor",
+            description: "Moss-slick boulders crowd the bottom of the ravine, where little light reaches. Pale moonpetal grows thick in the damp between the stones, untouched by anyone unwilling to make the climb.",
+            terrain: Rough,
+            exits: {
+                "up": (to: "east_road", needs: Climb(6)),
+            },
+            environment: Forest,
+            finds: (
+                forage: [("wild_berries", 70), ("mushrooms", 30)],
+                herbs: [("kingsfoil", 40), ("moonpetal", 60)],
+            ),
         ),
         "north_road": (
             name: "North Road",

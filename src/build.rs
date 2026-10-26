@@ -1071,23 +1071,21 @@ fn add_door(
                 lock: None,
             },
         );
-        room_mut(zone, here)?.exits.insert(
-            dir.into(),
-            ExitDef::Door {
-                to: exit.to().into(),
-                door: id.clone(),
-            },
-        );
+        room_mut(zone, here)?
+            .exits
+            .insert(dir.into(), exit.with_door(Some(id.clone())));
         if dest.zone == here.zone
             && let Some((back_dir, back_to)) = &back
             && let Some(room) = zone.rooms.get_mut(&dest.room)
         {
+            let back_exit = room
+                .exits
+                .get(back_dir)
+                .cloned()
+                .unwrap_or_else(|| ExitDef::To(back_to.clone()));
             room.exits.insert(
                 back_dir.clone(),
-                ExitDef::Door {
-                    to: back_to.clone(),
-                    door: door_ref(&dest.zone),
-                },
+                back_exit.with_door(Some(door_ref(&dest.zone))),
             );
         }
         Ok(String::new())
@@ -1100,12 +1098,14 @@ fn add_door(
                 .rooms
                 .get_mut(&dest.room)
                 .ok_or_else(|| format!("Room [{dest}] no longer exists."))?;
+            let back_exit = room
+                .exits
+                .get(back_dir)
+                .cloned()
+                .unwrap_or_else(|| ExitDef::To(back_to.clone()));
             room.exits.insert(
                 back_dir.clone(),
-                ExitDef::Door {
-                    to: back_to.clone(),
-                    door: door_ref(&dest.zone),
-                },
+                back_exit.with_door(Some(door_ref(&dest.zone))),
             );
             Ok(String::new())
         })?;
@@ -1146,7 +1146,7 @@ fn remove_door(key: &DoorKey, def: &DoorDef, zones: &mut Assets<ZoneDef>) -> Rep
                         .door()
                         .is_some_and(|d| DoorKey::parse(d, &zone_id) == *key)
                     {
-                        *exit = ExitDef::To(exit.to().into());
+                        *exit = exit.with_door(None);
                     }
                 }
             }

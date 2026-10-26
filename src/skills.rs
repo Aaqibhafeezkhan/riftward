@@ -690,7 +690,7 @@ pub struct Practice<'w, 's> {
     dice: ResMut<'w, Dice>,
     db: Res<'w, Database>,
     time: Res<'w, Time>,
-    events: MessageWriter<'w, GameEvent>,
+    pub events: MessageWriter<'w, GameEvent>,
 }
 
 /// A character ready to use an active skill.
@@ -748,6 +748,14 @@ impl Practice<'_, '_> {
     /// Roll a yes-or-no with `who`'s Luck.
     pub fn chance(&mut self, luck: i32, p: f64) -> bool {
         self.dice.chance(luck, p)
+    }
+
+    /// `who`'s skills, vitals and attributes, for systems that need them alongside practice.
+    pub fn sheet(
+        &mut self,
+        who: Entity,
+    ) -> Option<(Mut<'_, Skills>, Mut<'_, Vitals>, Mut<'_, Attributes>)> {
+        self.sheets.get_mut(who).ok()
     }
 
     /// Pick from a weighted table ordered worst to best, with `who`'s Luck.
@@ -1751,6 +1759,7 @@ mod tests {
                                     ("target", "b"),
                                     ("door", "c"),
                                     ("item", "d"),
+                                    ("direction", "e"),
                                 ],
                             );
                             assert!(
