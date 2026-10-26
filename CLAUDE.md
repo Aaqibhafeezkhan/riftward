@@ -21,6 +21,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 
 - Always `cargo run` from the project root: that's how Bevy finds `assets/`.
 - `fmt`, `clippy --all-targets` and `test` must all be clean before a change is done.
+- `main.rs`'s `the_server_starts` test builds the whole app and sets up every system and command, so a query clash (Bevy's B0001) fails `cargo test` instead of crashing the live server.
 
 ### Testing live
 

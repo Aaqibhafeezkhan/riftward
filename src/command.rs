@@ -281,7 +281,11 @@ impl AddCommand for App {
         spec: CommandSpec,
         handler: impl IntoSystem<In<Invocation>, (), M> + 'static,
     ) -> &mut Self {
-        let id = self.register_system(handler);
+        // Set the system up now, not on first use, so parameters that clash (Bevy's B0001) stop
+        // the server at startup instead of when someone first types the command.
+        let mut system = IntoSystem::into_system(handler);
+        system.initialize(self.world_mut());
+        let id = self.world_mut().register_boxed_system(Box::new(system));
         let mut registry = self.world_mut().get_resource_or_init::<CommandRegistry>();
         let names = std::iter::once(&spec.name).chain(spec.shortcuts);
         for name in names {

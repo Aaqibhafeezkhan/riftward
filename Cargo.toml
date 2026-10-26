@@ -6,12 +6,14 @@ edition = "2024"
 [dependencies]
 argon2 = "0.6"
 # Headless server: no renderer, window, audio, etc. Just the ECS, app loop, logging, and
-# asset loading with hot reload (`file_watcher`) for the world definition.
+# asset loading with hot reload (`file_watcher`) for the world definition. `debug` names the
+# systems and components in ECS errors, such as a query clash (B0001).
 bevy = { version = "0.20.0", default-features = false, features = [
     "std",
     "bevy_log",
     "bevy_asset",
     "file_watcher",
+    "debug",
 ] }
 rand = { version = "0.10", default-features = false, features = ["std", "sys_rng"] }
 ron = "0.12"

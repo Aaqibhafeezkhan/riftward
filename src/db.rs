@@ -117,12 +117,15 @@ const SCHEMA: &str = "
     );
 ";
 
-pub struct DbPlugin;
+/// Opens the database at `path` (`:memory:` for one that isn't kept).
+pub struct DbPlugin {
+    pub path: String,
+}
 
 impl Plugin for DbPlugin {
     fn build(&self, app: &mut App) {
-        let path = std::env::var("MUD_DB").unwrap_or_else(|_| DEFAULT_DB_PATH.into());
-        let db = Database::open(&path).expect("failed to open database");
+        let path = &self.path;
+        let db = Database::open(path).expect("failed to open database");
         info!("using database {path}");
         app.insert_resource(db);
     }

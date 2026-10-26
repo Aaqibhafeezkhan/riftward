@@ -13,12 +13,15 @@ use crate::telnet::{self, Command, IAC};
 /// Address to listen on, unless overridden by the `MUD_ADDR` environment variable.
 pub const DEFAULT_ADDRESS: &str = "0.0.0.0:4000";
 
-pub struct NetPlugin;
+/// Listens for players on `address`.
+pub struct NetPlugin {
+    pub address: String,
+}
 
 impl Plugin for NetPlugin {
     fn build(&self, app: &mut App) {
-        let address = std::env::var("MUD_ADDR").unwrap_or_else(|_| DEFAULT_ADDRESS.into());
-        let listener = TcpListener::bind(&address).expect("failed to bind MUD port");
+        let address = &self.address;
+        let listener = TcpListener::bind(address).expect("failed to bind MUD port");
         listener
             .set_nonblocking(true)
             .expect("failed to set listener non-blocking");
