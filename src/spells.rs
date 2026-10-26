@@ -25,17 +25,17 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::{ConditionDefs, Conditions, Fighters, Fighting, Lasts, Round, the};
+use crate::combat::{ConditionDefs, Conditions, Fighters, Fighting, Round, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::dice::Dice;
+use crate::effects::{self, Effect, User};
 use crate::events::GameEvent;
 use crate::items::{ItemQuery, ItemTemplates};
 use crate::output::{Outbox, Outgoing, deliver};
 use crate::skills::{SkillDefs, SkillText, Skills};
 use crate::stealth::{Hidden, sees};
 use crate::targeting::{Keywords, Target};
-use crate::time::REAL_SECS_PER_GAME_DAY;
 use crate::vitals::Resting;
 use crate::world::ron_options;
 
@@ -100,7 +100,9 @@ pub struct SpellDef {
     /// What the target resists it with; without, it can't be resisted.
     #[serde(default)]
     pub resist: Option<Resist>,
-    pub effects: Vec<SpellEffect>,
+    /// What it does, in the one effect vocabulary (`effects.rs`). Amounts rolled get a third of
+    /// the spell's power on top.
+    pub effects: Vec<Effect>,
     /// What everyone sees. `{target}` is "yourself" (or "themselves", for the room) when the
     /// caster is their own target.
     pub text: SkillText,
@@ -126,69 +128,6 @@ pub enum Resist {
     Attribute(Attribute),
 }
 
-/// What a spell does. Amounts rolled get a third of the spell's power on top.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum SpellEffect {
-    /// Damage of a type (`assets/damage_types.ron`), landing harder the more decisively the spell
-    /// won. Armour takes its share only of what armour stops; resistances count.
-    Harm {
-        damage: (u32, u32),
-        #[serde(rename = "type", default = "crate::world::physical")]
-        damage_type: String,
-    },
-    /// Health back, up to the most.
-    Heal { heal: (u32, u32) },
-    /// Attacks better by `attack`, for as long as it `lasts`.
-    Bless { attack: i32, lasts: Lasting },
-    /// The next `absorb` damage is taken by the ward instead, within as long as it `lasts`.
-    Ward { absorb: u32, lasts: Lasting },
-    /// Can't flee, and defends at half, for `rounds` of their turns.
-    Hold { rounds: u32 },
-    /// An animal stops fighting and stops attacking those who come near.
-    Calm,
-    /// Puts a condition (`assets/conditions`) on the target, at `strength`, for as long as it
-    /// `lasts`: any condition there is, so a designer can make a poison or a silence in data.
-    Apply {
-        condition: String,
-        #[serde(default = "one")]
-        strength: i32,
-        lasts: Lasting,
-    },
-}
-
-fn one() -> i32 {
-    1
-}
-
-/// How long a spell's effect lasts: in game time (a game hour is 7.5 real minutes), counting down
-/// in a fight or out of one, or in the bearer's turns, for what only matters in a fight.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Lasting {
-    Minutes(u32),
-    Hours(u32),
-    Turns(u32),
-}
-
-impl Lasting {
-    /// The same time in real seconds; nothing for turns.
-    pub fn real_secs(self) -> f64 {
-        let minutes = match self {
-            Lasting::Minutes(n) => n,
-            Lasting::Hours(n) => n * 60,
-            Lasting::Turns(_) => 0,
-        };
-        f64::from(minutes) * REAL_SECS_PER_GAME_DAY as f64 / (24.0 * 60.0)
-    }
-
-    /// How long a condition cast at `now` (seconds since the server started) lasts.
-    pub fn lasts(self, now: f64) -> Lasts {
-        match self {
-            Lasting::Turns(n) => Lasts::Turns(n.max(1)),
-            time => Lasts::Until(now + time.real_secs()),
-        }
-    }
-}
-
 impl SpellDef {
     /// Whether it's complete, so nothing is forgotten. A spell that fails this keeps its whole
     /// book from loading.
@@ -199,12 +138,9 @@ impl SpellDef {
         if self.effects.is_empty() {
             return Err("needs effects: what it does".into());
         }
-        let hostile = self
-            .effects
-            .iter()
-            .any(|e| matches!(e, SpellEffect::Harm { .. } | SpellEffect::Hold { .. }));
-        if hostile && self.aim != Aim::Foe {
-            return Err("harms or holds, so it must be aimed at a Foe".into());
+        effects::check(&self.effects, User::Spell)?;
+        if self.harms() && self.aim != Aim::Foe {
+            return Err("does damage, so it must be aimed at a Foe".into());
         }
         if self.aim == Aim::Foe && self.resist.is_none() {
             return Err("is aimed at a Foe, so needs something to resist it".into());
@@ -241,7 +177,7 @@ impl SpellDef {
     pub fn harms(&self) -> bool {
         self.effects
             .iter()
-            .any(|e| matches!(e, SpellEffect::Harm { .. }))
+            .any(|e| matches!(e, Effect::Damage { .. }))
     }
 }
 
@@ -371,7 +307,7 @@ pub fn can_cast(
 
 /// Whether `spell` can take hold of `target` at all: only animals can be calmed.
 pub fn takes_hold(spell: &SpellDef, target_skills: &Skills) -> bool {
-    !spell.effects.contains(&SpellEffect::Calm) || is_beast(target_skills)
+    !spell.effects.contains(&Effect::Calm) || is_beast(target_skills)
 }
 
 /// An animal: something that fights with the Beast tree's natural attacks.
@@ -731,7 +667,7 @@ mod tests {
                 .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
             for (id, spell) in &book.spells {
                 for effect in &spell.effects {
-                    if let SpellEffect::Harm { damage_type, .. } = effect {
+                    if let Some(damage_type) = effect.damage_type() {
                         assert!(
                             crate::world::damage_types().contains_key(damage_type),
                             "{id}: no damage type '{damage_type}'"
@@ -740,14 +676,7 @@ mod tests {
                 }
                 // Every condition it puts on someone is a real one.
                 let conditions = crate::combat::defs_on_disk();
-                for effect in &spell.effects {
-                    let key = match effect {
-                        SpellEffect::Apply { condition, .. } => condition.as_str(),
-                        SpellEffect::Bless { .. } => "blessed",
-                        SpellEffect::Ward { .. } => "warded",
-                        SpellEffect::Hold { .. } => "held",
-                        _ => continue,
-                    };
+                for key in spell.effects.iter().filter_map(Effect::condition) {
                     assert!(conditions.get(key).is_some(), "{id}: no condition '{key}'");
                 }
                 spell
@@ -785,8 +714,8 @@ mod tests {
             drain: 2,
             aim: Aim::Foe,
             resist: Some(Resist::Dodge),
-            effects: vec![SpellEffect::Harm {
-                damage: (1, 2),
+            effects: vec![Effect::Damage {
+                amount: (1, 2),
                 damage_type: "force".into(),
             }],
             text: SkillText {
@@ -845,13 +774,6 @@ mod tests {
             "no PvP"
         );
         assert!(choose_target(&spark, me, None, "dragon", here(), players).is_err());
-    }
-
-    #[test]
-    fn spell_time_is_game_time() {
-        // Twelve game hours is an eighth of a day: an hour and a half, really.
-        assert_eq!(Lasting::Hours(12).real_secs(), 90.0 * 60.0);
-        assert_eq!(Lasting::Minutes(80).real_secs(), 10.0 * 60.0);
     }
 
     #[test]

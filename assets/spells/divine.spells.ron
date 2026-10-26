@@ -8,7 +8,7 @@
             school: "divine:foundation",
             drain: 3,
             aim: Ally,
-            effects: [Heal(heal: (2, 5))],
+            effects: [Heal(amount: (2, 5))],
             text: (
                 hit: (
                     actor: "You lay your hands on {target} and pray, and the wounds close.",
@@ -24,7 +24,7 @@
             price: 50,
             drain: 2,
             aim: Ally,
-            effects: [Bless(attack: 2, lasts: Minutes(80))],
+            effects: [Apply(condition: "blessed", strength: 2, lasts: Minutes(80))],
             text: (
                 hit: (
                     actor: "You trace a holy sign over {target}, and warm light gathers.",

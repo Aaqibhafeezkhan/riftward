@@ -7,26 +7,27 @@ use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 
 use super::casting::MobMove;
-use super::states::{ConditionDefs, Conditions, Lasts};
+use super::states::{ConditionDefs, Conditions};
 use super::{
     ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, Dead, Fighting, HideNumbers, Tactics,
 };
 use crate::attributes::{Attribute, Attributes};
 use crate::db::Database;
 use crate::dice::Dice;
+use crate::effects::{self, Effect, Who};
 use crate::events::GameEvent;
 use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
 use crate::mobs::Mob;
 use crate::output::PuppetedBy;
 use crate::output::{Outbox, Outgoing};
 use crate::skills::{
-    Bonus, Boosts, Cost, Effect, Learner, Lines, Skill, SkillDefs, SkillKind, SkillText, Skills,
+    Bonus, Boosts, Cost, Learner, Lines, Skill, SkillDefs, SkillKind, SkillText, Skills,
     StrikeKind, Technique, Trigger, boosts, count_use, fill, tough_fight_boost,
 };
 use crate::spells::{SpellDefs, Spells};
 use crate::targeting::Keywords;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
-use crate::world::{ArmourDef, InRoom, Player, WeaponDef, armour_stops};
+use crate::world::{ArmourDef, InRoom, Player, WeaponDef};
 
 /// The skill that helps avoid attacks.
 const DODGE: &str = "athletics:dodge";
@@ -482,6 +483,16 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         self.log.0.push(Outgoing::line(who, line.into()));
     }
 
+    /// Tell each their lines, and the room (but `a` and `b`) the rest, together.
+    pub(super) fn tell(&mut self, tell: Telling, room: Entity, a: Entity, b: Entity) {
+        for (who, line) in tell.lines {
+            self.say(who, line);
+        }
+        if !tell.room.is_empty() {
+            self.tell_room(room, a, b, &tell.room.join(" "));
+        }
+    }
+
     /// Tell everyone in `room` but `a` and `b`.
     pub(super) fn tell_room(&mut self, room: Entity, a: Entity, b: Entity, line: &str) {
         for &(player, at) in self.watchers {
@@ -748,13 +759,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
 
         // The user's own effects happen whether or not the blow lands.
         if let Some(Move { technique: t, .. }) = &technique {
-            let conditions = self.conditions;
-            for (key, strength, turns) in t.effects.iter().filter_map(Effect::on_user) {
-                if let Ok(mut f) = self.fighters.get_mut(attacker) {
-                    f.conditions
-                        .apply(conditions, key, strength, Lasts::Turns(turns.max(1)));
-                }
-            }
+            let mut own = Telling::default();
+            self.affect(attacker, target, &t.effects, Who::User, 0, &mut own);
+            self.tell(own, room, attacker, target);
             if t.strike == StrikeKind::None {
                 let key = technique.as_ref().map_or("", |m| m.key);
                 if let Some(text) = self.defs.skills.get(key).and_then(|s| s.def.text.clone()) {
@@ -822,9 +829,6 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let d_gear = gear(target, self.items, self.templates);
         let parts = defence_rating(&d_attributes, &d_skills, d_aura, &d_boosts, &d_gear);
         let mut defence = d.conditions.defence(parts.total(), self.conditions);
-        let d_condition_armour = d.conditions.armour(self.conditions, &damage_type);
-        let d_resist = d.conditions.resist(self.conditions, &damage_type);
-        let d_damage_times = d.conditions.damage_taken(self.conditions);
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let opener = technique.as_ref().is_some_and(|m| m.technique.opener);
         if self.resting.contains(&target) || opener {
@@ -874,36 +878,23 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 let rolled = self.dice.range(a_luck, i64::from(low)..=i64::from(high)) as i32;
                 // Armour takes its share off, even all of it; a point can find the gaps.
                 let pierce = a_boosts.pierce_with(&key)
-                    + technique.as_ref().map_or(0, |m| {
-                        m.technique
-                            .effects
-                            .iter()
-                            .map(|e| match e {
-                                Effect::Pierce(n) => *n,
-                                _ => 0,
-                            })
-                            .sum()
-                    });
-                // Armour stops what it stops: worn pieces by their `against`, natural armour
-                // and conditions only what armour stops.
-                let natural = if armour_stops(&damage_type) {
-                    d_aura.armour + d_boosts.armour
-                } else {
-                    0
-                };
-                let worn = armour_against(target, self.items, self.templates, &damage_type);
-                let armour = if ignores_armour {
-                    0
-                } else {
-                    (natural + worn + d_condition_armour - pierce).max(0)
-                };
+                    + technique
+                        .as_ref()
+                        .map_or(0, |m| effects::pierce(&m.technique.effects));
                 let force = rolled
                     + a_attributes.get(Attribute::Strength) / 2
                     + a_boosts.damage_with(&key)
                     + extra;
-                // Conditions on either side move it: weakened, strengthened, and the like.
-                let times = blow.multiplier() * a_damage_times * d_damage_times * d_resist;
-                dealt = ((f64::from(force) * times).round() as i32 - armour).max(0);
+                // Conditions on either side move it, weakened, strengthened and the like, and
+                // the target's armour and resistances have their say.
+                let times = blow.multiplier() * a_damage_times;
+                dealt = self.mitigate(
+                    target,
+                    f64::from(force) * times,
+                    &damage_type,
+                    pierce,
+                    ignores_armour,
+                );
                 // A ward takes what it can, told after the blow it stopped.
                 let mut ward = Telling::default();
                 let warded = self.ward_off(target, attacker, dealt, &d_name, &mut ward);
@@ -966,24 +957,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             }
             // The technique's effects on the target, if it's still standing.
             if let Some(Move { technique: t, .. }) = &technique {
-                let standing = !died.contains(&target);
-                let conditions = self.conditions;
-                let inflicted = t.effects.iter().filter_map(Effect::on_target);
-                for (key, strength, turns) in inflicted.filter(|_| standing) {
-                    if let Ok(mut f) = self.fighters.get_mut(target) {
-                        f.conditions
-                            .apply(conditions, key, strength, Lasts::Turns(turns.max(1)));
-                    }
-                    // Told in the condition's own words: "The rat is staggered!".
-                    let applied = conditions.get(key).and_then(|d| d.text.applied.as_ref());
-                    if let Some(applied) = applied {
-                        let (theirs, seen) = applied.fill(&capitalized(&d_name), strength);
-                        if let Some(seen) = seen {
-                            tell.lines.push((attacker, seen.clone()));
-                            tell.room.push(seen);
-                        }
-                        tell.lines.push((target, format!("\x1b[1m{theirs}\x1b[0m")));
-                    }
+                // Told in the conditions' own words: "The rat is staggered!".
+                if !died.contains(&target) {
+                    self.affect(attacker, target, &t.effects, Who::Target, 0, &mut tell);
                 }
                 // Cleave: the blow carries on into another foe fighting the attacker, even
                 // when it fells the first.

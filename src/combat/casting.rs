@@ -4,21 +4,20 @@
 use bevy::prelude::*;
 
 use super::Round;
-use super::states::{Conditions, Lasts};
-use super::strike::{Blow, Telling, armour_against, defence_rating, gear, harm, name_of, told};
+use super::states::Conditions;
+use super::strike::{Blow, Telling, defence_rating, gear, harm, name_of, told};
 use crate::attributes::{Attribute, Attributes};
+use crate::effects::{self, Effect, Who};
 use crate::events::GameEvent;
 use crate::items::capitalized;
 use crate::skills::{Skills, boosts, fill};
 use crate::spells::{
-    Aim, Resist, SpellEffect, can_cast, choose_target, drain_paid, drain_resistance, power,
-    takes_hold,
+    Aim, Resist, can_cast, choose_target, drain_paid, drain_resistance, power, takes_hold,
 };
 use crate::stealth::{Hidden, sees};
 use crate::targeting::Keywords;
 use crate::vitals::Maxima;
 use crate::world::MobKey;
-use crate::world::armour_stops;
 
 /// What came of a cast.
 #[derive(Debug, Default)]
@@ -112,6 +111,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             );
         }
         let power = power(spell, &c_skills, &c_attributes, self.defs).max(1);
+        // What it does to the caster, it does whether or not it takes hold.
+        let mut tell = Telling::default();
+        self.affect(caster, target, &spell.effects, Who::User, power, &mut tell);
 
         // Against whatever resists it, the caster's power by opposed roll; how decisively it
         // wins is how hard a harmful spell lands.
@@ -154,74 +156,50 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         } else {
             (d_name.clone(), d_name.clone())
         };
-        let mut tell = Telling::default();
         let mut after = Telling::default();
         if hit {
             let mut dealt = None;
             let mut healed = None;
-            let conditions = self.conditions;
+            // Armour and resistances have their say, as against a blow.
+            let pierce = effects::pierce(&spell.effects);
+            let ignores_armour = spell.effects.contains(&Effect::IgnoreArmour);
             for effect in &spell.effects {
-                let Ok(mut f) = self.fighters.get_mut(target) else {
-                    continue;
-                };
                 match effect {
-                    SpellEffect::Harm {
-                        damage: (low, high),
+                    Effect::Damage {
+                        amount: (low, high),
                         damage_type,
                     } => {
                         let (low, high) = (*low.min(high), *low.max(high));
                         let rolled = self.dice.range(luck, i64::from(low)..=i64::from(high)) as i32;
                         let force = rolled + power / 3;
-                        // Armour stops what it stops, as against a blow.
-                        let natural = if armour_stops(damage_type) {
-                            self.auras.get(&target).map_or(0, |a| a.armour)
-                                + boosts(&d.skills, self.defs).armour
-                        } else {
-                            0
-                        };
-                        let armour = (natural
-                            + armour_against(target, self.items, self.templates, damage_type)
-                            + d.conditions.armour(conditions, damage_type))
-                        .max(0);
-                        // Conditions on either side move it, as they do a blow.
-                        let times = blow.multiplier()
-                            * c_damage_times
-                            * d.conditions.damage_taken(conditions)
-                            * d.conditions.resist(conditions, damage_type);
-                        let mut hurt = ((f64::from(force) * times).round() as i32 - armour).max(0);
+                        // Conditions on the caster move it, as they do a blow.
+                        let times = blow.multiplier() * c_damage_times;
+                        let mut hurt = self.mitigate(
+                            target,
+                            f64::from(force) * times,
+                            damage_type,
+                            pierce,
+                            ignores_armour,
+                        );
                         hurt -= self.ward_off(target, caster, hurt, &d_name, &mut after);
-                        dealt = Some(hurt);
+                        dealt = Some(dealt.unwrap_or(0) + hurt);
                     }
-                    SpellEffect::Heal { heal: (low, high) } => {
+                    Effect::Heal {
+                        amount: (low, high),
+                    } => {
+                        let Ok(mut f) = self.fighters.get_mut(target) else {
+                            continue;
+                        };
                         let (low, high) = (*low.min(high), *low.max(high));
                         let rolled = self.dice.range(luck, i64::from(low)..=i64::from(high)) as i32;
                         let most = Maxima::of(&f.attributes, &f.skills, self.defs, f.base).health;
                         let before = f.vitals.health;
                         f.vitals.health = (before + (rolled + power / 3) as f32).min(most as f32);
-                        healed = Some((f.vitals.health - before).round() as i32);
+                        healed =
+                            Some(healed.unwrap_or(0) + (f.vitals.health - before).round() as i32);
                     }
-                    SpellEffect::Bless { attack, lasts } => {
-                        let lasts = lasts.lasts(self.now);
-                        f.conditions.apply(conditions, "blessed", *attack, lasts);
-                    }
-                    SpellEffect::Ward { absorb, lasts } => {
-                        let strength = *absorb as i32 + (power / 3).max(0);
-                        let lasts = lasts.lasts(self.now);
-                        f.conditions.apply(conditions, "warded", strength, lasts);
-                    }
-                    SpellEffect::Hold { rounds } => {
-                        let lasts = Lasts::Turns((*rounds).max(1));
-                        f.conditions.apply(conditions, "held", 1, lasts);
-                    }
-                    SpellEffect::Calm => cast.calmed = Some(target),
-                    SpellEffect::Apply {
-                        condition,
-                        strength,
-                        lasts,
-                    } => {
-                        let lasts = lasts.lasts(self.now);
-                        f.conditions.apply(conditions, condition, *strength, lasts);
-                    }
+                    // Conditions follow the telling, on a target still standing.
+                    _ => {}
                 }
             }
             let most = d.most;
@@ -275,6 +253,18 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 ) {
                     cast.died.push(target);
                 }
+            }
+            if !cast.died.contains(&target)
+                && self.affect(
+                    caster,
+                    target,
+                    &spell.effects,
+                    Who::Target,
+                    power,
+                    &mut tell,
+                )
+            {
+                cast.calmed = Some(target);
             }
         } else {
             let miss = spell.text.miss.as_ref().unwrap_or(&spell.text.hit);
@@ -355,11 +345,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 let target_skills = self.fighters.get(target).ok()?.skills;
                 let useful = takes_hold(spell, target_skills)
                     && spell.effects.iter().all(|effect| match effect {
-                        SpellEffect::Heal { .. } => hurt,
-                        SpellEffect::Bless { .. } => !f.conditions.has("blessed"),
-                        SpellEffect::Ward { .. } => !f.conditions.has("warded"),
+                        Effect::Heal { .. } => hurt,
                         // Not twice on itself; at a foe, not on one that already has it.
-                        SpellEffect::Apply { condition, .. } => self
+                        Effect::Apply {
+                            condition,
+                            on: Who::Target,
+                            ..
+                        } => self
                             .fighters
                             .get(target)
                             .is_ok_and(|t| !t.conditions.has(condition)),

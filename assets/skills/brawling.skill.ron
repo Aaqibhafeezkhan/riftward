@@ -44,7 +44,7 @@
             name: "Grapple",
             description: "Grab hold of a foe and pin them: for two turns they can't flee, and they defend poorly.",
             kind: Technique((with: "brawling:basics", cost: Stamina(2), strike: Harmless,
-                effects: [Hold(rounds: 2)])),
+                effects: [Apply(condition: "held", lasts: Turns(2))])),
             requires: Skill("brawling:basics", 15),
             karma: 10,
             text: (

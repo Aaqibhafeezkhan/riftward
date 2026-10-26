@@ -28,7 +28,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** one effect vocabulary and one ability shape for spells, techniques and active skills. Step 1, conditions as data, is built, and so are damage types (2a): typed weapons, attacks and spells, armour that says what it stops, and `Resist`, `Weakness` and `Immune`.
+**Step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** one ability shape for spells, techniques and active skills (2c). Step 1, conditions as data, is built, and so are one effect vocabulary for spells and techniques (2b) and damage types (2a): typed weapons, attacks and spells, armour that says what it stops, and `Resist`, `Weakness` and `Immune`.
 
 Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 
@@ -48,7 +48,7 @@ Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order
 - Haggling's numbers are first guesses: deals of a twentieth to a fifth, lasting ten minutes, and shopkeepers at 5 to 10. Deals aren't saved, and a deal is only struck by those who know Haggling.
 - Prices are first guesses (see [Prices](economy.md#prices)), and so is buying at a third. A shop's resale stock and a player's money on death are open questions.
 - Puppeting is for GMs and admins (builders can't). `help` still lists GM commands under "Building" and "Admin". While puppeting, the builder hears nothing of their own body, even if it's attacked. Lessons (`learn`) and account commands (`raise`, `alias`, `describe`) are for players only.
-- Conditions: Hidden and Nourished are still their own components, not data. Modifiers beyond the twelve built (initiative, attributes, blind, fear, haste…) come when something needs them. No content uses the nine new conditions yet; designers can, with `Inflict`, `Apply` and `grants`.
+- Conditions: Hidden and Nourished are still their own components, not data. Modifiers beyond the twelve built (initiative, attributes, blind, fear, haste…) come when something needs them. No content uses the nine new conditions yet; designers can, with `Apply` and `grants`.
 - No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built).
 - Hiding isn't saved: logging out shows you, and a restart forgets everyone's hiding.
 - Herbs, rat tails and the Rat King's tooth can only be sold until Brewing and quests use them.

@@ -31,7 +31,7 @@
             drain: 3,
             aim: Foe,
             resist: Some(Attribute(Strength)),
-            effects: [Hold(rounds: 2)],
+            effects: [Apply(condition: "held", lasts: Turns(2))],
             text: (
                 hit: (
                     actor: "A spirit answers your call and seizes {target}!",

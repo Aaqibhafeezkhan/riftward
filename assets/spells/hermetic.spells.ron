@@ -9,7 +9,7 @@
             drain: 2,
             aim: Foe,
             resist: Some(Dodge),
-            effects: [Harm(damage: (2, 5), type: "force")],
+            effects: [Damage(amount: (2, 5), type: "force")],
             text: (
                 hit: (
                     actor: "Your spark {harm} {target}.",
@@ -30,7 +30,7 @@
             price: 80,
             drain: 3,
             aim: Ally,
-            effects: [Ward(absorb: 4, lasts: Minutes(80))],
+            effects: [Apply(condition: "warded", strength: 4, lasts: Minutes(80), empowered: true)],
             text: (
                 hit: (
                     actor: "You trace a shimmering ward around {target}.",

@@ -61,7 +61,7 @@
             name: "Rend",
             description: "Claws that tear, leaving wounds that bleed for three turns.",
             kind: Technique((with: "beast:claw", cost: Stamina(2),
-                effects: [Bleed(damage: 1, rounds: 3)])),
+                effects: [Apply(condition: "bleeding", lasts: Turns(3))])),
             text: (
                 hit: (
                     actor: "Your rake {harm} {target}.",

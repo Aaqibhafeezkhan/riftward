@@ -183,7 +183,7 @@ Conditions on items come in two kinds, which behave differently.
 - **Modifiers built:** `Attack`, `Defence`, `DefenceTimes`, `Armour`, `DamageDealt`, `DamageTaken`, `HealthEachTurn`, `Absorb`, `LosesTurn`, `CantFlee`, `CantMove`, `CantCast`. Additive ones count once per point of strength. The rest of the list above arrives as something needs it.
 - **Stacking:** `Replace`, `Strongest`, `Stack(n)`. **Tags** are kept for cures and immunities to come.
 - **Text from data:** applied (to the target of a technique), each turn, a lost turn, death, fading, a ward taking a blow and breaking, and `looks` hints, chosen by strength left. `affects` lists names, what each does and how long, and `score` the names.
-- **Using any condition:** techniques have `Inflict(condition, strength, rounds)` for the target and `Gain(...)` for the user; spells have `Apply(condition, strength, lasts)`, where `lasts` is `Minutes(n)`, `Hours(n)` or `Turns(n)`. Stagger, Bleed, Bless, Ward and the rest are now shorthands for these.
+- **Using any condition:** spells and techniques alike use `Apply(condition, strength, lasts, on)`, where `lasts` is `Minutes(n)`, `Hours(n)` or `Turns(n)` and `on` is `Target` (the default) or `User`. See [Effects, as built](#effects-as-built).
 - **Items grant conditions:** `grants: [(condition: "shielded", strength: 1, while: Worn)]` on a template, `Worn`, `Held` or `Carried`, kept in step whenever items move.
 - **Saved:** conditions lasting in time are saved with players (`character_conditions`), as when they end, every minute and at logout, and restored at login if they still last.
 - **Checked:** tests fail if a technique, spell or item names a condition that doesn't exist.
@@ -208,7 +208,7 @@ Every attack and harming effect names its type, so armour, resistances and immun
 ### Damage types, as built
 
 - **The list** is `assets/damage_types.ron`: each type's name and whether ordinary armour stops it (only `physical` does). Tests fail if a weapon, attack skill, spell, armour piece or condition names a type that isn't there.
-- **Weapons and attack skills** take `type:` and default to `"physical"`; Spark's `Harm` is `type: "force"`.
+- **Weapons and attack skills** take `type:` and default to `"physical"`; Spark's `Damage` is `type: "force"`.
 - **Armour:** worn and held pieces count against a hit only if they stop its type (`against`, empty meaning what ordinary armour stops). Natural armour (auras, boosts) and armour from conditions count only against types ordinary armour stops.
 - **Resistances:** a condition's `Resist(type, x)` is the share of that type it stops: 0.8 stops 80%, 1 all of it. Several stack on what gets through: 50% and 50% let a quarter in.
 - **Weaknesses:** `Weakness(type, x)` is extra damage of that type, added up: 0.5 takes 150%, 1 takes double, and two weaknesses of 0.5 take double. Weaknesses multiply what resistances let through, so resisting 50% of fire while weak to it by 1 takes 100%. **`Immune(tag)`** stops a condition carrying that tag from being put on at all.
@@ -292,6 +292,33 @@ What spells, techniques, active skills, items and reactions *do*: a list, each w
 | `Repeat(n, effects)` / `Delay(turns, effects)` | |
 | `Say(text)` | Text templates (✓ every skill's `text`) |
 | `Script(name)` | Hands off to a [script](#scripting) |
+
+### Effects, as built
+
+Step 2b. Spells and techniques list their effects in one vocabulary (`src/effects.rs`), and the combat round carries them out one way (`src/combat/effects.rs`):
+
+```ron
+// A technique: down on the target if it lands, open yourself either way.
+effects: [Apply(condition: "down", lasts: Turns(1)), Apply(condition: "exposed", lasts: Turns(1), on: User)],
+// A spell: force damage; a ward that grows with the caster's power.
+effects: [Damage(amount: (2, 5), type: "force")],
+effects: [Apply(condition: "warded", strength: 4, lasts: Minutes(80), empowered: true)],
+```
+
+| Effect | Does | In |
+| --- | --- | --- |
+| `Damage(amount, type)` | Rolled, plus a third of the power, harder on a decisive win; through armour and resistances | Spells |
+| `Heal(amount)` | Rolled, plus a third of the power, up to the most | Spells |
+| `Apply(condition, strength, lasts, on, empowered)` | Puts a condition on; `empowered` adds a third of the power to its strength. Told in the condition's `applied` words | Both |
+| `Remove(condition, on)` / `Cure(tag, on)` | Ends one condition, or every one with a tag, told in its `fades` words. Item grants stay | Both |
+| `Pierce(n)` / `IgnoreArmour` | How damage gets past armour | Both |
+| `Cleave` | The blow carries on into a second foe | Techniques |
+| `Calm` | An animal stops fighting | Spells |
+
+- **On the user, whatever happens; on the target, if it lands** and the target is still standing.
+- **Damage goes one way:** blows and spells both go through `mitigate`: worn armour by its `against`, natural armour and conditions only against what armour stops, less `Pierce`, times damage taken and resistances. A ward then takes what it can.
+- **What fits where** is checked at load: a technique's damage is its blow, so `Damage`, `Heal` and `Calm` are for spells for now, and `Cleave` is for blows. Step 2c's one ability shape lifts this.
+- The old shorthands (`Stagger`, `KnockDown`, `Bleed`, `Hold`, `Expose`, `Guard`, `Inflict`, `Gain`, `Harm`, `Bless`, `Ward`) are gone; every skill and spell file uses `Apply`.
 
 ## Abilities
 
@@ -383,7 +410,7 @@ reactions: [(on: Hit, effects: [Damage(amount: "2", type: piercing, armour: fals
 Each step leaves the game working and designers with more they can do alone.
 
 1. **Conditions as data** (*built*). The built conditions move to `assets/conditions/`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
-2. **Effects and abilities.** Damage types are built (2a). One effect vocabulary and one ability shape; spells and techniques become abilities, and damage types arrive. `Imbue` and saved item conditions come with it.
+2. **Effects and abilities.** Damage types (2a) and one effect vocabulary (2b) are built. Next, one ability shape: spells and techniques become abilities. `Imbue` and saved item conditions come with it.
 3. **Formulas.** The expression evaluator, and every amount moved into data.
 4. **Triggers and reactions.** More game events; reactions on conditions, skills and items.
 5. **Active skills through `use`.** Most bespoke commands become abilities.

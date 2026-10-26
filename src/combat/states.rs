@@ -257,10 +257,27 @@ impl Conditions {
     }
 
     /// End a condition early, whatever its turns or strength: bandaged bleeding stops. Item
-    /// grants stay while the item does.
-    pub fn remove(&mut self, key: &str) {
+    /// grants stay while the item does. Returns whether they had it.
+    pub fn remove(&mut self, key: &str) -> bool {
+        let before = self.0.len();
         self.0
             .retain(|a| a.key != key || matches!(a.lasts, Lasts::Granted(_)));
+        self.0.len() < before
+    }
+
+    /// End every condition with `tag`, but those items grant: a cure for poison. Returns the
+    /// conditions it ended.
+    pub fn cure(&mut self, defs: &ConditionDefs, tag: &str) -> Vec<String> {
+        let tagged = |a: &Active| {
+            !matches!(a.lasts, Lasts::Granted(_))
+                && defs
+                    .get(&a.key)
+                    .is_some_and(|d| d.tags.iter().any(|t| t == tag))
+        };
+        let ended = self.0.iter().filter(|a| tagged(a)).map(|a| a.key.clone());
+        let ended: Vec<String> = ended.collect();
+        self.0.retain(|a| !tagged(a));
+        ended
     }
 
     /// End every condition but those items grant: death clears them.

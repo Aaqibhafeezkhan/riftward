@@ -15,6 +15,7 @@
 //! Players can't fight each other yet.
 
 mod casting;
+mod effects;
 mod states;
 mod strike;
 
@@ -1271,12 +1272,12 @@ fn stop(In(inv): In<Invocation>, mut outbox: ResMut<Outbox>, mut queues: Query<&
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::effects::{Effect, Lasting, Who};
     use crate::items::Item;
     use crate::skills::{
-        Cost, Effect, Lines, Skill, SkillDef, SkillKind, SkillState, SkillText, StrikeKind,
-        Technique,
+        Cost, Lines, Skill, SkillDef, SkillKind, SkillState, SkillText, StrikeKind, Technique,
     };
-    use crate::spells::{Resist, Spell, SpellDef, SpellEffect, Spells};
+    use crate::spells::{Resist, Spell, SpellDef, Spells};
     use crate::stealth::Hidden;
     use crate::vitals::BaseHealth;
     use crate::world::{ArmourDef, DoorState, Exits, ItemDef, ItemKey, Room, Slot, Terrain};
@@ -1347,6 +1348,34 @@ mod tests {
                         damage: 0,
                         strike: StrikeKind::Hit,
                         effects: vec![Effect::Cleave],
+                        opener: false,
+                    }),
+                ),
+                // Leaves the target down and the user open, without hurting.
+                skill(
+                    "brawling:trip",
+                    SkillKind::Technique(Technique {
+                        with: BASIC_ATTACK.into(),
+                        cost: Cost::Free,
+                        accuracy: 0,
+                        damage: 0,
+                        strike: StrikeKind::Harmless,
+                        effects: vec![
+                            Effect::Apply {
+                                condition: "down".into(),
+                                strength: 1,
+                                lasts: Lasting::Turns(2),
+                                on: Who::Target,
+                                empowered: false,
+                            },
+                            Effect::Apply {
+                                condition: "exposed".into(),
+                                strength: 1,
+                                lasts: Lasting::Turns(2),
+                                on: Who::User,
+                                empowered: false,
+                            },
+                        ],
                         opener: false,
                     }),
                 ),
@@ -1509,7 +1538,7 @@ mod tests {
 
     /// A spell for these tests, cast through `school`, with text that says what happened: "You
     /// spark {target}." and so on, and `{harm}` in every hit line.
-    fn spell(key: &str, aim: Aim, resist: Option<Resist>, effects: Vec<SpellEffect>) -> Spell {
+    fn spell(key: &str, aim: Aim, resist: Option<Resist>, effects: Vec<Effect>) -> Spell {
         let (_, id) = key.split_once(':').unwrap();
         let lines = |verb: &str| Lines {
             actor: format!("You {verb} {{target}} ({{harm}})."),
@@ -1579,8 +1608,8 @@ mod tests {
             "hermetic:spark",
             Aim::Foe,
             Some(Resist::Dodge),
-            vec![SpellEffect::Harm {
-                damage: (2, 2),
+            vec![Effect::Damage {
+                amount: (2, 2),
                 damage_type: "force".into(),
             }],
         );
@@ -1624,8 +1653,8 @@ mod tests {
                 "hermetic:bolt",
                 Aim::Foe,
                 Some(Resist::Dodge),
-                vec![SpellEffect::Harm {
-                    damage: (5, 5),
+                vec![Effect::Damage {
+                    amount: (5, 5),
                     damage_type: kind.into(),
                 }],
             );
@@ -1673,7 +1702,7 @@ mod tests {
             "divine:mend",
             Aim::Ally,
             None,
-            vec![SpellEffect::Heal { heal: (5, 5) }],
+            vec![Effect::Heal { amount: (5, 5) }],
         );
         caster(&mut world, healer, vec![mend]);
         world.entity_mut(healer).insert(Tactics(100));
@@ -1681,6 +1710,52 @@ mod tests {
         world.entity_mut(foe).insert(Fighting(healer));
         world.run_system_once(combat_round).unwrap();
         assert!(world.get::<Vitals>(healer).unwrap().health > 20.0);
+    }
+
+    #[test]
+    fn a_spell_cures_removes_and_empowers_conditions() {
+        let (mut world, room) = world();
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let priest = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
+        let purify = spell(
+            "divine:purify",
+            Aim::Ally,
+            None,
+            vec![
+                Effect::Cure {
+                    tag: "poison".into(),
+                    on: Who::Target,
+                },
+                Effect::Remove {
+                    condition: "held".into(),
+                    on: Who::Target,
+                },
+                Effect::Apply {
+                    condition: "blessed".into(),
+                    strength: 1,
+                    lasts: Lasting::Minutes(10),
+                    on: Who::Target,
+                    empowered: true,
+                },
+            ],
+        );
+        caster(&mut world, priest, vec![purify]);
+        let defs = defs_on_disk();
+        let mut conditions = world.get_mut::<Conditions>(priest).unwrap();
+        conditions.apply(&defs, "poisoned", 1, Lasts::Turns(5));
+        conditions.apply(&defs, "held", 1, Lasts::Turns(5));
+        conditions.apply(&defs, "guarding", 2, Lasts::Turns(5));
+        world.entity_mut(priest).insert(Tactics(100));
+        world.entity_mut(foe).insert(Fighting(priest));
+        world.run_system_once(combat_round).unwrap();
+        let conditions = world.get::<Conditions>(priest).unwrap();
+        assert!(!conditions.has("poisoned"), "cured");
+        assert!(!conditions.has("held"), "removed");
+        assert!(conditions.has("guarding"), "untouched");
+        assert!(
+            conditions.attack(&defs) > 1,
+            "a strong caster's blessing is stronger"
+        );
     }
 
     #[test]
@@ -1694,7 +1769,7 @@ mod tests {
             "shamanic:beast_speech",
             Aim::Other,
             Some(Resist::Attribute(Attribute::Willpower)),
-            vec![SpellEffect::Calm],
+            vec![Effect::Calm],
         );
         caster(&mut world, shaman, vec![calm]);
         world.entity_mut(shaman).insert((
@@ -1962,6 +2037,24 @@ mod tests {
         world.run_system_once(combat_round).unwrap();
         assert!(said(&world, cleaver, "carries on into"));
         assert!(world.get::<Vitals>(second).unwrap().health < 100.0);
+    }
+
+    #[test]
+    fn a_technique_puts_conditions_on_the_target_and_the_user() {
+        let (mut world, room) = world();
+        let tripper = fighter(&mut world, room, 1000, 1, &[BASIC_ATTACK, "brawling:trip"]);
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(tripper).insert((
+            Fighting(foe),
+            Readied {
+                skill: "brawling:trip".into(),
+            },
+        ));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(foe).unwrap().has("down"));
+        assert!(world.get::<Conditions>(tripper).unwrap().has("exposed"));
+        assert!(said(&world, foe, "You go down!"), "told in its words");
+        assert_eq!(world.get::<Vitals>(foe).unwrap().health, 100.0, "harmless");
     }
 
     #[test]

@@ -25,7 +25,7 @@
         "stagger": (
             name: "Stagger",
             description: "A heavy slam that leaves a foe reeling: they lose their next turn.",
-            kind: Technique((with: "hammers:basics", cost: Stamina(4), effects: [Stagger])),
+            kind: Technique((with: "hammers:basics", cost: Stamina(4), effects: [Apply(condition: "staggered", lasts: Turns(1))])),
             requires: Skill("hammers:basics", 15),
             karma: 12,
             text: (

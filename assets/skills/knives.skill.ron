@@ -46,7 +46,7 @@
             name: "Open Vein",
             description: "A slash meant to bleed: the wound keeps hurting for three turns.",
             kind: Technique((with: "knives:basics", cost: Stamina(2),
-                effects: [Bleed(damage: 1, rounds: 3)])),
+                effects: [Apply(condition: "bleeding", lasts: Turns(3))])),
             requires: Skill("knives:basics", 15),
             karma: 8,
             text: (

@@ -12,6 +12,7 @@ mod commands;
 mod conditions;
 mod db;
 mod dice;
+mod effects;
 mod events;
 mod gathering;
 mod healing;

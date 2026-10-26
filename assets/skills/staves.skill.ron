@@ -25,7 +25,7 @@
         "sweep": (
             name: "Sweep",
             description: "A low sweep that takes a foe off their feet: they lose their next turn, and defend at half until then.",
-            kind: Technique((with: "staves:basics", cost: Stamina(3), effects: [KnockDown])),
+            kind: Technique((with: "staves:basics", cost: Stamina(3), effects: [Apply(condition: "down", lasts: Turns(1))])),
             requires: Skill("staves:basics", 15),
             karma: 10,
             text: (
@@ -45,7 +45,7 @@
             name: "Guard",
             description: "Hold your staff across you instead of attacking: 4 more defence for two turns.",
             kind: Technique((with: "staves:basics", cost: Stamina(1), strike: None,
-                effects: [Guard(defence: 4, rounds: 2)])),
+                effects: [Apply(condition: "guarding", strength: 4, lasts: Turns(2), on: User)])),
             requires: Skill("staves:basics", 15),
             karma: 6,
             text: (

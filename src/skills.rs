@@ -31,6 +31,7 @@ use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocat
 use crate::conditions::{Condition, Facts};
 use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
+use crate::effects::{self, Effect, User};
 use crate::events::GameEvent;
 use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
@@ -204,6 +205,9 @@ impl SkillDef {
         }
         if self.karma.is_some() && self.requires.is_none() {
             return Err("has a Karma cost but no requirements: entry skills are taught".into());
+        }
+        if let SkillKind::Technique(t) = &self.kind {
+            effects::check(&t.effects, User::Technique)?;
         }
         let (target, miss) = match &self.kind {
             // Struck at someone, so their view and a miss are needed.
@@ -485,6 +489,8 @@ pub struct Technique {
     /// Whether it strikes at all, and whether a hit does damage.
     #[serde(default)]
     pub strike: StrikeKind,
+    /// What it does besides its blow, in the one effect vocabulary (`effects.rs`): conditions
+    /// on the target when it lands, or on the user whether or not it does.
     #[serde(default)]
     pub effects: Vec<Effect>,
     /// Only works on someone not yet fighting back, or who is down or resting: Backstab. It can
@@ -502,80 +508,6 @@ pub enum StrikeKind {
     Harmless,
     /// Doesn't strike: its effects are on the user, like raising a guard.
     None,
-}
-
-/// What a technique does besides damage. The ones that leave a condition name it in
-/// `assets/conditions`; `Inflict` and `Gain` put any condition there is on the target or the user.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum Effect {
-    /// The target loses their next turn.
-    Stagger,
-    /// The target loses their next turn and defends at half until then.
-    KnockDown,
-    /// The target loses `damage` health on each of their next `rounds` turns.
-    Bleed { damage: u32, rounds: u32 },
-    /// The target can't flee and defends at half for `rounds` turns.
-    Hold { rounds: u32 },
-    /// The blow carries on into a second foe fighting you.
-    Cleave,
-    /// The target's armour doesn't help.
-    IgnoreArmour,
-    /// This much of the target's armour doesn't help: a point finding a gap.
-    Pierce(i32),
-    /// The user defends at half until their next turn.
-    Expose,
-    /// The user defends better for `rounds` turns.
-    Guard { defence: i32, rounds: u32 },
-    /// Puts a condition on the target, at `strength`, for `rounds` of their turns.
-    Inflict {
-        condition: String,
-        #[serde(default = "one")]
-        strength: i32,
-        rounds: u32,
-    },
-    /// Puts a condition on the user, at `strength`, for `rounds` of their turns.
-    Gain {
-        condition: String,
-        #[serde(default = "one")]
-        strength: i32,
-        rounds: u32,
-    },
-}
-
-fn one() -> i32 {
-    1
-}
-
-impl Effect {
-    /// The condition it leaves on the target, if any: (condition, strength, turns).
-    pub fn on_target(&self) -> Option<(&str, i32, u32)> {
-        match self {
-            Effect::Stagger => Some(("staggered", 1, 1)),
-            Effect::KnockDown => Some(("down", 1, 1)),
-            Effect::Bleed { damage, rounds } => Some(("bleeding", *damage as i32, *rounds)),
-            Effect::Hold { rounds } => Some(("held", 1, *rounds)),
-            Effect::Inflict {
-                condition,
-                strength,
-                rounds,
-            } => Some((condition.as_str(), *strength, *rounds)),
-            _ => None,
-        }
-    }
-
-    /// The condition it leaves on the user, if any: (condition, strength, turns).
-    pub fn on_user(&self) -> Option<(&str, i32, u32)> {
-        match self {
-            Effect::Expose => Some(("exposed", 1, 1)),
-            Effect::Guard { defence, rounds } => Some(("guarding", *defence, *rounds)),
-            Effect::Gain {
-                condition,
-                strength,
-                rounds,
-            } => Some((condition.as_str(), *strength, *rounds)),
-            _ => None,
-        }
-    }
 }
 
 /// What an aura adds to the mobs it affects.
@@ -2109,15 +2041,12 @@ mod tests {
                     }
                     // Every condition a technique leaves is a real one.
                     if let SkillKind::Technique(t) = &skill.kind {
-                        for effect in &t.effects {
-                            let left = effect.on_target().or(effect.on_user());
-                            if let Some((key, _, _)) = left {
-                                assert!(
-                                    conditions.get(key).is_some(),
-                                    "{} {id}: no condition '{key}'",
-                                    path.display()
-                                );
-                            }
+                        for key in t.effects.iter().filter_map(Effect::condition) {
+                            assert!(
+                                conditions.get(key).is_some(),
+                                "{} {id}: no condition '{key}'",
+                                path.display()
+                            );
                         }
                     }
                     // Its text is all there, and every placeholder is one the game fills in.
