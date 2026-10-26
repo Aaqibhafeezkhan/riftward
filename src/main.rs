@@ -18,8 +18,10 @@ mod healing;
 mod items;
 mod login;
 mod mobs;
+mod money;
 mod net;
 mod output;
+mod shops;
 mod skills;
 mod spawns;
 mod spells;
@@ -68,6 +70,7 @@ fn add_game(app: &mut App, path: String, address: String) {
     .add_plugins((
         db::DbPlugin { path },
         dice::DicePlugin,
+        money::MoneyPlugin,
         net::NetPlugin { address },
         login::LoginPlugin,
         command::CommandPlugin,
@@ -92,8 +95,9 @@ fn add_game(app: &mut App, path: String, address: String) {
         gathering::GatheringPlugin,
         tracking::TrackingPlugin,
         stealth::StealthPlugin,
-        spells::SpellsPlugin,
-    ));
+    ))
+    // Magic and trade.
+    .add_plugins((spells::SpellsPlugin, shops::ShopsPlugin));
 }
 
 #[cfg(test)]

@@ -52,7 +52,9 @@ const SCHEMA: &str = "
         -- Experience, which sets character level; NULL for characters from before it existed.
         experience  INTEGER,
         -- 1 if they'd rather not see damage numbers in fights.
-        hide_numbers INTEGER NOT NULL DEFAULT 0
+        hide_numbers INTEGER NOT NULL DEFAULT 0,
+        -- Money in their purse, in copper.
+        coins       INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS character_aliases (
@@ -280,6 +282,8 @@ pub struct CharacterRecord {
     pub experience: Option<u64>,
     /// Whether they'd rather fights didn't show damage numbers.
     pub hide_numbers: bool,
+    /// Money in their purse, in copper.
+    pub coins: u64,
 }
 
 /// SQLite connection. Queries run synchronously on the main thread; they're small and local,
@@ -306,6 +310,7 @@ impl Database {
             ("characters", "autoattack", "TEXT"),
             ("characters", "experience", "INTEGER"),
             ("characters", "hide_numbers", "INTEGER NOT NULL DEFAULT 0"),
+            ("characters", "coins", "INTEGER NOT NULL DEFAULT 0"),
         ] {
             let exists: bool = conn.query_row(
                 &format!(
@@ -382,7 +387,7 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, name, room, race, background, description, health, stamina, vitals_at,
-                 prompt, autoattack, experience, hide_numbers FROM characters
+                 prompt, autoattack, experience, hide_numbers, coins FROM characters
                  WHERE account_id = ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([account_id], |row| {
@@ -402,6 +407,7 @@ impl Database {
                 autoattack: row.get(10)?,
                 experience: row.get::<_, Option<i64>>(11)?.map(|e| e.max(0) as u64),
                 hide_numbers: row.get::<_, i64>(12)? != 0,
+                coins: row.get::<_, i64>(13)?.max(0) as u64,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -434,6 +440,7 @@ impl Database {
             autoattack: None,
             experience: Some(0),
             hide_numbers: false,
+            coins: 0,
         })
     }
 
@@ -441,6 +448,14 @@ impl Database {
         self.conn().execute(
             "UPDATE characters SET hide_numbers = ?1 WHERE id = ?2",
             params![i64::from(hide), character_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_coins(&self, character_id: i64, coins: u64) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE characters SET coins = ?1 WHERE id = ?2",
+            params![coins as i64, character_id],
         )?;
         Ok(())
     }

@@ -8,6 +8,7 @@ use crate::characters::{Backgrounds, Races};
 use crate::combat::Conditions;
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
+use crate::money::{self, Purse};
 use crate::output::{Actor, Outgoing, PlayerQuery, Reply, deliver, reply_line};
 use crate::skills::{SkillDefs, Skills};
 use crate::trainers;
@@ -16,15 +17,24 @@ use crate::vitals::{Maxima, Vitals};
 /// The longest description a character can have.
 const MAX_DESCRIPTION_LEN: usize = 600;
 
+/// What `score` shows of a character.
+type Sheet = (
+    &'static Attributes,
+    &'static Vitals,
+    &'static Skills,
+    Option<&'static Conditions>,
+    Option<&'static Purse>,
+);
+
 pub fn score(
     In(inv): In<Invocation>,
     mut players: PlayerQuery,
-    sheets: Query<(&Attributes, &Vitals, &Skills, Option<&Conditions>)>,
+    sheets: Query<Sheet>,
     races: Res<Races>,
     backgrounds: Res<Backgrounds>,
     defs: Res<SkillDefs>,
 ) {
-    let (Ok((_, _, Some(player), _)), Ok((attributes, vitals, skills, conditions))) =
+    let (Ok((_, _, Some(player), _)), Ok((attributes, vitals, skills, conditions, purse))) =
         (players.get(inv.entity), sheets.get(inv.entity))
     else {
         return;
@@ -44,6 +54,9 @@ pub fn score(
         (max.health, max.stamina),
         tradition,
     );
+    if let Some(purse) = purse {
+        text += &format!("    Purse: {}", money::coins(purse.0));
+    }
     let affected: Vec<&str> = conditions
         .into_iter()
         .flat_map(|c| c.0.iter().map(|(state, _)| state.describe().0))

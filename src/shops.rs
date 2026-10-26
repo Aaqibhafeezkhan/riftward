@@ -1,0 +1,478 @@
+//! Shops: mobs who sell and buy. A mob template's `shop` lists what it always has for sale and
+//! the kinds of thing it buys (see `ShopDef`). Next to a shopkeeper, `list` shows their goods,
+//! `buy` and `sell` trade with them, and `value` asks what they'd pay.
+//!
+//! A shop sells at an item's value and buys at a third of it, and resells what it buys at full
+//! value until someone buys it back (unless it stocks that anyway). What a shop has bought isn't saved: a restart, or the
+//! shopkeeper's death, clears it. Haggling will move these prices, once it exists.
+
+use bevy::ecs::system::SystemParam;
+use bevy::prelude::*;
+
+use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::db::{Database, ItemPlace};
+use crate::items::{self, HANDS, ItemLocation, ItemQuery, ItemTemplates, Snapshot, capitalized};
+use crate::mobs::{MobQuery, MobTemplates};
+use crate::money::{self, Purse};
+use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
+use crate::targeting::Keywords;
+use crate::world::{Consume, ItemDef, ItemKey, ShopDef};
+
+/// What a shop pays for an item: this share of its value.
+const BUYING_SHARE: u64 = 3;
+/// The most a shop resells at once; the oldest goes first.
+const MAX_RESALE: usize = 20;
+
+pub struct ShopsPlugin;
+
+impl Plugin for ShopsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_command(
+            CommandSpec::new("list", Category::Interaction)
+                .summary("see what a shopkeeper here sells, and for how much")
+                .quiet(),
+            list,
+        )
+        .add_command(
+            CommandSpec::new("buy", Category::Interaction)
+                .usage("buy <item>")
+                .summary("buy something from a shopkeeper here"),
+            buy,
+        )
+        .add_command(
+            CommandSpec::new("sell", Category::Interaction)
+                .usage("sell <item>")
+                .summary("sell something you carry to a shopkeeper here"),
+            sell,
+        )
+        .add_command(
+            CommandSpec::new("value", Category::Interaction)
+                .usage("value <item>")
+                .summary("ask a shopkeeper here what they'd pay for something you carry")
+                .quiet(),
+            value,
+        );
+    }
+}
+
+/// What a shopkeeper has bought from players and will sell again, oldest first.
+#[derive(Component, Debug, Default)]
+pub struct Resale(pub Vec<ItemKey>);
+
+/// What an item is worth to a shop, if anything.
+pub fn worth(def: &ItemDef) -> Option<u64> {
+    def.value.map(u64::from).filter(|v| *v > 0)
+}
+
+/// What a shop pays for something worth `value`: a third, and at least a copper.
+pub fn offer(value: u64) -> u64 {
+    (value / BUYING_SHARE).max(1)
+}
+
+/// Whether a shop buys this kind of item: `anything`, one of its tags, or what it is (`weapon`,
+/// `armour`, `food`, `drink`, `container`).
+pub fn buys(shop: &ShopDef, def: &ItemDef) -> bool {
+    let mut kinds: Vec<&str> = def.tags.iter().map(String::as_str).collect();
+    if def.weapon.is_some() {
+        kinds.push("weapon");
+    }
+    if def.armour.is_some() {
+        kinds.push("armour");
+    }
+    if def.container.is_some() {
+        kinds.push("container");
+    }
+    match def.consumable.map(|c| c.by) {
+        Some(Consume::Eat) => kinds.push("food"),
+        Some(Consume::Drink) => kinds.push("drink"),
+        None => {}
+    }
+    worth(def).is_some()
+        && shop
+            .buys
+            .iter()
+            .any(|kind| kind == "anything" || kinds.contains(&kind.as_str()))
+}
+
+/// What trading needs.
+#[derive(SystemParam)]
+struct Counter<'w, 's> {
+    commands: Commands<'w, 's>,
+    players: PlayerQuery<'w, 's>,
+    mobs: MobQuery<'w, 's>,
+    mob_templates: Res<'w, MobTemplates>,
+    templates: Res<'w, ItemTemplates>,
+    items: ItemQuery<'w, 's>,
+    keywords: Query<'w, 's, &'static Keywords>,
+    purses: Query<'w, 's, &'static mut Purse>,
+    resale: Query<'w, 's, &'static mut Resale>,
+    rooms: RoomQuery<'w, 's>,
+    db: Res<'w, Database>,
+}
+
+/// A shopkeeper and their shop.
+struct Keeper {
+    entity: Entity,
+    name: String,
+    zone: String,
+    shop: ShopDef,
+}
+
+/// One line of a shop's goods.
+struct Ware {
+    key: ItemKey,
+    def: ItemDef,
+    price: u64,
+    /// Bought from a player, at this place in the resale list.
+    resale: Option<usize>,
+}
+
+impl Counter<'_, '_> {
+    /// The first shopkeeper in `room`, if any.
+    fn keeper(&self, room: Entity) -> Result<Keeper, String> {
+        let mut here: Vec<_> = self
+            .mobs
+            .iter()
+            .filter(|(_, _, r)| r.0 == room)
+            .filter_map(|(entity, mob, _)| {
+                let shop = self.mob_templates.0.get(&mob.key)?.shop.clone()?;
+                Some(Keeper {
+                    entity,
+                    name: mob.name.clone(),
+                    zone: mob.key.zone.clone(),
+                    shop,
+                })
+            })
+            .collect();
+        here.sort_by_key(|k| k.entity);
+        here.into_iter()
+            .next()
+            .ok_or_else(|| "There's no one here to trade with.".to_string())
+    }
+
+    /// Everything `keeper` has for sale: their stock, then what they've bought.
+    fn wares(&self, keeper: &Keeper) -> Vec<Ware> {
+        let stock = keeper
+            .shop
+            .sells
+            .iter()
+            .map(|id| (ItemKey::parse(id, &keeper.zone), None));
+        let resale = self
+            .resale
+            .get(keeper.entity)
+            .map(|r| r.0.clone())
+            .unwrap_or_default();
+        let bought = resale
+            .into_iter()
+            .enumerate()
+            .map(|(i, key)| (key, Some(i)));
+        stock
+            .chain(bought)
+            .filter_map(|(key, resale)| {
+                let def = self.templates.0.get(&key)?.clone();
+                let price = worth(&def)?;
+                Some(Ware {
+                    key,
+                    def,
+                    price,
+                    resale,
+                })
+            })
+            .collect()
+    }
+
+    /// An item `actor` carries, by name, ready to sell: not worn, and empty if it's a container.
+    fn sellable(&self, actor: &Actor, words: &str) -> Result<(Entity, ItemKey, String), String> {
+        if words.trim().is_empty() {
+            return Err("Sell what?".into());
+        }
+        let entity = items::find_item(words, actor, &self.items, &self.keywords, &self.templates)?;
+        let snapshot = Snapshot::new(
+            self.items.iter().map(|(e, i, l)| (e, i, *l)),
+            &self.templates,
+        );
+        let (_, item, location) = self.items.get(entity).map_err(|_| String::new())?;
+        if snapshot.root(entity).and_then(ItemLocation::holder) != Some(actor.entity) {
+            return Err(format!("You'd have to pick up {} first.", item.name));
+        }
+        if matches!(location, ItemLocation::Worn(..)) {
+            return Err(format!("You'd have to take off {} first.", item.name));
+        }
+        if snapshot.at(ItemLocation::Inside(entity)).next().is_some() {
+            return Err(format!("You'd have to empty {} first.", item.name));
+        }
+        Ok((entity, item.key.clone(), item.name.clone()))
+    }
+}
+
+/// `list`: what the shopkeeper here sells.
+fn list(In(inv): In<Invocation>, mut counter: Counter) {
+    let text = counter
+        .keeper(Actor::get(&counter.players, inv.entity).map_or(Entity::PLACEHOLDER, |a| a.room))
+        .map(|keeper| {
+            let wares = counter.wares(&keeper);
+            if wares.is_empty() {
+                return format!("{} has nothing for sale.", capitalized(&keeper.name));
+            }
+            let mut text = format!("{} sells:", capitalized(&keeper.name));
+            for ware in wares {
+                let used = if ware.resale.is_some() { " (used)" } else { "" };
+                let name = format!("{}{used}", ware.def.name);
+                text += &format!("\r\n  {name:<34} {}", money::coins(ware.price));
+            }
+            text + "\r\nType 'buy <item>' to buy, 'sell <item>' to sell, or 'value <item>' to ask \
+                    what they'd pay."
+        })
+        .unwrap_or_else(|err| err);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut counter.players);
+}
+
+/// `buy <item>`: buy something from the shopkeeper here. It goes into a free hand, or onto the
+/// ground if your hands are full.
+fn buy(In(inv): In<Invocation>, mut counter: Counter) {
+    let Some(actor) = Actor::get(&counter.players, inv.entity) else {
+        return;
+    };
+    let mut out = Vec::new();
+    let reply = (|| {
+        let keeper = counter.keeper(actor.room)?;
+        let wanted = inv.args.trim();
+        if wanted.is_empty() {
+            return Err("Buy what? Type 'list' to see what's for sale.".to_string());
+        }
+        let ware = counter
+            .wares(&keeper)
+            .into_iter()
+            .find(|ware| ware.def.keywords().matches(wanted))
+            .ok_or_else(|| {
+                format!(
+                    "{} doesn't sell '{wanted}'. Type 'list' to see what's for sale.",
+                    capitalized(&keeper.name)
+                )
+            })?;
+        let mut purse = counter
+            .purses
+            .get_mut(actor.entity)
+            .map_err(|_| String::new())?;
+        if !purse.pay(ware.price) {
+            return Err(format!(
+                "{} costs {}, and you have {}.",
+                capitalized(&ware.def.name),
+                money::coins(ware.price),
+                money::coins(purse.0)
+            ));
+        }
+        purse.save(actor.character_id, &counter.db);
+        if let Some(i) = ware.resale
+            && let Ok(mut resale) = counter.resale.get_mut(keeper.entity)
+        {
+            resale.0.remove(i);
+        }
+        // Into a free hand, or set down if both are full. Either way it's a player's now, so real.
+        let hands = counter
+            .items
+            .iter()
+            .filter(|(_, _, l)| **l == ItemLocation::Held(actor.entity))
+            .count();
+        let (location, place, where_to) = if hands < HANDS {
+            (
+                ItemLocation::Held(actor.entity),
+                ItemPlace::Held(actor.character_id),
+                "",
+            )
+        } else {
+            let room = counter
+                .rooms
+                .get(actor.room)
+                .map(|(_, key, _)| key.to_string())
+                .unwrap_or_default();
+            (
+                ItemLocation::Room(actor.room),
+                ItemPlace::Room(room),
+                " Your hands are full, so it's set down at your feet.",
+            )
+        };
+        let id = counter
+            .db
+            .create_item(&ware.key.to_string(), &place)
+            .map_err(|err| error!("failed to save a bought item [{}]: {err}", ware.key))
+            .ok();
+        items::spawn_item(
+            &mut counter.commands,
+            &counter.templates,
+            ware.key.clone(),
+            id,
+            location,
+        );
+        out.push(Outgoing::Room {
+            room: actor.room,
+            except: actor.entity,
+            text: format!(
+                "{} buys {} from {}.\r\n",
+                actor.name,
+                ware.def.name,
+                crate::combat::the(&keeper.name)
+            ),
+        });
+        Ok(format!(
+            "You buy {} from {} for {}.{where_to}",
+            ware.def.name,
+            crate::combat::the(&keeper.name),
+            money::coins(ware.price)
+        ))
+    })();
+    match reply {
+        Ok(text) | Err(text) if !text.is_empty() => {
+            out.insert(0, Outgoing::line(actor.entity, text))
+        }
+        _ => {}
+    }
+    deliver(out, &mut counter.players);
+}
+
+/// `sell <item>`: sell something you carry to the shopkeeper here, for a third of its value.
+fn sell(In(inv): In<Invocation>, mut counter: Counter) {
+    let Some(actor) = Actor::get(&counter.players, inv.entity) else {
+        return;
+    };
+    let mut out = Vec::new();
+    let reply = (|| {
+        let keeper = counter.keeper(actor.room)?;
+        let (entity, key, name) = counter.sellable(&actor, &inv.args)?;
+        let def = counter.templates.0.get(&key).ok_or_else(String::new)?;
+        let keeper_name = crate::combat::the(&keeper.name);
+        if !buys(&keeper.shop, def) {
+            return Err(format!(
+                "{} isn't interested in {name}.",
+                capitalized(&keeper_name)
+            ));
+        }
+        let paid = offer(worth(def).unwrap_or_default());
+        let unique = def.unique;
+        let mut purse = counter
+            .purses
+            .get_mut(actor.entity)
+            .map_err(|_| String::new())?;
+        purse.0 += paid;
+        purse.save(actor.character_id, &counter.db);
+        // Gone from the player.
+        if let Ok((_, item, _)) = counter.items.get(entity)
+            && let Some(id) = item.id
+            && let Err(err) = counter.db.delete_item(id)
+        {
+            error!("failed to delete sold item {id}: {err}");
+        }
+        counter.commands.entity(entity).despawn();
+        // A shop resells what it bought, unless it stocks it anyway, or there's only ever one.
+        let stocked = keeper
+            .shop
+            .sells
+            .iter()
+            .any(|id| ItemKey::parse(id, &keeper.zone) == key);
+        if !unique && !stocked {
+            match counter.resale.get_mut(keeper.entity) {
+                Ok(mut resale) => {
+                    resale.0.push(key);
+                    if resale.0.len() > MAX_RESALE {
+                        resale.0.remove(0);
+                    }
+                }
+                Err(_) => {
+                    counter
+                        .commands
+                        .entity(keeper.entity)
+                        .insert(Resale(vec![key]));
+                }
+            }
+        }
+        out.push(Outgoing::Room {
+            room: actor.room,
+            except: actor.entity,
+            text: format!("{} sells {name} to {keeper_name}.\r\n", actor.name),
+        });
+        Ok(format!(
+            "You sell {name} to {keeper_name} for {}.",
+            money::coins(paid)
+        ))
+    })();
+    match reply {
+        Ok(text) | Err(text) if !text.is_empty() => {
+            out.insert(0, Outgoing::line(actor.entity, text))
+        }
+        _ => {}
+    }
+    deliver(out, &mut counter.players);
+}
+
+/// `value <item>`: what the shopkeeper here would pay for something you carry.
+fn value(In(inv): In<Invocation>, mut counter: Counter) {
+    let Some(actor) = Actor::get(&counter.players, inv.entity) else {
+        return;
+    };
+    let text = (|| {
+        let keeper = counter.keeper(actor.room)?;
+        let (_, key, name) = counter.sellable(&actor, &inv.args)?;
+        let def = counter.templates.0.get(&key).ok_or_else(String::new)?;
+        let keeper_name = capitalized(&crate::combat::the(&keeper.name));
+        Ok(if buys(&keeper.shop, def) {
+            let paid = offer(worth(def).unwrap_or_default());
+            format!(
+                "{keeper_name} would give you {} for {name}.",
+                money::coins(paid)
+            )
+        } else {
+            format!("{keeper_name} isn't interested in {name}.")
+        })
+    })()
+    .unwrap_or_else(|err: String| err);
+    deliver(vec![Outgoing::line(inv.entity, text)], &mut counter.players);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::{ConsumableDef, WeaponDef};
+
+    #[test]
+    fn shops_buy_what_they_deal_in() {
+        let mut sword = ItemDef::named("a short sword");
+        sword.weapon = Some(WeaponDef {
+            skill: "swordplay:basics".into(),
+            damage: (2, 5),
+        });
+        sword.value = Some(100);
+        let mut bread = ItemDef::named("a loaf of bread");
+        bread.value = Some(3);
+        bread.consumable = Some(ConsumableDef {
+            by: Consume::Eat,
+            health: None,
+            stamina: None,
+            recovery: None,
+        });
+        let mut herb = ItemDef::named("a sprig of yarrow");
+        herb.tags = vec!["herb".into()];
+        herb.value = Some(4);
+        let worthless = ItemDef::named("a rusty key");
+
+        let smith = ShopDef {
+            sells: Vec::new(),
+            buys: vec!["weapon".into(), "armour".into()],
+        };
+        let herbalist = ShopDef {
+            sells: Vec::new(),
+            buys: vec!["herb".into(), "food".into()],
+        };
+        let tinker = ShopDef {
+            sells: Vec::new(),
+            buys: vec!["anything".into()],
+        };
+        assert!(buys(&smith, &sword) && !buys(&smith, &bread));
+        assert!(buys(&herbalist, &herb) && buys(&herbalist, &bread) && !buys(&herbalist, &sword));
+        assert!(
+            buys(&tinker, &sword) && !buys(&tinker, &worthless),
+            "nothing for no value"
+        );
+        assert_eq!(offer(100), 33);
+        assert_eq!(offer(1), 1, "always something");
+    }
+}

@@ -15,6 +15,7 @@ use bevy::prelude::*;
 use crate::attributes::{Attribute, Attributes};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, ItemPlace, Permission, RoomItemRow};
+use crate::money::{self, Purse};
 use crate::net::{self, Connection};
 use crate::output::{
     Actor, Outgoing, PlayerQuery, Reply, RoomQuery, deliver, reply_line, targets_in_room,
@@ -79,7 +80,7 @@ impl Plugin for ItemsPlugin {
             )
             .add_command(
                 CommandSpec::new("give", Interaction)
-                    .usage("give <item> <player>")
+                    .usage("give <item | amount> <player>")
                     .summary("hand something to someone here"),
                 give,
             )
@@ -1174,6 +1175,7 @@ fn inventory(
     items: ItemQuery,
     templates: Res<ItemTemplates>,
     sheets: Query<&Attributes>,
+    purses: Query<&Purse>,
 ) {
     let who = inv.entity;
     let snapshot = Snapshot::new(items.iter().map(|(e, i, l)| (e, i, *l)), &templates);
@@ -1216,6 +1218,9 @@ fn inventory(
     } else {
         ""
     };
+    if let Ok(purse) = purses.get(who) {
+        text += &format!("In your purse: {}.\r\n", money::coins(purse.0));
+    }
     text += &format!(
         "Bulk: {} (encumbered above {}, limit {}).{state}",
         format_bulk(burden),
@@ -1656,10 +1661,27 @@ fn give(
     sheets: Query<&Attributes>,
     hidden: Query<&Hidden>,
     db: Res<Database>,
+    mut purses: Query<&mut Purse>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
+    // `give 5 silver grok` gives money.
+    if let Some((amount, who)) = money::amount_in(&inv.args) {
+        let here = visible(
+            actor.entity,
+            targets_in_room(actor.room, &players, &keywords),
+            &hidden,
+        );
+        let out = Target::parse(who)
+            .and_then(|t| t.find_one(actor.entity, here))
+            .and_then(|e| Actor::get(&players, e))
+            .ok_or_else(|| format!("You don't see {} here.", who.trim()))
+            .and_then(|receiver| money::give_coins(&actor, &receiver, amount, &mut purses, &db))
+            .unwrap_or_else(|err| vec![Outgoing::line(actor.entity, err)]);
+        deliver(out, &mut players);
+        return;
+    }
     let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
     let me = mover.me();
     let out = give_item(&inv, &mut mover, &players, &keywords, &sheets, &hidden)

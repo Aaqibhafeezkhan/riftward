@@ -37,6 +37,7 @@ use crate::items::{
     PLAYER_CORPSE_SECS, capitalized,
 };
 use crate::mobs::{self, Mob, MobQuery, MobTemplates};
+use crate::money::{self, Purse};
 use crate::net::Connection;
 use crate::output::{Actor, Outgoing, PlayerQuery, RoomQuery, deliver};
 use crate::skills::{Bonus, Practice, SkillDefs, SkillKind, Skills, boosts};
@@ -738,6 +739,7 @@ fn handle_deaths(
     registry: Res<CommandRegistry>,
     db: Res<Database>,
     mut log: ResMut<CombatLog>,
+    mut purses: Query<&mut Purse>,
 ) {
     // Say how the fight ended before the dead wake up somewhere else.
     if !log.0.is_empty() {
@@ -764,6 +766,23 @@ fn handle_deaths(
             let luck = slayer
                 .and_then(|s| sheets.get(s.0).ok())
                 .map_or(0, |(_, attributes, ..)| attributes.get(Attribute::Luck));
+            // Its coins go to whoever killed it, if that was a player.
+            let carried = mob_templates.0.get(&mob.key).and_then(|def| def.coins);
+            if let (Some((low, high)), Some(slayer)) = (carried, slayer)
+                && let Some(killer) = Actor::get(&players, slayer.0)
+                && let Ok(mut purse) = purses.get_mut(killer.entity)
+            {
+                let (low, high) = (low.min(high), low.max(high));
+                let found = dice.range(luck, i64::from(low)..=i64::from(high)) as u64;
+                if found > 0 {
+                    purse.0 += found;
+                    purse.save(killer.character_id, &db);
+                    log.0.push(Outgoing::line(
+                        killer.entity,
+                        format!("You take {} from {}.", money::coins(found), the(&mob.name)),
+                    ));
+                }
+            }
             let tables = mob_templates.0.get(&mob.key).map(|def| &def.loot);
             for table in tables.into_iter().flatten() {
                 if let Some(Some(id)) = dice.pick(luck, table) {
@@ -1428,6 +1447,7 @@ mod tests {
             description: id.into(),
             school: SCHOOL.into(),
             min_level: 0,
+            price: 0,
             drain: 2,
             aim,
             resist,

@@ -10,6 +10,7 @@
             bulk: Negligible,
             tags: ["food"],
             consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
+            value: 1,
         ),
         "silver_locket": (
             name: "a tarnished silver locket",
@@ -17,6 +18,7 @@
             description: "A heavy silver locket on a broken chain, black with tarnish. The clasp is rusted shut.",
             bulk: Negligible,
             tags: ["valuable"],
+            value: 300,
         ),
         "glowcap": (
             name: "a glowcap",
@@ -24,6 +26,7 @@
             description: "A spongy fungus that glows a faint, sickly green in the dark. Not for eating.",
             bulk: Negligible,
             tags: ["herb"],
+            value: 6,
         ),
         "rat_tail": (
             name: "a rat's tail",
@@ -31,6 +34,7 @@
             description: "A long, scaly rat's tail. Someone in town probably pays for these.",
             bulk: Negligible,
             tags: ["trophy"],
+            value: 1,
         ),
         "kings_tooth": (
             name: "a yellowed tooth of the Rat King",
@@ -38,6 +42,7 @@
             description: "A long, curved incisor, yellow as old ivory and still sharp. Proof that the Rat King has fallen, for now.",
             bulk: Negligible,
             tags: ["trophy"],
+            value: 200,
         ),
     },
     mobs: {
@@ -51,6 +56,7 @@
             attack: "beast:rat_bite",
             health: 3,
             loot: [[(None, 70), ("rat_tail", 30)]],
+            coins: (0, 2),
             aggressive: true,
         ),
         "rat_king": (
@@ -66,6 +72,7 @@
                 [(None, 70), ("riftwatch:healing_draught", 30)],
             ],
             health: 30,
+            coins: (150, 400),
             tactics: 30,
             aggressive: true,
         ),

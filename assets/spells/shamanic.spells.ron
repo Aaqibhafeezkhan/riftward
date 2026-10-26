@@ -6,6 +6,7 @@
             name: "Beast Speech",
             description: "Speak to an animal in the spirits' tongue and calm it: it stops fighting, and no longer attacks those who come near. Its Willpower resists. It doesn't start a fight.",
             school: "shamanic:foundation",
+            price: 50,
             drain: 2,
             aim: Other,
             resist: Some(Attribute(Willpower)),

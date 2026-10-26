@@ -1,6 +1,6 @@
 # Where we are
 
-[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells
+[Design summary](README.md) · Last updated 2026-10-25, after limiting trainers to entry skills, adding discovery through use and the tough-fight boost, and making Inner Discipline the Adept's school, then giving mobs equipment and skills their own text, then armour, then healing, then loot tables and gathering, then tracking, climbing and swimming, then reworking contests and progression, with blows and Diku damage words, then stealth, then spells, then money and shops
 
 A handoff note for picking the work back up: what's built, what's next, and what's waiting on a decision. The design docs hold the detail; this page points into them.
 
@@ -14,6 +14,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Mobs:** templates and spawns (keeping a count, breeding, after-death and reseed timers, gated by world flags), wandering and crowding, pack limits, aggression, auras, the players' vitals, technique skills used by chance, and equipment they fight with and drop.
 - **Characters:** creation (race with Earthdawn-style shifts, starting Karma, a background as a past life, a description), vitals that recover (faster resting, offline too, never in a fight), `score`, `describe`, aliases, a custom prompt.
 - **Skills:** trees as data (`assets/skills/*.skill.ron`), use-based progression with practice and gain cooldowns, uncapped levels with a soft cap from character level, experience and character levels that earn Karma, opposed-roll contests, active and passive skills, attacks, techniques, auras, passive stat bonuses, counters (Riposte), trainers (`learn`, entry skills only), discovery of a tree's other skills through use, a tough-fight boost to learning, Awakening to the four magic traditions.
+- **Money and shops:** a copper, silver and gold purse, coins from kills, three Riftwatch shops that sell, buy and resell, and spell lessons that cost money.
 - **Spells:** spell books as data (`assets/spells/`), `cast` and `spells`, Drain resisted by Willpower, the first two spells of each casting tradition taught by its teacher, cast in or out of fights by players and mobs alike, and the blessed and warded conditions.
 - **Combat:** rounds in initiative order, auto-attacks, weapons (trained and untrained), techniques for every weapon tree's journeyman tier, conditions (staggered, down, bleeding, held, guarding, exposed), stamina costs, fleeing, death and respawn at the shrine, corpses that keep a player's gear, and death for anyone who quits or disconnects mid-fight.
 - **World events:** saved world flags and data-driven events. A rat breakout into the city raises the Rat King, whose aura toughens the rats until he dies.
@@ -22,29 +23,29 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**Money and shops,** step 7 of the plan in [Skill trees](trees.md#proposed-order), then Trade and the crafts. Spells, step 6, are built: see [Spells](magic.md#spells).
+**Trade and the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order): Haggling and Appraisal first, since prices exist now. Money and shops are built: see [Money and shops](economy.md).
 
 ## Small things noticed and not yet done
 
 - Attacks use the margin as blows (glancing to crushing); other contests don't yet: quiet picks, finds of better quality. Later Stealth and Knife skills could add Backstab damage, or make crushing blows easier for it.
 - Trained mobs now land mostly strong and crushing blows on a novice: a town guard hits a new character for up to 14. Guards aren't aggressive, but this needs a look in play.
 - Experience and level numbers are first guesses: 50 for an even fight, 100 × 1.25ⁿ per level.
-- The silver locket from the Sunken Hall has no use until shops.
 - Difficulties are re-rated for the steeper contests and still first guesses: climbs and swims 4 (about one try in three untrained), ordinary locks 4, foraging 3.
 - Blessings and wards aren't saved: logging out or a restart ends them, along with every other condition.
 - A calmed animal stays calm until it dies or resets: there's no time limit yet.
 - Spells come only from teachers: scrolls and grimoires, a spell-holding limit, more schools and great spells costing health are still to come. An admin can know every tradition's foundation; players can't yet, an open question.
 - Spell numbers are first guesses: Drain 2 or 3, resisted at twice that, power = school level + its attribute + Magic, a third of which adds to damage, healing and wards. A teacher at school 20 with Magic 4 casts a Spark or Ward that a new character can't match.
 - A spell readied out of a fight (`Casting`), like an opener, lingers if the fight never starts, and fires at the next one.
+- Prices are first guesses (see [Prices](economy.md#prices)), and so is buying at a third. A shop's resale stock and a player's money on death are open questions.
 - No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built).
 - Hiding isn't saved: logging out shows you, and a restart forgets everyone's hiding.
-- Herbs have no use until Brewing; rat tails and the Rat King's tooth have none until quests or shops.
+- Herbs, rat tails and the Rat King's tooth can only be sold until Brewing and quests use them.
 - Foraging's patch numbers are first guesses: three finds a room, one back every 10 minutes.
 - First Aid's numbers are first guesses too: a novice (Intuition 3) heals 2 to 4, and treats a badly hurt patient about a third of the time.
 - Waterskins can't be drunk from; they need refilling, so they wait for wells and rivers.
 - Armour's numbers are first guesses. Guards in studded leather and a helm (3 armour) shrug off most of a new character's punches.
 - The tough-fight odds count armour's penalty and a shield's block, but not its reduction, so a heavily armoured foe counts as less tough than it is.
-- Town guards drop their short swords (and now armour) and respawn, so they can be farmed for them. Fine while nothing is sold; worth a look once shops exist.
+- Town guards drop their short swords and armour and respawn, and the tinker buys anything: a guard is worth about 1 gold 6 silver in gear, plus his coins. Worth a look in play ([open question](economy.md#open-questions)).
 - Discovery chance (0.1% a use) and the tough-fight cap (2×) are first guesses, untested in play.
 - Room descriptions don't show who's fighting whom.
 - A pack attacking repeats "The sewer rat attacks you!" once per rat.
@@ -59,7 +60,6 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 The design docs keep their own open questions; these are the ones that shape the most:
 
 - **What stops one character learning every tree?** Trainers now teach only entry skills, but those are still free ([Skills](skills.md#open-questions)).
-- **What lessons cost,** once there's money.
 - **How many spells a caster can hold,** and whether spells cost Karma ([Magic](magic.md#open-questions)).
 - **The tier gates** (15, 30, 45) and how many skills per tree ([Skill trees](trees.md#open-questions)).
 - **Where the GM role sits** among the roles ([Architecture](architecture.md#open-questions)).

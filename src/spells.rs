@@ -91,6 +91,9 @@ pub struct SpellDef {
     /// The school level it needs.
     #[serde(default)]
     pub min_level: u32,
+    /// What a teacher asks to teach it, in copper. A tradition's starter spell is free.
+    #[serde(default)]
+    pub price: u32,
     /// Stamina it costs; resisting the Drain well halves it.
     pub drain: u32,
     pub aim: Aim,
@@ -716,6 +719,7 @@ mod tests {
             description: "A bolt.".into(),
             school: "hermetic:foundation".into(),
             min_level: 0,
+            price: 0,
             drain: 2,
             aim: Aim::Foe,
             resist: Some(Resist::Dodge),

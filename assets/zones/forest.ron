@@ -10,6 +10,7 @@
             bulk: Negligible,
             tags: ["food"],
             consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
+            value: 1,
         ),
         "mushrooms": (
             name: "a cluster of mushrooms",
@@ -18,6 +19,7 @@
             bulk: Negligible,
             tags: ["food"],
             consumable: (by: Eat, recovery: (speed: 1.5, minutes: 5)),
+            value: 2,
         ),
         "hazelnuts": (
             name: "a pouchful of hazelnuts",
@@ -26,6 +28,7 @@
             bulk: Negligible,
             tags: ["food"],
             consumable: (by: Eat, recovery: (speed: 1.5, minutes: 10)),
+            value: 1,
         ),
         "yarrow": (
             name: "a sprig of yarrow",
@@ -33,6 +36,7 @@
             description: "Feathery leaves and a flat head of tiny white flowers. Herbalists pack it into wounds.",
             bulk: Negligible,
             tags: ["herb"],
+            value: 4,
         ),
         "kingsfoil": (
             name: "a sprig of kingsfoil",
@@ -40,6 +44,7 @@
             description: "Long green leaves that smell sweet and clean when crushed.",
             bulk: Negligible,
             tags: ["herb"],
+            value: 8,
         ),
         "moonpetal": (
             name: "a moonpetal blossom",
@@ -47,6 +52,7 @@
             description: "A pale flower whose petals hold a faint silver sheen, even in shadow.",
             bulk: Negligible,
             tags: ["herb"],
+            value: 15,
         ),
     },
     mobs: {

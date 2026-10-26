@@ -21,6 +21,7 @@
             name: "Bless",
             description: "Call your god's favour onto someone, or yourself: they attack better by 2 for 80 minutes (ten minutes, really), in a fight or out of one.",
             school: "divine:foundation",
+            price: 50,
             drain: 2,
             aim: Ally,
             effects: [Bless(attack: 2, lasts: Minutes(80))],

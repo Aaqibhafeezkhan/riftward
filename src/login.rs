@@ -17,6 +17,7 @@ use crate::command::{self, ActionQueue};
 use crate::commands::movement::{View, describe_room};
 use crate::db::{Account, CharacterRecord, Database, ItemPlace, Permission, Role};
 use crate::items::{HANDS, ItemTemplates};
+use crate::money::Purse;
 use crate::net::{Connection, JustConnected, PlayerInput};
 use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::skills::{SkillDefs, Skills, UNIVERSAL_SKILLS, learn};
@@ -910,6 +911,7 @@ fn enter_game(
         prompt,
         skills,
         spells,
+        Purse(character.coins),
         ActionQueue::default(),
         AutoAttack(character.autoattack.clone()),
         Keywords::from_name(&character.name),

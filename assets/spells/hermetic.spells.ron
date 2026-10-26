@@ -27,6 +27,7 @@
             name: "Ward",
             description: "Trace a ward around someone, or yourself, that takes the next blows in their place: 4 damage, and a third of your power on top. It lasts 80 minutes (ten minutes, really), in a fight or out of one, or until it has taken all it can.",
             school: "hermetic:foundation",
+            price: 80,
             drain: 3,
             aim: Ally,
             effects: [Ward(absorb: 4, lasts: Minutes(80))],

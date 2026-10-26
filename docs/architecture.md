@@ -44,6 +44,8 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `gathering.rs` | `forage` and `gather`, from a room's finds, and how finds deplete and grow back |
 | `tracking.rs` | Tracks left in rooms by whoever walks through, and `track` |
 | `stealth.rs` | Hiding, sneaking and noticing: `hide`, `sneak`, `search`, who sees whom, and revealing |
+| `money.rs` | The purse, coins and how amounts read and are written, giving coins, the admin `setcoins` |
+| `shops.rs` | Shopkeepers: `list`, `buy`, `sell`, `value`, prices and resale |
 | `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |

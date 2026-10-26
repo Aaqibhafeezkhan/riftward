@@ -343,6 +343,9 @@ pub struct ItemDef {
     /// What it does as armour, if it is some: worn in its slot, or held, like a shield.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub armour: Option<ArmourDef>,
+    /// What it's worth, in copper: what shops sell it for. Without one, no shop buys or sells it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<u32>,
     /// What eating or drinking it does, if it's food, drink or a draught. It's used up.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consumable: Option<ConsumableDef>,
@@ -544,6 +547,7 @@ impl ItemDef {
             unique: false,
             weapon: None,
             armour: None,
+            value: None,
             consumable: None,
         }
     }
@@ -554,6 +558,19 @@ impl ItemDef {
         }
         Keywords::from_name(without_article(&self.name))
     }
+}
+
+/// A shop a mob keeps: what it always has for sale, and what it buys. It sells at an item's
+/// value and buys at a third of it, and resells what it buys.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct ShopDef {
+    /// Item templates (`item` or `zone:item`) it always has for sale.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sells: Vec<String>,
+    /// The kinds of thing it buys: item tags, or `weapon`, `armour`, `food` and `drink` for
+    /// what an item is, or `anything`. Only items with a value are bought.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buys: Vec<String>,
 }
 
 /// A mob template: a monster, an animal or a townsperson.
@@ -597,6 +614,12 @@ pub struct MobDef {
     /// Attacks players who come near, instead of only fighting back.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub aggressive: bool,
+    /// Copper it carries, low to high, rolled when it dies and taken by whoever killed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coins: Option<(u32, u32)>,
+    /// What it sells and buys, if it keeps a shop.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shop: Option<ShopDef>,
     /// Spells it knows (`tradition:spell`), cast by its tactics like techniques.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spells: Vec<String>,
@@ -622,6 +645,8 @@ impl MobDef {
             health: None,
             tactics: None,
             aggressive: false,
+            coins: None,
+            shop: None,
             spells: Vec::new(),
             teaches: Vec::new(),
         }
@@ -1566,7 +1591,8 @@ mod tests {
     }
 
     /// Every zone file in `assets/zones` parses, every exit leads to a real room, every door an
-    /// exit names exists, every lock's key is a real item, and the start room exists.
+    /// exit names exists, every lock's key is a real item, every shop's goods exist and have a
+    /// price, and the start room exists.
     #[test]
     fn zone_files_are_consistent() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/zones");
@@ -1611,6 +1637,27 @@ mod tests {
                     && !item_exists(&ItemKey::parse(key, &zone.id))
                 {
                     problems.push(format!("item {}:{item_id}: no key item '{key}'", zone.id));
+                }
+            }
+            // A shop's goods must exist and have a price, or they'd quietly go unsold.
+            for (mob_id, mob) in &zone.mobs {
+                for id in mob.shop.iter().flat_map(|shop| &shop.sells) {
+                    let key = ItemKey::parse(id, &zone.id);
+                    let priced = zones
+                        .iter()
+                        .find(|z| z.id == key.zone)
+                        .and_then(|z| z.items.get(&key.item))
+                        .map(|item| item.value.is_some_and(|v| v > 0));
+                    match priced {
+                        None => {
+                            problems.push(format!("mob {}:{mob_id}: sells no item '{id}'", zone.id))
+                        }
+                        Some(false) => problems.push(format!(
+                            "mob {}:{mob_id}: sells '{id}', which has no value",
+                            zone.id
+                        )),
+                        Some(true) => {}
+                    }
                 }
             }
             for (door_id, door) in &zone.doors {

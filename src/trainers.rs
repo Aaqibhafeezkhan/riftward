@@ -4,7 +4,8 @@
 //! and so is magic: each tradition's teacher Awakens a student with latent talent by teaching them
 //! its foundation skill.
 //!
-//! Lessons are free for now; what they cost is a question for when there's money.
+//! Skill lessons are free, so no one is locked out of a way to play. Spells cost money, as each
+//! spell says (`price`), except each tradition's starter spell.
 
 use bevy::prelude::*;
 
@@ -14,6 +15,7 @@ use crate::conditions::Facts;
 use crate::db::Database;
 use crate::items::capitalized;
 use crate::mobs::{MobQuery, MobTemplates};
+use crate::money::{self, Purse};
 use crate::output::{Outgoing, PlayerQuery, deliver};
 use crate::skills::{Skill, SkillDefs, Skills, learn};
 use crate::spells::{self, Spell, SpellDefs, Spells};
@@ -65,7 +67,7 @@ fn learn_cmd(
     mobs: MobQuery,
     templates: Res<MobTemplates>,
     (defs, spell_defs): (Res<SkillDefs>, Res<SpellDefs>),
-    mut sheets: Query<(&mut Skills, &mut Attributes, &mut Spells)>,
+    mut sheets: Query<(&mut Skills, &mut Attributes, &mut Spells, &mut Purse)>,
     db: Res<Database>,
 ) {
     let Ok((_, _, Some(player), Some(in_room))) = players.get(inv.entity) else {
@@ -77,7 +79,7 @@ fn learn_cmd(
         player.name.clone(),
         player.character_id,
     );
-    let Ok((mut skills, mut attributes, mut spells)) = sheets.get_mut(inv.entity) else {
+    let Ok((mut skills, mut attributes, mut spells, mut purse)) = sheets.get_mut(inv.entity) else {
         return;
     };
 
@@ -142,7 +144,10 @@ fn learn_cmd(
             let list: Vec<String> = lessons
                 .iter()
                 .map(|lesson| match (known(lesson), needs(lesson)) {
-                    (true, _) => format!("{} (known)", lesson.title()),
+                    (true, _) => match lesson {
+                        Lesson::Spell(spell) => format!("the spell {} (known)", spell.def.name),
+                        Lesson::Skill(skill) => format!("{} (known)", skill.def.name),
+                    },
                     (false, Some(req)) => format!("{} (requires {req})", lesson.title()),
                     (false, None) => lesson.title(),
                 })
@@ -188,7 +193,19 @@ fn learn_cmd(
                     capitalized(&trainer),
                     lesson.name()
                 ),
+                (None, Lesson::Spell(spell)) if !purse.pay(u64::from(spell.def.price)) => {
+                    format!(
+                        "{} asks {} to teach you {}, and you have {}.",
+                        capitalized(&trainer),
+                        money::coins(u64::from(spell.def.price)),
+                        spell.def.name,
+                        money::coins(purse.0)
+                    )
+                }
                 (None, Lesson::Spell(spell)) => {
+                    if spell.def.price > 0 {
+                        purse.save(character_id, &db);
+                    }
                     spells.0.insert(spell.key.clone());
                     if let Err(err) = db.save_spell(character_id, &spell.key, "Taught") {
                         error!("failed to save {name}'s new spell {}: {err}", spell.key);
@@ -262,11 +279,16 @@ impl Lesson<'_> {
         }
     }
 
-    /// How it's listed: a spell says so.
+    /// How it's listed: a spell says so, and what it costs.
     fn title(&self) -> String {
         match self {
             Lesson::Skill(skill) => skill.def.name.clone(),
-            Lesson::Spell(spell) => format!("the spell {}", spell.def.name),
+            Lesson::Spell(spell) if spell.def.price > 0 => format!(
+                "the spell {} for {}",
+                spell.def.name,
+                money::coins(u64::from(spell.def.price))
+            ),
+            Lesson::Spell(spell) => format!("the spell {} (free)", spell.def.name),
         }
     }
 

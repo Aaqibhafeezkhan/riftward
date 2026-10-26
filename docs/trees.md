@@ -135,7 +135,7 @@ The trees above mostly can't be built as data alone yet. Grouped by the system e
 4. **Room terrain and loot tables:** Foraging, Herbalism, Tracking, Climbing and Swimming, and mobs that drop things. *Built:* loot tables, Foraging and Herbalism (see [Gathering](#gathering)), and Tracking, Climbing and Swimming (see [Climbing and swimming](world.md#climbing-and-swimming) and [Tracking](world.md#tracking)). Climbing and Swimming are Athletics skills, taught by the drill sergeant; Tracking is Survival's, taught by the hedge-shaman.
 5. **Seeing and being seen:** Stealth, and Backstab from hiding. *Built:* see [Stealth](#stealth).
 6. **Spells:** the spell category, `cast` and Drain, and the first two spells per tradition, reusing techniques' effects and conditions. *Built:* see [Spells](magic.md#spells): Mend and Bless, Spark and Ward, Beast Speech and Spirit Grasp, taught by each tradition's teacher.
-7. **Money and shops,** then Trade and the crafts.
+7. **Money and shops,** then Trade and the crafts. *Built:* money and shops, see [Money and shops](economy.md); Trade (Haggling, Appraisal) and the crafts are next.
 
 Each step adds its trees' entry skills to the trainers in Riftwatch: the drill sergeant teaches each weapon's basics, and new trainers appear for the rest (the herbalist for Herbalism and First Aid, someone in the Back Alley for Stealth and Thievery). Trainers teach only entry skills; the rest of each tree is [discovered](skills.md#discovery) or learned another way.
 
@@ -207,7 +207,7 @@ Built.
 
 - **First Aid** is the Healing tree's entry skill (Intuition), taught by the herbalist and granted by the Soldier and Herbalist's Apprentice backgrounds, who also start with two bandages. `bandage [<someone>]` (or `use first aid [<someone>]`) uses up a bandage you carry. Whether it helps is your First Aid (level plus Intuition) against half the health they've lost, by opposed roll, so a bad wound is harder to treat. Done well, it heals half your First Aid plus 1 to 3, and stops bleeding; fumbled, the bandage is spoiled. It's an action, so in a fight it takes your turn, on yourself or anyone else there, player or mob.
 - **Consumables** are items with a `consumable` section, used up by `eat` or `drink` (also actions). **Food and drink don't heal**; they speed recovery of health and stamina for a while, on top of resting and never in a fight: a loaf of bread 1.5 times as fast for 10 minutes, a flask of water 1.25 times for 5. Another meal keeps the better speed and the later end, so eating more makes it last, not faster. The feeling is gone at logout. **Healing draughts** work at once, 4 to 8 health rolled with Luck, so they're what to drink in a fight.
-- **Where to find them:** the herbalist's stall keeps three bandages and a healing draught; the guild cellar's chest has bread and water.
+- **Where to find them:** the herbalist sells bandages and healing draughts, and the provisioner bread and water ([Shops](economy.md#riftwatchs-shops)); the guild cellar's chest has bread and water.
 - **Later:** Treat Poison and Surgery (expert), Herbalism and Brewing to make draughts and poultices, and waterskins that refill (they're carried but can't yet be drunk from).
 
 ## Gathering
@@ -225,6 +225,6 @@ Built.
 - [ ] **Is the four-tier shape right,** and are the level gates (15, 30, 45) the right spacing for a 0–50 skill?
 - [ ] **How many skills per tree** to start: the five or so above, or fewer?
 - [ ] **What stops one character learning every tree?** Still the biggest open question in [Skills](skills.md#open-questions). Trainers make it pressing: with free lessons, anyone can open every tree, though now only at its entry.
-- [ ] **Do lessons cost money, time, or both,** once there's money?
+- [x] **Do lessons cost money?** Spells do, except each tradition's starter; skills don't (2026-10-26). See [Lessons](economy.md#lessons).
 - [ ] **Shields and Archery:** in from the start, or later?
 - [ ] **Crafting:** one tree, or one per craft?

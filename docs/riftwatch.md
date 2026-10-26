@@ -193,4 +193,4 @@ The sewers are built for the breeding spawn described in [The living world](worl
 
 - [ ] **The lord:** name, title and household, for the Great Hall and the Lord's Solar.
 - [ ] **How Riftwatch fits the setting:** its place relative to the barrier and the rifts, and what the watchtower actually watches.
-- [ ] **Shops:** which stalls sell what, once items and money exist.
+- [x] **Shops:** the herbalist, the provisioner in the Vendor Stalls and the tinker in Tinkers' Corner; see [Money and shops](economy.md#riftwatchs-shops).

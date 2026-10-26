@@ -28,6 +28,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Designed |
+| [Money and shops](economy.md) | Copper, silver and gold in a purse, coins from kills, shops that sell, buy and resell, what lessons cost | Built |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds as past lives, conditions | Built |
 
@@ -45,7 +46,7 @@ Each document below covers one area and can be read on its own. This page is the
 - A command registry with generated `help`, permission-hidden commands, and target resolution (`2.goblin`, `all.coin`, `me`).
 - Per-character aliases.
 - Character creation: race, starting Karma, background (11 past lives, gated by conditions) and a description, with `back` at every step. Races and backgrounds are data files.
-- Trainers: `learn` from mobs who teach, entry skills and first spells only. The drill sergeant teaches every weapon's basics; a teacher for each magic tradition Awakens those with latent talent. Higher skills are discovered, very rarely, by using their tree, and a tough fight makes gains and discoveries likelier.
+- Trainers: `learn` from mobs who teach, entry skills and first spells only. Skills are free; spells cost money, but for each tradition's starter. The drill sergeant teaches every weapon's basics; a teacher for each magic tradition Awakens those with latent talent. Higher skills are discovered, very rarely, by using their tree, and a tough fight makes gains and discoveries likelier.
 - Attributes, starting Karma, `raise`, `score`, `describe`, and the Luck-aware `Dice` service.
 - Skills: trees as data, use-based progression with practice and cooldowns, active skills (`use`, `pick` for Lockpicking) and passive ones (Endurance), starting skills, uncapped levels with a soft cap set by character level, `skills`.
 - Experience and character level: earned by victories (worth the risk overcome) and discoveries; each level brings 2 Karma. Contests are opposed rolls by the ratio rule, steep (k = 3), with a margin.
@@ -53,6 +54,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Techniques and conditions: every weapon tree's journeyman techniques (Kick, Grapple, Lunge, Riposte, Backstab, Open Vein, Cleave, Hew, Stagger, Crush, Sweep, Guard), staggers, falls, bleeding, holds and guards, and passive bonuses (Toughness, Endurance, the Adept's Killing Hands and Quickened Reflexes).
 - Combat: 3-second rounds in initiative order, auto-attacks chosen by the player, attack skills (Brawling, Swordplay with a blade, beasts' bites), Dodge, aggressive mobs with pack limits, auras, resting (faster recovery, but dangerous), corpses, death and respawn at the shrine, `kill` and `flee`. Action commands queue, one per round.
 - Spells: `cast`, `spells`, Drain resisted by Willpower, lasting effects that wear off in time whether fighting or not (`affects` shows what's on you and for how long), and the first two spells of each casting tradition (Mend, Bless, Spark, Ward, Beast Speech, Spirit Grasp), learned from the tradition's teacher and cast through its school, in a fight or out. Mobs cast them too.
+- Money and shops: a copper, silver and gold purse (`give 5 silver wren`), coins from kills, and shopkeepers (the herbalist, the provisioner, the tinker) with `list`, `buy`, `sell` and `value`, who resell what they buy. Spell lessons cost money, except each tradition's starter spell.
 - Stealth: `hide`, `sneak` and `search`; unseen characters aren't listed, targeted or announced, aggressive mobs ignore what they haven't noticed, acting openly reveals, and a Backstab from hiding can't be avoided.
 - Tracking, Climbing and Swimming: rooms remember who walked through, read with `track`; exits that need a climb or a swim, tried by anyone, practised by the trained.
 - Gathering: `forage` (Foraging) and `gather` (Herbalism), from what each room's environment yields, depleting and growing back; mob loot tables, rolled with the killer's Luck.
