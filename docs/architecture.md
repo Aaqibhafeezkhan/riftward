@@ -43,11 +43,11 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `vitals.rs` | Current health and stamina for players and mobs alike, their maximums, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `healing.rs` | `eat` and `drink` for consumables, and `bandage`, a shortcut for `use first aid` |
 | `gathering.rs` | Active skills aimed at the room that `Find` (`roomwork`; `forage` and `gather` are shortcuts), from a room's finds, and how finds deplete and grow back |
-| `tracking.rs` | Tracks left in rooms by whoever walks through, and `track` |
+| `tracking.rs` | Tracks left in rooms by whoever walks through, and active skills that read them (`trackwork`; `track` is a shortcut to Tracking) |
 | `stealth.rs` | Hiding, sneaking and noticing: `hide`, `sneak`, `search`, who sees whom, and revealing |
 | `money.rs` | The purse, coins and how amounts read and are written, giving coins, the admin `setcoins` |
 | `shops.rs` | Shopkeepers: `list`, `buy`, `sell`, `value`, prices and resale |
-| `trade.rs` | Haggling (deals with shopkeepers, and the prices they set) and `appraise` |
+| `trade.rs` | Haggling (deals with shopkeepers, and the prices they set), and active skills aimed at an item (`itemwork`; `appraise` is a shortcut to Appraisal) |
 | `formula.rs` | Formulas: amounts in data (`"roll(2, 5) + floor(power / 3)"`), parsed at load and worked out through `Dice` with their inputs |
 | `effects.rs` | The one effect vocabulary spells and techniques share (`Damage`, `Heal`, `Apply`, `Remove`, `Cure`, …), whom each is on, how long conditions last, and what fits where |
 | `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |

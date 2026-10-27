@@ -565,6 +565,7 @@ mod tests {
                 description: "Picking locks.".into(),
                 kind: SkillKind::Active {
                     command: None,
+                    quiet: false,
                     provokes: false,
                     cost: Cost::Stamina(1),
                     cooldown: 0.0,

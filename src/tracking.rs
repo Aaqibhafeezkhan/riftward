@@ -1,9 +1,10 @@
 //! Tracking: reading who has passed through a room, and which way they went.
 //!
 //! Every room remembers the tracks of whoever walks in or out of it, player or mob, for half an
-//! hour; a teleport leaves none, and wading water holds none. `track [<who>]` reads them with
-//! Tracking: each track is found by the tracker's skill against how hard the ground is to read,
-//! harder the older the track. Tracks show what made them, not who: "a human" (a player or a
+//! hour; a teleport leaves none, and wading water holds none. `track [<who>]` (or `use tracking`)
+//! reads them with Tracking, an active skill made of effects resolved by `trackwork`: each track
+//! is found by the tracker's skill against how hard the ground is to read, harder the older the
+//! track, as its `against` formula says. Tracks show what made them, not who: "a human" (a player or a
 //! townsperson alike), "a sewer rat".
 
 use std::collections::{HashMap, VecDeque};
@@ -11,11 +12,13 @@ use std::collections::{HashMap, VecDeque};
 use bevy::prelude::*;
 
 use crate::characters::{Races, article};
-use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
+use crate::db::Role;
 use crate::events::{GameEvent, Way, from};
+use crate::formula::Side;
 use crate::mobs::Mob;
 use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
-use crate::skills::{Learner, Practice, fill};
+use crate::skills::{Learner, Practice, SkillKind, fill};
 use crate::targeting::Keywords;
 use crate::world::{Player, Room, Terrain};
 
@@ -39,6 +42,16 @@ impl Plugin for TrackingPlugin {
                     .quiet()
                     .action(),
                 track,
+            )
+            // Run by `use` for an active skill that reads the room's tracks; players don't type
+            // it.
+            .add_command(
+                CommandSpec::new("trackwork", Category::Interaction)
+                    .usage("use <skill> [<who>]")
+                    .summary("read the tracks here with an active skill")
+                    .quiet()
+                    .unlisted(),
+                trackwork,
             );
     }
 }
@@ -165,8 +178,29 @@ fn lay_tracks(
     }
 }
 
-/// `track [<who>]`: read the tracks here, or only those whose maker matches `who`.
-fn track(
+/// `track [<who>]`: Tracking, by its old name. It's an active skill made of effects
+/// (`survival.skill.ron`), so this is `use tracking [<who>]`.
+fn track(In(inv): In<Invocation>, mut commands: Commands, registry: Res<CommandRegistry>) {
+    let Some((spec, id)) = registry.find("trackwork", Role::Player) else {
+        return;
+    };
+    commands.run_system_with(
+        *id,
+        Invocation {
+            entity: inv.entity,
+            command: spec.name,
+            usage: spec.usage,
+            args: format!("{TRACKING} {}", inv.args.trim()),
+        },
+    );
+}
+
+/// `trackwork <tree:skill> [<who>]`: what `use` runs for an active skill aimed at the room that
+/// `Reveal`s its tracks: Tracking. Each track here (or only those whose maker matches `who`) is
+/// read by its own roll, the user's skill against the skill's `against` formula, which sees the
+/// ground's difficulty as `target.ground` and the track's age in minutes as `age`. Those read are
+/// listed after the skill's line. Every try practises the skill.
+fn trackwork(
     In(inv): In<Invocation>,
     players: Characters,
     mut outbox: ResMut<Outbox>,
@@ -178,14 +212,21 @@ fn track(
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
+    let (key, words) = inv.args.split_once(' ').unwrap_or((&inv.args, ""));
+    let Some(skill) = practice.defs.skills.get(key).cloned() else {
+        return;
+    };
+    let SkillKind::Active { against, .. } = &skill.def.kind else {
+        return;
+    };
     let mut out = Vec::new();
     let reply = (|| {
         let room = rooms.get(actor.room).map_err(|_| String::new())?;
-        let difficulty = ground(room.terrain).ok_or("The water holds no tracks.")?;
-        let ready = practice.begin(actor.entity, TRACKING)?;
+        let ground = ground(room.terrain).ok_or("The water holds no tracks.")?;
+        let ready = practice.begin(actor.entity, key)?;
         let now = time.elapsed_secs_f64();
-        let wanted = inv.args.trim().to_lowercase();
-        let skill = f64::from(ready.effectiveness.max(1));
+        let wanted = words.trim().to_lowercase();
+        let skill_rating = f64::from(ready.effectiveness.max(1));
         let mut read = Vec::new();
         for t in tracks.in_room(actor.room, now) {
             if t.who == actor.entity
@@ -193,9 +234,20 @@ fn track(
             {
                 continue;
             }
-            // Older tracks are harder: twice as hard after ten minutes.
-            let hard = difficulty * (1.0 + (now - t.at) / 600.0);
-            if practice.opposed(skill, ready.luck, hard, 0).won {
+            let seen = match against {
+                None => true,
+                Some(against) => {
+                    let numbers = Side {
+                        ground,
+                        ..Side::default()
+                    };
+                    let mut inputs = practice.inputs(actor.entity, ready.effectiveness, numbers);
+                    inputs.age = (now - t.at) / 60.0;
+                    let hard = practice.eval(against, &inputs).max(1.0);
+                    practice.opposed(skill_rating, ready.luck, hard, 0).won
+                }
+            };
+            if seen {
                 let way = match &t.going {
                     Going::Out(dir) => format!("headed {dir}"),
                     Going::In(dir) => format!("came in {}", from(dir)),
@@ -208,14 +260,9 @@ fn track(
             race: &actor.race,
             boost: 1.0,
         };
-        let gains = practice.exercise(actor.entity, learner, TRACKING);
+        let gains = practice.exercise(actor.entity, learner, key);
 
-        let text = practice
-            .defs
-            .skills
-            .get(TRACKING)
-            .and_then(|skill| skill.def.text.clone())
-            .ok_or_else(String::new)?;
+        let text = skill.def.text.as_ref().ok_or_else(String::new)?;
         let lines = match (read.is_empty(), &text.miss) {
             (true, Some(miss)) => miss,
             _ => &text.hit,
@@ -247,6 +294,155 @@ fn track(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::attributes::{Attribute, Attributes};
+    use crate::db::Database;
+    use crate::dice::Dice;
+    use crate::effects::{Effect, Revealed};
+    use crate::formula::Formula;
+    use crate::skills::{Cost, Lines, Skill, SkillDef, SkillDefs, SkillState, SkillText, Skills};
+    use crate::spells::Aim;
+    use crate::vitals::Vitals;
+    use crate::world::{InRoom, MobKey};
+    use bevy::ecs::message::Messages;
+    use bevy::ecs::system::RunSystemOnce;
+    use std::collections::{BTreeMap, HashMap};
+
+    /// A muddy lane with a rat's and a dog's fresh tracks, and a tracker at `level`, as Tracking
+    /// is in its file. Returns the world, the tracker and the lane.
+    fn lane(level: u32) -> (World, Entity, Entity) {
+        let mut world = World::new();
+        let lines = |actor: &str| Lines {
+            actor: actor.into(),
+            target: None,
+            room: "{actor} studies the ground.".into(),
+            beyond: None,
+        };
+        let tracking = Skill {
+            key: TRACKING.into(),
+            tree: "survival".into(),
+            attribute: Attribute::Intuition,
+            def: SkillDef {
+                name: "Tracking".into(),
+                description: "Reading tracks.".into(),
+                kind: SkillKind::Active {
+                    command: None,
+                    quiet: true,
+                    provokes: false,
+                    cost: Cost::Free,
+                    cooldown: 0.0,
+                    aim: Aim::Room,
+                    uses: None,
+                    resist: None,
+                    against: Some(Formula::parse("target.ground * (1 + age / 10)").unwrap()),
+                    tags: Vec::new(),
+                    effects: vec![Effect::Reveal(Revealed::Tracks)],
+                },
+                text: Some(SkillText {
+                    hit: lines("You read the signs:"),
+                    miss: Some(lines("You can't make out any tracks.")),
+                }),
+                mastery: 50,
+                attribute: None,
+                rarity: None,
+                difficulty: 1.0,
+                requires: None,
+                karma: None,
+            },
+        };
+        world.insert_resource(SkillDefs {
+            skills: HashMap::from([(TRACKING.to_string(), tracking)]),
+            trees: HashMap::new(),
+        });
+        world.insert_resource(Dice::seeded(4));
+        world.insert_resource(Database::open(":memory:").unwrap());
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(Outbox::default());
+        world.init_resource::<Messages<GameEvent>>();
+        let room = world
+            .spawn(Room {
+                name: "Lane".into(),
+                description: String::new(),
+                no_wander: false,
+                indoors: false,
+                terrain: Terrain::Mud,
+            })
+            .id();
+        let mut tracks = Tracks::default();
+        tracks.lay(room, track(0.0));
+        tracks.lay(
+            room,
+            Track {
+                what: "a stray dog".into(),
+                words: vec!["dog".into()],
+                ..track(0.0)
+            },
+        );
+        world.insert_resource(tracks);
+        let mut skill = SkillState::new("Template");
+        skill.level = level;
+        let tracker = world
+            .spawn((
+                Mob {
+                    key: MobKey::parse("test:tracker", ""),
+                    name: "a tracker".into(),
+                    here: String::new(),
+                    description: String::new(),
+                    race: None,
+                },
+                InRoom(room),
+                Attributes::starting(|_| 1, 0),
+                Vitals {
+                    health: 10.0,
+                    stamina: 10.0,
+                },
+                Skills(BTreeMap::from([(TRACKING.to_string(), skill)])),
+            ))
+            .id();
+        (world, tracker, room)
+    }
+
+    fn read(world: &mut World, who: Entity, words: &str) -> String {
+        let inv = Invocation {
+            entity: who,
+            command: "trackwork",
+            usage: "",
+            args: format!("{TRACKING} {words}"),
+        };
+        world.run_system_once_with(trackwork, inv).unwrap();
+        world
+            .resource::<Outbox>()
+            .0
+            .iter()
+            .filter_map(|out| match out {
+                Outgoing::To(_, line) => Some(line.clone()),
+                Outgoing::Room { .. } => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn tracking_reads_the_tracks_here_or_only_those_asked_for() {
+        let (mut world, tracker, _) = lane(1000);
+        let told = read(&mut world, tracker, "");
+        assert!(told.contains("You read the signs:"));
+        assert!(told.contains("a sewer rat headed north (fresh)"), "{told}");
+        assert!(told.contains("a stray dog headed north"), "{told}");
+        world.resource_mut::<Outbox>().0.clear();
+        let told = read(&mut world, tracker, "dog");
+        assert!(told.contains("a stray dog"));
+        assert!(!told.contains("sewer rat"), "only the dog's");
+    }
+
+    #[test]
+    fn water_holds_no_tracks() {
+        let (mut world, tracker, lane) = lane(1000);
+        world.get_mut::<Room>(lane).unwrap().terrain = Terrain::Wading;
+        assert_eq!(
+            read(&mut world, tracker, "").trim_end(),
+            "The water holds no tracks."
+        );
+    }
 
     fn track(at: f64) -> Track {
         Track {

@@ -38,11 +38,12 @@ enum Expr {
 }
 
 /// The names a formula can use besides attributes.
-const INPUTS: &[&str] = &["power", "strength", "margin", "level"];
+const INPUTS: &[&str] = &["power", "strength", "margin", "level", "age"];
 /// What `user.` and `target.` can name besides attributes.
 const VITALS: &[&str] = &["health", "most_health", "coins"];
-/// What `target.` can name on a lock (a door or container): how hard it is to pick, and to force.
-const LOCKS: &[&str] = &["pick", "sturdiness"];
+/// What `target.` can name besides a character's: on a lock (a door or container), how hard it is
+/// to pick and to force; on an item, what it's worth; on a room, how hard its ground is to read.
+const THINGS: &[&str] = &["pick", "sturdiness", "value", "ground"];
 /// Functions, and how many arguments each takes.
 const FUNCTIONS: &[(&str, usize)] = &[
     ("min", 2),
@@ -51,6 +52,7 @@ const FUNCTIONS: &[(&str, usize)] = &[
     ("ceil", 1),
     ("round", 1),
     ("roll", 2),
+    ("log10", 1),
 ];
 
 /// What a formula's inputs are worth where it's used. Anything not given counts as nothing,
@@ -61,6 +63,8 @@ pub struct Inputs {
     pub strength: Option<f64>,
     pub margin: f64,
     pub level: f64,
+    /// How old what's being read is, in real minutes: a track's age.
+    pub age: f64,
     pub user: Side,
     pub target: Side,
 }
@@ -75,6 +79,10 @@ pub struct Side {
     pub sturdiness: f64,
     /// The coins in their purse, in copper.
     pub coins: f64,
+    /// An item's worth, in copper; nothing for what no merchant would pay for.
+    pub value: f64,
+    /// How hard a room's ground is to read a fresh track on.
+    pub ground: f64,
 }
 
 impl Side {
@@ -84,6 +92,8 @@ impl Side {
             "most_health" => self.most_health,
             "pick" => self.pick,
             "coins" => self.coins,
+            "value" => self.value,
+            "ground" => self.ground,
             "sturdiness" => self.sturdiness,
             _ => self
                 .attributes
@@ -104,6 +114,7 @@ impl Inputs {
                 "strength" => self.strength.unwrap_or(1.0),
                 "margin" => self.margin,
                 "level" => self.level,
+                "age" => self.age,
                 _ => 0.0,
             },
         }
@@ -210,6 +221,9 @@ fn eval(expr: &Expr, inputs: &Inputs, dice: &mut Dice, luck: i32) -> f64 {
                 ("floor", [x]) => x.floor(),
                 ("ceil", [x]) => x.ceil(),
                 ("round", [x]) => x.round(),
+                // Of nothing or less, nothing.
+                ("log10", [x]) if *x > 0.0 => x.log10(),
+                ("log10", _) => 0.0,
                 ("roll", [a, b]) => {
                     let (low, high) = (a.min(*b).round() as i64, a.max(*b).round() as i64);
                     dice.range(luck, low..=high) as f64
@@ -380,7 +394,7 @@ impl Parser {
 /// Whether `name` is an input formulas know.
 fn known(name: &str) -> Result<(), String> {
     let ok = match name.split_once('.') {
-        Some(("target", rest)) if LOCKS.contains(&rest) => true,
+        Some(("target", rest)) if THINGS.contains(&rest) => true,
         Some(("user" | "target", rest)) => {
             VITALS.contains(&rest)
                 || Attribute::ALL
@@ -395,7 +409,8 @@ fn known(name: &str) -> Result<(), String> {
     } else {
         Err(format!(
             "there's no input '{name}': use {}, or user. and target. with an attribute, health, \
-             most_health or coins, or target.pick or target.sturdiness for a lock",
+             most_health or coins, target.pick or target.sturdiness for a lock, \
+             target.value for an item, target.ground for a room",
             INPUTS.join(", ")
         ))
     }
@@ -477,6 +492,8 @@ mod tests {
             "missing counts as nothing"
         );
         assert_eq!(worked("target.pick + 1", &inputs), 7.0, "a lock's numbers");
+        assert_eq!(worked("log10(1000)", &inputs), 3.0);
+        assert_eq!(worked("log10(0)", &inputs), 0.0, "of nothing, nothing");
         let pick = Formula::parse("max(1, target.pick - power)").unwrap();
         assert!(pick.reads("target.pick"));
         assert!(!pick.reads("target.sturdiness"));

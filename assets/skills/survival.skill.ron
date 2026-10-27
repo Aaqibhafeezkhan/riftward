@@ -23,8 +23,16 @@
         // `track` lists what was read after the actor's line.
         "tracking": (
             name: "Tracking",
-            description: "Reading who passed this way, and which way they went, with 'track [<who>]'. Soft ground and fresh tracks are easy; stone and old tracks hard; water holds none.",
-            kind: Active(command: "track", cooldown: 3),
+            description: "Reading who passed this way, and which way they went, with 'track [<who>]' (or 'use tracking [<who>]'). Soft ground and fresh tracks are easy; stone and old tracks hard; water holds none.",
+            // Each track: the ground's difficulty (mud 1 to paving 8), twice as hard after ten
+            // minutes.
+            kind: Active(
+                aim: Room,
+                cooldown: 3,
+                quiet: true,
+                against: "target.ground * (1 + age / 10)",
+                effects: [Reveal(Tracks)],
+            ),
             text: (
                 hit: (
                     actor: "You study the ground and read the signs:",

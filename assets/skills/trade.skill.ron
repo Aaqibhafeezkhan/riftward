@@ -25,8 +25,15 @@
         // `appraise` fills in {item}, and {worth} as what it's worth.
         "appraisal": (
             name: "Appraisal",
-            description: "Knowing what a thing is worth, with 'appraise <item>'. The more valuable it is, the harder it is to judge.",
-            kind: Active(command: "appraise", cooldown: 2),
+            description: "Knowing what a thing is worth, with 'appraise <item>' (or 'use appraisal <item>'). The more valuable it is, the harder it is to judge.",
+            // Bread is about 3 to judge, a short sword 6, a breastplate 8.
+            kind: Active(
+                aim: Item,
+                cooldown: 2,
+                quiet: true,
+                against: "2 + 2 * log10(target.value + 1)",
+                effects: [Reveal(Worth)],
+            ),
             text: (
                 hit: (
                     actor: "You turn {item} over in your hands: it's worth {worth}.",

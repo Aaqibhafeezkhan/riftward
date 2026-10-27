@@ -83,6 +83,20 @@ pub enum Effect {
     /// Something lifted from the target and given to the user, if it lands: `Take(Coins("..."))`
     /// for Pickpocketing. See [`Taken`].
     Take(Taken),
+    /// Something the user learns, and nothing else changes: an item's worth, a room's tracks. Only
+    /// in an active skill aimed at what it reveals. See [`Revealed`].
+    Reveal(Revealed),
+}
+
+/// What `Reveal` tells the user. Each is read off what the skill is aimed at.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Revealed {
+    /// An item's worth, named as `{worth}` in the skill's text: Appraisal.
+    Worth,
+    /// The tracks in a room, each read by its own roll against `against`, which sees the
+    /// ground's difficulty as `target.ground` and the track's age in minutes as `age`; those read
+    /// are listed after the skill's line: Tracking.
+    Tracks,
 }
 
 /// What `Take` lifts. Coins, for now; items (carried, held, by tag) and conditions (a stolen
@@ -301,9 +315,12 @@ impl Effect {
     }
 }
 
-/// Whether any of `effects` is done to a room rather than to someone: `Find`.
+/// Whether any of `effects` is done to a room or an item rather than to someone: `Find`,
+/// `Reveal`.
 pub fn in_a_room(effects: &[Effect]) -> bool {
-    effects.iter().any(|e| matches!(e, Effect::Find { .. }))
+    effects
+        .iter()
+        .any(|e| matches!(e, Effect::Find { .. } | Effect::Reveal(_)))
 }
 
 /// What a spell or technique is, for what resists it: its own `tags`, the tags of every condition

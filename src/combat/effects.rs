@@ -81,6 +81,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 .map_or(0.0, |f| f64::from(f.attributes.level())),
             user: side(user),
             target: side(target),
+            ..Inputs::default()
         }
     }
 

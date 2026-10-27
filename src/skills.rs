@@ -237,15 +237,26 @@ impl SkillDef {
                     "is aimed at a lock, so it can only Apply or Remove \"{LOCKED}\""
                 ));
             }
-            // A room yields what's found in it, for now: one kind of find.
-            let finds = effects
-                .iter()
-                .filter(|e| matches!(e, Effect::Find { .. }))
-                .count();
-            match (*aim == Aim::Room, finds, effects.len()) {
-                (true, 1, 1) | (false, 0, _) => {}
-                (true, ..) => return Err("is aimed at the room, so it does one Find".into()),
-                (false, ..) => return Err("Finds, so it must be aimed at the Room".into()),
+            // A room yields what's found in it, or tells its tracks; an item its worth. Each one
+            // thing, for now.
+            let only = |fits: fn(&Effect) -> bool| effects.len() == 1 && fits(&effects[0]);
+            let ok = match aim {
+                Aim::Room => only(|e| {
+                    matches!(
+                        e,
+                        Effect::Find { .. } | Effect::Reveal(effects::Revealed::Tracks)
+                    )
+                }),
+                Aim::Item => only(|e| matches!(e, Effect::Reveal(effects::Revealed::Worth))),
+                _ => !effects::in_a_room(effects),
+            };
+            if !ok {
+                return Err(match aim {
+                    Aim::Room => "is aimed at the room, so it does one Find or Reveal(Tracks)",
+                    Aim::Item => "is aimed at an item, so it does one Reveal(Worth)",
+                    _ => "Finds or Reveals, so it must be aimed at the Room or an Item",
+                }
+                .into());
             }
         }
         if let SkillKind::Passive { reactions, .. } = &self.kind {
@@ -402,6 +413,9 @@ pub enum SkillKind {
         /// When it fails, a mob it was tried on turns on the user: a pickpocket caught.
         #[serde(default)]
         provokes: bool,
+        /// Using it doesn't show a hidden user: reading tracks, weighing an item's worth.
+        #[serde(default)]
+        quiet: bool,
     },
     /// Practised whenever one of its triggers happens, and raising numbers as it levels.
     Passive {
@@ -446,6 +460,11 @@ pub enum SkillKind {
 
 /// The condition a lock is in when it's locked: on a door or a container, it's their state.
 pub const LOCKED: &str = "locked";
+
+/// Whether `effects` find something in a room, rather than reading it.
+fn finds(effects: &[Effect]) -> bool {
+    effects.iter().any(|e| matches!(e, Effect::Find { .. }))
+}
 
 fn ally() -> Aim {
     Aim::Ally
@@ -1599,18 +1618,31 @@ fn use_cmd(
                 },
                 // One like nothing else has its own command; the rest are their effects, done by
                 // `ability`, which shows a hidden user as casting does.
-                SkillKind::Active { command, aim, .. } => {
+                SkillKind::Active {
+                    command,
+                    aim,
+                    effects,
+                    quiet,
+                    ..
+                } => {
                     let (verb, args) = match (command, aim) {
                         (Some(command), _) => (command.as_str(), target.trim().to_string()),
                         (None, Aim::Lock) => {
                             ("lockwork", format!("{} {}", skill.key, target.trim()))
                         }
+                        // The room's tracks are `trackwork`'s; what's found there `roomwork`'s.
+                        (None, Aim::Room) if effects::in_a_room(effects) && !finds(effects) => {
+                            ("trackwork", format!("{} {}", skill.key, target.trim()))
+                        }
                         (None, Aim::Room) => ("roomwork", skill.key.clone()),
+                        (None, Aim::Item) => {
+                            ("itemwork", format!("{} {}", skill.key, target.trim()))
+                        }
                         (None, _) => ("ability", format!("{} {}", skill.key, target.trim())),
                     };
                     match registry.find(verb, actor.role) {
                         Some((spec, id)) => {
-                            if command.is_none() && hidden.get(inv.entity).is_ok() {
+                            if command.is_none() && !quiet && hidden.get(inv.entity).is_ok() {
                                 reveal(
                                     &mut commands,
                                     &mut events,

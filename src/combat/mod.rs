@@ -2800,6 +2800,7 @@ mod tests {
             key,
             SkillKind::Active {
                 command: None,
+                quiet: false,
                 provokes: false,
                 cost: Cost::Stamina(2),
                 cooldown: 5.0,
@@ -2966,6 +2967,7 @@ mod tests {
             "thievery:pickpocketing",
             SkillKind::Active {
                 command: None,
+                quiet: false,
                 provokes: true,
                 cost: Cost::Free,
                 cooldown: 0.0,

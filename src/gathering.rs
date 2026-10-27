@@ -282,6 +282,7 @@ mod tests {
                 description: "Finding food.".into(),
                 kind: SkillKind::Active {
                     command: None,
+                    quiet: false,
                     provokes: false,
                     cost: Cost::Free,
                     cooldown: 0.0,

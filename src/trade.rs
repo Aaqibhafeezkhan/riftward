@@ -6,8 +6,8 @@
 //! fifth), for `DEAL_SECS`. Buying prices come down by that share of an item's value, and selling
 //! prices go up by it, so the two never cross. Without Haggling, a character pays list price.
 //!
-//! **Appraisal** is `appraise <item>`: what something is worth, judged against a difficulty that
-//! grows with its value.
+//! **Appraisal** is `appraise <item>` (or `use appraisal <item>`): what something is worth, judged
+//! against a difficulty that grows with its value. It's data, resolved by `itemwork`.
 
 use std::collections::HashMap;
 
@@ -15,12 +15,14 @@ use bevy::prelude::*;
 
 use crate::attributes::Attribute;
 use crate::combat::{Blow, the};
-use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
+use crate::db::Role;
 use crate::dice::Contest;
+use crate::formula::Side;
 use crate::items::{self, ItemQuery, ItemTemplates, worth};
 use crate::money;
 use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
-use crate::skills::{Learner, Practice, fill};
+use crate::skills::{Learner, Practice, SkillKind, fill};
 use crate::targeting::Keywords;
 
 /// The skill that moves prices.
@@ -43,6 +45,15 @@ impl Plugin for TradePlugin {
                 .quiet()
                 .action(),
             appraise,
+        )
+        // Run by `use` for an active skill aimed at an item; players don't type it.
+        .add_command(
+            CommandSpec::new("itemwork", Category::Interaction)
+                .usage("use <skill> <item>")
+                .summary("use an active skill on an item")
+                .quiet()
+                .unlisted(),
+            itemwork,
         );
     }
 }
@@ -167,14 +178,28 @@ pub fn bargain(
     share
 }
 
-/// The difficulty of appraising something worth `value`: harder the more it's worth. Bread is
-/// about 3, a short sword 6, a breastplate 8.
-fn appraisal_difficulty(value: u64) -> f64 {
-    2.0 + 2.0 * (value as f64 + 1.0).log10()
+/// `appraise <item>`: Appraisal, by its old name. It's an active skill made of effects
+/// (`trade.skill.ron`), so this is `use appraisal <item>`.
+fn appraise(In(inv): In<Invocation>, mut commands: Commands, registry: Res<CommandRegistry>) {
+    let Some((spec, id)) = registry.find("itemwork", Role::Player) else {
+        return;
+    };
+    commands.run_system_with(
+        *id,
+        Invocation {
+            entity: inv.entity,
+            command: spec.name,
+            usage: spec.usage,
+            args: format!("{APPRAISAL} {}", inv.args.trim()),
+        },
+    );
 }
 
-/// `appraise <item>`: what something you can reach is worth, if you can tell.
-fn appraise(
+/// `itemwork <tree:skill> <item>`: what `use` runs for an active skill aimed at an item you can
+/// reach, carried or here, which `Reveal`s its worth: Appraisal. It's the user's skill (level
+/// plus attribute) against its `against` formula, which sees the item's worth as
+/// `target.value`; worked, the skill's text names it as `{worth}`. Every try practises the skill.
+fn itemwork(
     In(inv): In<Invocation>,
     players: Characters,
     mut outbox: ResMut<Outbox>,
@@ -186,26 +211,36 @@ fn appraise(
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
+    let (key, words) = inv.args.split_once(' ').unwrap_or((&inv.args, ""));
+    let Some(skill) = practice.defs.skills.get(key).cloned() else {
+        return;
+    };
+    let SkillKind::Active { against, .. } = &skill.def.kind else {
+        return;
+    };
     let mut out = Vec::new();
     let reply = (|| {
-        if inv.args.trim().is_empty() {
-            return Err(inv.usage_error());
+        if words.trim().is_empty() {
+            return Err(format!("Use {} on what?", skill.def.name));
         }
-        let entity = items::find_item(&inv.args, &actor, &items, &keywords, &templates)?;
+        let entity = items::find_item(words, &actor, &items, &keywords, &templates)?;
         let (_, item, _) = items.get(entity).map_err(|_| String::new())?;
-        let ready = practice.begin(actor.entity, APPRAISAL)?;
+        let ready = practice.begin(actor.entity, key)?;
         let value = templates
             .0
             .get(&item.key)
             .and_then(|def| worth(def, item.quality));
-        let skill = f64::from(ready.effectiveness.max(1));
-        // Something with no value is easy to judge.
-        let judged = match value {
+        let judged = match against {
             None => true,
-            Some(value) => {
-                practice
-                    .opposed(skill, ready.luck, appraisal_difficulty(value), 0)
-                    .won
+            Some(against) => {
+                let numbers = Side {
+                    value: value.unwrap_or(0) as f64,
+                    ..Side::default()
+                };
+                let inputs = practice.inputs(actor.entity, ready.effectiveness, numbers);
+                let difficulty = practice.eval(against, &inputs).max(1.0);
+                let skill = f64::from(ready.effectiveness.max(1));
+                practice.opposed(skill, ready.luck, difficulty, 0).won
             }
         };
         let learner = Learner {
@@ -213,13 +248,8 @@ fn appraise(
             race: &actor.race,
             boost: 1.0,
         };
-        let gains = practice.exercise(actor.entity, learner, APPRAISAL);
-        let text = practice
-            .defs
-            .skills
-            .get(APPRAISAL)
-            .and_then(|skill| skill.def.text.clone())
-            .ok_or_else(String::new)?;
+        let gains = practice.exercise(actor.entity, learner, key);
+        let text = skill.def.text.as_ref().ok_or_else(String::new)?;
         let lines = match (judged, &text.miss) {
             (false, Some(miss)) => miss,
             _ => &text.hit,
@@ -281,8 +311,29 @@ mod tests {
 
     #[test]
     fn dearer_things_are_harder_to_judge() {
-        assert!(appraisal_difficulty(3) < appraisal_difficulty(100));
-        assert!(appraisal_difficulty(100) < appraisal_difficulty(1000));
-        assert!((appraisal_difficulty(1000) - 8.0).abs() < 0.01);
+        // Appraisal's own difficulty, from its skill file.
+        let text = std::fs::read_to_string("assets/skills/trade.skill.ron").unwrap();
+        let tree: crate::skills::SkillTreeDef =
+            crate::world::ron_options().from_str(&text).unwrap();
+        let SkillKind::Active {
+            against: Some(against),
+            ..
+        } = &tree.skills["appraisal"].kind
+        else {
+            panic!("Appraisal is judged against a difficulty");
+        };
+        let difficulty = |value: u64| {
+            let inputs = crate::formula::Inputs {
+                target: Side {
+                    value: value as f64,
+                    ..Side::default()
+                },
+                ..Default::default()
+            };
+            against.eval(&inputs, &mut crate::dice::Dice::seeded(1), 0)
+        };
+        assert!(difficulty(3) < difficulty(100));
+        assert!(difficulty(100) < difficulty(1000));
+        assert!((difficulty(1000) - 8.0).abs() < 0.01);
     }
 }
