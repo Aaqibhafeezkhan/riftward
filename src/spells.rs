@@ -253,6 +253,7 @@ pub struct Spells(pub BTreeSet<String>);
 pub struct Casting {
     pub spell: String,
     pub target: Entity,
+    pub ready_at: f64,
 }
 
 /// A spell's power for a caster: their school's level, plus its attribute, plus Magic.
@@ -549,6 +550,7 @@ fn cast(
     let casting = Casting {
         spell: spell.key.clone(),
         target,
+        ready_at: time.elapsed_secs_f64(),
     };
     if fighting.is_some() {
         commands.entity(inv.entity).insert(casting);
