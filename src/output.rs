@@ -16,6 +16,7 @@ use crate::combat::the;
 use crate::db::Role;
 use crate::mobs::Mob;
 use crate::net::Connection;
+use crate::stealth::{Hidden, sees};
 use crate::targeting::Keywords;
 use crate::world::{Exits, InRoom, Player, Room, RoomKey};
 
@@ -171,6 +172,7 @@ pub fn flush_outbox(
     present: Present,
     puppeted: Query<&PuppetedBy>,
     puppeting: Query<(), With<Puppeting>>,
+    hidden: Query<&Hidden>,
 ) {
     let mut send = |to: Entity, text: &str| {
         if puppeting.get(to).is_ok() {
@@ -185,14 +187,24 @@ pub fn flush_outbox(
         match msg {
             Outgoing::To(entity, text) => send(entity, &text),
             Outgoing::Room { room, except, text } => {
-                for (entity, in_room, _, puppeting) in &present {
-                    if entity != except && in_room.0 == room && !puppeting {
-                        send(entity, &text);
-                    }
+                for entity in audience(room, except, &present, &hidden) {
+                    send(entity, &text);
                 }
             }
         }
     }
+}
+
+/// Who's told what `who` does in `room`: everyone there but them, and while they're still hidden
+/// (doing something quiet, like reading tracks from the shadows), only those who've noticed them.
+fn audience(room: Entity, who: Entity, present: &Present, hidden: &Query<&Hidden>) -> Vec<Entity> {
+    present
+        .iter()
+        .filter(|(entity, in_room, _, puppeting)| {
+            *entity != who && in_room.0 == room && !puppeting && sees(hidden, *entity, who)
+        })
+        .map(|(entity, ..)| entity)
+        .collect()
 }
 
 /// Logged-in players in `room` with their keywords, in a stable order, for resolving targets.
@@ -223,6 +235,47 @@ pub fn targets_online<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::system::RunSystemOnce;
+    use std::collections::HashSet;
+
+    #[test]
+    fn what_a_hidden_character_does_is_seen_only_by_those_who_noticed() {
+        let mut world = World::new();
+        let room = world.spawn_empty().id();
+        let mob = |world: &mut World| {
+            world
+                .spawn((
+                    Mob {
+                        key: crate::world::MobKey::parse("test:mob", ""),
+                        name: "a mob".into(),
+                        here: String::new(),
+                        description: String::new(),
+                        race: None,
+                    },
+                    InRoom(room),
+                ))
+                .id()
+        };
+        let (tracker, noticer, other) = (mob(&mut world), mob(&mut world), mob(&mut world));
+        let told = |world: &mut World| {
+            let mut told = world
+                .run_system_once(move |present: Present, hidden: Query<&Hidden>| {
+                    audience(room, tracker, &present, &hidden)
+                })
+                .unwrap();
+            told.sort();
+            told
+        };
+        let mut everyone = vec![noticer, other];
+        everyone.sort();
+        assert_eq!(told(&mut world), everyone, "in plain sight");
+        world.entity_mut(tracker).insert(Hidden {
+            stealth: 10.0,
+            luck: 0,
+            seen_by: HashSet::from([noticer]),
+        });
+        assert_eq!(told(&mut world), vec![noticer]);
+    }
 
     #[test]
     fn lines_start_with_a_capital() {
