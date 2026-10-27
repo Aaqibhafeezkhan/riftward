@@ -70,6 +70,8 @@ const RESPAWN_ROOM: &str = "riftwatch:shrine";
 const FLEE_COST: f32 = 2.0;
 /// The chance of getting away, before Luck.
 const FLEE_CHANCE: f64 = 0.6;
+/// Seconds before an unstarted prepared move fades.
+const READY_TIMEOUT_SECS: f64 = 5.0;
 
 pub struct CombatPlugin;
 
@@ -77,7 +79,7 @@ impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(states::ConditionsPlugin)
             .add_message::<triggers::Trigger>()
-            .add_systems(Update, expire_conditions.run_if(heartbeat()))
+            .add_systems(Update, (expire_conditions, expire_readied).chain().run_if(heartbeat()))
             .add_systems(
                 Update,
                 (
@@ -209,6 +211,7 @@ pub fn the(name: &str) -> String {
 #[derive(Component, Debug, Clone)]
 pub struct Readied {
     pub skill: String,
+    pub ready_at: f64,
 }
 
 /// The aura each living mob fights under: every living mob holding an aura skill lends its bonus
@@ -717,6 +720,7 @@ fn technique(
     dead: Query<(), With<Dead>>,
     hidden: Query<&Conditions>,
     defs: Res<SkillDefs>,
+    time: Res<Time>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -732,6 +736,7 @@ fn technique(
         // Readied for their next turn.
         commands.entity(inv.entity).insert(Readied {
             skill: key.to_string(),
+            ready_at: time.elapsed_secs_f64(),
         });
         format!("You ready yourself to {}.", skill.def.name)
     } else if !t.opener {
@@ -754,6 +759,7 @@ fn technique(
                         Fighting(mob_entity),
                         Readied {
                             skill: key.to_string(),
+                            ready_at: time.elapsed_secs_f64(),
                         },
                     ))
                     .remove::<Resting>();
@@ -766,6 +772,49 @@ fn technique(
         }
     };
     deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
+}
+
+/// Expire prepared moves only if their first turn never starts.
+fn expire_readied(
+    mut commands: Commands,
+    ready: Query<
+        (Entity, Option<&Readied>, Option<&Casting>),
+        (Or<(With<Readied>, With<Casting>)>, Without<Fighting>),
+    >,
+    time: Res<Time>,
+    skills: Res<SkillDefs>,
+    spells: Res<SpellDefs>,
+    mut log: ResMut<Outbox>,
+) {
+    let now = time.elapsed_secs_f64();
+    for (entity, readied, casting) in &ready {
+        if let Some(readied) = readied
+            && now >= readied.ready_at + READY_TIMEOUT_SECS
+        {
+            let name = skills
+                .skills
+                .get(&readied.skill)
+                .map_or(readied.skill.as_str(), |skill| skill.def.name.as_str());
+            commands.entity(entity).remove::<Readied>();
+            log.0.push(Outgoing::line(
+                entity,
+                format!("You let your {name} fade."),
+            ));
+        }
+        if let Some(casting) = casting
+            && now >= casting.ready_at + READY_TIMEOUT_SECS
+        {
+            let name = spells
+                .0
+                .get(&casting.spell)
+                .map_or(casting.spell.as_str(), |spell| spell.def.name.as_str());
+            commands.entity(entity).remove::<Casting>();
+            log.0.push(Outgoing::line(
+                entity,
+                format!("You let your {name} fade."),
+            ));
+        }
+    }
 }
 
 /// Fighters who haven't fallen yet.
@@ -1701,6 +1750,7 @@ mod tests {
             Casting {
                 spell: "hermetic:spark".into(),
                 target: rat,
+                ready_at: 0.0,
             },
         ));
         world.run_system_once(combat_round).unwrap();
@@ -1746,6 +1796,7 @@ mod tests {
                 Casting {
                     spell: "hermetic:bolt".into(),
                     target: knight,
+                ready_at: 0.0,
                 },
             ));
             world.run_system_once(combat_round).unwrap();
@@ -2116,6 +2167,7 @@ mod tests {
             Casting {
                 spell: "shamanic:beast_speech".into(),
                 target: dog,
+                ready_at: 0.0,
             },
         ));
         world.entity_mut(dog).insert(Fighting(shaman));
@@ -2596,6 +2648,7 @@ mod tests {
             Casting {
                 spell: "hermetic:spark".into(),
                 target: rat,
+                ready_at: 0.0,
             },
         ));
         world.run_system_once(combat_round).unwrap();
@@ -3146,4 +3199,39 @@ mod tests {
         ));
         assert!(world.get::<Conditions>(thief).unwrap().hidden().is_none());
     }
+    
+    #[test]
+    fn abandoned_prepared_moves_expire_only_outside_fights() {
+        let (mut world, room) = world();
+        let opener = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let caster = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let target = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let engaged = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+
+        world.entity_mut(opener).insert(Readied {
+            skill: "brawling:backstab".into(),
+            ready_at: -6.0,
+        });
+        world.entity_mut(caster).insert(Casting {
+            spell: "hermetic:spark".into(),
+            target,
+            ready_at: -6.0,
+        });
+        world.entity_mut(engaged).insert((
+            Fighting(target),
+            Readied {
+                skill: "brawling:cleave".into(),
+                ready_at: -6.0,
+            },
+        ));
+
+        world.run_system_once(expire_readied).unwrap();
+
+        assert!(world.get::<Readied>(opener).is_none());
+        assert!(world.get::<Casting>(caster).is_none());
+        assert!(world.get::<Readied>(engaged).is_some());
+        assert!(said(&world, opener, "You let your brawling:backstab fade."));
+        assert!(said(&world, caster, "You let your hermetic:spark fade."));
+    }
+
 }
