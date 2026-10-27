@@ -111,10 +111,11 @@ Spells are their own category, separate from skills. **Schools are what improve;
 | Divine | **Bless** | Ally | | Attack +2 for 80 minutes | 2 |
 | Hermetic | **Spark** | Foe | Dodge | 2 to 5 damage | 2 |
 | Hermetic | **Ward** | Ally | | Takes 4 damage, within 80 minutes | 3 |
+| Hermetic | **Kindle Blade** | Ally | | The weapon in hand burns for 1 to 3 more fire damage a blow, for 10 blows or 80 minutes (Hermetic Principles 5) | 3 |
 | Shamanic | **Beast Speech** | Other | Willpower | Calms an animal | 2 |
 | Shamanic | **Spirit Grasp** | Foe | Strength | Held for 2 turns | 3 |
 
-All are cast through the tradition's foundation, at level 0, and taught by its teacher (`learn`), who needs the student to know the school first.
+All are cast through the tradition's foundation, at level 0 but for Kindle Blade at 5, and taught by its teacher (`learn`), who needs the student to know the school first.
 
 ## Possible later additions
 

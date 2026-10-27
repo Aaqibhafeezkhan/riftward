@@ -13,6 +13,7 @@ use bevy::prelude::*;
 use rusqlite::{Connection, OptionalExtension, params};
 use thiserror::Error;
 
+use crate::combat::ItemCondition;
 use crate::items::Quality;
 use crate::skills::SkillState;
 
@@ -112,6 +113,17 @@ const SCHEMA: &str = "
         most         INTEGER NOT NULL,
         ends_at      INTEGER NOT NULL,     -- unix seconds
         PRIMARY KEY (character_id, condition)
+    );
+
+    -- Conditions put on one real item (a venom coating, a flaming blade), not its template:
+    -- until a time, for so many hits, or both. NULL is never, or unlimited.
+    CREATE TABLE IF NOT EXISTS item_conditions (
+        item_id      INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        condition    TEXT NOT NULL,
+        strength     INTEGER NOT NULL,
+        ends_at      INTEGER,              -- unix seconds
+        charges      INTEGER,
+        PRIMARY KEY (item_id, condition)
     );
 
     -- The spells each character knows.
@@ -877,6 +889,40 @@ impl Database {
         Ok(())
     }
 
+    /// The conditions on a real item.
+    pub fn item_conditions(&self, item_id: i64) -> DbResult<Vec<ItemCondition>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT condition, strength, ends_at, charges FROM item_conditions WHERE item_id = ?1",
+        )?;
+        let rows = stmt.query_map([item_id], |row| {
+            Ok(ItemCondition {
+                key: row.get(0)?,
+                strength: row.get(1)?,
+                ends_at: row.get(2)?,
+                charges: row.get(3)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Replace a real item's saved conditions with `conditions`.
+    pub fn save_item_conditions(&self, item_id: i64, conditions: &[ItemCondition]) -> DbResult<()> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM item_conditions WHERE item_id = ?1", [item_id])?;
+        for c in conditions {
+            tx.execute(
+                "INSERT OR REPLACE INTO item_conditions
+                     (item_id, condition, strength, ends_at, charges)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![item_id, c.key, c.strength, c.ends_at, c.charges],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// The spells a character knows, by `tradition:spell`.
     pub fn spells(&self, character_id: i64) -> DbResult<Vec<String>> {
         let conn = self.conn();
@@ -907,6 +953,43 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn item_conditions_are_saved_with_the_item() {
+        let db = Database::open(":memory:").unwrap();
+        let id = db
+            .create_item(
+                "test:knife",
+                &ItemPlace::Room("test:here".into()),
+                Quality::Standard,
+            )
+            .unwrap();
+        let venom = ItemCondition {
+            key: "envenomed".into(),
+            strength: 1,
+            ends_at: None,
+            charges: Some(3),
+        };
+        let flames = ItemCondition {
+            key: "flaming".into(),
+            strength: 2,
+            ends_at: Some(1_000),
+            charges: None,
+        };
+        db.save_item_conditions(id, &[venom.clone(), flames.clone()])
+            .unwrap();
+        let mut saved = db.item_conditions(id).unwrap();
+        saved.sort_by(|a, b| a.key.cmp(&b.key));
+        assert_eq!(saved, [venom.clone(), flames]);
+        db.save_item_conditions(id, std::slice::from_ref(&venom))
+            .unwrap();
+        assert_eq!(db.item_conditions(id).unwrap(), [venom]);
+        db.delete_item(id).unwrap();
+        assert!(
+            db.item_conditions(id).unwrap().is_empty(),
+            "gone with the item"
+        );
+    }
 
     #[test]
     fn builders_and_gms_sit_side_by_side() {

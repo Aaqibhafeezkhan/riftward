@@ -50,6 +50,25 @@ pub enum Effect {
         #[serde(default)]
         on: Who,
     },
+    /// Puts a condition on the weapon in hand of whoever it's `on`: a venom coating, a flaming
+    /// blade. Its modifiers pass to whoever holds it, and its `on_hit` effects land on whatever
+    /// it strikes, once for every point of `strength`: flaming at strength 2 burns twice as hot.
+    /// `empowered` adds a third of the caster's power to the strength. It lasts for `lasts` of
+    /// game time or `charges` hits, whichever runs out first; with neither, until something
+    /// takes it off. Saved with the item.
+    Imbue {
+        condition: String,
+        #[serde(default = "one")]
+        strength: i32,
+        #[serde(default)]
+        lasts: Option<Lasting>,
+        #[serde(default)]
+        charges: Option<u32>,
+        #[serde(default)]
+        on: Who,
+        #[serde(default)]
+        empowered: bool,
+    },
     /// This much of the target's armour doesn't help: a point finding a gap.
     Pierce(i32),
     /// The target's armour doesn't help at all.
@@ -125,7 +144,10 @@ impl Effect {
     /// Whom it's on.
     pub fn on(&self) -> Who {
         match self {
-            Effect::Apply { on, .. } | Effect::Remove { on, .. } | Effect::Cure { on, .. } => *on,
+            Effect::Apply { on, .. }
+            | Effect::Remove { on, .. }
+            | Effect::Cure { on, .. }
+            | Effect::Imbue { on, .. } => *on,
             _ => Who::Target,
         }
     }
@@ -134,9 +156,26 @@ impl Effect {
     #[cfg(test)]
     pub fn condition(&self) -> Option<&str> {
         match self {
-            Effect::Apply { condition, .. } | Effect::Remove { condition, .. } => Some(condition),
+            Effect::Apply { condition, .. }
+            | Effect::Remove { condition, .. }
+            | Effect::Imbue { condition, .. } => Some(condition),
             _ => None,
         }
+    }
+
+    /// This effect `n` times over, as a condition at strength `n` carries it: damage and healing
+    /// rolled `n` times as high, conditions put on `n` times as strong. Anything else is the same.
+    pub fn times(&self, n: i32) -> Effect {
+        let n = n.max(1) as u32;
+        let mut effect = self.clone();
+        match &mut effect {
+            Effect::Damage { amount, .. } | Effect::Heal { amount } => {
+                *amount = (amount.0 * n, amount.1 * n);
+            }
+            Effect::Apply { strength, .. } => *strength *= n as i32,
+            _ => {}
+        }
+        effect
     }
 
     /// The damage type it names, if any.
@@ -171,6 +210,24 @@ pub fn tags(own: &[String], effects: &[Effect], conditions: &ConditionDefs) -> V
     tags.sort();
     tags.dedup();
     tags
+}
+
+/// Whether `effects` make sense, so a mistake is caught at load.
+pub fn check(effects: &[Effect]) -> Result<(), String> {
+    for effect in effects {
+        if let Effect::Imbue {
+            lasts: Some(Lasting::Turns(_)),
+            ..
+        } = effect
+        {
+            return Err(
+                "imbues an item for turns, but items don't take turns: give it \
+                        Minutes, Hours or charges"
+                    .into(),
+            );
+        }
+    }
+    Ok(())
 }
 
 /// The armour a blow or spell gets past: `Pierce`s added up.
@@ -235,6 +292,45 @@ mod tests {
             tags(&["charm".into()], &effects, &conditions),
             ["charm", "force", "mind", "sleep"]
         );
+    }
+
+    #[test]
+    fn an_item_is_imbued_for_time_or_charges_not_turns() {
+        let imbue = |lasts| Effect::Imbue {
+            condition: "flaming".into(),
+            strength: 1,
+            lasts,
+            charges: Some(3),
+            on: Who::Target,
+            empowered: false,
+        };
+        assert!(check(&[imbue(Some(Lasting::Minutes(10)))]).is_ok());
+        assert!(check(&[imbue(None)]).is_ok());
+        assert!(check(&[imbue(Some(Lasting::Turns(2)))]).is_err());
+    }
+
+    #[test]
+    fn an_effect_at_strength_counts_that_many_times() {
+        let fire = Effect::Damage {
+            amount: (1, 3),
+            damage_type: "fire".into(),
+        };
+        assert_eq!(
+            fire.times(2),
+            Effect::Damage {
+                amount: (2, 6),
+                damage_type: "fire".into(),
+            }
+        );
+        assert_eq!(fire.times(0), fire, "never less than once");
+        let poison = Effect::Apply {
+            condition: "poisoned".into(),
+            strength: 1,
+            lasts: Lasting::Turns(4),
+            on: Who::Target,
+            empowered: false,
+        };
+        assert!(matches!(poison.times(3), Effect::Apply { strength: 3, .. }));
     }
 
     #[test]

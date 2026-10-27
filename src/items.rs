@@ -14,7 +14,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::Conditions;
+use crate::combat::{ConditionDefs, Conditions, ItemConditions, name_of};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, ItemPlace, Permission, RoomItemRow};
 use crate::dice::Dice;
@@ -43,7 +43,8 @@ impl Plugin for ItemsPlugin {
                 Update,
                 (
                     (sync_templates, restore_room_items, load_carried_items).chain(),
-                    (rot, drop_orphaned).run_if(heartbeat()),
+                    (rot, drop_orphaned, expire_item_conditions).run_if(heartbeat()),
+                    (load_item_conditions, save_item_conditions).chain(),
                     sync_grants,
                 ),
             )
@@ -142,8 +143,9 @@ impl Plugin for ItemsPlugin {
 /// How many items fit in a character's hands.
 pub const HANDS: usize = 2;
 
-/// An item in the world.
+/// An item in the world. Each carries its own conditions (`ItemConditions`), most none.
 #[derive(Component, Debug)]
+#[require(crate::combat::ItemConditions)]
 pub struct Item {
     pub key: ItemKey,
     /// Its template's name, unless it has its own, like a corpse.
@@ -975,9 +977,10 @@ fn sync_grants(
     mut gone: RemovedComponents<ItemLocation>,
     time: Res<Time>,
     mut checked: Local<f64>,
+    (imbued, reimbued): (Query<&ItemConditions>, Query<(), Changed<ItemConditions>>),
 ) {
     let now = time.elapsed_secs_f64();
-    let changed = !moved.is_empty() || gone.read().count() > 0;
+    let changed = !moved.is_empty() || !reimbued.is_empty() || gone.read().count() > 0;
     if !changed && now - *checked < 1.0 {
         return;
     }
@@ -1003,6 +1006,20 @@ fn sync_grants(
         }
     };
     let mut granted: HashMap<Entity, Vec<(String, i32, Entity)>> = HashMap::new();
+    // What's been put on one item passes to whoever holds or wears it, not to a pack it's in.
+    for (entity, _, _) in &items {
+        let Some(conditions) = imbued.get(entity).ok().filter(|c| !c.0.is_empty()) else {
+            continue;
+        };
+        if let Some((who, Having::Held | Having::Worn)) = holder(entity) {
+            for c in &conditions.0 {
+                granted
+                    .entry(who)
+                    .or_default()
+                    .push((c.key.clone(), c.strength, entity));
+            }
+        }
+    }
     for (entity, item, _) in &items {
         let Some(def) = templates.0.get(&item.key).filter(|d| !d.grants.is_empty()) else {
             continue;
@@ -1027,6 +1044,97 @@ fn sync_grants(
         has.sort_by_key(|(key, _, item)| (key.clone(), *item));
         if should != has {
             conditions.set_grants(should);
+        }
+    }
+}
+
+/// Give each real item, as it appears, the conditions saved on it, but those whose time is up.
+fn load_item_conditions(
+    mut items: Query<(&Item, &mut ItemConditions), Added<Item>>,
+    db: Res<Database>,
+) {
+    let unix = crate::time::unix_now();
+    for (item, mut conditions) in &mut items {
+        let Some(id) = item.id else {
+            continue;
+        };
+        match db.item_conditions(id) {
+            Ok(saved) if !saved.is_empty() => {
+                conditions.0 = saved;
+                conditions.expire(unix);
+            }
+            Ok(_) => {}
+            Err(err) => error!("failed to load conditions of item {id}: {err}"),
+        }
+    }
+}
+
+/// Items whose conditions, or whose being real, changed.
+type ChangedImbued<'w, 's> = Query<
+    'w,
+    's,
+    (Ref<'static, Item>, Ref<'static, ItemConditions>),
+    Or<(Changed<Item>, Changed<ItemConditions>)>,
+>;
+
+/// Save a real item's conditions when they change, or when an item carrying some becomes real.
+fn save_item_conditions(items: ChangedImbued, db: Res<Database>) {
+    for (item, conditions) in &items {
+        let Some(id) = item.id else {
+            continue;
+        };
+        // Just made, it has nothing new to save; an item changing otherwise only matters if it
+        // carries something.
+        if conditions.is_added() || (!conditions.is_changed() && conditions.0.is_empty()) {
+            continue;
+        }
+        if let Err(err) = db.save_item_conditions(id, &conditions.0) {
+            error!("failed to save conditions of item {id}: {err}");
+        }
+    }
+}
+
+/// End item conditions whose time is up, told to whoever has the item in the condition's words.
+fn expire_item_conditions(
+    mut items: Query<(&mut ItemConditions, &ItemLocation)>,
+    defs: Res<ConditionDefs>,
+    characters: Query<(
+        Option<&Player>,
+        Option<&crate::mobs::Mob>,
+        &crate::world::InRoom,
+    )>,
+    mut outbox: ResMut<Outbox>,
+) {
+    let unix = crate::time::unix_now();
+    for (mut conditions, location) in &mut items {
+        let due = conditions
+            .0
+            .iter()
+            .any(|c| c.ends_at.is_some_and(|end| end <= unix));
+        if !due {
+            continue;
+        }
+        let ended = conditions.expire(unix);
+        let (ItemLocation::Held(who) | ItemLocation::Worn(who, _)) = *location else {
+            continue;
+        };
+        let Ok((player, mob, in_room)) = characters.get(who) else {
+            continue;
+        };
+        let name = capitalized(&name_of(player, mob));
+        for c in ended {
+            let Some(fades) = defs.get(&c.key).and_then(|d| d.text.fades.as_ref()) else {
+                continue;
+            };
+            let (theirs, seen) = fades.fill(&name, c.strength);
+            outbox.0.push(Outgoing::line(who, theirs));
+            if let Some(seen) = seen {
+                outbox.0.push(Outgoing::Room {
+                    room: in_room.0,
+                    except: who,
+                    text: seen + "\r\n",
+                });
+            }
         }
     }
 }
@@ -1579,6 +1687,7 @@ fn examine(
     items: ItemQuery,
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
+    (imbued, defs): (Query<&ItemConditions>, Res<ConditionDefs>),
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -1586,6 +1695,9 @@ fn examine(
     let text = match find_item(&inv.args, &actor, &items, &keywords, &templates) {
         Ok(entity) => {
             let mut text = describe_item(entity, &items, &templates);
+            if let Ok(conditions) = imbued.get(entity) {
+                text += &imbued_lines(conditions, &defs, crate::time::unix_now());
+            }
             let snapshot = Snapshot::new(items.iter().map(|(e, i, l)| (e, i, *l)), &templates);
             if let Some(info) = snapshot.get(entity)
                 && snapshot.is_container(entity)
@@ -1674,6 +1786,39 @@ pub fn describe_item(entity: Entity, items: &ItemQuery, templates: &ItemTemplate
         if !parts.is_empty() {
             text += &format!("\r\nArmour: {}.", parts.join(", "));
         }
+    }
+    text
+}
+
+/// What's been put on an item, a line each, with what's left of it: "It's envenomed: poisoning
+/// what it strikes (3 hits left)."
+fn imbued_lines(conditions: &ItemConditions, defs: &ConditionDefs, unix: i64) -> String {
+    let mut text = String::new();
+    for c in &conditions.0 {
+        let Some(def) = defs.get(&c.key) else {
+            continue;
+        };
+        let strength = c.strength.to_string();
+        let what = def.description.replace("{strength}", &strength);
+        let mut left = Vec::new();
+        if let Some(charges) = c.charges {
+            left.push(format!(
+                "{charges} {} left",
+                if charges == 1 { "hit" } else { "hits" }
+            ));
+        }
+        if let Some(end) = c.ends_at {
+            left.push(format!(
+                "for {}",
+                crate::time::span((end - unix).max(0) as f64)
+            ));
+        }
+        let left = if left.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", left.join(", "))
+        };
+        text += &format!("\r\nIt's {}: {what}{left}.", def.name);
     }
     text
 }
@@ -2461,6 +2606,24 @@ mod tests {
         *world.get_mut::<ItemLocation>(item).unwrap() = ItemLocation::Room(room);
         world.run_system_once(sync_grants).unwrap();
         assert_eq!(attack(&world), 0);
+        // Something put on this one item passes to whoever holds it, the same way.
+        world
+            .get_mut::<ItemConditions>(item)
+            .unwrap()
+            .imbue(crate::combat::ItemCondition {
+                key: "strengthened".into(),
+                strength: 1,
+                ends_at: None,
+                charges: None,
+            });
+        *world.get_mut::<ItemLocation>(item).unwrap() = ItemLocation::Held(wearer);
+        world.run_system_once(sync_grants).unwrap();
+        let conditions = world.get::<Conditions>(wearer).unwrap();
+        assert!(conditions.has("strengthened"), "held, it strengthens");
+        assert!(
+            !conditions.has("blessed"),
+            "the template's grant is only while worn"
+        );
     }
 
     #[test]

@@ -17,6 +17,14 @@ use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
 /// Real seconds in one game day.
 pub const REAL_SECS_PER_GAME_DAY: i64 = 3 * 60 * 60;
 
+/// The real time now, in unix seconds, for what's saved to end at a time.
+pub fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_default()
+}
+
 /// How often the heartbeat systems run.
 const HEARTBEAT: Duration = Duration::from_secs(1);
 

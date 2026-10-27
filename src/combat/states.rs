@@ -21,6 +21,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::effects::Effect;
 use crate::skills::fill;
 use crate::time::span;
 use crate::world::ron_options;
@@ -55,6 +56,10 @@ pub struct ConditionDef {
     #[serde(default)]
     pub stacking: Stacking,
     pub modifiers: Vec<Modifier>,
+    /// On an item, what lands on whatever it strikes, using a charge: a venom coating's
+    /// `[Apply(condition: "poisoned", ...)]`. Nothing on a character.
+    #[serde(default)]
+    pub on_hit: Vec<Effect>,
     #[serde(default)]
     pub text: ConditionText,
 }
@@ -167,6 +172,100 @@ pub struct ConditionDefs(pub HashMap<String, ConditionDef>);
 impl ConditionDefs {
     pub fn get(&self, key: &str) -> Option<&ConditionDef> {
         self.0.get(key)
+    }
+}
+
+/// A condition on one item, not its template: put on by `Imbue`, saved with the item
+/// (`item_conditions`). Items take no turns, so it lasts until a time, or for so many hits.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ItemCondition {
+    pub key: String,
+    pub strength: i32,
+    /// When it ends, in unix seconds; never, without.
+    pub ends_at: Option<i64>,
+    /// Hits left, each using one as its `on_hit` effects land; unlimited, without.
+    pub charges: Option<u32>,
+}
+
+/// The conditions on one item. Every item has them, most none.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ItemConditions(pub Vec<ItemCondition>);
+
+impl ItemConditions {
+    /// Put one on, replacing any of the same kind.
+    pub fn imbue(&mut self, condition: ItemCondition) {
+        self.0.retain(|c| c.key != condition.key);
+        self.0.push(condition);
+    }
+
+    /// Take off those whose time is up at `unix`, returning them.
+    pub fn expire(&mut self, unix: i64) -> Vec<ItemCondition> {
+        let (gone, kept) = std::mem::take(&mut self.0)
+            .into_iter()
+            .partition(|c| c.ends_at.is_some_and(|end| end <= unix));
+        self.0 = kept;
+        gone
+    }
+
+    /// The `on_hit` effects of every condition with a charge left, each at its strength, and use
+    /// a charge of each.
+    /// Returns the effects, and the conditions it spent the last charge of.
+    pub fn strike(&mut self, defs: &ConditionDefs) -> (Vec<Effect>, Vec<String>) {
+        let mut effects = Vec::new();
+        for condition in &mut self.0 {
+            let Some(def) = defs.get(&condition.key).filter(|d| !d.on_hit.is_empty()) else {
+                continue;
+            };
+            if condition.charges == Some(0) {
+                continue;
+            }
+            // At its strength: flaming at 2 burns twice as hot.
+            effects.extend(def.on_hit.iter().map(|e| e.times(condition.strength)));
+            if let Some(charges) = condition.charges.as_mut() {
+                *charges -= 1;
+            }
+        }
+        let spent = self
+            .0
+            .iter()
+            .filter(|c| c.charges == Some(0))
+            .map(|c| c.key.clone())
+            .collect();
+        self.0.retain(|c| c.charges != Some(0));
+        (effects, spent)
+    }
+}
+
+/// Item conditions as a combat round sees them: copied out before it, changed as weapons strike
+/// and are imbued, and written back after.
+#[derive(Debug, Default)]
+pub struct Imbued {
+    pub items: HashMap<Entity, ItemConditions>,
+    /// The items whose conditions changed, to write back.
+    pub changed: std::collections::HashSet<Entity>,
+}
+
+impl Imbued {
+    /// Every item with conditions on it.
+    pub fn gather<'a>(items: impl Iterator<Item = (Entity, &'a ItemConditions)>) -> Self {
+        Self {
+            items: items
+                .filter(|(_, c)| !c.0.is_empty())
+                .map(|(e, c)| (e, c.clone()))
+                .collect(),
+            changed: Default::default(),
+        }
+    }
+
+    /// Write back what changed.
+    pub fn write_back(self, items: &mut Query<(Entity, &mut ItemConditions)>) {
+        for entity in self.changed {
+            if let (Ok((_, mut conditions)), Some(now)) =
+                (items.get_mut(entity), self.items.get(&entity))
+            {
+                *conditions = now.clone();
+            }
+        }
     }
 }
 
@@ -702,6 +801,12 @@ mod tests {
                 !def.description.trim().is_empty(),
                 "{key} needs a description"
             );
+            for key in def.on_hit.iter().filter_map(Effect::condition) {
+                assert!(
+                    defs.get(key).is_some(),
+                    "{key}: on_hit puts on no condition {key}"
+                );
+            }
             for m in &def.modifiers {
                 if let Modifier::Resist(kind, _) | Modifier::Weakness(kind, _) = m {
                     assert!(
@@ -840,6 +945,32 @@ mod tests {
     }
 
     #[test]
+    fn an_items_conditions_strike_until_spent_or_ended() {
+        let defs = defs_on_disk();
+        let venom = |charges, ends_at| ItemCondition {
+            key: "envenomed".into(),
+            strength: 1,
+            ends_at,
+            charges,
+        };
+        let mut blade = ItemConditions::default();
+        blade.imbue(venom(Some(2), None));
+        let (effects, spent) = blade.strike(&defs);
+        assert_eq!(effects.len(), 1, "the venom lands");
+        assert!(spent.is_empty());
+        let (_, spent) = blade.strike(&defs);
+        assert_eq!(spent, ["envenomed"], "its last charge");
+        assert!(blade.0.is_empty());
+        // Imbued again, the new coating replaces the old; one that's timed runs out.
+        blade.imbue(venom(None, Some(100)));
+        blade.imbue(venom(None, Some(200)));
+        assert_eq!(blade.0.len(), 1);
+        assert!(blade.expire(150).is_empty());
+        assert_eq!(blade.expire(200).len(), 1);
+        assert!(blade.0.is_empty());
+    }
+
+    #[test]
     fn resistances_and_immunities_follow_types_and_tags() {
         let mut defs = defs_on_disk();
         let charm = |modifiers| ConditionDef {
@@ -848,6 +979,7 @@ mod tests {
             tags: vec!["magic".into()],
             stacking: Stacking::Replace,
             modifiers,
+            on_hit: Vec::new(),
             text: ConditionText::default(),
         };
         defs.0.insert(

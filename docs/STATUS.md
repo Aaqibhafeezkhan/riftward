@@ -28,7 +28,7 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 ## Next up
 
-**The rest of step 2 of [Effects, conditions and scripting](effects.md#how-it-gets-built):** `Imbue` and saved item conditions; then step 3, formulas. Built so far: conditions as data (1), damage types (2a: typed weapons, attacks and spells, armour that says what it stops, `Resist`, `Weakness` and `Immune`), one effect vocabulary (2b), skills that resist by tag (2c-i), and one resolver for spells, techniques and blows, so either can use any effect and any contest (2c-ii).
+**Step 3 of [Effects, conditions and scripting](effects.md#how-it-gets-built): formulas,** amounts written in data (`"1d4 + power / 3"`) instead of hand-picked rules like "a third of the power" or "once per point of strength". Built so far: conditions as data (1), damage types (2a: typed weapons, attacks and spells, armour that says what it stops, `Resist`, `Weakness` and `Immune`), one effect vocabulary (2b), skills that resist by tag (2c-i), and one resolver for spells, techniques and blows, so either can use any effect and any contest (2c-ii), and conditions on single items: `Imbue`, `on_hit`, charges, saved with the item (2d).
 
 Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 

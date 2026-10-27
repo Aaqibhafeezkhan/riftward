@@ -54,7 +54,7 @@ use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_
 pub use casting::MobMove;
 #[cfg(test)]
 pub use states::defs_on_disk;
-pub use states::{ConditionDefs, Conditions, Lasts};
+pub use states::{ConditionDefs, Conditions, Imbued, ItemCondition, ItemConditions, Lasts};
 pub use strike::{Blow, Fighters, Move, Round, name_of};
 
 /// Seconds in a combat round, and between a player's actions.
@@ -245,6 +245,7 @@ fn combat_round(
     (readied, casting): (Query<&Readied>, Query<&Casting>),
     rooms: RoomQuery,
     hidden: Query<&Hidden>,
+    mut item_conditions: Query<(Entity, &mut ItemConditions)>,
 ) {
     let now = time.elapsed_secs_f64();
     let auras = auras(&fighters, &rooms, &defs);
@@ -322,6 +323,7 @@ fn combat_round(
 
     let mut fallen: HashSet<Entity> = HashSet::new();
     let mut calmed: HashSet<Entity> = HashSet::new();
+    let mut imbued = Imbued::gather(item_conditions.iter());
     let mut round = Round {
         fighters: &mut fighters,
         items: &items,
@@ -341,6 +343,7 @@ fn combat_round(
         outmatched: &outmatched,
         ambushers: &ambushers,
         now,
+        imbued: &mut imbued,
     };
     for (_, attacker) in order {
         let Some(&target) = targets.get(&attacker) else {
@@ -462,6 +465,7 @@ fn combat_round(
             }
         }
     }
+    imbued.write_back(&mut item_conditions);
 
     reveal_fighters(&mut commands, &mut events, &fighters, &targets, &hidden);
 
@@ -1514,6 +1518,35 @@ mod tests {
         ));
     }
 
+    /// Put a club in `who`'s hand, swung with Brawling, and return it.
+    fn club(world: &mut World, who: Entity) -> Entity {
+        let key = ItemKey::parse("club", "test");
+        let def = ItemDef {
+            weapon: Some(crate::world::WeaponDef {
+                skill: BASIC_ATTACK.into(),
+                damage: (1, 1),
+                damage_type: "physical".into(),
+            }),
+            ..ItemDef::named("club")
+        };
+        world
+            .resource_mut::<ItemTemplates>()
+            .0
+            .insert(key.clone(), def);
+        world
+            .spawn((
+                Item {
+                    key,
+                    name: "club".into(),
+                    id: None,
+                    state: DoorState::Open,
+                    quality: Quality::Standard,
+                },
+                ItemLocation::Held(who),
+            ))
+            .id()
+    }
+
     /// Someone whose fists never miss.
     fn sure_hands(world: &mut World, who: Entity) {
         let mut skills = world.get_mut::<Skills>(who).unwrap();
@@ -1823,6 +1856,67 @@ mod tests {
         let (without, with) = (slept(false), slept(true));
         assert!(without >= 10, "a weak spell mostly works ({without})");
         assert!(with <= 2, "but an elf mostly shrugs it off ({with})");
+    }
+
+    #[test]
+    fn a_weapons_conditions_ride_on_its_blows_until_spent() {
+        let (mut world, room) = world();
+        let hitter = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        sure_hands(&mut world, hitter);
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let club = club(&mut world, hitter);
+        world
+            .get_mut::<ItemConditions>(club)
+            .unwrap()
+            .imbue(ItemCondition {
+                key: "envenomed".into(),
+                strength: 1,
+                ends_at: None,
+                charges: Some(1),
+            });
+        world.entity_mut(hitter).insert(Fighting(foe));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(foe).unwrap().has("poisoned"));
+        assert!(
+            world.get::<ItemConditions>(club).unwrap().0.is_empty(),
+            "its one charge spent"
+        );
+        assert!(said(&world, hitter, "venom is gone"));
+    }
+
+    #[test]
+    fn a_spell_imbues_the_weapon_in_hand() {
+        let (mut world, room) = world();
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let mage = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
+        let club = club(&mut world, mage);
+        let kindle = spell(
+            "hermetic:kindle",
+            Aim::Ally,
+            None,
+            vec![Effect::Imbue {
+                condition: "flaming".into(),
+                strength: 1,
+                lasts: Some(Lasting::Minutes(10)),
+                charges: Some(5),
+                on: Who::Target,
+                empowered: true,
+            }],
+        );
+        caster(&mut world, mage, vec![kindle]);
+        world.entity_mut(mage).insert(Tactics(100));
+        world.entity_mut(foe).insert(Fighting(mage));
+        world.run_system_once(combat_round).unwrap();
+        let on_club = &world.get::<ItemConditions>(club).unwrap().0;
+        assert_eq!(on_club.len(), 1);
+        assert_eq!(on_club[0].key, "flaming");
+        assert_eq!(on_club[0].charges, Some(5));
+        assert!(
+            on_club[0].strength > 1,
+            "a strong caster's flames burn hotter"
+        );
+        assert!(on_club[0].ends_at.is_some());
+        assert!(said(&world, mage, "Flames run along your weapon!"));
     }
 
     #[test]

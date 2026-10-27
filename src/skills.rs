@@ -208,6 +208,9 @@ impl SkillDef {
         if self.karma.is_some() && self.requires.is_none() {
             return Err("has a Karma cost but no requirements: entry skills are taught".into());
         }
+        if let SkillKind::Technique(t) = &self.kind {
+            effects::check(&t.effects)?;
+        }
         let (target, miss) = match &self.kind {
             // Struck at someone, so their view and a miss are needed.
             SkillKind::Attack { .. } => (true, true),

@@ -169,6 +169,19 @@ Conditions on items come in two kinds, which behave differently.
 
 - Untouched items in the world (spawned, not yet real) can carry template grants, but an `Imbue` makes an item real, so it's saved.
 
+#### Item conditions, as built
+
+Step 2d (2026-10-26). The `reach` column above became simpler: a condition on an item works by what it has, so there's nothing to choose.
+
+- **`Imbue(condition, strength, lasts, charges, on, empowered)`** puts a condition on the weapon in hand of whoever it's `on`, replacing one of the same kind: `Imbue(condition: "flaming", lasts: Some(Minutes(80)), charges: Some(10))`. It lasts for its game time or its charges, whichever runs out first; neither, and it stays until something takes it off. `lasts: Turns(..)` is refused at load, since items don't take turns. With no weapon in hand, the user is told so.
+- **Its modifiers pass to whoever holds or wears the item** (not to a pack it's in), through the same grants as template ones, so `affects` lists it "from a wooden practice sword".
+- **Its `on_hit` effects ride on every blow the weapon lands,** using a charge: a condition's new `on_hit: [...]` list, in the same effect vocabulary. They count **once per point of the item condition's strength**, like modifiers: `flaming` (`Damage(1-3, fire)`) at strength 2 burns for 2 to 6. `empowered` adds a third of the caster's power to the strength. A charge is spent only when the blow lands; the last one is told in the condition's `fades` words.
+- **Saved** in `item_conditions` (game-time ends as unix seconds, charges as a count) whenever they change, loaded when a real item appears, and ended by the heartbeat when their time is up, told to whoever has the item.
+- **An imbue doesn't make an item real** (a departure from the plan above): a player's gear is real already, and a mob's weapon keeps its conditions until a player picks it up, when they're saved with it.
+- **`examine`** shows them: "It's flaming: burning whatever it strikes, 1 to 3 fire damage for each point of its strength (1) (9 hits left, for 1 hour 18 minutes)."
+- **The first:** `flaming` and `envenomed` (poisons what it cuts), and Hermetic's **Kindle Blade** spell, taught by the magister.
+- Not yet: the `Item` reach (a condition changing the item's own stats, like rust), `CantRemove` for cursed items, and imbuing armour.
+
 ### The starting conditions
 
 | Already built (to move into data) | New |
@@ -312,6 +325,7 @@ effects: [Apply(condition: "warded", strength: 4, lasts: Minutes(80), empowered:
 | `Apply(condition, strength, lasts, on, empowered)` | Puts a condition on; `empowered` adds a third of the power to its strength. Told in the condition's `applied` words | Both |
 | `Remove(condition, on)` / `Cure(tag, on)` | Ends one condition, or every one with a tag, told in its `fades` words. Item grants stay | Both |
 | `Pierce(n)` / `IgnoreArmour` | How damage gets past armour | Both |
+| `Imbue(condition, strength, lasts, charges, on, empowered)` | Puts a condition on the weapon in hand; see [Item conditions, as built](#item-conditions-as-built) | Both |
 | `Cleave` | The blow carries on into a second foe | Techniques |
 | `Calm` | An animal stops fighting | Spells |
 
@@ -434,7 +448,7 @@ reactions: [(on: Hit, effects: [Damage(amount: "2", type: piercing, armour: fals
 Each step leaves the game working and designers with more they can do alone.
 
 1. **Conditions as data** (*built*). The built conditions move to `assets/conditions/`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
-2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). Still to come in this step: `Imbue` and saved item conditions.
+2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). So are `Imbue` and saved item conditions (2d). Step 2 is done.
 3. **Formulas.** The expression evaluator, and every amount moved into data.
 4. **Triggers and reactions.** More game events; reactions on conditions, skills and items.
 5. **Active skills through `use`.** Most bespoke commands become abilities.

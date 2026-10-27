@@ -4,8 +4,10 @@
 
 use bevy::prelude::*;
 
+use super::states::ItemCondition;
 use super::strike::{Round, Telling};
 use crate::effects::{Effect, Who};
+use crate::items::ItemLocation;
 use crate::items::capitalized;
 use crate::skills::boosts;
 use crate::world::armour_stops;
@@ -43,6 +45,19 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let times = d.conditions.damage_taken(self.conditions)
             * d.conditions.resist(self.conditions, damage_type);
         ((force * times).round() as i32 - armour).max(0)
+    }
+
+    /// The weapon `who` holds, if any.
+    pub(super) fn weapon_of(&self, who: Entity) -> Option<Entity> {
+        self.items.iter().find_map(|(entity, item, location)| {
+            (*location == ItemLocation::Held(who)
+                && self
+                    .templates
+                    .0
+                    .get(&item.key)
+                    .is_some_and(|d| d.weapon.is_some()))
+            .then_some(entity)
+        })
     }
 
     /// Carry out the `effects` that are on `who`: conditions put on or taken off `user` or
@@ -98,6 +113,37 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     for ended in f.conditions.cure(defs, tag) {
                         let fades = defs.get(&ended).and_then(|d| d.text.fades.as_ref());
                         told.extend(fades.map(|t| t.fill(&name, 0)));
+                    }
+                }
+                Effect::Imbue {
+                    condition,
+                    strength,
+                    lasts,
+                    charges,
+                    empowered,
+                    ..
+                } => {
+                    let strength = strength + if *empowered { (power / 3).max(0) } else { 0 };
+                    match self.weapon_of(bearer) {
+                        Some(weapon) => {
+                            let unix = crate::time::unix_now();
+                            self.imbued
+                                .items
+                                .entry(weapon)
+                                .or_default()
+                                .imbue(ItemCondition {
+                                    key: condition.clone(),
+                                    strength,
+                                    ends_at: lasts.map(|l| unix + l.real_secs().round() as i64),
+                                    charges: *charges,
+                                });
+                            self.imbued.changed.insert(weapon);
+                            let applied = defs.get(condition).and_then(|d| d.text.applied.as_ref());
+                            told.extend(applied.map(|t| t.fill(&name, strength)));
+                        }
+                        None => tell
+                            .lines
+                            .push((user, format!("{name} has no weapon in hand to take it."))),
                     }
                 }
                 Effect::Calm => calmed = true,

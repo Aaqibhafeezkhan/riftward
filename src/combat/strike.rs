@@ -8,7 +8,7 @@ use bevy::prelude::*;
 
 use super::casting::MobMove;
 use super::resolve::{BlowDamage, Use};
-use super::states::{ConditionDefs, Conditions};
+use super::states::{ConditionDefs, Conditions, Imbued};
 use super::{
     ActionQueue, Aggressive, AutoAttack, BASIC_ATTACK, Dead, Fighting, HideNumbers, Tactics,
 };
@@ -244,6 +244,8 @@ pub struct Strike {
     pub text: SkillText,
     /// Stamina it takes.
     pub cost: u32,
+    /// The weapon it's made with, whose conditions ride on it: none for fists or fangs.
+    pub weapon: Option<Entity>,
 }
 
 /// The attack a fighter makes this round: their chosen attack if they can make it now, otherwise
@@ -267,15 +269,19 @@ pub fn choose_attack(
     defs: &SkillDefs,
 ) -> Option<Strike> {
     // The weapon in hand, its damage moved by how well it's made.
-    let weapon = items.iter().find_map(|(_, item, location)| {
+    let weapon = items.iter().find_map(|(held, item, location)| {
         let w = (*location == ItemLocation::Held(entity))
             .then(|| templates.0.get(&item.key)?.weapon.clone())
             .flatten()?;
-        Some(WeaponDef {
-            damage: item.quality.damage(w.damage),
-            ..w
-        })
+        Some((
+            held,
+            WeaponDef {
+                damage: item.quality.damage(w.damage),
+                ..w
+            },
+        ))
     });
+    let (held, weapon) = weapon.unzip();
     let weapon = weapon.as_ref();
     let strike = |key: &str| {
         let skill = defs.skills.get(key)?;
@@ -305,6 +311,7 @@ pub fn choose_attack(
                 damage_type: w.damage_type.clone(),
                 text,
                 cost,
+                weapon: held,
             }),
             _ => damage.map(|damage| Strike {
                 skill: key.to_string(),
@@ -312,6 +319,7 @@ pub fn choose_attack(
                 damage_type: damage_type.clone(),
                 text,
                 cost,
+                weapon: None,
             }),
         }
     };
@@ -326,6 +334,7 @@ pub fn choose_attack(
                     damage: w.damage,
                     damage_type: w.damage_type.clone(),
                     text: untrained(),
+                    weapon: held,
                     ..brawl
                 },
                 None => brawl,
@@ -470,6 +479,8 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub ambushers: &'a HashSet<Entity>,
     /// Seconds since the server started, for conditions that last a while.
     pub now: f64,
+    /// Conditions on items, read as weapons strike and changed as they're imbued.
+    pub imbued: &'a mut Imbued,
 }
 
 /// Messages for a strike: the attacker, the target, and everyone else there.
@@ -783,6 +794,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             damage_type,
             text,
             cost,
+            weapon,
         }) = choose_attack(
             attacker,
             with.as_deref(),
@@ -821,22 +833,56 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             damage_type,
             pierce: a_boosts.pierce_with(&key),
         });
+        // What's on the weapon rides on the blow: a venom coating, a flaming edge. Its charges
+        // are spent only if the blow lands.
+        let mut riding = weapon
+            .filter(|_| blow.is_some())
+            .and_then(|w| Some((w, self.imbued.items.get(&w)?.clone())));
+        let (on_hit, spent) = riding
+            .as_mut()
+            .map(|(_, c)| c.strike(self.conditions))
+            .unwrap_or_default();
+        let mut all_effects = t.map_or_else(Vec::new, |t| t.effects.clone());
+        all_effects.extend(on_hit);
         let outcome = self.resolve(Use {
             user: attacker,
             target,
             rating,
             resist: t.map_or(Some(Resist::Evasion), |t| t.resist),
-            tags: t.map_or_else(Vec::new, |t| {
-                effects::tags(&t.tags, &t.effects, self.conditions)
-            }),
+            tags: effects::tags(
+                t.map_or(&[][..], |t| &t.tags),
+                &all_effects,
+                self.conditions,
+            ),
             blow,
-            effects: t.map_or(&[][..], |t| &t.effects),
+            effects: &all_effects,
             power: 0,
             text: &text,
             opener: t.is_some_and(|t| t.opener),
             harmful: true,
         });
         died.extend(outcome.died);
+        if outcome.hit
+            && let Some((weapon, conditions)) = riding
+        {
+            self.imbued.items.insert(weapon, conditions);
+            self.imbued.changed.insert(weapon);
+            // Told in the condition's own words as it runs out: "The venom on your blade is gone."
+            let name = capitalized(&a_name);
+            for key in spent {
+                if let Some(fades) = self
+                    .conditions
+                    .get(&key)
+                    .and_then(|d| d.text.fades.as_ref())
+                {
+                    let (mine, seen) = fades.fill(&name, 0);
+                    self.say(attacker, mine);
+                    if let Some(seen) = seen {
+                        self.tell_room(room, attacker, attacker, &seen);
+                    }
+                }
+            }
+        }
 
         // Players practise what they used.
         self.practise(attacker, &key);

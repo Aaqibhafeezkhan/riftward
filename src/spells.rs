@@ -25,7 +25,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::{ConditionDefs, Conditions, Fighters, Fighting, Round, the};
+use crate::combat::{
+    ConditionDefs, Conditions, Fighters, Fighting, Imbued, ItemConditions, Round, the,
+};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::dice::Dice;
@@ -135,6 +137,7 @@ impl SpellDef {
         if self.effects.is_empty() {
             return Err("needs effects: what it does".into());
         }
+        crate::effects::check(&self.effects)?;
         if self.harms() && self.aim != Aim::Foe {
             return Err("does damage, so it must be aimed at a Foe".into());
         }
@@ -424,6 +427,7 @@ fn cast(
     hidden: Query<&Hidden>,
     resting: Query<Entity, With<Resting>>,
     (time, condition_defs): (Res<Time>, Res<ConditionDefs>),
+    mut item_conditions: Query<(Entity, &mut ItemConditions)>,
 ) {
     let Ok(caster) = fighters.get(inv.entity) else {
         return;
@@ -522,6 +526,7 @@ fn cast(
         .collect();
     let resting: HashSet<Entity> = resting.iter().collect();
     let none = HashMap::new();
+    let mut imbued = Imbued::gather(item_conditions.iter());
     let mut round = Round {
         fighters: &mut fighters,
         items: &items,
@@ -541,8 +546,10 @@ fn cast(
         outmatched: &none,
         ambushers: &HashSet::new(),
         now: time.elapsed_secs_f64(),
+        imbued: &mut imbued,
     };
     let outcome = round.cast(inv.entity, target, &spell.key);
+    imbued.write_back(&mut item_conditions);
     if let Some(calmed) = outcome.calmed {
         crate::combat::calm(&mut commands, calmed, &targets);
     }

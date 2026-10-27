@@ -23,6 +23,23 @@
                 ),
             ),
         ),
+        "kindle_blade": (
+            name: "Kindle Blade",
+            description: "Set someone's weapon, or your own, alight: for its next 10 blows, or 80 minutes (ten minutes, really), whichever comes first, each blow that lands burns for 1 to 3 fire damage more. It needs a weapon in hand, and Hermetic Principles at 5.",
+            school: "hermetic:foundation",
+            min_level: 5,
+            price: 120,
+            drain: 3,
+            aim: Ally,
+            effects: [Imbue(condition: "flaming", lasts: Some(Minutes(80)), charges: Some(10))],
+            text: (
+                hit: (
+                    actor: "You trace a burning sigil over {target}.",
+                    target: "{actor} traces a burning sigil over you.",
+                    room: "{actor} traces a burning sigil over {target}.",
+                ),
+            ),
+        ),
         "ward": (
             name: "Ward",
             description: "Trace a ward around someone, or yourself, that takes the next blows in their place: 4 damage, and a third of your power on top. It lasts 80 minutes (ten minutes, really), in a fight or out of one, or until it has taken all it can.",
