@@ -8,7 +8,7 @@
         // one blocking, {target} the attacker.
         "block": (
             name: "Block",
-            description: "Getting your shield in the way. With a shield in hand, every blow it turns trains it, and it adds 1 to your shield's block for every 10 levels.",
+            description: "Getting your shield in the way. With a shield in hand, every blow it turns trains it, and it adds to your shield's block, a tenth of a point with every level.",
             kind: Passive(
                 triggers: [Blocked],
                 bonuses: [(stat: Block, per: 10)],

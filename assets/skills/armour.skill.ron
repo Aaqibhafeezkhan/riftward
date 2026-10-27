@@ -8,7 +8,7 @@
         // armour, which would be too often to tell.
         "heavy_armour": (
             name: "Heavy Armour",
-            description: "Moving and fighting in armour as if it weighed less. Every hit you take in armour trains it, and it eases armour's penalty to your defence by 1 for every 10 levels.",
+            description: "Moving and fighting in armour as if it weighed less. Every hit you take in armour trains it, and it eases armour's penalty to your defence, a tenth of a point with every level.",
             kind: Passive(
                 triggers: [HitInArmour],
                 bonuses: [(stat: ArmourEase, per: 10)],

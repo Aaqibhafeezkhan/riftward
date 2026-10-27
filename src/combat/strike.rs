@@ -33,7 +33,6 @@ use crate::world::{ArmourDef, InRoom, Player, WeaponDef};
 
 /// The skill that helps avoid attacks.
 const DODGE: &str = "athletics:dodge";
-/// Levels of a weapon skill for each extra point of damage with that weapon.
 /// Stamina a riposte takes.
 const RIPOSTE_COST: f32 = 1.0;
 

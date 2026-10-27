@@ -164,7 +164,7 @@ Each step adds its trees' entry skills to the trainers in Riftwatch: the drill s
   | Axe Fighting | **Cleave** (carries into a second foe, even when it kills the first, 3), **Hew** (+3 damage, −2 accuracy, 2) |
   | Hammer Fighting | **Stagger** (target loses a turn, 4), **Crush** (ignores armour, +1, 2) |
   | Staff Fighting | **Sweep** (knocks down, 3), **Guard** (+4 defence for 2 turns, no strike, 1) |
-  | Athletics | **Toughness** (+1 max health per 5 levels, practised by taking damage); **Endurance** now gives +1 max stamina per 5 levels |
+  | Athletics | **Toughness** (+1 max health per 5 levels, a fifth with each, practised by taking damage); **Endurance** now gives +1 max stamina per 5 levels |
   | Adept | **Killing Hands** (unarmed, 2–4: the Adept's weapon), **Quickened Reflexes** (+initiative, and +defence, practised by dodging) |
 
 - **Mobs** use whatever skills their templates give them: technique skills now and then, by their `tactics` chance (see [The living world](world.md)), as well as auras and passives.
@@ -189,7 +189,7 @@ Built. Armour is **damage reduction**: every hit loses its wearer's armour, **ev
   | buckler / round shield | held | block 2 / 4 | 0 / 1 | 1 / 2 |
 
   The training yard keeps a padded jack, a leather cap and a buckler; the locked armory keeps mail, a helm, a round shield, gauntlets and greaves. Town guards wear studded leather and an iron helm, and carry a round shield.
-- **Skills work both sides of it.** In armour: **Heavy Armour** (the Armour tree's entry, practised by taking hits in armour; eases the penalty by 1 per 10 levels) and **Block** (the Shields tree's entry, practised by blocking; adds 1 to a shield's block per 10 levels). Out of it: the Adept's Quickened Reflexes, and an unarmoured Evasion later. Both entries are taught by the drill sergeant; their higher skills are to come.
+- **Skills work both sides of it.** In armour: **Heavy Armour** (the Armour tree's entry, practised by taking hits in armour; eases the penalty by 1 per 10 levels, a tenth with each) and **Block** (the Shields tree's entry, practised by blocking; adds 1 to a shield's block per 10 levels). Out of it: the Adept's Quickened Reflexes, and an unarmoured Evasion later. Both entries are taught by the drill sergeant; their higher skills are to come.
 - **Piercing answers armour.** `Pierce(n)`, a technique effect, ignores `n` points of armour: **Lunge** has 1 (the point finds a gap), **Backstab** 2 (between the plates). A passive can add piercing too, `(stat: Pierce, per: 10, with: "knives:basics")`. **Crush** ignores armour entirely, so it's the answer to plate.
 
 ## Stealth

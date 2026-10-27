@@ -7,7 +7,7 @@
         // A weapon skill: no damage of its own, it needs a weapon that uses it in hand.
         "basics": (
             name: "Axe Fighting",
-            description: "Fighting with an axe: heavy, simple blows. You do the axe's damage, and a point more for every 10 levels.",
+            description: "Fighting with an axe: heavy, simple blows. Your skill and Strength are your aim, every level of it counting, and the more surely you land a blow, the harder it hits, from a glancing one to a crushing one. You do the axe's damage.",
             kind: Attack(),
             text: (
                 hit: (

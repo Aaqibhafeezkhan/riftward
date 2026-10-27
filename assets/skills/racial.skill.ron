@@ -9,7 +9,7 @@
         // finds little purchase.
         "fey_mind": (
             name: "Fey Mind",
-            description: "An elf's mind is hard to lull or bend: you resist sleep and charm better than others, by 3 and 1 more for every 10 levels.",
+            description: "An elf's mind is hard to lull or bend: you resist sleep and charm better than others, by 3, and a tenth of a point more with every level.",
             kind: Passive(
                 triggers: [],
                 bonuses: [
