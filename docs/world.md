@@ -159,7 +159,7 @@ Mobs share players' vitals and recover by the same rules, at their own maximums:
 - **The same rules as against a player:** a fight is picked as `kill` picks one (`attack` in `combat/mod.rs`), only on someone noticed, and a spawn's `pack` limits how many gang up on one.
 - **Kills:** a mob killed by a mob gives no one experience, and its coins stay in its corpse; only a player's kill takes them.
 - **The zone test** checks every ally is `players`, a mob template, or a tag some mob has.
-- **Next, reinforcements** (planned): a guard losing a fight shouts for help, and the other guards nearby come running. A reaction on `Hurt(0.5)` with a new effect, say `CallForHelp(rooms: n)`, bringing allies within `n` rooms to the fight; its allies are the ones that answer.
+- **Reinforcements** (*built*, 2026-10-27): a guard losing a fight shouts for help, and those nearby who count them an ally come running. It's the Command tree's **Call for Help** (`command:call_for_help`), a passive whose reaction, on dropping below half health, is `CallForHelp(rooms: 2)`: allies within two rooms, through exits anyone could walk (open doors, no climbing), who aren't fighting, dead or being played, walk in (seen arriving, as anyone walking in is) and join the fight against the caller's foe, a player too. An ally is the caller's own kind or one its `allies` name (`MobDef::allied`, stricter than `spares`: without `allies`, only its own kind); so a guard's call brings the other guards and the stray dog, but never a rat. Town guards know it. `combat/help.rs` answers the calls.
 
 ## Building mobs and spawns
 

@@ -777,6 +777,17 @@ impl MobDef {
         }
     }
 
+    /// Whether it counts `other` an ally: `None` for a player, or a mob's template key and
+    /// template. Its own kind always, and those its `allies` name; without `allies`, its own kind
+    /// alone. Allies come to each other's help (`combat/help.rs`).
+    pub fn allied(&self, own: &MobKey, other: Option<(&MobKey, &MobDef)>) -> bool {
+        let named = |a: &String| match other {
+            None => a == "players",
+            Some((key, def)) => MobKey::parse(a, &own.zone) == *key || def.tags.contains(a),
+        };
+        other.is_some_and(|(key, _)| key == own) || self.allies.iter().flatten().any(named)
+    }
+
     /// A plain mob with just a name, as builders create them.
     pub fn named(name: &str) -> Self {
         Self {

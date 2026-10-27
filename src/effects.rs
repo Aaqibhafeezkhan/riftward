@@ -86,6 +86,10 @@ pub enum Effect {
     /// Something the user learns, and nothing else changes: an item's worth, a room's tracks. Only
     /// in an active skill aimed at what it reveals. See [`Revealed`].
     Reveal(Revealed),
+    /// The user's allies within `rooms` of them who aren't busy come running, and join the fight
+    /// against the target: a losing guard shouting for help. Who answers is whoever counts the
+    /// user an ally (`allies` on their templates, and always their own kind).
+    CallForHelp { rooms: u32 },
 }
 
 /// What `Reveal` tells the user. Each is read off what the skill is aimed at.

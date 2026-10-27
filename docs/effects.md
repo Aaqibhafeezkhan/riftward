@@ -329,6 +329,7 @@ effects: [Apply(condition: "warded", strength: "4 + floor(power / 3)", lasts: Mi
 | `Cleave` | The blow carries on into a second foe | Techniques |
 | `Calm` | An animal stops fighting | Spells |
 | `Take(what)` | Something lifted from the target and given to the user. `Take(Coins(amount))`: coins from their purse into the user's, as many as `amount` (a formula, in copper) says, up to what they have; the text names the haul as `{coins}`. Items and conditions would be more kinds of `what`. Not from players, for now | Active skills |
+| `CallForHelp(rooms)` | Allies of the user within `rooms`, not busy, come running and join the fight against the target: a losing guard shouting (see [Reinforcements](world.md#mobs-fighting-mobs)) | Reactions, and any skill or spell |
 | `Reveal(what)` | Something the user learns, and nothing else changes. `Reveal(Worth)`: an item's worth, named as `{worth}` (Appraisal, aimed at an item). `Reveal(Tracks)`: the tracks in the room, each read by its own roll against `against`, which sees `target.ground` and each track's `age` in minutes; those read are listed after the skill's line (Tracking, aimed at the room) | Active skills |
 | `Find(kind)` | Something of a `kind` the room's [finds](world.md#environment-and-finds) list, into the user's hand, the better made the more surely it was found; see [Every skill as data](#every-skill-as-data) | Active skills aimed at the room |
 

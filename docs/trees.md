@@ -81,6 +81,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 | **Crafting** | Logic (Strength for Smithing) | **Smithing**, **Leatherwork**, **Carpentry**, **Scribing** (copy scrolls), each a tree of its own later |
 | **Lore** | Logic | **Lore** (study a mob or item: what it is, how tough), **Bestiary**, **Rift Lore**, **Languages** |
 | **Performance** | Charisma | **Performance** (play for coin; inspire companions, as an aura) |
+| **Command** ✓ | Charisma | **Call for Help** ✓ (passive: below half health, allies within two rooms come running), **Rally**, **Orders**. Not taught yet: the town's guards have it |
 | **Sailing** | Intuition | **Sailing**: boats and rivers, when the world has them |
 
 ### Magic

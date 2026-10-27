@@ -444,7 +444,7 @@
             skills: {
                 "brawling:basics": 10, "brawling:grapple": 5, "swordplay:basics": 10,
                 "swordplay:lunge": 5, "swordplay:riposte": 5, "athletics:dodge": 5,
-                "shields:block": 5, "armour:heavy_armour": 5,
+                "shields:block": 5, "armour:heavy_armour": 5, "command:call_for_help": 1,
             },
             equipment: ["short_sword", "round_shield", "studded_leather", "iron_helm"],
             coins: (5, 30),

@@ -17,6 +17,7 @@
 mod abilities;
 mod casting;
 mod effects;
+mod help;
 mod resolve;
 mod states;
 mod strike;
@@ -87,6 +88,8 @@ impl Plugin for CombatPlugin {
                         .run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
                     // Then what conditions and skills do about what happened, out of the round.
                     (triggers::triggers, triggers::react).chain(),
+                    // Those who heard a shout for help come running.
+                    help::answer_calls,
                     abandon_fights,
                     handle_deaths,
                 )
@@ -3429,5 +3432,79 @@ mod tests {
         world.flush();
         assert!(world.get::<Fighting>(rat).is_none(), "leaves the dog alone");
         assert!(world.get::<Fighting>(dog).is_none());
+    }
+
+    /// A row of rooms east of `room`, each joined to the last both ways. Returns them in order.
+    fn rooms_east(world: &mut World, room: Entity, count: usize) -> Vec<Entity> {
+        use crate::world::Exit;
+        let mut row = vec![room];
+        for i in 0..count {
+            let next = world
+                .spawn((
+                    Room {
+                        name: format!("Room {i}"),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(&format!("test:room{i}"), ""),
+                    Exits::default(),
+                ))
+                .id();
+            let last = *row.last().unwrap();
+            let exit = |to| Exit {
+                to,
+                door: None,
+                needs: None,
+            };
+            world
+                .get_mut::<Exits>(last)
+                .unwrap()
+                .0
+                .insert("east".into(), exit(next));
+            world
+                .get_mut::<Exits>(next)
+                .unwrap()
+                .0
+                .insert("west".into(), exit(last));
+            row.push(next);
+        }
+        row
+    }
+
+    #[test]
+    fn allies_within_earshot_come_running_to_a_call_for_help() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, Some(vec!["townsfolk".into(), "players".into()]));
+        let row = rooms_east(&mut world, room, 3);
+        let caller = fighter(&mut world, row[0], 1, 1, &[BASIC_ATTACK]);
+        let rat = other_mob(&mut world, row[0], "rat", &["vermin"]);
+        world.entity_mut(caller).insert(Fighting(rat));
+        // Two rooms off, a guard hears; three off, one doesn't. A rat and a dog nearby aren't
+        // the caller's allies.
+        let near = fighter(&mut world, row[2], 1, 1, &[BASIC_ATTACK]);
+        let far = fighter(&mut world, row[3], 1, 1, &[BASIC_ATTACK]);
+        let other_rat = other_mob(&mut world, row[1], "rat", &["vermin"]);
+        let dog = other_mob(&mut world, row[1], "dog", &[]);
+        world.init_resource::<Messages<GameEvent>>();
+        world.write_message(GameEvent::CalledForHelp {
+            who: caller,
+            foe: rat,
+            rooms: 2,
+        });
+        world.run_system_once(help::answer_calls).unwrap();
+        world.flush();
+        assert_eq!(world.get::<InRoom>(near).unwrap().0, row[0], "came running");
+        assert_eq!(world.get::<Fighting>(near).map(|f| f.0), Some(rat));
+        assert_eq!(
+            world.get::<InRoom>(far).unwrap().0,
+            row[3],
+            "out of earshot"
+        );
+        for stayed in [other_rat, dog] {
+            assert_eq!(world.get::<InRoom>(stayed).unwrap().0, row[1]);
+            assert!(world.get::<Fighting>(stayed).is_none());
+        }
     }
 }

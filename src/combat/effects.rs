@@ -200,6 +200,14 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     }
                 }
                 Effect::Calm => calmed = true,
+                // Heard and answered once the round is done (`help.rs`).
+                Effect::CallForHelp { rooms } => {
+                    self.events.write(GameEvent::CalledForHelp {
+                        who: user,
+                        foe: target,
+                        rooms: *rooms,
+                    });
+                }
                 // The rest are how damage lands, carried out with it.
                 _ => {}
             }
