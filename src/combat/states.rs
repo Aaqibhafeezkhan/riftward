@@ -220,7 +220,11 @@ impl ItemConditions {
                 continue;
             }
             // At its strength: flaming at 2 burns twice as hot.
-            effects.extend(def.on_hit.iter().map(|e| e.times(condition.strength)));
+            effects.extend(
+                def.on_hit
+                    .iter()
+                    .map(|e| e.with_strength(condition.strength)),
+            );
             if let Some(charges) = condition.charges.as_mut() {
                 *charges -= 1;
             }

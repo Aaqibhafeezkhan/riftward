@@ -6,10 +6,13 @@ use bevy::prelude::*;
 
 use super::states::ItemCondition;
 use super::strike::{Round, Telling};
+use crate::attributes::Attribute;
 use crate::effects::{Effect, Who};
+use crate::formula::{Inputs, Side};
 use crate::items::ItemLocation;
 use crate::items::capitalized;
 use crate::skills::boosts;
+use crate::vitals::Maxima;
 use crate::world::armour_stops;
 
 use super::strike::armour_against;
@@ -47,6 +50,37 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         ((force * times).round() as i32 - armour).max(0)
     }
 
+    /// What formulas see when `user` does something to `target`: their attributes and health,
+    /// the user's level, a caster's `power`, and the contest's `margin`.
+    pub(super) fn inputs(&self, user: Entity, target: Entity, power: i32, margin: f64) -> Inputs {
+        let side = |who: Entity| {
+            self.fighters
+                .get(who)
+                .map(|f| Side {
+                    attributes: Attribute::ALL
+                        .iter()
+                        .map(|a| (*a, f64::from(f.attributes.get(*a))))
+                        .collect(),
+                    health: f64::from(f.vitals.health),
+                    most_health: f64::from(
+                        Maxima::of(f.attributes, f.skills, self.defs, f.base).health,
+                    ),
+                })
+                .unwrap_or_default()
+        };
+        Inputs {
+            power: f64::from(power),
+            strength: None,
+            margin,
+            level: self
+                .fighters
+                .get(user)
+                .map_or(0.0, |f| f64::from(f.attributes.level())),
+            user: side(user),
+            target: side(target),
+        }
+    }
+
     /// The weapon `who` holds, if any.
     pub(super) fn weapon_of(&self, who: Entity) -> Option<Entity> {
         self.items.iter().find_map(|(entity, item, location)| {
@@ -63,6 +97,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
     /// Carry out the `effects` that are on `who`: conditions put on or taken off `user` or
     /// `target`, told in the conditions' own words. `power` is a caster's, for `empowered`
     /// conditions; nothing for a technique. Returns whether it calmed the target.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn affect(
         &mut self,
         user: Entity,
@@ -70,8 +105,14 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         effects: &[Effect],
         who: Who,
         power: i32,
+        margin: f64,
         tell: &mut Telling,
     ) -> bool {
+        let inputs = self.inputs(user, target, power, margin);
+        let luck = self
+            .fighters
+            .get(user)
+            .map_or(0, |f| f.attributes.get(Attribute::Luck));
         let bearer = match who {
             Who::User => user,
             Who::Target => target,
@@ -93,10 +134,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     condition,
                     strength,
                     lasts,
-                    empowered,
                     ..
                 } => {
-                    let strength = strength + if *empowered { (power / 3).max(0) } else { 0 };
+                    let strength = strength.amount(&inputs, self.dice, luck);
                     let lasts = lasts.lasts(self.now);
                     if f.conditions.apply(defs, condition, strength, lasts) {
                         let applied = defs.get(condition).and_then(|d| d.text.applied.as_ref());
@@ -120,10 +160,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     strength,
                     lasts,
                     charges,
-                    empowered,
                     ..
                 } => {
-                    let strength = strength + if *empowered { (power / 3).max(0) } else { 0 };
+                    let strength = strength.amount(&inputs, self.dice, luck);
                     match self.weapon_of(bearer) {
                         Some(weapon) => {
                             let unix = crate::time::unix_now();

@@ -642,6 +642,7 @@ fn book_id(path: &std::path::Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::formula::Formula;
 
     /// Every spell book in `assets/spells` parses, and every spell in it is complete and cast
     /// through a school that exists.
@@ -719,7 +720,7 @@ mod tests {
             resist: Some(Resist::Dodge),
             tags: Vec::new(),
             effects: vec![Effect::Damage {
-                amount: (1, 2),
+                amount: Formula::parse("roll(1, 2)").unwrap(),
                 damage_type: "force".into(),
             }],
             text: SkillText {

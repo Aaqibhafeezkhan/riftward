@@ -123,7 +123,7 @@
         description: "burning whatever it strikes, 1 to 3 fire damage for each point of its strength ({strength})",
         tags: ["magic", "fire"],
         modifiers: [],
-        on_hit: [Damage(amount: (1, 3), type: "fire")],
+        on_hit: [Damage(amount: "roll(1, 3) * strength", type: "fire")],
         text: (
             applied: (bearer: "Flames run along your weapon!", room: "Flames run along {bearer}'s weapon!"),
             fades: (bearer: "The flames on your weapon gutter and die.", room: "The flames on {bearer}'s weapon die."),
@@ -135,7 +135,7 @@
         description: "coated in venom that poisons whatever it cuts",
         tags: ["poison"],
         modifiers: [],
-        on_hit: [Apply(condition: "poisoned", lasts: Turns(4))],
+        on_hit: [Apply(condition: "poisoned", strength: "strength", lasts: Turns(4))],
         text: (
             applied: (bearer: "Venom glistens on your blade.", room: "Venom glistens on {bearer}'s blade."),
             fades: (bearer: "The last of the venom is gone from your blade."),

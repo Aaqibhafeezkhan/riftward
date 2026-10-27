@@ -1,6 +1,6 @@
 # Effects, conditions and scripting
 
-[Design summary](README.md) · Status: steps 1 and 2 are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections). Formulas (step 3) are next; the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
+[Design summary](README.md) · Status: steps 1 to 3 are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections). So are formulas (step 3). Triggers and reactions (step 4) are next; the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
 
 **The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, a new active skill (each has its own command, like `pick` or `track`), a new trigger, or a formula other than the built-in ones.
 
@@ -173,9 +173,9 @@ Conditions on items come in two kinds, which behave differently.
 
 Step 2d (2026-10-26). The `reach` column above became simpler: a condition on an item works by what it has, so there's nothing to choose.
 
-- **`Imbue(condition, strength, lasts, charges, on, empowered)`** puts a condition on the weapon in hand of whoever it's `on`, replacing one of the same kind: `Imbue(condition: "flaming", lasts: Some(Minutes(80)), charges: Some(10))`. It lasts for its game time or its charges, whichever runs out first; neither, and it stays until something takes it off. `lasts: Turns(..)` is refused at load, since items don't take turns. With no weapon in hand, the user is told so.
+- **`Imbue(condition, strength, lasts, charges, on)`** puts a condition on the weapon in hand of whoever it's `on`, replacing one of the same kind: `Imbue(condition: "flaming", lasts: Some(Minutes(80)), charges: Some(10))`. It lasts for its game time or its charges, whichever runs out first; neither, and it stays until something takes it off. `lasts: Turns(..)` is refused at load, since items don't take turns. With no weapon in hand, the user is told so.
 - **Its modifiers pass to whoever holds or wears the item** (not to a pack it's in), through the same grants as template ones, so `affects` lists it "from a wooden practice sword".
-- **Its `on_hit` effects ride on every blow the weapon lands,** using a charge: a condition's new `on_hit: [...]` list, in the same effect vocabulary. They count **once per point of the item condition's strength**, like modifiers: `flaming` (`Damage(1-3, fire)`) at strength 2 burns for 2 to 6. `empowered` adds a third of the caster's power to the strength. A charge is spent only when the blow lands; the last one is told in the condition's `fades` words.
+- **Its `on_hit` effects ride on every blow the weapon lands,** using a charge: a condition's new `on_hit: [...]` list, in the same effect vocabulary. Their [formulas](#formulas-as-built) can use the item condition's `strength`: `flaming` is `Damage(amount: "roll(1, 3) * strength", type: "fire")`, so at strength 2 it burns for 2 to 6, and `envenomed` poisons at `strength: "strength"`. `Imbue`'s own `strength` is a formula too, so a spell can make it grow with power: `strength: "1 + floor(power / 5)"`. A charge is spent only when the blow lands; the last one is told in the condition's `fades` words.
 - **Saved** in `item_conditions` (game-time ends as unix seconds, charges as a count) whenever they change, loaded when a real item appears, and ended by the heartbeat when their time is up, told to whoever has the item.
 - **An imbue doesn't make an item real** (a departure from the plan above): a player's gear is real already, and a mob's weapon keeps its conditions until a player picks it up, when they're saved with it.
 - **`examine`** shows them: "It's flaming: burning whatever it strikes, 1 to 3 fire damage for each point of its strength (1) (9 hits left, for 1 hour 18 minutes)."
@@ -314,18 +314,18 @@ Step 2b. Spells and techniques list their effects in one vocabulary (`src/effect
 // A technique: down on the target if it lands, open yourself either way.
 effects: [Apply(condition: "down", lasts: Turns(1)), Apply(condition: "exposed", lasts: Turns(1), on: User)],
 // A spell: force damage; a ward that grows with the caster's power.
-effects: [Damage(amount: (2, 5), type: "force")],
-effects: [Apply(condition: "warded", strength: 4, lasts: Minutes(80), empowered: true)],
+effects: [Damage(amount: "roll(2, 5) + floor(power / 3)", type: "force")],
+effects: [Apply(condition: "warded", strength: "4 + floor(power / 3)", lasts: Minutes(80))],
 ```
 
 | Effect | Does | In |
 | --- | --- | --- |
-| `Damage(amount, type)` | Rolled, plus a third of the power, harder on a decisive win; through armour and resistances | Spells |
-| `Heal(amount)` | Rolled, plus a third of the power, up to the most | Spells |
-| `Apply(condition, strength, lasts, on, empowered)` | Puts a condition on; `empowered` adds a third of the power to its strength. Told in the condition's `applied` words | Both |
+| `Damage(amount, type)` | `amount` is a [formula](#formulas-as-built), harder on a decisive win; through armour and resistances | Both |
+| `Heal(amount)` | `amount` is a formula; health back, up to the most | Both |
+| `Apply(condition, strength, lasts, on)` | Puts a condition on, at `strength` (a formula, 1 unless it says). Told in the condition's `applied` words | Both |
 | `Remove(condition, on)` / `Cure(tag, on)` | Ends one condition, or every one with a tag, told in its `fades` words. Item grants stay | Both |
 | `Pierce(n)` / `IgnoreArmour` | How damage gets past armour | Both |
-| `Imbue(condition, strength, lasts, charges, on, empowered)` | Puts a condition on the weapon in hand; see [Item conditions, as built](#item-conditions-as-built) | Both |
+| `Imbue(condition, strength, lasts, charges, on)` | Puts a condition on the weapon in hand; see [Item conditions, as built](#item-conditions-as-built) | Both |
 | `Cleave` | The blow carries on into a second foe | Techniques |
 | `Calm` | An animal stops fighting | Spells |
 
@@ -349,7 +349,7 @@ Step 2c-i. Spells and techniques are resisted the same way, and skills made for 
 Step 2c-ii. Spells, techniques and plain blows are resolved by one piece of code (`src/combat/resolve.rs`); each keeps only what's truly its own.
 
 - **Shared by both:** `resist`, `tags`, `effects` and `text`, and everything after the user has paid: effects on the user, the contest with the target's skills that resist it, then on a win the blow's damage and every `Damage` effect through armour, resistances and wards, `Heal`, the conditions, `Cleave`, all told in the user's words.
-- **A spell's own:** its school and the level it needs, its Drain, its price, and its `aim`. A third of its power adds to its damage, healing and `empowered` conditions.
+- **A spell's own:** its school and the level it needs, its Drain, its price, and its `aim`. Its `power` is an input to its formulas: the first spells add a third of it to their damage, healing and wards, as their data says.
 - **A technique's own:** the attack it's made `with` (whose weapon must be ready), its stamina `cost`, `accuracy` and extra `damage` on the blow, whether it strikes (`Hit`, `Harmless`, `None`), and whether it's an `opener`.
 - **Techniques name their contest too:** `resist` defaults to `Some(Evasion)`, as a blow; Grapple is now `Some(Attribute(Strength))`, your grip against their Strength. `None` can't be resisted.
 - **Missing:** resisted by `Evasion`, it's dodged or blocked, in the defender's skill's words, and a dodge can be riposted. Resisted any other way, it just misses, in its own `miss` words, and isn't a dodge.
@@ -417,6 +417,16 @@ Amounts, ratings and chances are written as small expressions, checked when the 
 
 There are no loops and no assignments. Anything that needs more is a script.
 
+### Formulas, as built
+
+Step 3 (2026-10-26). `src/formula.rs` parses formulas when a file loads, so a typo or an unknown name stops the file loading with a message saying what's wrong, and works them out where they're used. Every amount in an effect is one: `Damage` and `Heal` `amount`, and `Apply` and `Imbue` `strength`. A plain number still works (`strength: 4`).
+
+- **Dice:** `2d6` adds two six-sided dice; `roll(2, 5)` is one roll from 2 to 5, what `(2, 5)` used to mean. Every roll goes through `Dice` with the user's Luck.
+- **Inputs:** `power` (a caster's; nothing for a blow), `strength` (an item condition's, in its `on_hit` effects; 1 elsewhere), `margin` (how decisively the contest was won, the winner's roll over the loser's; 1 when nothing resisted), `level` (the user's character level), `user.<attribute>` and `target.<attribute>` (`user.strength`, `target.willpower`), and `user.health`, `user.most_health`, `target.health`, `target.most_health`. Attributes go through `user.` and `target.` so that `strength` can mean a condition's.
+- **Operators:** `+ - * /` (division doesn't round), brackets, `min`, `max`, `floor`, `ceil`, `round`. An amount is rounded to a whole number where it's used.
+- **What moved into data:** "a third of the power on top" is now written in each spell (`"roll(2, 5) + floor(power / 3)"`), `empowered` is gone (a ward is `strength: "4 + floor(power / 3)"`), and "once per point of strength" for item conditions is gone (flaming says `* strength`).
+- **Still in code:** a blow's weapon damage and Strength bonus, the blow's crushing multiplier (applied to every `Damage` automatically, so formulas don't repeat it), spell power and Drain, and the numbers in `progression.ron`. `weapon`, `quality` and `skill(key)` inputs come when something needs them.
+
 ## Triggers
 
 When reactions and passive skills fire. Passives already practise on some of these (✓ stamina spent, dodged, blocked, hit in armour, damaged, used a skill or tree).
@@ -449,7 +459,7 @@ Each step leaves the game working and designers with more they can do alone.
 
 1. **Conditions as data** (*built*). The built conditions move to `assets/conditions/`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
 2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). So are `Imbue` and saved item conditions (2d). Step 2 is done.
-3. **Formulas.** The expression evaluator, and every amount moved into data.
+3. **Formulas** (*built*). The expression evaluator, and every amount in an effect moved into data.
 4. **Triggers and reactions.** More game events; reactions on conditions, skills and items.
 5. **Active skills through `use`.** Most bespoke commands become abilities.
 6. **Scripting.** Rhai, exposing the verbs and triggers above.

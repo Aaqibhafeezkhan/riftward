@@ -770,7 +770,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         // The user's own effects happen whether or not the blow lands.
         if let Some(Move { technique: t, .. }) = &technique {
             let mut own = Telling::default();
-            self.affect(attacker, target, &t.effects, Who::User, 0, &mut own);
+            self.affect(attacker, target, &t.effects, Who::User, 0, 1.0, &mut own);
             self.tell(own, room, attacker, target);
             if t.strike == StrikeKind::None {
                 let key = technique.as_ref().map_or("", |m| m.key);

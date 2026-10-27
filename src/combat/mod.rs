@@ -1278,6 +1278,7 @@ fn stop(In(inv): In<Invocation>, mut outbox: ResMut<Outbox>, mut queues: Query<&
 mod tests {
     use super::*;
     use crate::effects::{Effect, Lasting, Who};
+    use crate::formula::Formula;
     use crate::items::Item;
     use crate::skills::{
         Cost, Lines, PassiveBonus, Skill, SkillDef, SkillKind, SkillState, SkillText, Stat,
@@ -1373,17 +1374,15 @@ mod tests {
                         effects: vec![
                             Effect::Apply {
                                 condition: "down".into(),
-                                strength: 1,
+                                strength: Formula::number(1.0),
                                 lasts: Lasting::Turns(2),
                                 on: Who::Target,
-                                empowered: false,
                             },
                             Effect::Apply {
                                 condition: "exposed".into(),
-                                strength: 1,
+                                strength: Formula::number(1.0),
                                 lasts: Lasting::Turns(2),
                                 on: Who::User,
-                                empowered: false,
                             },
                         ],
                         opener: false,
@@ -1649,7 +1648,7 @@ mod tests {
             Aim::Foe,
             Some(Resist::Dodge),
             vec![Effect::Damage {
-                amount: (2, 2),
+                amount: Formula::parse("roll(2, 2)").unwrap(),
                 damage_type: "force".into(),
             }],
         );
@@ -1694,7 +1693,7 @@ mod tests {
                 Aim::Foe,
                 Some(Resist::Dodge),
                 vec![Effect::Damage {
-                    amount: (5, 5),
+                    amount: Formula::parse("roll(5, 5)").unwrap(),
                     damage_type: kind.into(),
                 }],
             );
@@ -1742,7 +1741,9 @@ mod tests {
             "divine:mend",
             Aim::Ally,
             None,
-            vec![Effect::Heal { amount: (5, 5) }],
+            vec![Effect::Heal {
+                amount: Formula::number(5.0),
+            }],
         );
         caster(&mut world, healer, vec![mend]);
         world.entity_mut(healer).insert(Tactics(100));
@@ -1772,10 +1773,9 @@ mod tests {
                 },
                 Effect::Apply {
                     condition: "blessed".into(),
-                    strength: 1,
+                    strength: Formula::parse("1 + power / 3").unwrap(),
                     lasts: Lasting::Minutes(10),
                     on: Who::Target,
-                    empowered: true,
                 },
             ],
         );
@@ -1815,10 +1815,9 @@ mod tests {
                         Some(Resist::Attribute(Attribute::Willpower)),
                         vec![Effect::Apply {
                             condition: "asleep".into(),
-                            strength: 1,
+                            strength: Formula::number(1.0),
                             lasts: Lasting::Turns(5),
                             on: Who::Target,
-                            empowered: false,
                         }],
                     );
                     caster(&mut world, mage, vec![sleep]);
@@ -1896,11 +1895,10 @@ mod tests {
             None,
             vec![Effect::Imbue {
                 condition: "flaming".into(),
-                strength: 1,
+                strength: Formula::parse("1 + power / 3").unwrap(),
                 lasts: Some(Lasting::Minutes(10)),
                 charges: Some(5),
                 on: Who::Target,
-                empowered: true,
             }],
         );
         caster(&mut world, mage, vec![kindle]);
@@ -2240,7 +2238,7 @@ mod tests {
             };
             t.resist = Some(Resist::Attribute(Attribute::Strength));
             t.effects.push(Effect::Damage {
-                amount: (5, 5),
+                amount: Formula::parse("roll(5, 5)").unwrap(),
                 damage_type: "fire".into(),
             });
             world.entity_mut(grappler).insert((

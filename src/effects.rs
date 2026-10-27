@@ -12,31 +12,31 @@ use serde::{Deserialize, Serialize};
 
 use crate::attributes::Attribute;
 use crate::combat::{ConditionDefs, Lasts};
+use crate::formula::Formula;
 use crate::time::REAL_SECS_PER_GAME_DAY;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Effect {
-    /// Damage of a type (`assets/damage_types.ron`), landing harder the more decisively it won.
+    /// Damage of a type (`assets/damage_types.ron`), `amount` a [formula](crate::formula), landing
+    /// harder the more decisively it won: `Damage(amount: "roll(2, 5) + power / 3", type: "force")`.
     /// Armour takes its share only of what armour stops; resistances and weaknesses count.
     Damage {
-        amount: (u32, u32),
+        amount: Formula,
         #[serde(rename = "type", default = "crate::world::physical")]
         damage_type: String,
     },
-    /// Health back, up to the most.
-    Heal { amount: (u32, u32) },
-    /// Puts a condition (`assets/conditions`) on someone, at `strength`, for as long as it
-    /// `lasts`. `empowered` adds a third of the caster's power to the strength: a stronger
-    /// caster's ward takes more.
+    /// Health back, up to the most: `amount` is a formula.
+    Heal { amount: Formula },
+    /// Puts a condition (`assets/conditions`) on someone, at `strength` (a formula, 1 unless it
+    /// says: a ward's `"4 + power / 3"` takes more from a stronger caster), for as long as it
+    /// `lasts`.
     Apply {
         condition: String,
         #[serde(default = "one")]
-        strength: i32,
+        strength: Formula,
         lasts: Lasting,
         #[serde(default)]
         on: Who,
-        #[serde(default)]
-        empowered: bool,
     },
     /// Ends a condition early.
     Remove {
@@ -52,22 +52,20 @@ pub enum Effect {
     },
     /// Puts a condition on the weapon in hand of whoever it's `on`: a venom coating, a flaming
     /// blade. Its modifiers pass to whoever holds it, and its `on_hit` effects land on whatever
-    /// it strikes, once for every point of `strength`: flaming at strength 2 burns twice as hot.
-    /// `empowered` adds a third of the caster's power to the strength. It lasts for `lasts` of
-    /// game time or `charges` hits, whichever runs out first; with neither, until something
-    /// takes it off. Saved with the item.
+    /// it strikes, with `strength` in their formulas the item condition's: flaming's
+    /// `"roll(1, 3) * strength"` burns twice as hot at 2. `strength` is a formula itself, 1
+    /// unless it says. It lasts for `lasts` of game time or `charges` hits, whichever runs out
+    /// first; with neither, until something takes it off. Saved with the item.
     Imbue {
         condition: String,
         #[serde(default = "one")]
-        strength: i32,
+        strength: Formula,
         #[serde(default)]
         lasts: Option<Lasting>,
         #[serde(default)]
         charges: Option<u32>,
         #[serde(default)]
         on: Who,
-        #[serde(default)]
-        empowered: bool,
     },
     /// This much of the target's armour doesn't help: a point finding a gap.
     Pierce(i32),
@@ -79,8 +77,8 @@ pub enum Effect {
     Calm,
 }
 
-fn one() -> i32 {
-    1
+fn one() -> Formula {
+    Formula::number(1.0)
 }
 
 /// What the target resists a spell or technique with, in an opposed roll against the user's
@@ -163,16 +161,18 @@ impl Effect {
         }
     }
 
-    /// This effect `n` times over, as a condition at strength `n` carries it: damage and healing
-    /// rolled `n` times as high, conditions put on `n` times as strong. Anything else is the same.
-    pub fn times(&self, n: i32) -> Effect {
-        let n = n.max(1) as u32;
+    /// This effect as an item condition at strength `n` carries it: `strength` in its formulas
+    /// is `n`.
+    pub fn with_strength(&self, n: i32) -> Effect {
+        let n = f64::from(n);
         let mut effect = self.clone();
         match &mut effect {
             Effect::Damage { amount, .. } | Effect::Heal { amount } => {
-                *amount = (amount.0 * n, amount.1 * n);
+                *amount = amount.with_strength(n);
             }
-            Effect::Apply { strength, .. } => *strength *= n as i32,
+            Effect::Apply { strength, .. } | Effect::Imbue { strength, .. } => {
+                *strength = strength.with_strength(n);
+            }
             _ => {}
         }
         effect
@@ -251,7 +251,7 @@ mod tests {
             r#"[
                 Apply(condition: "staggered", lasts: Turns(1)),
                 Apply(condition: "guarding", strength: 4, lasts: Turns(2), on: User),
-                Damage(amount: (2, 5)),
+                Damage(amount: "roll(2, 5)"),
                 Cure(tag: "poison"),
                 Pierce(2),
             ]"#,
@@ -261,10 +261,9 @@ mod tests {
             effects[0],
             Effect::Apply {
                 condition: "staggered".into(),
-                strength: 1,
+                strength: Formula::number(1.0),
                 lasts: Lasting::Turns(1),
                 on: Who::Target,
-                empowered: false,
             }
         );
         assert_eq!(effects[1].on(), Who::User);
@@ -278,13 +277,12 @@ mod tests {
         let effects = [
             Effect::Apply {
                 condition: "asleep".into(),
-                strength: 1,
+                strength: Formula::number(1.0),
                 lasts: Lasting::Turns(2),
                 on: Who::Target,
-                empowered: false,
             },
             Effect::Damage {
-                amount: (1, 2),
+                amount: Formula::parse("roll(1, 2)").unwrap(),
                 damage_type: "force".into(),
             },
         ];
@@ -298,11 +296,10 @@ mod tests {
     fn an_item_is_imbued_for_time_or_charges_not_turns() {
         let imbue = |lasts| Effect::Imbue {
             condition: "flaming".into(),
-            strength: 1,
+            strength: Formula::number(1.0),
             lasts,
             charges: Some(3),
             on: Who::Target,
-            empowered: false,
         };
         assert!(check(&[imbue(Some(Lasting::Minutes(10)))]).is_ok());
         assert!(check(&[imbue(None)]).is_ok());
@@ -310,27 +307,22 @@ mod tests {
     }
 
     #[test]
-    fn an_effect_at_strength_counts_that_many_times() {
-        let fire = Effect::Damage {
-            amount: (1, 3),
-            damage_type: "fire".into(),
-        };
-        assert_eq!(
-            fire.times(2),
-            Effect::Damage {
-                amount: (2, 6),
-                damage_type: "fire".into(),
-            }
-        );
-        assert_eq!(fire.times(0), fire, "never less than once");
+    fn an_item_conditions_strength_reaches_its_effects() {
         let poison = Effect::Apply {
             condition: "poisoned".into(),
-            strength: 1,
+            strength: Formula::parse("strength * 2").unwrap(),
             lasts: Lasting::Turns(4),
             on: Who::Target,
-            empowered: false,
         };
-        assert!(matches!(poison.times(3), Effect::Apply { strength: 3, .. }));
+        let Effect::Apply { strength, .. } = poison.with_strength(3) else {
+            unreachable!()
+        };
+        let worked = strength.eval(
+            &crate::formula::Inputs::default(),
+            &mut crate::dice::Dice::seeded(1),
+            0,
+        );
+        assert_eq!(worked, 6.0);
     }
 
     #[test]

@@ -78,7 +78,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let mut tell = Telling::default();
 
         // What it does to the user, it does whether or not it lands.
-        self.affect(user, target, u.effects, Who::User, u.power, &mut tell);
+        self.affect(user, target, u.effects, Who::User, u.power, 1.0, &mut tell);
 
         let Ok(d) = self.fighters.get(target) else {
             return out;
@@ -107,8 +107,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
 
         // The user's rating against the target's, by opposed roll; how decisively it wins is how
         // hard it lands. An opener from hiding can't be dodged: Backstab from the shadows lands.
-        let (hit, blow) = match rating {
-            None => (true, Blow::Solid),
+        let (hit, blow, margin) = match rating {
+            None => (true, Blow::Solid, 1.0),
             Some(rating) => {
                 let contest = self.dice.opposed(
                     f64::from(u.rating.max(1)),
@@ -118,8 +118,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 );
                 let ambush = u.opener && self.ambushers.contains(&user);
                 match (ambush, contest.won) {
-                    (true, false) => (true, Blow::Solid),
-                    (_, won) => (won, Blow::of(contest.margin)),
+                    (true, false) => (true, Blow::Solid, contest.margin),
+                    (_, won) => (won, Blow::of(contest.margin), contest.margin),
                 }
             }
         };
@@ -138,6 +138,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             let pierce = effects::pierce(u.effects);
             let ignores_armour = u.effects.contains(&Effect::IgnoreArmour);
             let times = blow.multiplier() * a_times;
+            let inputs = self.inputs(user, target, u.power, margin);
             let mut forces = Vec::new();
             if let Some(b) = &u.blow {
                 let rolled = self.roll(a_luck, b.damage);
@@ -149,8 +150,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     damage_type,
                 } = effect
                 {
-                    let rolled = self.roll(a_luck, *amount);
-                    forces.push((rolled + u.power / 3, damage_type.clone(), pierce));
+                    let force = amount.amount(&inputs, self.dice, a_luck);
+                    forces.push((force, damage_type.clone(), pierce));
                 }
             }
             let mut dealt: Option<i32> = None;
@@ -169,7 +170,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             let mut healed: Option<i32> = None;
             for effect in u.effects {
                 if let Effect::Heal { amount } = effect {
-                    let rolled = self.roll(a_luck, *amount) + u.power / 3;
+                    let rolled = amount.amount(&inputs, self.dice, a_luck).max(0);
                     let Ok(mut f) = self.fighters.get_mut(target) else {
                         continue;
                     };
@@ -237,7 +238,15 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             }
             // What it does to the target, if they're still standing, in the conditions' words.
             if !out.died.contains(&target) {
-                out.calmed = self.affect(user, target, u.effects, Who::Target, u.power, &mut tell);
+                out.calmed = self.affect(
+                    user,
+                    target,
+                    u.effects,
+                    Who::Target,
+                    u.power,
+                    margin,
+                    &mut tell,
+                );
             }
             if let Some(hurt) = dealt.filter(|n| *n > 0)
                 && u.effects.contains(&Effect::Cleave)

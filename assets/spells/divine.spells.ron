@@ -8,7 +8,7 @@
             school: "divine:foundation",
             drain: 3,
             aim: Ally,
-            effects: [Heal(amount: (2, 5))],
+            effects: [Heal(amount: "roll(2, 5) + floor(power / 3)")],
             text: (
                 hit: (
                     actor: "You lay your hands on {target} and pray, and the wounds close.",

@@ -81,7 +81,7 @@ Spells are their own category, separate from skills. **Schools are what improve;
     drain: 2,                         // stamina; half if resisted
     aim: Foe,                         // Foe, Ally or Other
     resist: Some(Dodge),              // or Some(Attribute(Willpower)); none for a blessing
-    effects: [Damage(amount: (2, 5), type: "force")],  // plus a third of the power; see effects.md
+    effects: [Damage(amount: "roll(2, 5) + floor(power / 3)", type: "force")],  // a formula; see effects.md
     text: (hit: (...), miss: (...)),  // like a skill's, with {harm} when it harms
 ),
 ```
@@ -93,10 +93,10 @@ Spells are their own category, separate from skills. **Schools are what improve;
   - **Ally:** yourself unless you name someone else here. Cast now, in a fight or out of one.
   - **Other:** someone else here, your foe by default, without starting a fight (Beast Speech).
 - **Resisting:** each spell names what resists it. **Dodge** is Reaction plus Dodge, as against a blow, but a shield doesn't help against magic; an **attribute** is the target's rating in it. A spell aimed at a foe must be resistable. Unresisted spells (blessings, healing) always work.
-- **Effects** (any number, in the [shared vocabulary](effects.md#effects-as-built); amounts rolled get a third of the power on top):
+- **Effects** (any number, in the [shared vocabulary](effects.md#effects-as-built); amounts are [formulas](effects.md#formulas-as-built), and the first spells add a third of the power to theirs):
   - **Damage:** of a type, landing harder the more decisively the spell won (the same [blows](attributes.md#the-ratio-rule) as an attack), through armour and resistances; told in Diku's words with `{harm}`.
   - **Heal:** health back, up to the most.
-  - **Apply** a condition: Bless puts on *blessed* (attacks better), Ward *warded* (takes the next blows' damage in their place, up to its strength, from any blow, weapon or spell; `empowered`, so it grows with the power), Spirit Grasp *held* (can't flee, defends at half, as a grapple leaves). **Remove** and **Cure** take conditions off.
+  - **Apply** a condition: Bless puts on *blessed* (attacks better), Ward *warded* (takes the next blows' damage in their place, up to its strength, from any blow, weapon or spell; its strength is `4 + floor(power / 3)`, so it grows with the power), Spirit Grasp *held* (can't flee, defends at half, as a grapple leaves). **Remove** and **Cure** take conditions off.
   - **Calm:** an animal (anything that fights with the Beast tree) stops fighting, no one fights it, and it no longer attacks those who come near.
 - **In a fight,** a queued `cast` is cast on the caster's turn in the round, in initiative order like any blow, so its damage, deaths and experience go the way a blow's do: `src/combat/casting.rs` pays for it, and `src/combat/resolve.rs` resolves it like any blow.
 - **Mobs cast** by the same rules. A template lists `spells` (and the school skill and attributes they need); on its turn, with its `tactics` chance, a mob picks among its techniques and the spells that would do some good: a spell at its foe, healing itself only when badly hurt, blessing or warding itself only when it isn't already. The three teachers know their tradition's two spells and cast them if attacked.

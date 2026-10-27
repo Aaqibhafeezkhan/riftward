@@ -48,6 +48,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `money.rs` | The purse, coins and how amounts read and are written, giving coins, the admin `setcoins` |
 | `shops.rs` | Shopkeepers: `list`, `buy`, `sell`, `value`, prices and resale |
 | `trade.rs` | Haggling (deals with shopkeepers, and the prices they set) and `appraise` |
+| `formula.rs` | Formulas: amounts in data (`"roll(2, 5) + floor(power / 3)"`), parsed at load and worked out through `Dice` with their inputs |
 | `effects.rs` | The one effect vocabulary spells and techniques share (`Damage`, `Heal`, `Apply`, `Remove`, `Cure`, …), whom each is on, how long conditions last, and what fits where |
 | `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, character and item conditions, real items, spawn timers |
