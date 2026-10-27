@@ -510,6 +510,22 @@ impl Conditions {
         self.0.iter().any(|a| a.key == key)
     }
 
+    /// Conditions someone is born with, (condition, strength), lasting until something ends them.
+    pub fn born_with(conditions: impl IntoIterator<Item = (String, i32)>) -> Self {
+        Self(
+            conditions
+                .into_iter()
+                .map(|(key, strength)| Active {
+                    key,
+                    strength,
+                    most: strength,
+                    lasts: Lasts::Indefinitely,
+                    seen_by: HashSet::new(),
+                })
+                .collect(),
+        )
+    }
+
     /// Their hiding, if they're hidden: its strength is how well they hid.
     pub fn hidden(&self) -> Option<&Active> {
         self.0.iter().find(|a| a.key == HIDDEN)

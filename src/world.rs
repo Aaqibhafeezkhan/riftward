@@ -419,6 +419,14 @@ pub struct ItemDef {
     pub consumable: Option<ConsumableDef>,
 }
 
+/// A condition a mob is born with, and how strong.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct BornWith {
+    pub condition: String,
+    #[serde(default = "full_strength")]
+    pub strength: i32,
+}
+
 /// A condition an item gives whoever has it, and how they must have it.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Grant {
@@ -743,6 +751,10 @@ pub struct MobDef {
     /// too: guards go for the rats. Without, it attacks players only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allies: Option<Vec<String>>,
+    /// Conditions it's born with, lasting until something ends them: a slime that shrugs off
+    /// blades, a beast that's `hidden` in its lair. `[(condition: "regenerating", strength: 2)]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<BornWith>,
     /// Copper it carries, low to high, rolled when it dies and taken by whoever killed it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coins: Option<(u32, u32)>,
@@ -806,6 +818,7 @@ impl MobDef {
             aggressive: false,
             tags: Vec::new(),
             allies: None,
+            conditions: Vec::new(),
             coins: None,
             shop: None,
             spells: Vec::new(),
@@ -1934,6 +1947,15 @@ mod tests {
                     && !races.contains(race)
                 {
                     problems.push(format!("mob {}:{mob_id}: no race '{race}'", zone.id));
+                }
+                // Each condition it's born with is a real one.
+                for born in &mob.conditions {
+                    if conditions.get(&born.condition).is_none() {
+                        problems.push(format!(
+                            "mob {}:{mob_id}: no condition '{}'",
+                            zone.id, born.condition
+                        ));
+                    }
                 }
                 // Each ally is players, a mob template, or a tag some mob has.
                 for ally in mob.allies.iter().flatten() {

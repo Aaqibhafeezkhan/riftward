@@ -82,7 +82,7 @@ Each creature with what it does and which existing data does it. Numbers are fir
 | **Forest spider** | Spider Hollow | Waits in its web **(gap: mobs hiding and ambushing, #9)**; a bite that poisons | `aggressive`; passive *Venomous Bite*: reaction `Hits` → `Apply(poisoned)` | Spider silk; a venom sac |
 | **Brown bear** | Bear's Cave | Solitary and huge; ignores you on the paths, savage at home **(gap: territorial)** | `wander: Never`, high Body and Strength, natural armour (*Thick Hide*: `Armour` bonus), a maul | A bear pelt; claws, bear meat |
 | **Crows** | The road, the clearing | Atmosphere: they watch, and caw **(gap: ambient lines)** | A `here` line, `wander: Zone` | Nothing |
-| **The rift-touched stag** | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` condition (resist force, `Struck` → force damage, as thorns), granted by its template's natural state **(gap: conditions a mob starts with)**; `AfterDeath(Days(3))`; a Silver contract later | A rift-glass antler (rare, a crafting reagent later) |
+| **The rift-touched stag** | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` condition (resist force, `Struck` → force damage, as thorns), granted by its template's natural state (conditions a mob is born with, *built*); `AfterDeath(Days(3))`; a Silver contract later | A rift-glass antler (rare, a crafting reagent later) |
 
 **Food chain, from what's built:** wolves and boars are `aggressive` with allies of their own kind only, so they go for deer and rabbits as readily as players; deer and rabbits aren't aggressive, so they're prey. Without fleeing, prey just stands and dies, which is why fleeing is the first gap worth closing.
 
@@ -148,7 +148,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | --- | --- | --- | --- |
 | **Fleeing** | Deer and rabbits, a hurt wolf breaking off | A `Flee` effect, as the `flee` command: out of a fight, the bearer leaves by a random walkable exit; in one, a chance to break away. Then data does the rest: *Skittish* puts `startled` on at `Arrives`, and `startled` `Fades` → `Flee`, which makes the window ([Prey](#prey-a-window-then-gone)). `Arrives` fires for anyone coming in, other deer too, so it also needs a check on the trigger, "only if they aren't an ally": the trigger checks [effects.md](effects.md#reactions-as-built) lists as still to come. | Small to medium |
 | **Harvesting corpses** | Pelts, meat, fangs, antlers | `harvest` tables on mob templates, carried onto the corpse; `Find` aimed at a corpse (`aim: Item`) finding a kind from it, once per kind; Skinning and Butchering as data | Small to medium |
-| **Mob conditions from the start** | The rift-touched stag; any template that "is" something | `conditions: [("rift_touched", 2)]` on a mob template, put on as it spawns, lasting `Indefinitely` | Small |
+| **Mob conditions from the start** (*built* 2026-10-27) | The rift-touched stag, the grey slimes, the Slime Lord; any template that "is" something | `conditions: [(condition: "rift_touched", strength: 2)]` on a mob template, put on as it spawns, lasting `Indefinitely`. A mob born `hidden` lurks unseen until noticed, the start of [#9](https://github.com/Foxworks-Studios/riftward/issues/9)'s ambushers | Small |
 | **Consumables that apply conditions** | Deathcap poisoning, later potions of strength | `effects: [...]` on a `consumable`, resolved as an active skill's are, on the eater | Small |
 | **Time-of-day spawns** | Night wolves, day deer | The spawn `when` condition gains `TimeOfDay(Night)` (designed in [world.md](world.md)) | Small |
 | **Ambient lines** | Crows, the hum of the scar, birdsong | `chatter: ["The crow caws.", ...]` on a mob or room, one now and then on the heartbeat | Small |
@@ -161,6 +161,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Spawning from an effect** | Slimes splitting, the Slime Lord shedding slimes | A `Spawn(mob, count)` effect, in a reaction on `Hurt` or on a death (`Kills` is the killer's; this needs the dying one's own reaction, **a `Dies` trigger**) | Small to medium |
 | **Acid that eats gear** | The sewers' slimes | An `acid` damage type is data; acid wearing armour and weapons down needs item condition and wear **(later)** | Later |
 | **Ranged combat** | Bows, the hunter's teaching | Attacking into the next room, ammunition | Large, later |
+| **Rift-touched mutations** | Now and then a monstrous variant instead of an ordinary creature, more often near the Rift-Scar ([planned](world.md#rift-touched-mutations-planned)) | A pool of mutations as data, rolled on a spawn's small chance; each is mostly conditions the mob is born with, plus words and extra harvest | Medium, later |
 | **Navigation and getting lost** | The deep wood's thirty rooms | Without Navigation, a move in the deep wood may take you a different way than you meant, more often the further from a landmark; Navigation (Survival) against how tangled the wood is. Rooms say how easy they are to lose your way in | Medium |
 
 ## Proposed build order
@@ -170,7 +171,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 3. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. No material loot: what they yield waits for harvesting.
 4. **Harvesting** (code, small to medium): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
 5. **Fleeing** (code, small to medium), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
-6. **Mob starting conditions** (code, small), for the rift-touched stag; **consumables with effects** for deathcaps.
+6. **Mob starting conditions** (*built*), for the rift-touched stag; **consumables with effects** for deathcaps.
 7. **Time-of-day spawns** and **ambient lines** (code, small).
 8. **Room conditions and reactions** (code, medium), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.
 

@@ -10,7 +10,7 @@ use bevy::prelude::*;
 
 use crate::attributes::Attributes;
 use crate::characters::{Races, article};
-use crate::combat::{Aggressive, AutoAttack, Fighting, Tactics, the};
+use crate::combat::{Aggressive, AutoAttack, Conditions, Fighting, Tactics, the};
 use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
 use crate::db::{Permission, Role};
 use crate::dice::Dice;
@@ -215,6 +215,12 @@ pub fn spawn_mob(
         AutoAttack(def.attack.clone()),
         Tactics(def.tactics.unwrap_or(DEFAULT_TACTICS)),
         Spells(def.spells.iter().cloned().collect()),
+        // What it's born with, hidden in its lair or proof against blades, until something ends it.
+        Conditions::born_with(
+            def.conditions
+                .iter()
+                .map(|c| (c.condition.clone(), c.strength)),
+        ),
     ));
     if let Some(base) = base {
         entity.insert(base);
@@ -574,6 +580,58 @@ mod tests {
     use crate::items::Item;
     use crate::world::Slot;
     use bevy::ecs::system::RunSystemOnce;
+
+    #[test]
+    fn mobs_are_born_with_their_conditions() {
+        let mut world = World::new();
+        let key = MobKey::parse("sewers:grey_slime", "");
+        let mut slime = MobDef::named("a grey slime");
+        slime.conditions = vec![
+            crate::world::BornWith {
+                condition: "shielded".into(),
+                strength: 3,
+            },
+            crate::world::BornWith {
+                condition: crate::combat::HIDDEN.into(),
+                strength: 12,
+            },
+        ];
+        world.insert_resource(MobTemplates(HashMap::from([(key.clone(), slime)])));
+        world.insert_resource(ItemTemplates::default());
+        world.insert_resource(SkillDefs::default());
+        world.insert_resource(Dice::seeded(1));
+        world.insert_resource(Races(Vec::new()));
+        let room = world.spawn_empty().id();
+        let mob = world
+            .run_system_once(
+                move |mut commands: Commands,
+                      mobs: Res<MobTemplates>,
+                      items: Res<ItemTemplates>,
+                      defs: Res<SkillDefs>,
+                      races: Res<Races>,
+                      mut dice: ResMut<Dice>| {
+                    spawn_mob(
+                        &mut commands,
+                        &mobs,
+                        &items,
+                        &defs,
+                        &key,
+                        room,
+                        &races,
+                        &mut dice,
+                    )
+                },
+            )
+            .unwrap()
+            .unwrap();
+        let conditions = world.get::<Conditions>(mob).unwrap();
+        assert!(conditions.has("shielded"));
+        assert_eq!(conditions.0[0].strength, 3);
+        assert_eq!(conditions.0[0].lasts, crate::combat::Lasts::Indefinitely);
+        // Born hidden, it lurks unseen until someone notices it.
+        let passer_by = Entity::from_raw_u32(99).unwrap();
+        assert!(!conditions.seen_by(passer_by));
+    }
 
     #[test]
     fn mobs_are_made_with_their_gear() {
