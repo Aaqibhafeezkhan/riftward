@@ -74,8 +74,8 @@ Each creature with what it does and which existing data does it. Numbers are fir
 | **Young boar** | West woods | A boar not grown into its temper: rung 2's fighter | As the boar, weaker | Pork |
 | **Badger** | Brook, west woods' far edge | Stubborn and tough for its size; fights to the end | High Body, *Thick Hide* | A badger pelt |
 | **Giant frog** | Brook Ford | Leaps out of the water; a sticky tongue that holds | A technique *Tongue*: `Apply(held)` | Frog legs (meat) |
-| **Rabbit** | Meadow, west woods | Breeds fast, harmless; bolts from anyone **(gap: flee)** | Breeding spawn, `crowd`, `tags: ["game"]`; *Skittish* (see [Prey](#prey-a-window-then-gone)) | Meat; a rabbit pelt |
-| **Red deer** | Meadow, brook | A small herd, wandering the west woods; bolts **(gap: flee)**; a stag fights back hard | Breeding spawn with `reseed`; `tags: ["game"]`; the stag a `Keep(1)` spawn with a gore attack; *Skittish* | Venison; a hide; antlers (stag) |
+| **Rabbit** | Meadow, west woods | Breeds fast, harmless; bolts from anyone (*built*: `Flee`) | Breeding spawn, `crowd`, `tags: ["game"]`; *Skittish* (see [Prey](#prey-a-window-then-gone)) | Meat; a rabbit pelt |
+| **Red deer** | Meadow, brook | A small herd, wandering the west woods; bolts (*built*: `Flee`); a stag fights back hard | Breeding spawn with `reseed`; `tags: ["game"]`; the stag a `Keep(1)` spawn with a gore attack; *Skittish* | Venison; a hide; antlers (stag) |
 | **Wild boar** | Thicket, west woods, the road now and then | Bad-tempered: attacks anyone not a boar; **enrages** when hurt | `aggressive`, `allies: ["boar"]`; passive skill *Boar's Fury*: reaction `Hurt(0.5)` → `Apply(strengthened)` on itself | Pork; a tusk |
 | **Grey wolf** | Wolf Den, the deep wood (more at night **(gap: time-of-day spawns)**) | Hunts in packs of three; goes for game and travellers alike; **howls** for the pack when hurt | `aggressive`, `allies: ["wolf"]`, `pack: 3`, `tags: ["wolf"]`; *Howl*: Call for Help with the wolves' own words | A wolf pelt; fangs |
 | **The old she-wolf** | Wolf Den | The pack's leader: while she lives, every wolf in the Darkwood fights better | An `Aura` skill, as the Rat King's, affecting `forest:grey_wolf`; `AfterDeath(Days(7))` | A great grey pelt (rare) |
@@ -90,8 +90,8 @@ Each creature with what it does and which existing data does it. Numbers are fir
 
 Decided 2026-10-27. Deer and rabbits bolt, but not the instant someone walks in: there's a window a quick hunter can strike into, so taking one is a little hard, not wildly so, and a slow typist still has a fair chance.
 
-- **Startled, then off.** A non-ally the prey notices coming in startles it (`startled`, a condition lasting a few seconds); when that runs out, it flees. In data, a passive *Skittish*: `Arrives` → `Apply(startled)`, and `startled`'s own `Fades` → `Flee`. How long the window lasts is the condition's length: a tuning number, first guess 6 seconds (two rounds).
-- **Caught in the window, it fights to get away:** once in a fight, prey tries to break off as a player does with `flee`, a chance each turn rather than a certainty, and more likely once hurt (`Hurt(0.5)` → `Flee`). A hunter usually gets a blow or two in.
+- **Startled, then off** (*built*). A non-ally the prey notices coming in startles it (`startled`, a condition lasting a few seconds); when that runs out, it flees. In data, a passive *Skittish* (`beast:skittish`): `Arrives`, `only: Foes` → `Apply(startled, lasts: Rounds(2))`, and `startled`'s own `Fades` → `Flee`. How long the window lasts is the condition's length: a tuning number, first guess 6 seconds (two rounds).
+- **Caught in the window, it fights to get away:** once in a fight, prey tries to break off as a player does with `flee`, a chance each turn rather than a certainty (*Skittish*: half its turns, `TurnStarts` with `chance: "0.5"`, each try succeeding as `flee` does, 60% before Luck), and once more when badly hurt (`Hurt(0.5)` → `Flee`). A hunter usually gets a blow or two in.
 - **Stealth pays.** `Arrives` fires only for someone the prey noticed, so a sneaking hunter walks right up without startling it; a sharp-eyed deer (good Intuition) notices more.
 
 ### Harvest, not loot
@@ -146,7 +146,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 
 | Gap | Needed for | Proposed shape | Size |
 | --- | --- | --- | --- |
-| **Fleeing** | Deer and rabbits, a hurt wolf breaking off | A `Flee` effect, as the `flee` command: out of a fight, the bearer leaves by a random walkable exit; in one, a chance to break away. Then data does the rest: *Skittish* puts `startled` on at `Arrives`, and `startled` `Fades` → `Flee`, which makes the window ([Prey](#prey-a-window-then-gone)). `Arrives` fires for anyone coming in, other deer too, so it also needs a check on the trigger, "only if they aren't an ally": the trigger checks [effects.md](effects.md#reactions-as-built) lists as still to come. | Small to medium |
+| **Fleeing** (*built* 2026-10-27) | Deer and rabbits, a hurt wolf breaking off | A `Flee` effect, as the `flee` command: out of a fight, the bearer leaves by a random walkable exit, away from what it avoids; in one, a chance to break away. Data does the rest: *Skittish* (`beast:skittish`) puts `startled` on at `Arrives`, `only: Foes` (so other deer don't startle it), for `Rounds(2)`, and `startled` `Fades` → `Flee`, which makes the window ([Prey](#prey-a-window-then-gone)); in a fight it tries to break away half its turns, and on `Hurt(0.5)` | Small to medium |
 | **Harvesting corpses** | Pelts, meat, fangs, antlers | `harvest` tables on mob templates, carried onto the corpse; `Find` aimed at a corpse (`aim: Item`) finding a kind from it, once per kind; Skinning and Butchering as data | Small to medium |
 | **Mob conditions from the start** (*built* 2026-10-27) | The rift-touched stag, the grey slimes, the Slime Lord; any template that "is" something | `conditions: [(condition: "rift_touched", strength: 2)]` on a mob template, put on as it spawns, lasting `Indefinitely`. A mob born `hidden` lurks unseen until noticed, the start of [#9](https://github.com/Foxworks-Studios/riftward/issues/9)'s ambushers | Small |
 | **Consumables that apply conditions** | Deathcap poisoning, later potions of strength | `effects: [...]` on a `consumable`, resolved as an active skill's are, on the eater | Small |
@@ -170,7 +170,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 2. **Rooms and flora** (data): the rest of the forest: the ravine's falls, the deep wood, the stones and the scar, with their finds and the new herb and food items.
 3. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. No material loot: what they yield waits for harvesting.
 4. **Harvesting** (code, small to medium): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
-5. **Fleeing** (code, small to medium), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
+5. **Fleeing** (*built*), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
 6. **Mob starting conditions** (*built*), for the rift-touched stag; **consumables with effects** for deathcaps.
 7. **Time-of-day spawns** and **ambient lines** (code, small).
 8. **Room conditions and reactions** (code, medium), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.

@@ -23,6 +23,7 @@ use crate::dice::Dice;
 use crate::effects::When;
 use crate::events::GameEvent;
 use crate::items::{ItemQuery, ItemTemplates};
+use crate::mobs::MobTemplates;
 use crate::output::Outbox;
 use crate::skills::SkillDefs;
 use crate::spells::SpellDefs;
@@ -121,6 +122,7 @@ pub(super) struct Reacting<'w, 's> {
     fighters: Fighters<'w, 's>,
     items: ItemQuery<'w, 's>,
     templates: Res<'w, ItemTemplates>,
+    mobs: Res<'w, MobTemplates>,
     defs: Res<'w, SkillDefs>,
     spells: Res<'w, SpellDefs>,
     conditions: Res<'w, ConditionDefs>,
@@ -169,6 +171,7 @@ pub(super) fn react(
         fighters: &mut p.fighters,
         items: &p.items,
         templates: &p.templates,
+        mobs: &p.mobs,
         defs: &p.defs,
         spells: &p.spells,
         conditions: &p.conditions,

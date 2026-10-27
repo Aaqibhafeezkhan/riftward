@@ -100,6 +100,10 @@ pub enum Effect {
         #[serde(default = "one")]
         count: Formula,
     },
+    /// The user runs: in a fight, they try to break away as `flee` does (its stamina, its
+    /// chance, held fast by `CantFlee`); out of one, they bolt through a random way anyone could
+    /// walk, away from rooms holding what they `avoid`. A startled deer, a beaten wolf.
+    Flee,
 }
 
 /// The most mobs one `Spawn` brings, whatever its count says.
@@ -158,10 +162,22 @@ pub struct Reaction {
     /// The odds it happens, 0 to 1, a formula (`"0.25"`, `"strength / 10"`); always, without.
     #[serde(default)]
     pub chance: Option<Formula>,
+    /// Who the other one must be for it to happen: `only: Foes`. Anyone, without.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub only: Option<Only>,
     pub effects: Vec<Effect>,
     /// What everyone sees, `{actor}` the bearer and `{target}` the other one, with `{harm}` in
     /// every line if it does damage.
     pub text: Lines,
+}
+
+/// A check on who the other one in a reaction is.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Only {
+    /// Not the bearer's ally: for a mob, not its own kind nor one its `allies` name
+    /// (`MobDef::allied`); for a player, not another player. A deer startles at a wolf or a
+    /// hunter coming in, not at another deer.
+    Foes,
 }
 
 /// When a reaction happens.
@@ -261,6 +277,9 @@ pub enum Lasting {
     Minutes(u32),
     Hours(u32),
     Turns(u32),
+    /// So many combat rounds' worth of real time (`ROUND_SECS` each), in a fight or out of one,
+    /// unlike `Turns`: a startled deer's two rounds before it bolts.
+    Rounds(u32),
     /// Until something ends it: hiding lasts until the hider acts openly or is found.
     Indefinitely,
 }
@@ -271,6 +290,7 @@ impl Lasting {
         let minutes = match self {
             Lasting::Minutes(n) => n,
             Lasting::Hours(n) => n * 60,
+            Lasting::Rounds(n) => return f64::from(n) * crate::combat::ROUND_SECS,
             Lasting::Turns(_) | Lasting::Indefinitely => 0,
         };
         f64::from(minutes) * REAL_SECS_PER_GAME_DAY as f64 / (24.0 * 60.0)
@@ -295,7 +315,7 @@ impl Effect {
             | Effect::Cure { on, .. }
             | Effect::Imbue { on, .. } => *on,
             // Wherever the user is, whether or not anything lands.
-            Effect::Spawn { .. } => Who::User,
+            Effect::Spawn { .. } | Effect::Flee => Who::User,
             _ => Who::Target,
         }
     }
@@ -503,6 +523,7 @@ mod tests {
         let mut thorns = Reaction {
             on: When::Struck,
             chance: None,
+            only: None,
             effects: vec![Effect::Damage {
                 amount: Formula::number(2.0),
                 damage_type: "physical".into(),

@@ -17,6 +17,7 @@
 mod abilities;
 mod casting;
 mod effects;
+mod fleeing;
 mod help;
 mod resolve;
 mod spawning;
@@ -93,6 +94,8 @@ impl Plugin for CombatPlugin {
                     help::answer_calls,
                     // Those an effect brought into being arrive.
                     spawning::spawn_from_effects,
+                    // And those an effect told to run, run.
+                    fleeing::flee_from_effects,
                     abandon_fights,
                     handle_deaths,
                 )
@@ -267,7 +270,7 @@ fn combat_round(
     mut commands: Commands,
     mut fighters: Fighters,
     items: ItemQuery,
-    templates: Res<ItemTemplates>,
+    (templates, mobs): (Res<ItemTemplates>, Res<MobTemplates>),
     (defs, spells, condition_defs): (Res<SkillDefs>, Res<SpellDefs>, Res<ConditionDefs>),
     mut dice: ResMut<Dice>,
     db: Res<Database>,
@@ -373,6 +376,7 @@ fn combat_round(
         fighters: &mut fighters,
         items: &items,
         templates: &templates,
+        mobs: &mobs,
         defs: &defs,
         spells: &spells,
         conditions: &condition_defs,
@@ -1562,6 +1566,7 @@ mod tests {
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Outbox::default());
         world.insert_resource(Spawns::default());
+        world.init_resource::<MobTemplates>();
         world.init_resource::<Messages<GameEvent>>();
         let room = world
             .spawn((
@@ -2099,6 +2104,7 @@ mod tests {
                 reactions: vec![Reaction {
                     on,
                     chance: None,
+                    only: None,
                     effects,
                     text: lines,
                 }],
@@ -2213,6 +2219,43 @@ mod tests {
         world.run_system_once(combat_round).unwrap();
         assert!(world.get::<Dead>(victim).is_some());
         assert!(world.get::<Conditions>(victor).unwrap().has("weakened"));
+    }
+
+    #[test]
+    fn a_reaction_for_foes_only_ignores_allies() {
+        // Struck by its own kind, nothing; by a rat, it bristles.
+        let (mut world, room) = world();
+        aggressive_template(&mut world, None);
+        let deer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let herdmate = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        reacting(
+            &mut world,
+            deer,
+            "test:bristle",
+            When::Struck,
+            vec![on_self("strengthened")],
+        );
+        if let Some(SkillKind::Passive { reactions, .. }) = world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .get_mut("test:bristle")
+            .map(|s| &mut s.def.kind)
+        {
+            reactions[0].only = Some(crate::effects::Only::Foes);
+        }
+        sure_hands(&mut world, herdmate);
+        world.entity_mut(herdmate).insert(Fighting(deer));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get::<Vitals>(deer).unwrap().health < 100.0, "struck");
+        assert!(!world.get::<Conditions>(deer).unwrap().has("strengthened"));
+        let rat = other_mob(&mut world, room, "rat", &["vermin"]);
+        sure_hands(&mut world, rat);
+        world.entity_mut(herdmate).remove::<Fighting>();
+        world.entity_mut(deer).remove::<Fighting>();
+        world.entity_mut(rat).insert(Fighting(deer));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(deer).unwrap().has("strengthened"));
     }
 
     #[test]
@@ -2787,6 +2830,7 @@ mod tests {
             .map(|(on, effect)| Reaction {
                 on,
                 chance: None,
+                only: None,
                 effects: vec![effect],
                 text: reaction_lines(),
             })
@@ -3430,10 +3474,12 @@ mod tests {
                       mut log: ResMut<Outbox>| {
                     let none = HashMap::new();
                     let mut imbued = Imbued::default();
+                    let mobs = MobTemplates::default();
                     let round = Round {
                         fighters: &mut fighters,
                         items: &items,
                         templates: &templates,
+                        mobs: &mobs,
                         defs: &defs,
                         spells: &spells,
                         conditions: &conditions,

@@ -18,7 +18,7 @@ use crate::dice::Dice;
 use crate::effects::{self, Resist, Who};
 use crate::events::GameEvent;
 use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
-use crate::mobs::Mob;
+use crate::mobs::{Mob, MobTemplates};
 use crate::money::Purse;
 use crate::output::PuppetedBy;
 use crate::output::{Outbox, Outgoing};
@@ -475,6 +475,8 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub fighters: &'a mut Fighters<'w, 's>,
     pub items: &'a ItemQuery<'iw, 'is>,
     pub templates: &'a ItemTemplates,
+    /// Mob templates, for who counts whom an ally.
+    pub mobs: &'a MobTemplates,
     pub defs: &'a SkillDefs,
     pub conditions: &'a ConditionDefs,
     pub spells: &'a SpellDefs,

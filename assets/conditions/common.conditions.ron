@@ -152,6 +152,21 @@
     ),
 
     // Reacting by themselves.
+    "startled": (
+        name: "startled",
+        description: "startled, and about to bolt",
+        tags: [],
+        modifiers: [],
+        // Put on by Skittish (beast.skill.ron); how long it lasts is the hunter's window.
+        reactions: [(
+            on: Fades,
+            effects: [Flee],
+            text: (actor: "You turn to run.", room: "{actor} turns to run."),
+        )],
+        text: (
+            looks: ["{bearer} stands frozen, ready to run."],
+        ),
+    ),
     "thorns": (
         name: "thorns",
         description: "thorns that tear at whoever strikes you, for {strength} damage",

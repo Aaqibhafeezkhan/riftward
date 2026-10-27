@@ -34,6 +34,7 @@ use crate::dice::Dice;
 use crate::effects::{self, Effect};
 use crate::events::GameEvent;
 use crate::items::{ItemQuery, ItemTemplates};
+use crate::mobs::MobTemplates;
 use crate::output::{Outbox, Outgoing, deliver};
 use crate::skills::{SkillDefs, SkillText, Skills};
 use crate::stealth::can_see;
@@ -475,7 +476,7 @@ fn cast(
     mut commands: Commands,
     mut fighters: Fighters,
     items: ItemQuery,
-    templates: Res<ItemTemplates>,
+    (templates, mobs): (Res<ItemTemplates>, Res<MobTemplates>),
     defs: Res<SkillDefs>,
     spells: Res<SpellDefs>,
     mut dice: ResMut<Dice>,
@@ -588,6 +589,7 @@ fn cast(
         fighters: &mut fighters,
         items: &items,
         templates: &templates,
+        mobs: &mobs,
         defs: &defs,
         spells: &spells,
         conditions: &condition_defs,

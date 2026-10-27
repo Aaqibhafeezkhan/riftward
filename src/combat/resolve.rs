@@ -12,12 +12,14 @@ use bevy::prelude::*;
 use super::states::{ConditionDefs, Conditions};
 use super::strike::{Blow, Round, Telling, defence_rating, gear, harm, shield_block, told};
 use crate::attributes::Attribute;
-use crate::effects::{self, Effect, Reaction, Resist, Taken, When, Who};
+use crate::effects::{self, Effect, Only, Reaction, Resist, Taken, When, Who};
 use crate::events::GameEvent;
 use crate::items::capitalized;
+use crate::mobs::MobTemplates;
 use crate::money;
 use crate::skills::{SkillDefs, SkillKind, SkillText, Skills, Trigger, boosts, fill};
 use crate::vitals::Maxima;
+use crate::world::{MobDef, MobKey};
 
 /// A blow's own damage, rolled when it lands: the weapon's or attack's, plus what the user adds.
 pub(super) struct BlowDamage {
@@ -426,6 +428,32 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         out
     }
 
+    /// Whether `who` counts `other` an ally: for a mob, its own kind and those its `allies` name;
+    /// for a player, other players.
+    fn allied(&self, who: Entity, other: Entity) -> bool {
+        // A player, or a mob's template key.
+        let kind = |e: Entity| {
+            self.fighters.get(e).ok().map(|f| match f.player {
+                Some(_) => None,
+                None => f.mob.map(|m| m.key.clone()),
+            })
+        };
+        let (Some(a), Some(b)) = (kind(who), kind(other)) else {
+            return false;
+        };
+        fn def<'k>(
+            mobs: &'k MobTemplates,
+            key: &'k Option<MobKey>,
+        ) -> Option<(&'k MobKey, &'k MobDef)> {
+            key.as_ref().and_then(|k| Some((k, mobs.0.get(k)?)))
+        }
+        match (&a, def(self.mobs, &a)) {
+            (None, _) => b.is_none(),
+            (Some(_), Some((key, own))) => own.allied(key, def(self.mobs, &b)),
+            (Some(_), None) => false,
+        }
+    }
+
     /// The `Hurt` shares `who`'s reactions watch for.
     fn hurt_shares(&self, who: Entity) -> Vec<f32> {
         self.reactions_of(who)
@@ -492,6 +520,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             if (!dying && !standing(bearer)) || (!dying && when != When::Kills && !standing(other))
             {
                 break;
+            }
+            if reaction.only == Some(Only::Foes) && self.allied(bearer, other) {
+                continue;
             }
             if let Some(chance) = &reaction.chance {
                 let inputs = self.inputs(bearer, other, power, 1.0);

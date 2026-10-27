@@ -223,6 +223,10 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                         room,
                     });
                 }
+                // Run once the round is done (`fleeing.rs`).
+                Effect::Flee => {
+                    self.events.write(GameEvent::Flees { who: bearer });
+                }
                 // The rest are how damage lands, carried out with it.
                 _ => {}
             }

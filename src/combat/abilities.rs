@@ -27,6 +27,7 @@ use crate::effects::{self, Effect, Who};
 use crate::events::GameEvent;
 use crate::healing::used_up;
 use crate::items::{ItemQuery, ItemTemplates, Snapshot, capitalized};
+use crate::mobs::MobTemplates;
 use crate::output::{Outbox, Outgoing};
 use crate::skills::{Cost, SkillDefs, SkillKind};
 use crate::spells::{Aim, Aimed, SpellDefs};
@@ -372,7 +373,7 @@ pub(super) fn ability(
     mut commands: Commands,
     mut fighters: Fighters,
     items: ItemQuery,
-    templates: Res<ItemTemplates>,
+    (templates, mobs): (Res<ItemTemplates>, Res<MobTemplates>),
     (defs, spells, condition_defs): (Res<SkillDefs>, Res<SpellDefs>, Res<ConditionDefs>),
     mut dice: ResMut<Dice>,
     db: Res<Database>,
@@ -438,6 +439,7 @@ pub(super) fn ability(
         fighters: &mut fighters,
         items: &items,
         templates: &templates,
+        mobs: &mobs,
         defs: &defs,
         spells: &spells,
         conditions: &condition_defs,
