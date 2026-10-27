@@ -123,6 +123,9 @@ pub enum Aim {
     Ally,
     /// Someone else here, without starting a fight. Your foe, unless you name another.
     Other,
+    /// A door or a container that closes, by direction or name: Lockpicking. Active skills
+    /// only, for now.
+    Lock,
 }
 
 pub use crate::effects::Resist;
@@ -140,6 +143,9 @@ impl SpellDef {
         crate::effects::check(&self.effects)?;
         if self.harms() && self.aim != Aim::Foe {
             return Err("does damage, so it must be aimed at a Foe".into());
+        }
+        if self.aim == Aim::Lock {
+            return Err("can't be aimed at a lock: only active skills can, for now".into());
         }
         if self.aim == Aim::Foe && self.resist.is_none() {
             return Err("is aimed at a Foe, so needs something to resist it".into());
@@ -372,6 +378,8 @@ impl Aimed<'_> {
             (Aim::Foe | Aim::Other, None) => {
                 foe.ok_or_else(|| format!("{} {name} {at} whom?", crate::items::capitalized(verb)))?
             }
+            // Locks are found among doors and containers, not people.
+            (Aim::Lock, None) => return Err(format!("You can't {verb} {name} {at} someone.")),
         };
         match self.aim {
             Aim::Foe | Aim::Other if target == caster => {

@@ -76,6 +76,15 @@ impl Plugin for CommandsPlugin {
                     .action(),
                 doors::pick,
             )
+            // Run by `use` for an active skill aimed at a lock; players don't type it.
+            .add_command(
+                CommandSpec::new("lockwork", Interaction)
+                    .usage("use <skill> <door|container>")
+                    .summary("use an active skill on a door or container")
+                    .quiet()
+                    .unlisted(),
+                doors::lockwork,
+            )
             .add_command(
                 CommandSpec::new("bash", Interaction)
                     .usage("bash <door>")

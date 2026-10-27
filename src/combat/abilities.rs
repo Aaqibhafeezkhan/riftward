@@ -204,9 +204,13 @@ pub(super) fn ability(
     let Some(skill) = defs.skills.get(key) else {
         return;
     };
+    // A lock is `lockwork`'s (`commands/doors.rs`).
     let SkillKind::Active { aim, .. } = &skill.def.kind else {
         return;
     };
+    if *aim == Aim::Lock {
+        return;
+    }
     let Ok(user) = fighters.get(inv.entity) else {
         return;
     };

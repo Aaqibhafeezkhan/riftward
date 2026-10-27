@@ -33,7 +33,7 @@ use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
 use crate::effects::{self, Effect, Reaction, Resist};
 use crate::events::GameEvent;
-use crate::formula::Formula;
+use crate::formula::{Formula, Inputs};
 use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
 };
@@ -213,13 +213,26 @@ impl SkillDef {
             effects::check(&t.effects)?;
         }
         if let SkillKind::Active {
-            command, effects, ..
+            command,
+            effects,
+            aim,
+            ..
         } = &self.kind
         {
             match (command, effects.is_empty()) {
                 (Some(_), false) => return Err("does its command or its effects, not both".into()),
                 (None, true) => return Err("needs a command or effects".into()),
                 _ => effects::check(effects)?,
+            }
+            // A lock can only be locked or unlocked, for now.
+            let on_a_lock = |e: &Effect| {
+                matches!(e, Effect::Apply { condition, .. } | Effect::Remove { condition, .. }
+                    if condition == LOCKED)
+            };
+            if *aim == Aim::Lock && !effects.iter().all(on_a_lock) {
+                return Err(format!(
+                    "is aimed at a lock, so it can only Apply or Remove \"{LOCKED}\""
+                ));
             }
         }
         if let SkillKind::Passive { reactions, .. } = &self.kind {
@@ -240,10 +253,14 @@ impl SkillDef {
             SkillKind::Active {
                 command: Some(_), ..
             } => (false, true),
-            // Done to someone else, unless only to yourself; it can fail when it's a contest.
+            // Done to someone else, unless only to yourself, or to a lock; it can fail when it's
+            // a contest.
             SkillKind::Active {
-                resist, against, ..
-            } => (true, resist.is_some() || against.is_some()),
+                resist,
+                against,
+                aim,
+                ..
+            } => (*aim != Aim::Lock, resist.is_some() || against.is_some()),
             // Nothing to show.
             SkillKind::Passive { .. } | SkillKind::Aura { .. } => return Ok(()),
         };
@@ -407,6 +424,9 @@ pub enum SkillKind {
         bonus: Bonus,
     },
 }
+
+/// The condition a lock is in when it's locked: on a door or a container, it's their state.
+pub const LOCKED: &str = "locked";
 
 fn ally() -> Aim {
     Aim::Ally
@@ -892,6 +912,33 @@ impl Practice<'_, '_> {
             effectiveness: state.level as i32 + attributes.get(skill.attribute),
             luck: attributes.get(Attribute::Luck),
         })
+    }
+
+    /// What formulas see of `who` and their skill, using it on `target` (a lock's numbers, say).
+    pub fn inputs(&self, who: Entity, power: i32, target: crate::formula::Side) -> Inputs {
+        let attributes = self.sheets.get(who).map_or_else(
+            |_| Vec::new(),
+            |(_, _, a)| {
+                Attribute::ALL
+                    .iter()
+                    .map(|x| (*x, f64::from(a.get(*x))))
+                    .collect()
+            },
+        );
+        Inputs {
+            power: f64::from(power),
+            user: crate::formula::Side {
+                attributes,
+                ..Default::default()
+            },
+            target,
+            ..Default::default()
+        }
+    }
+
+    /// Work out a fixed difficulty: a formula, rolled without Luck.
+    pub fn eval(&mut self, formula: &Formula, inputs: &Inputs) -> f64 {
+        formula.eval(inputs, &mut self.dice, 0)
     }
 
     /// An opposed roll: `rating` with `luck` against `against` with `their_luck` (0 for a fixed
@@ -1533,10 +1580,13 @@ fn use_cmd(
                 },
                 // One like nothing else has its own command; the rest are their effects, done by
                 // `ability`, which shows a hidden user as casting does.
-                SkillKind::Active { command, .. } => {
-                    let (verb, args) = match command {
-                        Some(command) => (command.as_str(), target.trim().to_string()),
-                        None => ("ability", format!("{} {}", skill.key, target.trim())),
+                SkillKind::Active { command, aim, .. } => {
+                    let (verb, args) = match (command, aim) {
+                        (Some(command), _) => (command.as_str(), target.trim().to_string()),
+                        (None, Aim::Lock) => {
+                            ("lockwork", format!("{} {}", skill.key, target.trim()))
+                        }
+                        (None, _) => ("ability", format!("{} {}", skill.key, target.trim())),
                     };
                     match registry.find(verb, actor.role) {
                         Some((spec, id)) => {

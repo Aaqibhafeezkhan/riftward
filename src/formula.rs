@@ -41,6 +41,8 @@ enum Expr {
 const INPUTS: &[&str] = &["power", "strength", "margin", "level"];
 /// What `user.` and `target.` can name besides attributes.
 const VITALS: &[&str] = &["health", "most_health"];
+/// What `target.` can name on a lock (a door or container): how hard it is to pick, and to force.
+const LOCKS: &[&str] = &["pick", "sturdiness"];
 /// Functions, and how many arguments each takes.
 const FUNCTIONS: &[(&str, usize)] = &[
     ("min", 2),
@@ -63,12 +65,14 @@ pub struct Inputs {
     pub target: Side,
 }
 
-/// One side's attributes and health.
+/// One side's attributes and health, or for a lock, how hard it is to pick and to force.
 #[derive(Clone, Debug, Default)]
 pub struct Side {
     pub attributes: Vec<(Attribute, f64)>,
     pub health: f64,
     pub most_health: f64,
+    pub pick: f64,
+    pub sturdiness: f64,
 }
 
 impl Side {
@@ -76,6 +80,8 @@ impl Side {
         match name {
             "health" => self.health,
             "most_health" => self.most_health,
+            "pick" => self.pick,
+            "sturdiness" => self.sturdiness,
             _ => self
                 .attributes
                 .iter()
@@ -138,6 +144,20 @@ impl Formula {
 
     /// The same formula with `strength` fixed at `n`: an item condition's effects as they ride
     /// on its weapon.
+    /// Whether it reads the input `name` (`"target.pick"`).
+    pub fn reads(&self, name: &str) -> bool {
+        fn reads(expr: &Expr, name: &str) -> bool {
+            match expr {
+                Expr::Input(input) => input == name,
+                Expr::Number(_) | Expr::Dice(..) => false,
+                Expr::Neg(e) => reads(e, name),
+                Expr::Op(_, a, b) => reads(a, name) || reads(b, name),
+                Expr::Call(_, args) => args.iter().any(|a| reads(a, name)),
+            }
+        }
+        reads(&self.expr, name)
+    }
+
     pub fn with_strength(&self, n: f64) -> Self {
         Self {
             text: self.text.clone(),
@@ -357,6 +377,7 @@ impl Parser {
 /// Whether `name` is an input formulas know.
 fn known(name: &str) -> Result<(), String> {
     let ok = match name.split_once('.') {
+        Some(("target", rest)) if LOCKS.contains(&rest) => true,
         Some(("user" | "target", rest)) => {
             VITALS.contains(&rest)
                 || Attribute::ALL
@@ -371,7 +392,7 @@ fn known(name: &str) -> Result<(), String> {
     } else {
         Err(format!(
             "there's no input '{name}': use {}, or user. and target. with an attribute, health \
-             or most_health",
+             or most_health, or target.pick or target.sturdiness for a lock",
             INPUTS.join(", ")
         ))
     }
@@ -429,6 +450,11 @@ mod tests {
                 attributes: vec![(Attribute::Strength, 4.0)],
                 health: 10.0,
                 most_health: 20.0,
+                ..Side::default()
+            },
+            target: Side {
+                pick: 6.0,
+                ..Side::default()
             },
             ..Inputs::default()
         };
@@ -447,6 +473,10 @@ mod tests {
             0.0,
             "missing counts as nothing"
         );
+        assert_eq!(worked("target.pick + 1", &inputs), 7.0, "a lock's numbers");
+        let pick = Formula::parse("max(1, target.pick - power)").unwrap();
+        assert!(pick.reads("target.pick"));
+        assert!(!pick.reads("target.sturdiness"));
         assert_eq!(
             worked("power / 0", &inputs),
             0.0,

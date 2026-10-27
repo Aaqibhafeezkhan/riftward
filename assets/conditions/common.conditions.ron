@@ -262,4 +262,13 @@
             looks: ["{bearer}'s muscles stand out like cords."],
         ),
     ),
+
+    // On locks. A door's or container's lock is shut: Lockpicking and its key take it off, and
+    // its key puts it back. How hard it is to pick or force is the lock's own, in the zone file.
+    "locked": (
+        name: "locked",
+        description: "locked",
+        tags: ["lock"],
+        modifiers: [],
+    ),
 }

@@ -2,7 +2,7 @@
 
 [Design summary](README.md) · Status: steps 1 to 4 are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections), formulas (step 3), and reactions in a fight and out of one (step 4). Step 5 has begun: active skills can be made of effects (5a); the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
 
-**The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, an active skill that works on something other than a character (Lockpicking, Foraging and Tracking still have their own commands, until step 5 makes them data too; one that does effects to someone is data already, like First Aid), a new trigger, or a formula other than the built-in ones.
+**The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, an active skill that works on something other than a character (Foraging, Pickpocketing and Tracking still have their own commands, until step 5 makes them data too; one that does effects to someone is data already, like First Aid), a new trigger, or a formula other than the built-in ones.
 
 This doc proposes the vocabulary that removes those needs: **conditions as data**, **one effect vocabulary** shared by spells, techniques, skills and items, **formulas** in data, **triggers** for reactions, and, last, **scripting** (Rhai) for the long tail that data can't express.
 
@@ -360,7 +360,7 @@ Still to come: one file shape for all of them (a spell, a technique and an activ
 
 ### Active skills, as built
 
-Step 5a (2026-10-27). An active skill is either a command, for what's like nothing else (`Active(command: "pick")` for Lockpicking, `track`, `forage`, `steal`), or made of effects, in its `.skill.ron`, and resolved by `resolve.rs` like any spell or blow. First Aid is the first:
+Step 5a (2026-10-27). An active skill is either a command, for what's like nothing else (`track`, `forage`, `steal`, until the rest of step 5 makes them data), or made of effects, in its `.skill.ron`, and resolved by `resolve.rs` like any spell or blow. First Aid is the first:
 
 ```ron
 "first_aid": (
@@ -377,7 +377,7 @@ Step 5a (2026-10-27). An active skill is either a command, for what's like nothi
 ),
 ```
 
-- **Fields:** `aim` (`Ally`, the default: yourself unless you name someone; `Foe`; `Other`), `cost` (`Stamina(n)`), `cooldown` in seconds, `uses` (an item tag), `resist` (what the target resists with, as a spell's) or `against` (a fixed difficulty, rolled without Luck), `tags`, and `effects`. Neither `resist` nor `against`: it always works.
+- **Fields:** `aim` (`Ally`, the default: yourself unless you name someone; `Foe`; `Other`; `Lock`, a door or closable container, by direction or name), `cost` (`Stamina(n)`), `cooldown` in seconds, `uses` (an item tag), `resist` (what the target resists with, as a spell's) or `against` (a fixed difficulty, rolled without Luck), `tags`, and `effects`. Neither `resist` nor `against`: it always works.
 - **Power:** the user's skill, its level plus its attribute, is both their side of the contest and `power` in its formulas.
 - **Using one:** `use first aid [<someone>]`, in a fight or out of one; it's an action, so in a fight it takes the user's turn. Old commands can stay as shortcuts: `bandage` is `use first aid`. A hidden user is revealed, as casting does.
 - **Refusals cost nothing:** one that only heals and cures isn't used on someone unhurt with nothing to cure ("Bob isn't hurt."); one that `uses` an item needs one carried ("You have no bandages."); then the cooldown and the stamina. Once it's tried, the item is used up whether or not it worked, and the skill is practised.
@@ -390,10 +390,11 @@ Step 5a (2026-10-27). An active skill is either a command, for what's like nothi
 Decided 2026-10-27. Every skill becomes data, and the commands that do skills today (`pick`, `bash`, `forage`, `gather`, `steal`, `appraise`, `track`, `hide`) become shortcuts to `use`, built in as `bandage` is. What makes those skills different isn't code of their own but **what they're aimed at** and **a few more effects**.
 
 - **Target kinds:** a character (as now), an item, a door (an exit), a room. Doors and rooms carry conditions as characters and items do; resolving one skips what only characters have (dodging, damage, health).
-- **Locked is a condition on a door,** its strength how hard the lock is to pick. Lockpicking is the user's skill `against` that strength, and on success `Remove`s it; bashing is Strength against the lock's sturdiness, the same way; a Knock spell would be `Remove(locked)` aimed at a door.
-- **Keys aren't a skill.** `unlock <door>` still needs the door's key carried, and always works: it removes the condition, with no roll. `lock <door>` puts it back at the lock's own strength, from the zone file, so re-locking restores the same lock. The door's lock keeps its key, pick difficulty and sturdiness.
+- **Locked is a condition on a lock** (*built*, 5b): a door's or a closable container's. How hard it is to pick or force stays the lock's own, in the zone file (`lock: (key, pick, bash)`), and formulas read it as `target.pick` and `target.sturdiness` (decided 2026-10-27). Lockpicking is data: `aim: Lock`, the user's skill `against: "target.pick"`, and on success `Remove(condition: "locked")`. A lock without the number a skill reads can't be worked that way ("That lock can't be picked."). A Knock spell would be `Remove(locked)` aimed at a lock, once spells can aim at one.
+- **Keys aren't a skill.** `unlock <door>` still needs the door's key carried, and always works: it takes `locked` off, with no roll. `lock <door>` puts it back; the lock keeps its key, pick difficulty and sturdiness, so re-locking restores the same lock. `bash` isn't a skill either: it stays a command, Strength against the lock's sturdiness, forcing it open.
+- **How it's kept:** on a lock, `locked` is its state (`DoorState::Locked`), so zone files, resets and the builders' `door` command are unchanged; the effects act on that state. Skills aimed at a lock can only `Apply` or `Remove` it, for now. `lockwork` (`commands/doors.rs`) resolves them, as `ability` does skills aimed at characters.
 - **New effects:** `Find(table)`, a loot table rolled into the user's hands (Foraging, Gathering, aimed at a room); `Take`, an item moved from someone to the user (Pickpocketing, resisted by the victim's awareness); `Reveal`, telling the user something (Appraisal's value and quality, Tracking's trail), the first effect that only informs.
-- **The order,** each step leaving the game working: doors and rooms as targets with conditions, and locks as a condition, through pick, bash, keys (5b); `Find`, for foraging and gathering (5c); `Take`, for stealing (5d); `Reveal`, for appraising and tracking (5e); Hiding once Hidden is a condition ([#7](https://github.com/Foxworks-Studios/riftward/issues/7)).
+- **The order,** each step leaving the game working: locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*); rooms as targets, with `Find`, for foraging and gathering (5c); `Take`, for stealing (5d); `Reveal`, for appraising and tracking (5e); Hiding once Hidden is a condition ([#7](https://github.com/Foxworks-Studios/riftward/issues/7)).
 
 ## Abilities
 
@@ -525,7 +526,7 @@ Each step leaves the game working and designers with more they can do alone.
 2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). So are `Imbue` and saved item conditions (2d). Step 2 is done.
 3. **Formulas** (*built*). The expression evaluator, and every amount in an effect moved into data.
 4. **Triggers and reactions** (*built*). Reactions on conditions, skills and items in a fight (4a), and out of one: entering a room, someone arriving, resting, eating and drinking, a condition taking hold or running out, casting, the start of a turn and every so often (4b).
-5. **Every skill through `use`.** Active skills made of effects, with First Aid the first (5a, *built*). Then [every skill as data](#every-skill-as-data): doors and rooms as targets, with locks as a condition (5b), `Find` (5c), `Take` (5d), `Reveal` (5e), and Hiding; their commands become shortcuts.
+5. **Every skill through `use`.** Active skills made of effects, with First Aid the first (5a, *built*). Then [every skill as data](#every-skill-as-data): locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*), rooms as targets with `Find` (5c), `Take` (5d), `Reveal` (5e), and Hiding; their commands become shortcuts.
 6. **Scripting.** Rhai, exposing the verbs and triggers above.
 
 ## Open questions

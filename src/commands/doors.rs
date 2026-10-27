@@ -9,15 +9,17 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::command::Invocation;
+use crate::command::{CommandRegistry, Invocation};
 use crate::commands::movement::{full_direction, is_direction, toward};
-use crate::db::Permission;
+use crate::db::{Permission, Role};
 use crate::dice::Dice;
+use crate::effects::Effect;
+use crate::formula::Side;
 use crate::items::{
     Item, ItemLocation, ItemTemplates, Snapshot, capitalized, carries, with_keywords,
 };
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
-use crate::skills::{Learner, Practice, fill};
+use crate::skills::{Learner, Practice, SkillKind, fill};
 use crate::targeting::{Keywords, Target};
 use crate::world::{Door, DoorKey, DoorState, Exits, ItemKey, LockDef, without_article};
 
@@ -413,43 +415,93 @@ pub fn bash(
 /// The skill `pick` uses.
 const LOCKPICKING: &str = "thievery:lockpicking";
 
-/// Pick a locked door or container: Lockpicking (level plus Agility) against the lock's
-/// difficulty, as a ratio, with Luck. Every attempt practises the skill.
-pub fn pick(
+/// `pick <door|container>`: Lockpicking, by its old name. It's an active skill made of effects
+/// (`thievery.skill.ron`), so this is `use lockpicking`.
+pub fn pick(In(inv): In<Invocation>, mut commands: Commands, registry: Res<CommandRegistry>) {
+    let Some((spec, id)) = registry.find("lockwork", Role::Player) else {
+        return;
+    };
+    commands.run_system_with(
+        *id,
+        Invocation {
+            entity: inv.entity,
+            command: spec.name,
+            usage: spec.usage,
+            args: format!("{LOCKPICKING} {}", inv.args.trim()),
+        },
+    );
+}
+
+/// `lockwork <tree:skill> <door|container>`: what `use` runs for an active skill aimed at a lock,
+/// like Lockpicking. It's the user's skill (level plus attribute) against its `against` formula,
+/// which reads the lock's numbers (`target.pick`, `target.sturdiness`): a lock without the one it
+/// reads can't be worked that way. Worked, it takes `locked` off or puts it on, as its effects
+/// say. Every try practises the skill.
+pub fn lockwork(
     In(inv): In<Invocation>,
     players: Characters,
     mut outbox: ResMut<Outbox>,
     mut world: Lockables,
     mut practice: Practice,
 ) {
+    let (key, words) = inv.args.split_once(' ').unwrap_or((&inv.args, ""));
+    let Some(skill) = practice.defs.skills.get(key).cloned() else {
+        return;
+    };
+    let SkillKind::Active {
+        against, effects, ..
+    } = &skill.def.kind
+    else {
+        return;
+    };
+    let unlocks = effects.iter().any(|e| matches!(e, Effect::Remove { .. }));
+    let on = Invocation {
+        entity: inv.entity,
+        command: inv.command,
+        usage: "use <skill> <door|container>",
+        args: words.trim().to_string(),
+    };
     let mut gains = Vec::new();
-    with_lockable(&inv, &players, &mut outbox, &mut world, |it, _| {
-        match it.state {
-            DoorState::Open => return Err("It's already open.".into()),
-            DoorState::Closed => return Err("It isn't locked.".into()),
-            DoorState::Locked => {}
+    with_lockable(&on, &players, &mut outbox, &mut world, |it, _| {
+        let lock = it.lock.clone().ok_or("It has no lock.")?;
+        match (it.state, unlocks) {
+            (DoorState::Open, true) => return Err("It's already open.".into()),
+            (DoorState::Open, false) => return Err("You'll have to close it first.".into()),
+            (DoorState::Closed, true) => return Err("It isn't locked.".into()),
+            (DoorState::Locked, false) => return Err("It's already locked.".into()),
+            _ => {}
         }
-        let Some(difficulty) = it.lock.as_ref().and_then(|lock| lock.pick) else {
-            return Err("That lock can't be picked.".into());
+        let numbers = Side {
+            pick: lock.pick.map_or(0.0, f64::from),
+            sturdiness: lock.bash.map_or(0.0, f64::from),
+            ..Side::default()
         };
-        let ready = practice.begin(it.actor.entity, LOCKPICKING)?;
-        let skill = f64::from(ready.effectiveness.max(1));
-        let picked = practice
-            .opposed(skill, ready.luck, f64::from(difficulty.max(1)), 0)
-            .won;
+        if let Some(against) = against {
+            if against.reads("target.pick") && lock.pick.is_none() {
+                return Err("That lock can't be picked.".into());
+            }
+            if against.reads("target.sturdiness") && lock.bash.is_none() {
+                return Err("It's far too sturdy to force.".into());
+            }
+        }
+        let ready = practice.begin(it.actor.entity, key)?;
+        let worked = match against {
+            None => true,
+            Some(against) => {
+                let inputs = practice.inputs(it.actor.entity, ready.effectiveness, numbers);
+                let difficulty = practice.eval(against, &inputs).max(1.0);
+                let skill = f64::from(ready.effectiveness.max(1));
+                practice.opposed(skill, ready.luck, difficulty, 0).won
+            }
+        };
         let learner = Learner {
             character_id: it.actor.character_id,
             race: &it.actor.race,
             boost: 1.0,
         };
-        gains = practice.exercise(it.actor.entity, learner, LOCKPICKING);
-        let text = practice
-            .defs
-            .skills
-            .get(LOCKPICKING)
-            .and_then(|skill| skill.def.text.clone())
-            .ok_or_else(String::new)?;
-        let lines = match (picked, &text.miss) {
+        gains = practice.exercise(it.actor.entity, learner, key);
+        let text = skill.def.text.as_ref().ok_or_else(String::new)?;
+        let lines = match (worked, &text.miss) {
             (false, Some(miss)) => miss,
             _ => &text.hit,
         };
@@ -465,10 +517,10 @@ pub fn pick(
             .as_ref()
             .map_or_else(String::new, |b| fill(b, &with));
         let told = it.announce(fill(&lines.actor, &with), fill(&lines.room, &with), beyond);
-        Ok(if picked {
-            (DoorState::Closed, told)
-        } else {
-            (DoorState::Locked, told)
+        Ok(match (worked, unlocks) {
+            (false, _) => (it.state, told),
+            (true, true) => (DoorState::Closed, told),
+            (true, false) => (DoorState::Locked, told),
         })
     });
     let out = gains
@@ -476,4 +528,194 @@ pub fn pick(
         .map(|line| Outgoing::line(inv.entity, line))
         .collect();
     deliver(out, &mut outbox);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events::GameEvent;
+    use crate::formula::Formula;
+    use crate::mobs::Mob;
+    use crate::skills::{
+        Cost, Lines, Skill, SkillDef, SkillDefs, SkillKind, SkillState, SkillText, Skills,
+    };
+    use crate::spells::Aim;
+    use crate::vitals::Vitals;
+    use crate::world::{Exit, InRoom, MobKey, Room, RoomKey, Terrain};
+    use bevy::ecs::message::Messages;
+    use bevy::ecs::system::RunSystemOnce;
+    use std::collections::{BTreeMap, HashMap};
+
+    /// A room with a locked door north, a thief who knows Lockpicking at `level`, and a lock
+    /// with this pick difficulty. Returns the world, the thief and the door.
+    fn vault(level: u32, pick: Option<u32>) -> (World, Entity, Entity) {
+        let mut world = World::new();
+        let lines = |actor: &str| Lines {
+            actor: actor.into(),
+            target: None,
+            room: "{actor} works at {target}.".into(),
+            beyond: Some("Something scratches at {door}.".into()),
+        };
+        let lockpicking = Skill {
+            key: LOCKPICKING.into(),
+            tree: "thievery".into(),
+            attribute: Attribute::Agility,
+            def: SkillDef {
+                name: "Lockpicking".into(),
+                description: "Picking locks.".into(),
+                kind: SkillKind::Active {
+                    command: None,
+                    cost: Cost::Stamina(1),
+                    cooldown: 0.0,
+                    aim: Aim::Lock,
+                    uses: None,
+                    resist: None,
+                    against: Some(Formula::parse("target.pick").unwrap()),
+                    tags: Vec::new(),
+                    effects: vec![Effect::Remove {
+                        condition: "locked".into(),
+                        on: crate::effects::Who::Target,
+                    }],
+                },
+                text: Some(SkillText {
+                    hit: lines("You pick {target}."),
+                    miss: Some(lines("You can't pick {target}.")),
+                }),
+                mastery: 50,
+                attribute: None,
+                rarity: None,
+                difficulty: 1.0,
+                requires: None,
+                karma: None,
+            },
+        };
+        world.insert_resource(SkillDefs {
+            skills: HashMap::from([(LOCKPICKING.to_string(), lockpicking)]),
+            trees: HashMap::new(),
+        });
+        world.insert_resource(ItemTemplates::default());
+        world.insert_resource(Dice::seeded(5));
+        world.insert_resource(crate::db::Database::open(":memory:").unwrap());
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(Outbox::default());
+        world.init_resource::<Messages<GameEvent>>();
+        let room = |world: &mut World, id: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: id.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(id, ""),
+                ))
+                .id()
+        };
+        let hall = room(&mut world, "test:hall");
+        let vault = room(&mut world, "test:vault");
+        let door = world
+            .spawn((
+                Door {
+                    name: "an iron door".into(),
+                    state: DoorState::Locked,
+                    default: DoorState::Locked,
+                    lock: Some(LockDef {
+                        key: None,
+                        pick,
+                        bash: Some(6),
+                    }),
+                },
+                DoorKey::parse("test:vault_door", ""),
+                Keywords::from_name("iron door"),
+            ))
+            .id();
+        let exit = |to| Exit {
+            to,
+            door: Some(door),
+            needs: None,
+        };
+        world
+            .entity_mut(hall)
+            .insert(Exits(BTreeMap::from([("north".to_string(), exit(vault))])));
+        world
+            .entity_mut(vault)
+            .insert(Exits(BTreeMap::from([("south".to_string(), exit(hall))])));
+        let mut skill = SkillState::new("Template");
+        skill.level = level;
+        let thief = world
+            .spawn((
+                Mob {
+                    key: MobKey::parse("test:thief", ""),
+                    name: "a thief".into(),
+                    here: String::new(),
+                    description: String::new(),
+                    race: None,
+                },
+                InRoom(hall),
+                Attributes::starting(|_| 1, 0),
+                Vitals {
+                    health: 10.0,
+                    stamina: 10.0,
+                },
+                Skills(BTreeMap::from([(LOCKPICKING.to_string(), skill)])),
+            ))
+            .id();
+        (world, thief, door)
+    }
+
+    fn work(world: &mut World, who: Entity, args: &str) {
+        let inv = Invocation {
+            entity: who,
+            command: "lockwork",
+            usage: "",
+            args: format!("{LOCKPICKING} {args}"),
+        };
+        world.run_system_once_with(lockwork, inv).unwrap();
+    }
+
+    fn told(world: &World, text: &str) -> bool {
+        world.resource::<Outbox>().0.iter().any(|out| match out {
+            Outgoing::To(_, line) | Outgoing::Room { text: line, .. } => line.contains(text),
+        })
+    }
+
+    #[test]
+    fn lockpicking_takes_the_lock_off_a_door() {
+        let (mut world, thief, door) = vault(1000, Some(4));
+        work(&mut world, thief, "north");
+        assert_eq!(world.get::<Door>(door).unwrap().state, DoorState::Closed);
+        assert!(told(&world, "You pick the lock of the iron door."));
+        assert!(
+            told(&world, "Something scratches at the iron door."),
+            "beyond"
+        );
+        assert_eq!(world.get::<Vitals>(thief).unwrap().stamina, 9.0);
+        // Now there's nothing to pick.
+        work(&mut world, thief, "door");
+        assert!(told(&world, "It isn't locked."));
+    }
+
+    #[test]
+    fn a_hard_lock_holds_but_the_try_is_paid_for() {
+        let (mut world, thief, door) = vault(0, Some(1000));
+        work(&mut world, thief, "north");
+        assert_eq!(world.get::<Door>(door).unwrap().state, DoorState::Locked);
+        assert!(told(&world, "You can't pick the lock of the iron door."));
+        assert_eq!(world.get::<Vitals>(thief).unwrap().stamina, 9.0);
+    }
+
+    #[test]
+    fn a_lock_without_a_pick_difficulty_cant_be_picked() {
+        let (mut world, thief, door) = vault(1000, None);
+        work(&mut world, thief, "north");
+        assert_eq!(world.get::<Door>(door).unwrap().state, DoorState::Locked);
+        assert!(told(&world, "That lock can't be picked."));
+        assert_eq!(
+            world.get::<Vitals>(thief).unwrap().stamina,
+            10.0,
+            "nothing spent"
+        );
+    }
 }

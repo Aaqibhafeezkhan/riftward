@@ -66,6 +66,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     most_health: f64::from(
                         Maxima::of(f.attributes, f.skills, self.defs, f.base).health,
                     ),
+                    ..Side::default()
                 })
                 .unwrap_or_default()
         };
