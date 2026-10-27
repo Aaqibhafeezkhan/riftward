@@ -15,8 +15,9 @@ use super::resolve::{Outcome, Use};
 use super::states::{ConditionDefs, Imbued, ItemConditions};
 use super::strike::{Fighters, Round};
 use super::{Fighting, calm, fell};
-use crate::command::Invocation;
+use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
+use crate::db::Role;
 use crate::dice::Dice;
 use crate::effects::{self, Effect, Who};
 use crate::events::GameEvent;
@@ -65,6 +66,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         };
         // Checked at load: an active skill made of effects has its text.
         let text = skill.def.text.as_ref().ok_or_else(String::new)?;
+        // Players don't rob each other, for now.
+        let robs = effects.iter().any(|e| matches!(e, Effect::Take(_)));
+        if robs && target != user && self.fighters.get(target).is_ok_and(|f| f.player.is_some()) {
+            return Err("You can't steal from other players.".into());
+        }
         self.needed(user, target, effects)?;
         let item = match uses {
             Some(tag) => Some(
@@ -183,6 +189,30 @@ impl Round<'_, '_, '_, '_, '_, '_> {
     }
 }
 
+/// The skill `steal` uses.
+const PICKPOCKETING: &str = "thievery:pickpocketing";
+
+/// `steal <someone>`: Pickpocketing, by the name players know. It's an active skill made of
+/// effects (`thievery.skill.ron`), so this is `use pickpocketing`.
+pub(super) fn steal(
+    In(inv): In<Invocation>,
+    mut commands: Commands,
+    registry: Res<CommandRegistry>,
+) {
+    let Some((spec, id)) = registry.find("ability", Role::Player) else {
+        return;
+    };
+    commands.run_system_with(
+        *id,
+        Invocation {
+            entity: inv.entity,
+            command: spec.name,
+            usage: spec.usage,
+            args: format!("{PICKPOCKETING} {}", inv.args.trim()),
+        },
+    );
+}
+
 /// `ability <tree:skill> [<someone>]`: what `use` runs for an active skill made of effects.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn ability(
@@ -205,7 +235,7 @@ pub(super) fn ability(
         return;
     };
     // A lock is `lockwork`'s (`commands/doors.rs`), the room `roomwork`'s (`gathering.rs`).
-    let SkillKind::Active { aim, .. } = &skill.def.kind else {
+    let SkillKind::Active { aim, provokes, .. } = &skill.def.kind else {
         return;
     };
     if matches!(aim, Aim::Lock | Aim::Room) {
@@ -298,6 +328,16 @@ pub(super) fn ability(
             inv.entity
         };
         fell(&mut commands, fallen, slayer, &targets);
+    }
+    // Caught at it, a mob turns on them; players don't fight each other.
+    let mob = fighters
+        .get(target)
+        .is_ok_and(|f| f.player.is_none() && !f.dead);
+    if *provokes && !used.outcome.hit && mob && target != inv.entity {
+        if !targets.contains_key(&target) {
+            commands.entity(target).insert(Fighting(inv.entity));
+        }
+        commands.entity(inv.entity).remove::<Resting>();
     }
     // Turned on a foe, it's a fight.
     if *aim == Aim::Foe && !died.contains(&target) && !died.contains(&inv.entity) {

@@ -66,6 +66,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     most_health: f64::from(
                         Maxima::of(f.attributes, f.skills, self.defs, f.base).health,
                     ),
+                    coins: f.purse.as_ref().map_or(0.0, |p| p.0 as f64),
                     ..Side::default()
                 })
                 .unwrap_or_default()

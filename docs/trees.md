@@ -66,7 +66,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 
 | Tree | Attribute | Skills |
 | --- | --- | --- |
-| **Thievery** ✓ | Agility | **Lockpicking** ✓, **Pickpocketing** (steal from mobs, then players), **Disarm Traps**, **Fence** (with Trade: sell stolen goods) |
+| **Thievery** ✓ | Agility | **Lockpicking** ✓, **Pickpocketing** ✓ (coins from mobs with `steal`; players later), **Disarm Traps**, **Fence** (with Trade: sell stolen goods) |
 | **Stealth** | Agility | **Sneak** (move without being announced), **Hide** (unseen while still), **Shadowing** (follow unseen), capstone **Vanish** (hide mid-fight) |
 | **Survival** | Intuition | **Foraging** (find food and herbs, by terrain), **Tracking** (see who passed and where they went), **Camping** (rest well outdoors), **Navigation** |
 | **Nature** | Intuition | **Herbalism** (know and gather herbs), **Brewing** (with Crafting: draughts and poultices) |

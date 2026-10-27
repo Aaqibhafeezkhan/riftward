@@ -19,6 +19,7 @@ use crate::effects::{self, Resist, Who};
 use crate::events::GameEvent;
 use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
 use crate::mobs::Mob;
+use crate::money::Purse;
 use crate::output::PuppetedBy;
 use crate::output::{Outbox, Outgoing};
 use crate::skills::{
@@ -60,6 +61,8 @@ pub struct Fighter {
     pub spells: Option<&'static Spells>,
     /// A mob a builder is playing: it acts on what they queue, not on its own.
     pub puppeted: Has<PuppetedBy>,
+    /// The coins they carry: a player's, or a mob's for a pickpocket and its slayer.
+    pub purse: Option<&'static mut Purse>,
 }
 
 pub type Fighters<'w, 's> = Query<'w, 's, Fighter>;

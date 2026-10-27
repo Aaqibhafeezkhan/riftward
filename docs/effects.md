@@ -2,7 +2,7 @@
 
 [Design summary](README.md) · Status: steps 1 to 4 are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections), formulas (step 3), and reactions in a fight and out of one (step 4). Step 5 has begun: active skills can be made of effects (5a); the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
 
-**The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, an active skill that works on something other than a character (Pickpocketing, Appraisal and Tracking still have their own commands, until step 5 makes them data too; one that does effects to someone is data already, like First Aid), a new trigger, or a formula other than the built-in ones.
+**The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, an active skill that works on something other than a character (Appraisal and Tracking still have their own commands, until step 5 makes them data too; one that does effects to someone is data already, like First Aid), a new trigger, or a formula other than the built-in ones.
 
 This doc proposes the vocabulary that removes those needs: **conditions as data**, **one effect vocabulary** shared by spells, techniques, skills and items, **formulas** in data, **triggers** for reactions, and, last, **scripting** (Rhai) for the long tail that data can't express.
 
@@ -328,6 +328,7 @@ effects: [Apply(condition: "warded", strength: "4 + floor(power / 3)", lasts: Mi
 | `Imbue(condition, strength, lasts, charges, on)` | Puts a condition on the weapon in hand; see [Item conditions, as built](#item-conditions-as-built) | Both |
 | `Cleave` | The blow carries on into a second foe | Techniques |
 | `Calm` | An animal stops fighting | Spells |
+| `Take(what)` | Something lifted from the target and given to the user. `Take(Coins(amount))`: coins from their purse into the user's, as many as `amount` (a formula, in copper) says, up to what they have; the text names the haul as `{coins}`. Items and conditions would be more kinds of `what`. Not from players, for now | Active skills |
 | `Find(kind)` | Something of a `kind` the room's [finds](world.md#environment-and-finds) list, into the user's hand, the better made the more surely it was found; see [Every skill as data](#every-skill-as-data) | Active skills aimed at the room |
 
 - **On the user, whatever happens; on the target, if it lands** and the target is still standing.
@@ -361,7 +362,7 @@ Still to come: one file shape for all of them (a spell, a technique and an activ
 
 ### Active skills, as built
 
-Step 5a (2026-10-27). An active skill is either a command, for what's like nothing else (`track`, `steal`, `appraise`, until the rest of step 5 makes them data), or made of effects, in its `.skill.ron`, and resolved by `resolve.rs` like any spell or blow. First Aid is the first:
+Step 5a (2026-10-27). An active skill is either a command, for what's like nothing else (`track`, `appraise`, until the rest of step 5 makes them data), or made of effects, in its `.skill.ron`, and resolved by `resolve.rs` like any spell or blow. First Aid is the first:
 
 ```ron
 "first_aid": (
@@ -378,7 +379,7 @@ Step 5a (2026-10-27). An active skill is either a command, for what's like nothi
 ),
 ```
 
-- **Fields:** `aim` (`Ally`, the default: yourself unless you name someone; `Foe`; `Other`; `Lock`, a door or closable container, by direction or name; `Room`, the room the user is in), `cost` (`Stamina(n)`), `cooldown` in seconds, `uses` (an item tag), `resist` (what the target resists with, as a spell's) or `against` (a fixed difficulty, rolled without Luck), `tags`, and `effects`. Neither `resist` nor `against`: it always works.
+- **Fields:** `aim` (`Ally`, the default: yourself unless you name someone; `Foe`; `Other`; `Lock`, a door or closable container, by direction or name; `Room`, the room the user is in), `cost` (`Stamina(n)`), `cooldown` in seconds, `uses` (an item tag), `resist` (what the target resists with, as a spell's) or `against` (a fixed difficulty, rolled without Luck), `tags`, `effects`, and `provokes`: when it fails, a mob it was tried on turns on the user. Neither `resist` nor `against`: it always works. An `Other` skill needn't tell its target anything: a pickpocket's mark doesn't notice.
 - **Power:** the user's skill, its level plus its attribute, is both their side of the contest and `power` in its formulas.
 - **Using one:** `use first aid [<someone>]`, in a fight or out of one; it's an action, so in a fight it takes the user's turn. Old commands can stay as shortcuts: `bandage` is `use first aid`. A hidden user is revealed, as casting does.
 - **Refusals cost nothing:** one that only heals and cures isn't used on someone unhurt with nothing to cure ("Bob isn't hurt."); one that `uses` an item needs one carried ("You have no bandages."); then the cooldown and the stamina. Once it's tried, the item is used up whether or not it worked, and the skill is practised.
@@ -400,9 +401,15 @@ Decided 2026-10-27. Every skill becomes data, and the commands that do skills to
   ```
 
   A room's finds are named tables (`{"forage": [...], "herbs": [...]}`), so a new kind (ore for Mining, fish for Fishing) is data too: a table in the zone and a skill that finds it. Each room keeps a patch of each kind, three finds growing back one every 10 minutes; `roomwork` (`gathering.rs`) resolves them. Rooms don't carry conditions yet; that waits for something that needs a dark or consecrated room.
+- **Stealing** (*built*, 5d, 2026-10-27): `Take(Coins(...))` moves coins from the target's purse into the user's, and the text names the haul as `{coins}`. Pickpocketing is data: `aim: Other`, the user's skill against the mark's Intuition (`resist: Attribute(Intuition)`), for a share of their purse by the margin (all of it at three times their wits), and `provokes`, so a mark who catches them attacks. `steal <someone>` is a shortcut. What's taken is its own kind (`Taken`), so stealing an item, held or carried or by tag, or a condition like a blessing, is another kind beside `Coins` rather than another effect. Coins only, from mobs only, for now (decided 2026-10-27): mobs carry a purse from their template's `coins`, so what a pickpocket lifts is no longer there for their killer. A hidden thief is revealed, as by any skill made of effects.
+
+  ```ron
+  kind: Active(aim: Other, cost: Stamina(1), cooldown: 5, resist: Attribute(Intuition), provokes: true,
+      effects: [Take(Coins("max(1, floor(target.coins * min(1, margin / 3)))"))]),
+  ```
 - **How it's kept:** on a lock, `locked` is its state (`DoorState::Locked`), so zone files, resets and the builders' `door` command are unchanged; the effects act on that state. Skills aimed at a lock can only `Apply` or `Remove` it, for now. `lockwork` (`commands/doors.rs`) resolves them, as `ability` does skills aimed at characters.
 - **New effects:** `Find(table)`, a loot table rolled into the user's hands (Foraging, Gathering, aimed at a room); `Take`, an item moved from someone to the user (Pickpocketing, resisted by the victim's awareness); `Reveal`, telling the user something (Appraisal's value and quality, Tracking's trail), the first effect that only informs.
-- **The order,** each step leaving the game working: locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*); rooms as targets, with `Find`, for foraging and gathering (5c, *built*); `Take`, for stealing (5d); `Reveal`, for appraising and tracking (5e); Hiding once Hidden is a condition ([#7](https://github.com/Foxworks-Studios/riftward/issues/7)).
+- **The order,** each step leaving the game working: locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*); rooms as targets, with `Find`, for foraging and gathering (5c, *built*); `Take`, for stealing (5d, *built*); `Reveal`, for appraising and tracking (5e); Hiding once Hidden is a condition ([#7](https://github.com/Foxworks-Studios/riftward/issues/7)).
 
 ## Abilities
 
@@ -534,7 +541,7 @@ Each step leaves the game working and designers with more they can do alone.
 2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). So are `Imbue` and saved item conditions (2d). Step 2 is done.
 3. **Formulas** (*built*). The expression evaluator, and every amount in an effect moved into data.
 4. **Triggers and reactions** (*built*). Reactions on conditions, skills and items in a fight (4a), and out of one: entering a room, someone arriving, resting, eating and drinking, a condition taking hold or running out, casting, the start of a turn and every so often (4b).
-5. **Every skill through `use`.** Active skills made of effects, with First Aid the first (5a, *built*). Then [every skill as data](#every-skill-as-data): locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*), rooms as targets with `Find`, and Foraging and Herbalism as data (5c, *built*), `Take` (5d), `Reveal` (5e), and Hiding; their commands become shortcuts.
+5. **Every skill through `use`.** Active skills made of effects, with First Aid the first (5a, *built*). Then [every skill as data](#every-skill-as-data): locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*), rooms as targets with `Find`, and Foraging and Herbalism as data (5c, *built*), `Take` and Pickpocketing as data (5d, *built*), `Reveal` (5e), and Hiding; their commands become shortcuts.
 6. **Scripting.** Rhai, exposing the verbs and triggers above.
 
 ## Open questions

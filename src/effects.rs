@@ -80,6 +80,18 @@ pub enum Effect {
     /// from the room's table with the user's Luck, the better made the more surely it was found,
     /// and into their hand. Only in an active skill aimed at the room.
     Find { kind: String },
+    /// Something lifted from the target and given to the user, if it lands: `Take(Coins("..."))`
+    /// for Pickpocketing. See [`Taken`].
+    Take(Taken),
+}
+
+/// What `Take` lifts. Coins, for now; items (carried, held, by tag) and conditions (a stolen
+/// blessing) would each be another kind here.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Taken {
+    /// Coins from their purse into the user's: as many as the formula says (in copper), up to
+    /// what they have. A skill's text names the haul as `{coins}`.
+    Coins(Formula),
 }
 
 fn one() -> Formula {
@@ -266,7 +278,9 @@ impl Effect {
         let n = f64::from(n);
         let mut effect = self.clone();
         match &mut effect {
-            Effect::Damage { amount, .. } | Effect::Heal { amount } => {
+            Effect::Damage { amount, .. }
+            | Effect::Heal { amount }
+            | Effect::Take(Taken::Coins(amount)) => {
                 *amount = amount.with_strength(n);
             }
             Effect::Apply { strength, .. } | Effect::Imbue { strength, .. } => {

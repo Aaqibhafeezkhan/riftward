@@ -1,6 +1,6 @@
 # Money and shops
 
-[Design summary](README.md) · Status: built: the purse, coins from kills, shops that sell, buy and resell, spell lessons that cost money, and Haggling and Appraisal. The crafts are still to come.
+[Design summary](README.md) · Status: built: the purse, coins from kills and pickpocketing, shops that sell, buy and resell, spell lessons that cost money, and Haggling and Appraisal. The crafts are still to come.
 
 Money is the first thing in Riftward that isn't a skill, an attribute or an item: a number in each character's purse, earned by fighting and selling, and spent on goods and spells.
 
@@ -16,8 +16,9 @@ Money is the first thing in Riftward that isn't a skill, an attribute or an item
 
 | In | Out |
 | --- | --- |
-| **Kills:** a mob template's `coins: (low, high)`, in copper, rolled with the killer's Luck and taken by the player who killed it ("You take 3 silver from the town guard.") | **Goods** from shops |
+| **Kills:** a mob template's `coins: (low, high)`, in copper, rolled into the mob's own purse when it appears; whatever's left in it is taken by the player who killed it ("You take 3 silver from the town guard.") | **Goods** from shops |
 | **Selling** to shops | **Spell lessons** |
+| **Pickpocketing** a mob's purse (`steal <someone>`), which leaves less for its killer ([as built](effects.md#every-skill-as-data)) | |
 | Later: quests and guild contracts, Performance | Later: lodging, repairs, guild dues, Fence fees |
 
 Today's mobs: a sewer rat carries up to 2 copper, a town guard 5 to 30 copper, and the Rat King 1 gold 5 silver to 4 gold.

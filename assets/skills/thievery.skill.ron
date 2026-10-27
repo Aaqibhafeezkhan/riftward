@@ -31,11 +31,20 @@
         ),
         "pickpocketing": (
             name: "Pickpocketing",
-            description: "Lifting things from someone's pockets without their noticing.",
-            kind: Active(command: "steal", cost: Stamina(1), cooldown: 5),
+            description: "Lifting coins from someone's purse without their noticing, with 'steal <someone>' (or 'use pickpocketing <someone>'). Your Pickpocketing (level plus Agility) against their Intuition; the cleaner the lift, the more you get, up to all they carry. Caught, they'll turn on you. Not from other players.",
+            // A share of their purse, by how cleanly it went: all of it at three times their
+            // wits, at least a copper if they have one.
+            kind: Active(
+                aim: Other,
+                cost: Stamina(1),
+                cooldown: 5,
+                resist: Attribute(Intuition),
+                provokes: true,
+                effects: [Take(Coins("max(1, floor(target.coins * min(1, margin / 3)))"))],
+            ),
             text: (
                 hit: (
-                    actor: "You slip a hand into {target}'s pocket, unnoticed.",
+                    actor: "You slip a hand into {target}'s pocket, unnoticed, and come away with {coins}.",
                     room: "{actor} brushes past {target}.",
                 ),
                 miss: (

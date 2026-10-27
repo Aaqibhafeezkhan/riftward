@@ -40,7 +40,7 @@ enum Expr {
 /// The names a formula can use besides attributes.
 const INPUTS: &[&str] = &["power", "strength", "margin", "level"];
 /// What `user.` and `target.` can name besides attributes.
-const VITALS: &[&str] = &["health", "most_health"];
+const VITALS: &[&str] = &["health", "most_health", "coins"];
 /// What `target.` can name on a lock (a door or container): how hard it is to pick, and to force.
 const LOCKS: &[&str] = &["pick", "sturdiness"];
 /// Functions, and how many arguments each takes.
@@ -73,6 +73,8 @@ pub struct Side {
     pub most_health: f64,
     pub pick: f64,
     pub sturdiness: f64,
+    /// The coins in their purse, in copper.
+    pub coins: f64,
 }
 
 impl Side {
@@ -81,6 +83,7 @@ impl Side {
             "health" => self.health,
             "most_health" => self.most_health,
             "pick" => self.pick,
+            "coins" => self.coins,
             "sturdiness" => self.sturdiness,
             _ => self
                 .attributes
@@ -391,8 +394,8 @@ fn known(name: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!(
-            "there's no input '{name}': use {}, or user. and target. with an attribute, health \
-             or most_health, or target.pick or target.sturdiness for a lock",
+            "there's no input '{name}': use {}, or user. and target. with an attribute, health, \
+             most_health or coins, or target.pick or target.sturdiness for a lock",
             INPUTS.join(", ")
         ))
     }

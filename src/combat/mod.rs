@@ -133,6 +133,13 @@ impl Plugin for CombatPlugin {
                     .summary("forget the actions you've queued up"),
                 stop,
             )
+            .add_command(
+                CommandSpec::new("steal", Category::Interaction)
+                    .usage("steal <someone>")
+                    .summary("lift coins from someone's purse, if you know Pickpocketing")
+                    .action(),
+                abilities::steal,
+            )
             // Run by `use` for an active skill made of effects; players don't type it.
             .add_command(
                 CommandSpec::new("ability", Category::Interaction)
@@ -851,14 +858,14 @@ pub fn handle_deaths(
             let luck = slayer
                 .and_then(|s| sheets.get(s.0).ok())
                 .map_or(0, |(_, attributes, ..)| attributes.get(Attribute::Luck));
-            // Its coins go to whoever killed it, if that was a player.
-            let carried = mob_templates.0.get(&mob.key).and_then(|def| def.coins);
-            if let (Some((low, high)), Some(slayer)) = (carried, slayer)
+            // The coins it carried go to whoever killed it, if that was a player: what's left
+            // after any pickpocket.
+            let carried = purses.get(entity).map_or(0, |purse| purse.0);
+            if let Some(slayer) = slayer
                 && let Some(killer) = Actor::get(&players, slayer.0)
                 && let Ok(mut purse) = purses.get_mut(killer.entity)
             {
-                let (low, high) = (low.min(high), low.max(high));
-                let found = dice.range(luck, i64::from(low)..=i64::from(high)) as u64;
+                let found = carried;
                 if found > 0 {
                     purse.0 += found;
                     purse.save(killer.character_id, &db);
@@ -2793,6 +2800,7 @@ mod tests {
             key,
             SkillKind::Active {
                 command: None,
+                provokes: false,
                 cost: Cost::Stamina(2),
                 cooldown: 5.0,
                 aim,
@@ -2949,5 +2957,91 @@ mod tests {
         assert!(world.get::<Conditions>(victim).unwrap().has("exposed"));
         assert_eq!(world.get::<Fighting>(bully).map(|f| f.0), Some(victim));
         assert_eq!(world.get::<Fighting>(victim).map(|f| f.0), Some(bully));
+    }
+
+    /// Teach `thief` Pickpocketing at `level`: their skill against the mark's Intuition, for
+    /// everything in the mark's purse, and caught, the mark turns on them.
+    fn pickpocket(world: &mut World, thief: Entity, level: u32) {
+        let (key, mut skill) = skill(
+            "thievery:pickpocketing",
+            SkillKind::Active {
+                command: None,
+                provokes: true,
+                cost: Cost::Free,
+                cooldown: 0.0,
+                aim: Aim::Other,
+                uses: None,
+                resist: Some(Resist::Attribute(Attribute::Intuition)),
+                against: None,
+                tags: Vec::new(),
+                effects: vec![Effect::Take(crate::effects::Taken::Coins(
+                    Formula::parse("target.coins").unwrap(),
+                ))],
+            },
+        );
+        if let Some(text) = skill.def.text.as_mut() {
+            text.hit.actor = "You lift {coins} from {target}.".into();
+        }
+        world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .insert(key.clone(), skill);
+        let mut state = SkillState::new("Template");
+        state.level = level;
+        world.get_mut::<Skills>(thief).unwrap().0.insert(key, state);
+        world.entity_mut(thief).insert(Purse(0));
+    }
+
+    #[test]
+    fn a_clean_lift_takes_coins_from_a_mobs_purse() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let mark = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world
+            .entity_mut(mark)
+            .insert((Keywords::from_name("mark"), Purse(250)));
+        pickpocket(&mut world, thief, 1000);
+        use_ability(&mut world, thief, "thievery:pickpocketing mark");
+        assert_eq!(world.get::<Purse>(mark).unwrap().0, 0);
+        assert_eq!(world.get::<Purse>(thief).unwrap().0, 250);
+        assert!(said(
+            &world,
+            thief,
+            "You lift 2 gold and 5 silver from the brawler."
+        ));
+        assert!(world.get::<Fighting>(mark).is_none(), "unnoticed");
+    }
+
+    #[test]
+    fn a_caught_pickpocket_is_attacked() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let mark = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world
+            .entity_mut(mark)
+            .insert((Keywords::from_name("mark"), Purse(250)));
+        world
+            .get_mut::<Attributes>(mark)
+            .unwrap()
+            .set(Attribute::Intuition, 1000);
+        pickpocket(&mut world, thief, 0);
+        use_ability(&mut world, thief, "thievery:pickpocketing mark");
+        assert_eq!(world.get::<Purse>(mark).unwrap().0, 250);
+        assert_eq!(world.get::<Fighting>(mark).map(|f| f.0), Some(thief));
+    }
+
+    #[test]
+    fn players_dont_rob_each_other() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let mark = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, mark);
+        world
+            .entity_mut(mark)
+            .insert((Keywords::from_name("mark"), Purse(250)));
+        pickpocket(&mut world, thief, 1000);
+        use_ability(&mut world, thief, "thievery:pickpocketing mark");
+        assert!(said(&world, thief, "You can't steal from other players."));
+        assert_eq!(world.get::<Purse>(mark).unwrap().0, 250);
     }
 }

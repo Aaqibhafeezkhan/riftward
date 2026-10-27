@@ -12,9 +12,10 @@ use bevy::prelude::*;
 use super::states::{ConditionDefs, Conditions};
 use super::strike::{Blow, Round, Telling, defence_rating, gear, harm, shield_block, told};
 use crate::attributes::Attribute;
-use crate::effects::{self, Effect, Reaction, Resist, When, Who};
+use crate::effects::{self, Effect, Reaction, Resist, Taken, When, Who};
 use crate::events::GameEvent;
 use crate::items::capitalized;
+use crate::money;
 use crate::skills::{SkillDefs, SkillKind, SkillText, Skills, Trigger, boosts, fill};
 use crate::vitals::Maxima;
 
@@ -234,11 +235,36 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 }
             }
 
+            // Coins lifted from their purse, up to what's in it.
+            let mut taken: Option<u64> = None;
+            for effect in u.effects {
+                if let Effect::Take(Taken::Coins(coins)) = effect {
+                    let wanted = coins.amount(&inputs, self.dice, a_luck).max(0) as u64;
+                    let lifted = self.fighters.get_mut(target).ok().map_or(0, |mut f| {
+                        f.purse.as_mut().map_or(0, |purse| {
+                            let lifted = wanted.min(purse.0);
+                            purse.0 -= lifted;
+                            lifted
+                        })
+                    });
+                    if let Ok(mut f) = self.fighters.get_mut(user) {
+                        let character = f.player.map(|p| p.character_id);
+                        if let Some(purse) = f.purse.as_mut() {
+                            purse.0 += lifted;
+                            purse.save(character, self.db);
+                        }
+                    }
+                    taken = Some(taken.unwrap_or(0) + lifted);
+                }
+            }
+            let haul = taken.map_or_else(String::new, money::coins);
+
             // Told in its own words, with how much it hurt: "Your slash decimates the rat." A
             // crushing blow ends with a bang.
             let with = [
                 ("actor", a_name.as_str()),
                 ("harm", dealt.map_or("", |n| harm(n, d_most))),
+                ("coins", haul.as_str()),
             ];
             let say = |template: &str, target: &str| {
                 let mut with = with.to_vec();

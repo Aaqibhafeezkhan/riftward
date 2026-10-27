@@ -266,15 +266,15 @@ impl SkillDef {
             SkillKind::Active {
                 command: Some(_), ..
             } => (false, true),
-            // Done to someone else, unless only to yourself, or to a lock; it can fail when it's
-            // a contest.
+            // Done to someone, who sees it, unless it's only to yourself, to a lock or the room,
+            // or slipped past them (`Other`, a pickpocket's); it can fail when it's a contest.
             SkillKind::Active {
                 resist,
                 against,
                 aim,
                 ..
             } => (
-                !matches!(aim, Aim::Lock | Aim::Room),
+                matches!(aim, Aim::Ally | Aim::Foe),
                 resist.is_some() || against.is_some(),
             ),
             // Nothing to show.
@@ -399,6 +399,9 @@ pub enum SkillKind {
         /// What it does. Formulas see the user's skill (level plus attribute) as `power`.
         #[serde(default)]
         effects: Vec<Effect>,
+        /// When it fails, a mob it was tried on turns on the user: a pickpocket caught.
+        #[serde(default)]
+        provokes: bool,
     },
     /// Practised whenever one of its triggers happens, and raising numbers as it levels.
     Passive {
@@ -2289,6 +2292,7 @@ mod tests {
                                     ("harm", "f"),
                                     ("deal", "g"),
                                     ("worth", "h"),
+                                    ("coins", "i"),
                                 ],
                             );
                             assert!(

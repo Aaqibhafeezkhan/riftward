@@ -15,6 +15,7 @@ use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocat
 use crate::db::{Permission, Role};
 use crate::dice::Dice;
 use crate::items::{self, HANDS, ItemLocation, ItemTemplates, capitalized, counted};
+use crate::money::Purse;
 use crate::net::Connection;
 use crate::output::{Actor, Characters, Outbox, Outgoing, PuppetedBy, RoomQuery, deliver};
 use crate::skills::{SkillDefs, SkillState, Skills};
@@ -220,6 +221,12 @@ pub fn spawn_mob(
     }
     if def.aggressive {
         entity.insert(Aggressive);
+    }
+    // The coins it carries: what a pickpocket can lift, and what's left falls to its slayer.
+    if let Some((low, high)) = def.coins {
+        let (low, high) = (low.min(high), low.max(high));
+        let coins = dice.range(0, i64::from(low)..=i64::from(high)) as u64;
+        entity.insert(Purse(coins));
     }
     let id = entity.id();
     // Its gear: what can be worn is worn, the rest held while it has hands free.
