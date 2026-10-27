@@ -245,7 +245,7 @@ rooms: {
 - **Keywords** default to the words of the name without its article, so "a heavy oak door" answers to `heavy`, `oak` and `door`.
 - **A trapdoor is just a door on an `up` or `down` exit.**
 - **Doors between zones** use `zone:door` names on both sides.
-- **A closed door blocks movement** for players and wandering mobs: `north` gives "The heavy oak door is closed." Mob templates can be allowed to open doors, such as a guard who carries the gate key.
+- **A closed door blocks movement** for players and wandering mobs: `north` gives "The heavy oak door is closed." Mob templates can be allowed to open doors, such as a guard who carries the gate key. A packed crowd can [break through](#breaking-out).
 - **Rooms show door state:** "Exits: west, down (closed)", and `look down` describes the door.
 - **`bash` only forces a door open.** It isn't broken; it can be closed and locked again.
 - **Doors reset with their zone,** back to their default state, so the cellar is locked again after the next reset (once resets exist). Door state isn't saved across restarts.
@@ -274,7 +274,27 @@ A door with `hidden: true` isn't in a room's exits **for each character until th
 
 A spawn can set how many of its mobs one room holds comfortably (`crowd: 6`). Its mobs then stay put at their wander checks while their room holds that many or fewer. Past that, the extras move on, each toward the neighbouring room within its wander range that holds the fewest of its kind (a random one among equals). A spawn without `crowd` wanders as usual, moving at every check.
 
-So the nest fills to its limit, then rats spill into the next rooms, which fill in turn, and the population pushes outward as it grows. They can only leave through open exits: the grates hold them in the sewers until someone opens one.
+So the nest fills to its limit, then rats spill into the next rooms, which fill in turn, and the population pushes outward as it grows. They leave through open exits, and through closed doors only by breaking them (below).
+
+### Breaking out
+
+*Built* (2026-10-26). A crowding spawn can set `breach`: when a room holds `packed` of its mobs, and what lies beyond a closed door holds fewer of them than every open way, the next to move breaks the door and goes through. A door that's only shut gives way, as does a locked one whose lock can be bashed; one too sturdy to bash holds. It's left open, and anyone can close it again, until the crowd breaks it again.
+
+```ron
+"sewer_rats": (
+    ...
+    crowd: 6,
+    breach: Some((
+        packed: 8,
+        room: "{actor} gnaws through {door}, and the rats pour after it!",
+        beyond: "{door} gives way with a screech of rusted iron, gnawed through from below!",
+    )),
+),
+```
+
+- **The wording is the spawn's:** rats gnaw, goblins might batter. `{actor}` is the mob, `{door}` the door; `room` is seen where they are, `beyond` on the other side.
+- **Only under pressure:** a door is broken only when beyond it is emptier than every open way, so rats fill the tunnels around a grate before they gnaw through it. The zone test checks that a breach comes with a `crowd` below its `packed`.
+- **How long a neglected sewer holds:** with rats doubling every 4 hours from 8, and the nearest grate (the stalls culvert) four rooms from the Warren, the region around it fills to 8 a room in roughly 10 to 11 real hours from a fresh start; sooner once the population has grown, since it's saved across restarts. Door states aren't, so a restart shuts every grate.
 
 Crowding plus breeding is how a neglected sewer overruns the city, with no special rule:
 
@@ -282,7 +302,8 @@ Crowding plus breeding is how a neglected sewer overruns the city, with no speci
 flowchart LR
     breed[Rats breed<br/>in the nest] --> crowd[Nest crowded]
     crowd --> spread[Rats disperse<br/>through the sewers]
-    spread --> streets[Anywhere wander<br/>reaches the streets]
+    spread --> packed[Packed under a grate:<br/>they gnaw through]
+    packed --> streets[Anywhere wander<br/>reaches the streets]
     streets --> event[Trigger: rat count high<br/>town crier warns, guards posted]
     kill[Players clear them] --> fewer[Fewer rats breed]
     fewer --> last[Last rat dies]
@@ -382,7 +403,7 @@ events: {
 },
 ```
 
-The first rat to reach the city (through a grate someone left open) sets `rats_broke_out`; the `rat_king` spawn, gated on that flag, puts the Rat King in the Warren within a minute. His **Rat King's Command** aura makes every sewer rat in the sewers tougher (+2 attack, +2 defence, 1 armour) while he lives. Killing him clears the flag, so he's gone until the next breakout. The flag is saved, so a restart changes nothing.
+The first rat to reach the city (through a grate someone left open, or one the rats gnawed through) sets `rats_broke_out`; the `rat_king` spawn, gated on that flag, puts the Rat King in the Warren within a minute. His **Rat King's Command** aura makes every sewer rat in the sewers tougher (+2 attack, +2 defence, 1 armour) while he lives. Killing him clears the flag, so he's gone until the next breakout. The flag is saved, so a restart changes nothing.
 
 ## What survives a restart
 

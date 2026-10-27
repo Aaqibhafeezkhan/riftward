@@ -24,7 +24,7 @@ use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{
-    Door, InRoom, ItemKey, MobDef, MobKey, RoomKey, SpawnKey, Spawned, Wander, ZoneDef,
+    Door, DoorState, InRoom, ItemKey, MobDef, MobKey, RoomKey, SpawnKey, Spawned, Wander, ZoneDef,
 };
 
 /// The chance, in percent, that a mob uses a technique skill on its turn, unless its template says.
@@ -274,17 +274,20 @@ fn may_enter(wander: &Wander, spawn: &SpawnKey, room: &RoomKey, no_wander: bool)
 
 /// Move each wandering mob whose time has come through an open exit it's allowed to take: a random
 /// one, or, for a spawn that minds crowding, toward the room with the fewest of its kind, and
-/// only once its room holds too many.
+/// only once its room holds too many. A spawn that can `breach` breaks through a closed door
+/// when its room is packed.
 #[allow(clippy::too_many_arguments)]
 pub fn wander(
     mut commands: Commands,
     time: Res<Time>,
     spawns: Res<Spawns>,
     rooms: RoomQuery,
-    doors: Query<&Door>,
+    mut doors: Query<&mut Door>,
     mut dice: ResMut<Dice>,
     mut mobs: Query<(Entity, &SpawnedBy, &InRoom, &mut Wanderer), Idle>,
+    names: Query<&Mob>,
     registry: Res<CommandRegistry>,
+    mut outbox: ResMut<Outbox>,
 ) {
     // Mobs walk the way players do, with the same command.
     let Some((go, id)) = registry
@@ -322,34 +325,69 @@ pub fn wander(
         let Ok((_, _, exits)) = rooms.get(in_room.0) else {
             continue;
         };
-        let mut choices: Vec<(&String, Entity)> = exits
+        // Packed in, they'll break through a closed door to somewhere emptier.
+        let breach = def
+            .breach
+            .as_ref()
+            .filter(|b| crowd(&crowds, key, in_room.0) >= b.packed);
+        let passable = |door: Option<Entity>| {
+            door.and_then(|d| doors.get(d).ok())
+                .is_none_or(|d| d.is_open() || (breach.is_some() && d.can_breach()))
+        };
+        // Each way they might go, and the closed door they'd break to go that way.
+        let mut choices: Vec<(&String, Entity, Option<Entity>)> = exits
             .0
             .iter()
             // Mobs keep to where they can walk: no climbing or swimming.
-            .filter(|(_, exit)| {
-                exit.needs.is_none()
-                    && exit
-                        .door
-                        .and_then(|d| doors.get(d).ok())
-                        .is_none_or(Door::is_open)
-            })
+            .filter(|(_, exit)| exit.needs.is_none() && passable(exit.door))
             .filter(|(_, exit)| {
                 rooms.get(exit.to).is_ok_and(|(room, key, _)| {
                     may_enter(&def.wander, &spawned_by.0, key, room.no_wander)
                 })
             })
-            .map(|(dir, exit)| (dir, exit.to))
+            .map(|(dir, exit)| {
+                let closed = exit
+                    .door
+                    .filter(|d| doors.get(*d).is_ok_and(|d| !d.is_open()));
+                (dir, exit.to, closed)
+            })
             .collect();
         if def.crowd.is_some()
-            && let Some(least) = choices.iter().map(|(_, to)| crowd(&crowds, key, *to)).min()
+            && let Some(least) = choices
+                .iter()
+                .map(|(_, to, _)| crowd(&crowds, key, *to))
+                .min()
         {
-            choices.retain(|(_, to)| crowd(&crowds, key, *to) == least);
+            choices.retain(|(_, to, _)| crowd(&crowds, key, *to) == least);
+        }
+        // A door is broken only when what's beyond is emptier than every open way.
+        if choices.iter().any(|(_, _, closed)| closed.is_none()) {
+            choices.retain(|(_, _, closed)| closed.is_none());
         }
         if choices.is_empty() {
             continue;
         }
         let pick = dice.range(0, 0..=(choices.len() as i64 - 1)) as usize;
-        let (dir, to) = choices[pick];
+        let (dir, to, closed) = choices[pick];
+        // A closed door on the way gives, and stays open.
+        if let (Some(breach), Some(door)) = (breach, closed)
+            && let Ok(mut door) = doors.get_mut(door)
+        {
+            door.state = DoorState::Open;
+            let name = names.get(entity).map_or("something", |m| m.name.as_str());
+            let fill =
+                |text: &str| text.replace("{actor}", name).replace("{door}", &door.the()) + "\r\n";
+            outbox.0.push(Outgoing::Room {
+                room: in_room.0,
+                except: entity,
+                text: fill(&breach.room),
+            });
+            outbox.0.push(Outgoing::Room {
+                room: to,
+                except: entity,
+                text: fill(&breach.beyond),
+            });
+        }
         *crowds.entry((key.clone(), in_room.0)).or_default() -= 1;
         *crowds.entry((key.clone(), to)).or_default() += 1;
         commands.run_system_with(
@@ -633,5 +671,171 @@ mod tests {
 
         assert!(may_enter(&Wander::Anywhere { secs }, &spawn, &road, false));
         assert!(!may_enter(&Wander::Never, &spawn, &market, false));
+    }
+    /// A nest of `rats` below a closed grate, wandering now, with crowding at 6 and a breach at
+    /// 8. Returns the world, the grate and the nest.
+    fn nest(rats: usize) -> (World, Entity, Entity) {
+        use crate::command::CommandSpec;
+        use crate::world::{Breach, Every, Exit, Exits, Refill, Room, SpawnDef, Terrain};
+
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(Dice::seeded(3));
+        world.insert_resource(Outbox::default());
+        let go = world.register_system(|In(_): In<Invocation>| {});
+        world.insert_resource(CommandRegistry::of(vec![(
+            CommandSpec::new("go", Category::Movement),
+            go,
+        )]));
+        let key = SpawnKey::parse("sewers:rats", "");
+        world.insert_resource(Spawns(HashMap::from([(
+            key.clone(),
+            SpawnDef {
+                mob: Some("rat".into()),
+                item: None,
+                contents: Vec::new(),
+                room: "nest".into(),
+                every: Every::Minutes(20),
+                refill: Refill::Keep(1),
+                wander: Wander::Anywhere { secs: (30, 120) },
+                crowd: Some(6),
+                pack: None,
+                breach: Some(Breach {
+                    packed: 8,
+                    room: "{actor} gnaws through {door}!".into(),
+                    beyond: "{door} gives way!".into(),
+                }),
+                when: None,
+            },
+        )])));
+        let room = |world: &mut World, id: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: id.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(id, ""),
+                ))
+                .id()
+        };
+        let below = room(&mut world, "sewers:nest");
+        let above = room(&mut world, "town:alley");
+        let grate = world
+            .spawn(Door {
+                name: "a rusted grate".into(),
+                state: DoorState::Closed,
+                default: DoorState::Closed,
+                lock: None,
+            })
+            .id();
+        let exit = |to| Exit {
+            to,
+            door: Some(grate),
+            needs: None,
+        };
+        world
+            .entity_mut(below)
+            .insert(Exits([("up".to_string(), exit(above))].into()));
+        world
+            .entity_mut(above)
+            .insert(Exits([("down".to_string(), exit(below))].into()));
+        for _ in 0..rats {
+            world.spawn((
+                Mob {
+                    key: MobKey::parse("sewers:rat", ""),
+                    name: "a sewer rat".into(),
+                    here: String::new(),
+                    description: String::new(),
+                    race: None,
+                },
+                SpawnedBy(key.clone()),
+                InRoom(below),
+                Wanderer { next: 0.0 },
+            ));
+        }
+        (world, grate, below)
+    }
+
+    #[test]
+    fn a_packed_room_breaks_through_a_closed_door() {
+        let (mut world, grate, _) = nest(8);
+        world.run_system_once(wander).unwrap();
+        assert!(world.get::<Door>(grate).unwrap().is_open());
+        let told: Vec<String> = world
+            .resource::<Outbox>()
+            .0
+            .iter()
+            .filter_map(|out| match out {
+                Outgoing::Room { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            told,
+            [
+                "a sewer rat gnaws through the rusted grate!\r\n",
+                "the rusted grate gives way!\r\n"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_crowded_room_that_isnt_packed_stays_behind_a_closed_door() {
+        let (mut world, grate, _) = nest(7);
+        world.run_system_once(wander).unwrap();
+        assert!(!world.get::<Door>(grate).unwrap().is_open());
+        assert!(world.resource::<Outbox>().0.is_empty());
+    }
+
+    #[test]
+    fn a_packed_room_takes_an_open_way_before_breaking_a_door() {
+        use crate::world::{Exit, Exits, Room, Terrain};
+        // A tunnel as empty as the street above: they go that way, and the grate holds.
+        let (mut world, grate, below) = nest(8);
+        let tunnel = world
+            .spawn((
+                Room {
+                    name: "tunnel".into(),
+                    description: String::new(),
+                    no_wander: false,
+                    indoors: true,
+                    terrain: Terrain::Paved,
+                },
+                RoomKey::parse("sewers:tunnel", ""),
+                Exits::default(),
+            ))
+            .id();
+        world.get_mut::<Exits>(below).unwrap().0.insert(
+            "east".into(),
+            Exit {
+                to: tunnel,
+                door: None,
+                needs: None,
+            },
+        );
+        world.run_system_once(wander).unwrap();
+        assert!(!world.get::<Door>(grate).unwrap().is_open());
+    }
+
+    #[test]
+    fn only_doors_a_crowd_could_force_give_way() {
+        let door = |state, bash| Door {
+            name: "a door".into(),
+            state,
+            default: state,
+            lock: Some(crate::world::LockDef {
+                key: None,
+                pick: None,
+                bash,
+            }),
+        };
+        assert!(door(DoorState::Closed, None).can_breach());
+        assert!(door(DoorState::Locked, Some(6)).can_breach());
+        assert!(!door(DoorState::Locked, None).can_breach(), "too sturdy");
+        assert!(!door(DoorState::Open, None).can_breach(), "already open");
     }
 }

@@ -1555,6 +1555,7 @@ fn spawn(
                     wander: Wander::Never,
                     crowd: None,
                     pack: None,
+                    breach: None,
                     when: None,
                 };
                 let text = describe_spawn(&key(&id), &def, 0);
@@ -1682,6 +1683,7 @@ impl SpawnChange {
                 def.mob = None;
                 def.wander = Wander::Never;
                 def.crowd = None;
+                def.breach = None;
                 if let Refill::Breed { .. } = def.refill {
                     def.refill = Refill::Keep(1);
                 }
@@ -1836,9 +1838,12 @@ fn describe_spawn(key: &SpawnKey, def: &SpawnDef, alive: u32) -> String {
             let crowd = def
                 .crowd
                 .map_or("no limit".into(), |n| format!("{n} to a room"));
+            let breach = def.breach.as_ref().map_or_else(String::new, |b| {
+                format!("\r\n  breaks through doors: at {} to a room", b.packed)
+            });
             format!(
                 "{header}\r\n  mob: {}\r\n  refill: {refill}\r\n  wander: {wander}\r\n  \
-                 crowd: {crowd}",
+                 crowd: {crowd}{breach}",
                 def.template()
             )
         }

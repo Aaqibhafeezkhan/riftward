@@ -825,9 +825,26 @@ pub struct SpawnDef {
     /// The most of its mobs that will fight one player at once; the rest wait their turn.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pack: Option<u32>,
+    /// How its mobs break out of a packed room through a closed door: rats gnawing through a
+    /// grate. Only crowding moves them, so it needs `crowd`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub breach: Option<Breach>,
     /// Only fills while this is true, like `WorldFlag("rats_broke_out")`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<When>,
+}
+
+/// Mobs breaking out of a room packed with their kind, through a closed door on the way they're
+/// pushed: one that's merely shut, or locked but weak enough to bash. It's left open.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Breach {
+    /// How many of its mobs a room holds before they break through.
+    pub packed: u32,
+    /// What those in the room see, `{actor}` the mob and `{door}` the door: "{actor} gnaws
+    /// through {door}!"
+    pub room: String,
+    /// What those on the other side see: "{door} gives way, gnawed through from below!"
+    pub beyond: String,
 }
 
 /// What a spawn makes.
@@ -1288,6 +1305,15 @@ pub struct Door {
 impl Door {
     pub fn is_open(&self) -> bool {
         self.state == DoorState::Open
+    }
+
+    /// Whether a crowd could break it: shut, or locked with a lock that can be bashed.
+    pub fn can_breach(&self) -> bool {
+        match self.state {
+            DoorState::Open => false,
+            DoorState::Closed => true,
+            DoorState::Locked => self.lock.as_ref().is_some_and(|lock| lock.bash.is_some()),
+        }
     }
 
     /// "the heavy oak door", for the middle of a sentence.
@@ -1861,6 +1887,14 @@ mod tests {
                         if !spawn.contents.is_empty() {
                             problems.push(format!("{here}: only item spawns have contents"));
                         }
+                        if let Some(breach) = &spawn.breach {
+                            match spawn.crowd {
+                                Some(crowd) if breach.packed > crowd => {}
+                                _ => problems.push(format!(
+                                    "{here}: a breach needs a crowd limit below how packed it is"
+                                )),
+                            }
+                        }
                     }
                     Some(Spawned::Item(item)) => {
                         if !item_exists(&ItemKey::parse(item, &zone.id)) {
@@ -1869,6 +1903,7 @@ mod tests {
                         if matches!(spawn.refill, Refill::Breed { .. })
                             || !spawn.wander.is_never()
                             || spawn.crowd.is_some()
+                            || spawn.breach.is_some()
                         {
                             problems.push(format!("{here}: items don't breed, wander or crowd"));
                         }

@@ -101,6 +101,11 @@
             wander: Anywhere(secs: (30, 120)),
             crowd: 6,
             pack: 3,
+            breach: Some((
+                packed: 8,
+                room: "{actor} gnaws through {door}, and the rats pour after it!",
+                beyond: "{door} gives way with a screech of rusted iron, gnawed through from below!",
+            )),
         ),
         "rat_king": (
             mob: "rat_king",
