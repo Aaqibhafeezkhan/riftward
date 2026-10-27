@@ -7,8 +7,8 @@
         // `forage` fills in {item} with what was found.
         "foraging": (
             name: "Foraging",
-            description: "Finding something to eat in the wild, with 'forage'. What there is depends on the place: berries and nuts in a forest, not much in a sewer. Each place holds only a little, and grows back slowly.",
-            kind: Active(command: "forage", cooldown: 3),
+            description: "Finding something to eat in the wild, with 'forage' (or 'use foraging'). What there is depends on the place: berries and nuts in a forest, not much in a sewer. Each place holds only a little, and grows back slowly; the better you search, the better what you find.",
+            kind: Active(aim: Room, cooldown: 3, against: "3", effects: [Find(kind: "forage")]),
             text: (
                 hit: (
                     actor: "You search the ground and find {item}.",

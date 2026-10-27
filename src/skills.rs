@@ -211,6 +211,9 @@ impl SkillDef {
         }
         if let SkillKind::Technique(t) = &self.kind {
             effects::check(&t.effects)?;
+            if effects::in_a_room(&t.effects) {
+                return Err("can't Find: only an active skill aimed at the room can".into());
+            }
         }
         if let SkillKind::Active {
             command,
@@ -233,6 +236,16 @@ impl SkillDef {
                 return Err(format!(
                     "is aimed at a lock, so it can only Apply or Remove \"{LOCKED}\""
                 ));
+            }
+            // A room yields what's found in it, for now: one kind of find.
+            let finds = effects
+                .iter()
+                .filter(|e| matches!(e, Effect::Find { .. }))
+                .count();
+            match (*aim == Aim::Room, finds, effects.len()) {
+                (true, 1, 1) | (false, 0, _) => {}
+                (true, ..) => return Err("is aimed at the room, so it does one Find".into()),
+                (false, ..) => return Err("Finds, so it must be aimed at the Room".into()),
             }
         }
         if let SkillKind::Passive { reactions, .. } = &self.kind {
@@ -260,7 +273,10 @@ impl SkillDef {
                 against,
                 aim,
                 ..
-            } => (*aim != Aim::Lock, resist.is_some() || against.is_some()),
+            } => (
+                !matches!(aim, Aim::Lock | Aim::Room),
+                resist.is_some() || against.is_some(),
+            ),
             // Nothing to show.
             SkillKind::Passive { .. } | SkillKind::Aura { .. } => return Ok(()),
         };
@@ -1586,6 +1602,7 @@ fn use_cmd(
                         (None, Aim::Lock) => {
                             ("lockwork", format!("{} {}", skill.key, target.trim()))
                         }
+                        (None, Aim::Room) => ("roomwork", skill.key.clone()),
                         (None, _) => ("ability", format!("{} {}", skill.key, target.trim())),
                     };
                     match registry.find(verb, actor.role) {

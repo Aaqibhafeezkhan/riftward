@@ -81,10 +81,10 @@
         ),
     },
     finds: {
-        Forest: (
-            forage: [("wild_berries", 50), ("mushrooms", 35), ("hazelnuts", 15)],
-            herbs: [("yarrow", 50), ("kingsfoil", 35), ("moonpetal", 15)],
-        ),
+        Forest: {
+            "forage": [("wild_berries", 50), ("mushrooms", 35), ("hazelnuts", 15)],
+            "herbs": [("yarrow", 50), ("kingsfoil", 35), ("moonpetal", 15)],
+        },
     },
     rooms: {
         "clearing": (
@@ -125,10 +125,10 @@
                 "up": (to: "east_road", needs: Climb(4)),
             },
             environment: Forest,
-            finds: (
-                forage: [("wild_berries", 70), ("mushrooms", 30)],
-                herbs: [("kingsfoil", 40), ("moonpetal", 60)],
-            ),
+            finds: {
+                "forage": [("wild_berries", 70), ("mushrooms", 30)],
+                "herbs": [("kingsfoil", 40), ("moonpetal", 60)],
+            },
         ),
         "north_road": (
             name: "North Road",

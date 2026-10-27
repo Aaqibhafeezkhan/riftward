@@ -31,7 +31,7 @@ use crate::combat::{
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::dice::Dice;
-use crate::effects::Effect;
+use crate::effects::{self, Effect};
 use crate::events::GameEvent;
 use crate::items::{ItemQuery, ItemTemplates};
 use crate::output::{Outbox, Outgoing, deliver};
@@ -126,6 +126,8 @@ pub enum Aim {
     /// A door or a container that closes, by direction or name: Lockpicking. Active skills
     /// only, for now.
     Lock,
+    /// The room the user is in: Foraging. Active skills only, for now.
+    Room,
 }
 
 pub use crate::effects::Resist;
@@ -144,8 +146,13 @@ impl SpellDef {
         if self.harms() && self.aim != Aim::Foe {
             return Err("does damage, so it must be aimed at a Foe".into());
         }
-        if self.aim == Aim::Lock {
-            return Err("can't be aimed at a lock: only active skills can, for now".into());
+        if matches!(self.aim, Aim::Lock | Aim::Room) {
+            return Err(
+                "can't be aimed at a lock or a room: only active skills can, for now".into(),
+            );
+        }
+        if effects::in_a_room(&self.effects) {
+            return Err("can't Find: only an active skill aimed at the room can".into());
         }
         if self.aim == Aim::Foe && self.resist.is_none() {
             return Err("is aimed at a Foe, so needs something to resist it".into());
@@ -379,7 +386,9 @@ impl Aimed<'_> {
                 foe.ok_or_else(|| format!("{} {name} {at} whom?", crate::items::capitalized(verb)))?
             }
             // Locks are found among doors and containers, not people.
-            (Aim::Lock, None) => return Err(format!("You can't {verb} {name} {at} someone.")),
+            (Aim::Lock | Aim::Room, None) => {
+                return Err(format!("You can't {verb} {name} {at} someone."));
+            }
         };
         match self.aim {
             Aim::Foe | Aim::Other if target == caster => {

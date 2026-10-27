@@ -204,18 +204,18 @@ Separately from its footing, every room has an **environment**: what kind of pla
 | `Forest` | The Darkwood |
 | `Sewer` | The sewers |
 
-- **A zone says what each environment yields** in its `finds`, and a room can have its own instead. Each is two weighted tables, ordered worst to best: `forage` for Foraging, `herbs` for Herbalism. `None` is nothing at all.
+- **A zone says what each environment yields** in its `finds`, and a room can have its own instead. Each is weighted tables by kind, ordered worst to best: `"forage"` for Foraging, `"herbs"` for Herbalism, and any other kind a skill `Find`s ([Every skill as data](effects.md#every-skill-as-data)). `None` is nothing at all. The zone test checks every item in them exists.
 
   ```ron
   finds: {
-      Forest: (
-          forage: [("wild_berries", 50), ("mushrooms", 35), ("hazelnuts", 15)],
-          herbs: [("yarrow", 50), ("kingsfoil", 35), ("moonpetal", 15)],
-      ),
+      Forest: {
+          "forage": [("wild_berries", 50), ("mushrooms", 35), ("hazelnuts", 15)],
+          "herbs": [("yarrow", 50), ("kingsfoil", 35), ("moonpetal", 15)],
+      },
   },
   ```
 
-- **`forage` and `gather`** search the room (see [Gathering](trees.md#gathering)). Each room holds three finds of each kind, and grows one back every 10 minutes, so no one strips one bush forever. Finds aren't saved: a restart lets everything grow back.
+- **`forage` and `gather`** (shortcuts to `use foraging` and `use herbalism`) search the room (see [Gathering](trees.md#gathering)). Each room holds three finds of each kind, and grows one back every 10 minutes, so no one strips one bush forever. Finds aren't saved: a restart lets everything grow back.
 - **Builders** set a room's environment with `environment <kind>`, or in the zone file; a room dug out of another takes its environment.
 
 ### Weather (planned)

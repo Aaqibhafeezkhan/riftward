@@ -76,6 +76,10 @@ pub enum Effect {
     Cleave,
     /// An animal stops fighting and stops attacking those who come near.
     Calm,
+    /// Something found in the room, of a `kind` its finds list (`"forage"`, `"herbs"`): picked
+    /// from the room's table with the user's Luck, the better made the more surely it was found,
+    /// and into their hand. Only in an active skill aimed at the room.
+    Find { kind: String },
 }
 
 fn one() -> Formula {
@@ -281,6 +285,11 @@ impl Effect {
             _ => None,
         }
     }
+}
+
+/// Whether any of `effects` is done to a room rather than to someone: `Find`.
+pub fn in_a_room(effects: &[Effect]) -> bool {
+    effects.iter().any(|e| matches!(e, Effect::Find { .. }))
 }
 
 /// What a spell or technique is, for what resists it: its own `tags`, the tags of every condition

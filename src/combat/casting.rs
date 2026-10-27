@@ -179,7 +179,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 let target = match spell.aim {
                     Aim::Foe | Aim::Other => foe,
                     Aim::Ally => mob,
-                    Aim::Lock => return None,
+                    Aim::Lock | Aim::Room => return None,
                 };
                 let target_skills = self.fighters.get(target).ok()?.skills;
                 let useful = takes_hold(spell, target_skills)

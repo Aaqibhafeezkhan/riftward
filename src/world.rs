@@ -140,14 +140,11 @@ pub struct ZoneDef {
 /// roll favours the better end. `None` is nothing at all.
 pub type Table = Vec<(Option<String>, u32)>;
 
-/// What can be found in a room: by `forage` with Foraging, and by `gather` with Herbalism.
+/// What can be found in a room, by kind: `{"forage": [...], "herbs": [...]}`. A skill that
+/// `Find`s names the kind it looks for: Foraging `"forage"`, Herbalism `"herbs"`.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub struct FindsDef {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub forage: Table,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub herbs: Table,
-}
+#[serde(transparent)]
+pub struct FindsDef(pub BTreeMap<String, Table>);
 
 /// What kind of place a room is, for what grows and lives there: separate from its terrain, so a
 /// road through the Darkwood is forest to forage and road to walk.
@@ -1875,6 +1872,28 @@ mod tests {
                     && !item_exists(&ItemKey::parse(key, &zone.id))
                 {
                     problems.push(format!("door {}:{door_id}: no key item '{key}'", zone.id));
+                }
+            }
+            // Everything a room yields is a real item.
+            let zone_finds = zone
+                .finds
+                .iter()
+                .map(|(environment, finds)| (format!("{environment:?} finds"), finds));
+            let room_finds = zone.rooms.iter().filter_map(|(room_id, room)| {
+                room.finds
+                    .as_ref()
+                    .map(|f| (format!("room {room_id}'s finds"), f))
+            });
+            for (whose, finds) in zone_finds.chain(room_finds) {
+                for (kind, table) in &finds.0 {
+                    for item in table.iter().filter_map(|(item, _)| item.as_ref()) {
+                        if !item_exists(&ItemKey::parse(item, &zone.id)) {
+                            problems.push(format!(
+                                "zone {}: {whose}: no {kind} item '{item}'",
+                                zone.id
+                            ));
+                        }
+                    }
                 }
             }
             for (spawn_id, spawn) in &zone.spawns {

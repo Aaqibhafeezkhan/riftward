@@ -136,10 +136,10 @@
         ),
     },
     finds: {
-        Sewer: (
-            forage: [(None, 60), ("stale_crust", 40)],
-            herbs: [("glowcap", 1)],
-        ),
+        Sewer: {
+            "forage": [(None, 60), ("stale_crust", 40)],
+            "herbs": [("glowcap", 1)],
+        },
     },
     rooms: {
         "outflow_arch": (

@@ -214,8 +214,8 @@ Built.
 
 Built.
 
-- **Foraging** (the Survival tree's entry, Intuition) finds food with `forage`; **Herbalism** (the Nature tree's entry, Intuition) finds herbs with `gather`. The herbalist teaches both, and the Poacher, Farmhand and Herbalist's Apprentice backgrounds start with them.
-- **What there is** comes from the room's [environment](world.md#environment-and-finds). Finding anything is your skill (level plus Intuition) against 3, by opposed roll; what you find is picked from the room's table with Luck, so luck favours the rarer end. It goes to your hand, or your feet if your hands are full, and is saved at once.
+- **Foraging** (the Survival tree's entry, Intuition) finds food with `forage`; **Herbalism** (the Nature tree's entry, Intuition) finds herbs with `gather`. Both are data: `Find` aimed at the room ([Every skill as data](effects.md#every-skill-as-data)). The herbalist teaches both, and the Poacher, Farmhand and Herbalist's Apprentice backgrounds start with them.
+- **What there is** comes from the room's [environment](world.md#environment-and-finds). Finding anything is your skill (level plus Intuition) against 3 (the skill's `against`), by opposed roll; what you find is picked from the room's table with Luck, so luck favours the rarer end. It goes to your hand, or your feet if your hands are full, and is saved at once.
 - **Each room holds three finds** of each kind, growing one back every 10 minutes.
 - **Finds today:** the Darkwood has wild berries, mushrooms and hazelnuts (food that speeds recovery), and yarrow, kingsfoil and moonpetal (herbs); the sewers have the odd stale crust, and glowcap.
 - **Herbs have no use yet:** they're the makings of Brewing, draughts and poultices, which come later.

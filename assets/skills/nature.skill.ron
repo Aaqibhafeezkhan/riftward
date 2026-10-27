@@ -7,8 +7,8 @@
         // `gather` fills in {item} with what was found.
         "herbalism": (
             name: "Herbalism",
-            description: "Knowing which plants heal and which harm, and finding them, with 'gather'. What grows depends on the place. Herbs are the makings of draughts and poultices.",
-            kind: Active(command: "gather", cooldown: 3),
+            description: "Knowing which plants heal and which harm, and finding them, with 'gather' (or 'use herbalism'). What grows depends on the place. Herbs are the makings of draughts and poultices.",
+            kind: Active(aim: Room, cooldown: 3, against: "3", effects: [Find(kind: "herbs")]),
             text: (
                 hit: (
                     actor: "You search among the plants and find {item}.",
