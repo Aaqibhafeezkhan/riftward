@@ -86,7 +86,7 @@ Designed, waiting on other work:
 | Feature | Waits on | Details |
 | --- | --- | --- |
 | Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, mobs and game events | [Architecture](architecture.md#scripting) |
-| Game masters: admins and a new GM role can puppet any mob, playing it until they release it | Mobs | [Architecture](architecture.md#game-masters-and-puppeting) |
+| Bots: programs that play mobs through puppeting, reading GMCP; later several mobs at once, leashed movement and shops within bounds | GMCP, a bot role | [Architecture](architecture.md#bots), [#14](https://github.com/Foxworks-Studios/riftward/issues/14) |
 | Quests and guild contracts, with guild ranks that gate trainers and rooms | Mobs, game events, combat | [Quests](quests.md) |
 | Dialogue: conversation trees for mobs, likely [Yarn Spinner](https://www.yarnspinner.dev)'s Rust port, keeping the core independent of Bevy | Mobs | To design |
 | Mob behaviour: data-driven first (wander, flee, assist, aggressive), behaviour trees ([bonsai-bt](https://github.com/Sollimann/bonsai)) only for mobs that need more | Mobs, combat | To design |

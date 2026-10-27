@@ -190,6 +190,21 @@ You release the goblin king and return to yourself.
 - **Every puppeting session is logged** (who, which mob, when, and what they did), so the power is accountable.
 - **How it fits the code:** a `Puppeting(mob)` component on the GM makes the command dispatcher send each `Invocation` on behalf of the mob (all but `release` and `quit`), with the GM's permissions, and `PuppetedBy` on the mob routes what it's told back to them. While puppeting, the GM hears nothing of their own body. The puppet gets an `ActionQueue`, so in a fight it acts on what the GM queues, and its own choices (wandering, aggression, techniques and spells by chance) stop. The prompt shows whose vitals it is: `[the town guard] <11/11hp 9/9st>`. Starting, stopping and every command typed through a puppet are logged.
 
+### Bots
+
+*Planned* ([#14](https://github.com/Foxworks-Studios/riftward/issues/14)). A **bot** is a program that plays a mob the way a GM does: it connects over telnet like any client, puppets a mob, reads what happens around it as GMCP rather than parsing prose, and answers with ordinary commands. The first gives the Riftwatch herbalist a voice: she greets customers, answers questions about her wares and thanks them for a sale, while the shop itself keeps running without her.
+
+- **GMCP first** ([#15](https://github.com/Foxworks-Studios/riftward/issues/15), [#16](https://github.com/Foxworks-Studios/riftward/issues/16)). Telnet option 201 carries JSON messages beside the text, and Mudlet players get it too (health bars, scripts). Messages are built in one place from `GameEvent`s (speech, comings and goings, sales), not from each command, and routed like text, so what a puppet hears reaches its puppeteer. Standard package names (`Char.Vitals`, `Comm.Channel.Text`, `Room.Info`) where they exist; clients choose packages with `Core.Supports.Set`.
+- **A bot role** ([#17](https://github.com/Foxworks-Studios/riftward/issues/17)) whose only permission is Puppet, and only for mobs whose template allows bots. Its own body is out of the game through a marker of its own (never `Hidden` with a huge stealth): unseen, not in `who`, no entering or leaving lines, and it can do nothing but `puppet`, `release` and `quit`.
+- **GMs outrank bots:** a GM can take a mob from a bot, never the other way. A bot that disconnects leaves the mob to its own behaviour, as any puppeteer does.
+- **Bots are untrusted clients.** Everything a bot does goes through the same commands and rules as a player. Any language model lives in the bot, never in the server.
+- **Built to grow.** Every GMCP message sent through a puppet names the puppet, and the template's `bot` setting is meant to become a set of capabilities, so what comes later needs no protocol change:
+  - **Several mobs per bot:** `Puppeting` becomes a set, and the bot directs each command at one puppet (`as <puppet> <command>`), reading only GMCP. One program could play a whole town's cast.
+  - **Capabilities per template,** speech only by default, e.g. `bot: (speak: true, move: Leash(...), trade: (price_range: (0.8, 1.2)))`. The builder decides what each mob's bot may do.
+  - **Movement on a leash:** a bot moves its mob with `go`, within the rooms or zone the template allows.
+  - **Shops within bounds:** the server stays the authority on stock, prices, coins and items (`shops.rs`). A bot only chooses within the template's limits (a price modifier per customer, so haggling; whether to buy something; refusing service), and never makes an item or a coin.
+- **An example bot** ([#18](https://github.com/Foxworks-Studios/riftward/issues/18)) in `bots/`, standard-library Python, with its lines as data and one place a language model could take over.
+
 ### Roles
 
 *Built.* Four roles, and builders and GMs sit side by side rather than one above the other: a builder shapes the world's files, a GM runs what happens in it live, and an admin can do everything. Each command names the permission it needs (`Role::can` in `db.rs`), and `help` shows only what a role can use.
@@ -202,7 +217,7 @@ You release the goblin king and return to yourself.
 | Events | | | ✓ | ✓ | `worldflag`, `setvitals`, `condition` |
 | ManageRoles | | | | ✓ | `role`, `setattr`, `setcoins`, `grantskill` |
 
-`role <account> <player|builder|gm|admin>` sets one. The first account on a new server is an admin.
+`role <account> <player|builder|gm|admin>` sets one. The first account on a new server is an admin. A fifth role, **bot**, with Puppet alone and only for mobs that allow bots, is [planned](#bots).
 
 ### Scripting
 

@@ -34,6 +34,8 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 **The rest of step 4 of [Effects, conditions and scripting](effects.md#how-it-gets-built): triggers outside a fight** (entering a room, resting, the heartbeat, a condition taking hold or fading, casting) and at the start of a turn, which need more game events. Built so far: reactions in a fight (4a: conditions and passive skills react when their bearer hits, is struck, dodges, kills or is badly hurt, as [thorns](effects.md#reactions-as-built) do), formulas (3: every amount in an effect is a [formula](effects.md#formulas-as-built) in data, `"roll(2, 5) + floor(power / 3)"`), conditions as data (1), damage types (2a: typed weapons, attacks and spells, armour that says what it stops, `Resist`, `Weakness` and `Immune`), one effect vocabulary (2b), skills that resist by tag (2c-i), and one resolver for spells, techniques and blows, so either can use any effect and any contest (2c-ii), and conditions on single items: `Imbue`, `on_hit`, charges, saved with the item (2d).
 
+**Open to contributors: [bots](architecture.md#bots)** ([#14](https://github.com/Foxworks-Studios/riftward/issues/14)): GMCP, a bot role that can only puppet, and a bot that gives the herbalist a voice, in four issues. Several mobs per bot, leashed movement and shops within bounds come after.
+
 Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 
 ## Small things noticed and not yet done

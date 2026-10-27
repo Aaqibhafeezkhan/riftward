@@ -42,6 +42,7 @@ A shopkeeper is a mob whose template has a `shop`:
 - **Buying from you:** at a third of the value, at least a copper. `sell <item>` sells something you carry (not worn, and empty if it's a container); `value <item>` asks first.
 - **What a shop buys** is a list of kinds: item tags (`herb`, `potion`, `bandage`), or what an item is (`weapon`, `armour`, `food`, `drink`, `container`), or `anything`. A shop that doesn't deal in something says it isn't interested.
 - **Resale:** a shop sells again, at full value, what it bought, listed as "(used)", unless it stocks that item anyway or there's only ever one of it. It keeps the 20 most recent. What a shop has bought isn't saved: a restart, or the shopkeeper's death, clears it.
+- **Bots** may one day help run a shop, but only within limits the template sets (a price modifier per customer, what to buy); the shop's rules here stay the authority, and a bot never makes an item or a coin. See [Bots](architecture.md#bots).
 - **The zone test checks shops:** every item a shop sells must exist and have a value.
 
 ### Riftwatch's shops
