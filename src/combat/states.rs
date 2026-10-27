@@ -480,6 +480,10 @@ pub struct Active {
 /// on mobs whose template has it).
 pub const INANIMATE: &str = "inanimate";
 
+/// The trait of having no body to leave behind: a slime. It leaves no corpse when it dies, and
+/// what it held and leaves (its loot) falls where it died.
+pub const FORMLESS: &str = "formless";
+
 /// The condition of being out of sight: its strength is how well they hid (Stealth plus Agility),
 /// and those who noticed them anyway are its `seen_by`. See `stealth.rs`.
 pub const HIDDEN: &str = "hidden";

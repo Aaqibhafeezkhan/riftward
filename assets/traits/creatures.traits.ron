@@ -9,6 +9,93 @@
         description: "a thing, not a creature: it never fights back, and poison and the mind's arts find nothing in it",
         modifiers: [Immune("poison"), Immune("mind")],
     ),
+    // No body to leave behind: a slime. The code knows this one by name too: no corpse, and
+    // what it held and leaves falls where it died.
+    "formless": (
+        name: "formless",
+        description: "no body to leave behind: when it dies, it runs away into a puddle, and whatever was in it is left lying there",
+        modifiers: [],
+    ),
+    // The sewers' slimes (docs/riftwatch.md#the-sewers-ecology).
+    "rubbery": (
+        name: "rubbery",
+        description: "a rubbery mass that blades and fists sink into and spring back from, but that fire takes hold of",
+        modifiers: [Resist("physical", 0.5), Weakness("fire", 0.5)],
+        text: (
+            looks: ["{bearer} quivers, rubbery and grey."],
+        ),
+    ),
+    "splitting": (
+        name: "splitting",
+        description: "struck hard, a piece of it tears away and keeps on coming",
+        modifiers: [],
+        reactions: [(
+            on: Hurt(0.5),
+            effects: [Spawn(mob: "ooze_half")],
+            text: (
+                actor: "A piece of you tears away from the blow, and keeps coming.",
+                target: "Your blow tears a piece from {actor}, and the piece keeps coming!",
+                room: "{target}'s blow tears a piece from {actor}, and the piece keeps coming!",
+            ),
+        )],
+    ),
+    "shedding": (
+        name: "shedding",
+        description: "as it's hurt, it sheds oozes from its mass, each a slime of its own",
+        modifiers: [],
+        reactions: [
+            (
+                on: Hurt(0.75),
+                effects: [Spawn(mob: "ooze")],
+                text: (
+                    actor: "An ooze slides from your mass.",
+                    target: "An ooze slides from {actor}'s heaving mass, and turns toward you!",
+                    room: "An ooze slides from {actor}'s heaving mass!",
+                ),
+            ),
+            (
+                on: Hurt(0.5),
+                effects: [Spawn(mob: "ooze", count: "2")],
+                text: (
+                    actor: "Two oozes tear free of you.",
+                    target: "Two oozes tear free of {actor} and come for you!",
+                    room: "Two oozes tear free of {actor}!",
+                ),
+            ),
+            (
+                on: Hurt(0.25),
+                effects: [Spawn(mob: "ooze", count: "2")],
+                text: (
+                    actor: "You shed what you can spare.",
+                    target: "{actor} sheds more of itself, and the oozes come for you!",
+                    room: "{actor} sheds more of itself!",
+                ),
+            ),
+        ],
+    ),
+    "mending": (
+        name: "mending",
+        description: "knitting itself whole as it fights, 2 health each turn",
+        modifiers: [HealthEachTurn(2)],
+        text: (
+            each_turn: (bearer: "You knit yourself whole. ({amount})", room: "{bearer} knits itself together."),
+        ),
+    ),
+    "venomous": (
+        name: "venomous",
+        description: "a venomous bite: now and then what it bites is poisoned",
+        modifiers: [],
+        reactions: [(
+            on: Hits,
+            chance: "0.3",
+            effects: [Apply(condition: "poisoned", lasts: Turns(4))],
+            text: (
+                actor: "Your venom goes in.",
+                target: "{actor}'s fangs sink in, and venom burns in the wound!",
+                room: "{actor}'s fangs sink into {target}.",
+            ),
+        )],
+    ),
     // Prey: a window a quick hunter can strike into, then gone (docs/darkwood.md#prey).
     "skittish": (
         name: "skittish",

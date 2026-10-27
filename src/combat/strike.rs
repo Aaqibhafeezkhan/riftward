@@ -684,11 +684,22 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let mut told = Vec::new();
         // What hurts or heals each turn, in each condition's words.
         for (key, amount) in &start.health {
-            fighter.vitals.health = (fighter.vitals.health + *amount as f32).min(most as f32);
+            let before = fighter.vitals.health;
+            fighter.vitals.health = (before + *amount as f32).min((most as f32).max(before));
+            // Healing someone already whole does nothing, and says nothing; otherwise it tells
+            // what it really did.
+            let amount = if *amount > 0 {
+                (fighter.vitals.health - before).round() as i32
+            } else {
+                *amount
+            };
+            if amount == 0 {
+                continue;
+            }
             let text = conditions.get(key).map(|d| &d.text);
             if let Some(each) = text.and_then(|t| t.each_turn.as_ref()) {
-                let colour = if *amount < 0 { "\x1b[31m" } else { "\x1b[32m" };
-                let (mine, theirs) = each.fill(&name, *amount);
+                let colour = if amount < 0 { "\x1b[31m" } else { "\x1b[32m" };
+                let (mine, theirs) = each.fill(&name, amount);
                 told.push((format!("{colour}{mine}\x1b[0m"), theirs));
             }
             if fighter.vitals.health <= 0.0 && killed_by.is_none() {

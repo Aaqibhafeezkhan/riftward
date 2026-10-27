@@ -24,4 +24,6 @@
 
     "force": (name: "force"),
     "poison": (name: "poison"),
+    // What a slime touches with. Armour stops it for now; acid eating at gear is for later.
+    "acid": (name: "acid", armour: true),
 }

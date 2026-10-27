@@ -450,7 +450,8 @@ pub enum SkillKind {
     /// While its holder is alive, mobs made from the `affects` template in the same zone fight
     /// better: the Rat King's command over his rats.
     Aura {
-        /// A mob template, `zone:mob`.
+        /// A mob template (`mob` in the holder's zone, or `zone:mob`), or a tag its mobs have:
+        /// every other one in the holder's zone fights better. Never the holder itself.
         affects: String,
         bonus: Bonus,
     },

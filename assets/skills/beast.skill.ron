@@ -75,6 +75,28 @@
                 ),
             ),
         ),
+        "acid_touch": (
+            name: "Acid Touch",
+            description: "A slime's touch, burning with acid.",
+            kind: Attack(damage: (1, 2), damage_type: "acid"),
+            text: (
+                hit: (
+                    actor: "Your acid touch {harm} {target}.",
+                    target: "{actor}'s acid touch {harm} you.",
+                    room: "{actor}'s acid touch {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You flow at {target}, but they're clear.",
+                    target: "{actor} flows at you, but you're clear.",
+                    room: "{actor} flows at {target}, but misses.",
+                ),
+            ),
+        ),
+        "slime_lords_will": (
+            name: "Slime Lord's Will",
+            description: "The Slime Lord's hold over every slime in the sewers: while it lives, they fight harder.",
+            kind: Aura(affects: "slime", bonus: (attack: 1, defence: 1)),
+        ),
         "rat_kings_command": (
             name: "Rat King's Command",
             description: "The Rat King's will over the rats of the sewers: while he lives, they fight harder.",

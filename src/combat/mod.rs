@@ -61,7 +61,8 @@ pub use casting::MobMove;
 #[cfg(test)]
 pub use states::defs_on_disk;
 pub use states::{
-    ConditionDefs, Conditions, HIDDEN, INANIMATE, Imbued, ItemCondition, ItemConditions, Lasts,
+    ConditionDefs, Conditions, FORMLESS, HIDDEN, INANIMATE, Imbued, ItemCondition, ItemConditions,
+    Lasts,
 };
 pub use strike::{Blow, Fighters, Move, Round, name_of};
 
@@ -277,9 +278,15 @@ fn expire_readied(
 
 /// The aura each living mob fights under: every living mob holding an aura skill lends its bonus
 /// to the mobs it affects in its zone.
-fn auras(fighters: &Fighters, rooms: &RoomQuery, defs: &SkillDefs) -> HashMap<Entity, Bonus> {
+fn auras(
+    fighters: &Fighters,
+    rooms: &RoomQuery,
+    defs: &SkillDefs,
+    mobs: &MobTemplates,
+) -> HashMap<Entity, Bonus> {
     let zone_of = |room: Entity| rooms.get(room).ok().map(|(_, key, _)| key.zone.clone());
-    let mut by_zone: HashMap<(String, MobKey), Bonus> = HashMap::new();
+    // Each aura in the world: its holder, its zone, what it affects and how.
+    let mut held: Vec<(Entity, String, &str, Bonus)> = Vec::new();
     for fighter in fighters {
         let (false, Some(_), Some(zone)) = (fighter.dead, fighter.mob, zone_of(fighter.in_room.0))
         else {
@@ -289,17 +296,34 @@ fn auras(fighters: &Fighters, rooms: &RoomQuery, defs: &SkillDefs) -> HashMap<En
             if let Some(SkillKind::Aura { affects, bonus }) =
                 defs.skills.get(key).map(|s| &s.def.kind)
             {
-                let affected = MobKey::parse(affects, &zone);
-                *by_zone.entry((zone.clone(), affected)).or_default() += *bonus;
+                held.push((fighter.entity, zone.clone(), affects, *bonus));
             }
         }
     }
+    if held.is_empty() {
+        return HashMap::new();
+    }
+    // Every other mob in the zone of the template it names, or with the tag.
     fighters
         .iter()
         .filter_map(|fighter| {
             let zone = zone_of(fighter.in_room.0)?;
-            let bonus = by_zone.get(&(zone, fighter.mob?.key.clone()))?;
-            Some((fighter.entity, *bonus))
+            let key = &fighter.mob?.key;
+            let tags = mobs
+                .0
+                .get(key)
+                .map(|d| d.tags.as_slice())
+                .unwrap_or_default();
+            let mut total = Bonus::default();
+            let mut any = false;
+            for (holder, at, affects, bonus) in &held {
+                let named = MobKey::parse(affects, at) == *key || tags.iter().any(|t| t == affects);
+                if *holder != fighter.entity && *at == zone && named {
+                    total += *bonus;
+                    any = true;
+                }
+            }
+            any.then_some((fighter.entity, total))
         })
         .collect()
 }
@@ -333,7 +357,7 @@ fn combat_round(
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
 ) {
     let now = time.elapsed_secs_f64();
-    let auras = auras(&fighters, &rooms, &defs);
+    let auras = auras(&fighters, &rooms, &defs, &mobs);
     let resting: HashSet<Entity> = resting_query.iter().collect();
     let mut targets: HashMap<Entity, Entity> = HashMap::new();
     let mut alive_players: Vec<(Entity, Entity)> = Vec::new();
@@ -996,20 +1020,34 @@ pub fn handle_deaths(
             commands.entity(entity).despawn();
             continue;
         }
-        let corpse = items::spawn_corpse(
-            &mut commands,
-            &templates,
-            &mob.name,
-            None,
-            in_room.0,
-            now + MOB_CORPSE_SECS,
-        );
+        // Something formless, a slime, leaves no body either: what it held and leaves falls
+        // where it died.
+        let formless = sheets
+            .get(entity)
+            .is_ok_and(|(.., conditions)| conditions.has(FORMLESS));
+        let corpse = if formless {
+            None
+        } else {
+            items::spawn_corpse(
+                &mut commands,
+                &templates,
+                &mob.name,
+                None,
+                in_room.0,
+                now + MOB_CORPSE_SECS,
+            )
+        };
+        let place = match corpse {
+            Some(corpse) => Some(ItemLocation::Inside(corpse)),
+            None if formless => Some(ItemLocation::Room(in_room.0)),
+            None => None,
+        };
         // Its gear falls with it, for whoever wants it, and its loot, one find from each table
         // with its slayer's Luck.
-        if let Some(corpse) = corpse {
+        if let Some(place) = place {
             for (_, _, mut location) in &mut items {
                 if location.holder() == Some(entity) {
-                    *location = ItemLocation::Inside(corpse);
+                    *location = place;
                 }
             }
             let luck = slayer
@@ -1042,14 +1080,7 @@ pub fn handle_deaths(
                         .0
                         .get(&key)
                         .map_or(Quality::Standard, |def| Quality::roll(&mut dice, luck, def));
-                    items::spawn_item(
-                        &mut commands,
-                        &templates,
-                        key,
-                        None,
-                        ItemLocation::Inside(corpse),
-                        quality,
-                    );
+                    items::spawn_item(&mut commands, &templates, key, None, place, quality);
                 }
             }
         }
@@ -3741,6 +3772,82 @@ mod tests {
             assert_eq!(world.get::<InRoom>(stayed).unwrap().0, row[1]);
             assert!(world.get::<Fighting>(stayed).is_none());
         }
+    }
+
+    #[test]
+    fn a_formless_mob_leaves_its_loot_where_it_died_and_no_corpse() {
+        let (mut world, room) = world();
+        world.init_resource::<RoomIndex>();
+        world.init_resource::<CommandRegistry>();
+        let jelly = ItemKey::parse("test:jelly", "");
+        world
+            .resource_mut::<ItemTemplates>()
+            .0
+            .insert(jelly.clone(), ItemDef::named("a gob of jelly"));
+        let mut def = crate::world::MobDef::named("an ooze");
+        def.loot = vec![vec![(Some("jelly".into()), 100)]];
+        world.insert_resource(MobTemplates(HashMap::from([(
+            MobKey::parse("test:mob", ""),
+            def,
+        )])));
+        let ooze = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let traits = Conditions::default().with_traits(&[FORMLESS.to_string()]);
+        world.entity_mut(ooze).insert((traits, Dead));
+        world.run_system_once(handle_deaths).unwrap();
+        world.flush();
+        assert!(world.get_entity(ooze).is_err(), "gone");
+        let left: Vec<(ItemKey, ItemLocation)> = world
+            .query::<(&Item, &ItemLocation)>()
+            .iter(&world)
+            .map(|(item, at)| (item.key.clone(), *at))
+            .collect();
+        assert_eq!(
+            left,
+            vec![(jelly, ItemLocation::Room(room))],
+            "no corpse, jelly on the floor"
+        );
+    }
+
+    #[test]
+    fn an_aura_strengthens_mobs_of_its_tag_but_not_its_holder() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, None);
+        let aura = Bonus {
+            attack: 2,
+            ..Bonus::default()
+        };
+        let (key, will) = skill(
+            "test:will",
+            SkillKind::Aura {
+                affects: "slime".into(),
+                bonus: aura,
+            },
+        );
+        world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .insert(key.clone(), will);
+        let lord = other_mob(&mut world, room, "lord", &["slime"]);
+        world
+            .get_mut::<Skills>(lord)
+            .unwrap()
+            .0
+            .insert(key, SkillState::new("Template"));
+        let ooze = other_mob(&mut world, room, "ooze", &["slime"]);
+        let rat = other_mob(&mut world, room, "rat", &["vermin"]);
+        let auras = world
+            .run_system_once(
+                |fighters: Fighters,
+                 rooms: RoomQuery,
+                 defs: Res<SkillDefs>,
+                 mobs: Res<MobTemplates>| {
+                    auras(&fighters, &rooms, &defs, &mobs)
+                },
+            )
+            .unwrap();
+        assert_eq!(auras.get(&ooze), Some(&aura));
+        assert_eq!(auras.get(&lord), None, "not its holder");
+        assert_eq!(auras.get(&rat), None, "not another kind");
     }
 
     #[test]

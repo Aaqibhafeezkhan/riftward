@@ -296,11 +296,13 @@ The skill core, without combat, proved on non-combat skills first:
   "basics": (name: "Swordplay", description: "...", kind: Attack(), text: (...)),
   ```
 
-  An **aura** skill, held by a mob, makes certain other mobs in its zone fight better while the holder lives:
+  An **aura** skill, held by a mob, makes certain other mobs in its zone fight better while the holder lives: those of a template, or (since 2026-10-27) every mob with a tag, never the holder itself:
 
   ```ron
   "rat_kings_command": (name: "Rat King's Command",
       kind: Aura(affects: "sewers:sewer_rat", bonus: (attack: 2, defence: 2, armour: 1))),
+  "slime_lords_will": (name: "Slime Lord's Will",
+      kind: Aura(affects: "slime", bonus: (attack: 1, defence: 1))),
   ```
 
   A **technique** is a special move made with an attack skill, in place of the auto-attack, through the action queue (`use lunge`); see [Step 1, as built](trees.md#step-1-as-built). Passives can carry stat **bonuses** that grow with level, and **counters** like Riposte.

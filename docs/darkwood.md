@@ -82,7 +82,7 @@ Each creature with what it does and which existing data does it. Numbers are fir
 | **Forest spider** | Spider Hollow | Waits in its web **(gap: mobs hiding and ambushing, #9)**; a bite that poisons | `aggressive`; passive *Venomous Bite*: reaction `Hits` → `Apply(poisoned)` | Spider silk; a venom sac |
 | **Brown bear** | Bear's Cave | Solitary and huge; ignores you on the paths, savage at home **(gap: territorial)** | `wander: Never`, high Body and Strength, natural armour (*Thick Hide*: `Armour` bonus), a maul | A bear pelt; claws, bear meat |
 | **Crows** | The road, the clearing | Atmosphere: they watch, and caw **(gap: ambient lines)** | A `here` line, `wander: Zone` | Nothing |
-| **The rift-touched stag** | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` trait (resist force, `Struck` → force damage, as thorns; [traits](effects.md#traits) *built*); `AfterDeath(Days(3))`; a Silver contract later | A rift-glass antler (rare, a crafting reagent later) |
+| **The rift-touched stag** | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` trait (resist force, `Struck` → force damage, as thorns; [traits](effects.md#traits) *built*); `AfterDeath(Days(3))`; a Silver contract later | A rift crystal, left where it dies (loot: what the rift left in it; rare, a crafting reagent later); its antlers to harvesting |
 
 **Food chain, from what's built:** wolves and boars are `aggressive` with allies of their own kind only, so they go for deer and rabbits as readily as players; deer and rabbits aren't aggressive, so they're prey. Without fleeing, prey just stands and dies, which is why fleeing is the first gap worth closing.
 
@@ -94,14 +94,14 @@ Decided 2026-10-27. Deer and rabbits bolt, but not the instant someone walks in:
 - **Caught in the window, it fights to get away:** once in a fight, prey tries to break off as a player does with `flee`, a chance each turn rather than a certainty (*Skittish*: half its turns, `TurnStarts` with `chance: "0.5"`, each try succeeding as `flee` does, 60% before Luck), and once more when badly hurt (`Hurt(0.5)` → `Flee`). A hunter usually gets a blow or two in.
 - **Stealth pays.** `Arrives` fires only for someone the prey noticed, so a sneaking hunter walks right up without startling it; a sharp-eyed deer (good Intuition) notices more.
 
-### Harvest, not loot
+### Harvest what's cut, loot what's left
 
-Decided 2026-10-27. **A beast's corpse drops no materials.** Its pelt, meat, fangs and antlers are worked out of it with a skill, while it lasts (a mob's corpse rots in 5 minutes). Loot tables stay for what a creature carries: a bandit's knife, a guard's coins.
+Decided 2026-10-27. **What has to be cut from a carcass is harvested; what a creature leaves behind just by dying falls as loot.** A beast's pelt, meat, fangs and antlers are worked out of its corpse with a skill, while it lasts (a mob's corpse rots in 5 minutes). But a slime *is* jelly, so the jelly is simply there when it's gone; a rift-touched creature leaves its rift crystal; and loot tables stay for what a creature carries, a bandit's knife, a guard's coins. Something with no body to leave (the `formless` trait: slimes) leaves no corpse at all, and its loot lies where it died.
 
 - **Two new Survival skills,** made of effects: **Skinning** (hides, pelts, silk) and **Butchering** (meat, and trophies: fangs, tusks, antlers, claws, a venom sac). Each is `Find` aimed at a corpse, the user's skill against its difficulty, the better made the more surely it went, as foraging is.
 - **In data,** a creature's template says what its corpse yields, by kind: `harvest: {"hide": [("wolf_pelt", 1)], "meat": [(None, 20), ("wolf_meat", 80)]}`, and Skinning finds `"hide"`, Butchering `"meat"`. Each kind can be taken from a corpse once; a fumble spoils it.
 - **The corpse's rot timer is the window** for harvesting, and a corpse taken whole could be carried home to work later (it's an item).
-- **The sewers too:** sewer rats drop a rat's tail as loot today, and the Rat King his tooth. Both are an animal's, so they move to harvesting once it's built.
+- **The sewers too:** sewer rats drop a rat's tail as loot today, and the Rat King his tooth. Both are cut from an animal, so they move to harvesting once it's built. The slimes' jelly and the Slime Lord's heart of the deep stay loot.
 
 **New natural attacks** (data, `beast.skill.ron`): a wolf's bite (2–4), a boar's gore (2–5, with a knock-down technique, *Charge*: `Apply(down)`), a bear's maul (3–6), a stag's antlers (2–5), a spider's fangs (1–3).
 
