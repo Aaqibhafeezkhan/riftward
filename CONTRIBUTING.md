@@ -10,6 +10,17 @@ There are three main ways to contribute, and you don't need to write Rust for th
 
 Start with the [design summary](docs/README.md). It links to every design document, says what exists today, and lists the open questions.
 
+## Finding something to work on
+
+The [issues](https://github.com/Foxworks-Studios/riftward/issues) are labelled by kind of work:
+
+- [`good first issue`](https://github.com/Foxworks-Studios/riftward/labels/good%20first%20issue): small, self-contained changes, each saying where to start and when it's done.
+- [`no rust needed`](https://github.com/Foxworks-Studios/riftward/labels/no%20rust%20needed): skill trees, zones and other data files, writing and design.
+- [`playtesting`](https://github.com/Foxworks-Studios/riftward/labels/playtesting): play, and report how the numbers feel.
+- `area: engine`, `area: content` and `area: design` say which part of the game an issue touches.
+
+[Where we are](docs/STATUS.md) lists more small things noticed and not yet done. Comment on an issue before starting something big, so work isn't doubled.
+
 ## Running the server
 
 You need a recent stable Rust toolchain (the project uses the 2024 edition).
@@ -131,7 +142,7 @@ The design lives in [`docs/`](docs/README.md), one document per area, each with 
 
 ## Git
 
-- Work on a branch and open a pull request; don't commit straight to the main branch.
+- Work on a branch and open a pull request against `master`; don't commit straight to `master`.
 - Write commit messages as a short imperative summary line ("Add item decay"), then a body explaining what changed and why.
 - Commit zone files and docs; never commit `mud.db` or anything from `target/`.
 

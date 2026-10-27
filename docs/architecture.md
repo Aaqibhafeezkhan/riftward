@@ -26,13 +26,13 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `telnet.rs` | The telnet protocol: a parser that separates commands from text, and the options negotiated (echo for passwords, end-of-record for prompts) |
 | `login.rs` | Login state machine: account, password (hidden with telnet echo control), new accounts, character choice, and character creation (race, Karma, background, description) |
 | `command.rs` | The command system: `CommandSpec` registry, the dispatcher (alias expansion, permission hiding, unknown commands), generated `help`, and prompts |
-| `commands/` | Player commands, one system each: `movement` (look, go, directions), `communication` (say, whisper, yell, gossip, who), `character` (score, raise, alias, unalias, quit) |
+| `commands/` | Player commands, one system each: `movement` (look, go, directions), `communication` (say, emote, whisper, yell, gossip, who), `character` (score, raise, alias, unalias, quit) |
 | `build.rs` | Builder and admin commands, registered with a permission |
 | `targeting.rs` | `Keywords` and `Target`: resolving `goblin`, `2.goblin`, `all.coin`, `me` |
 | `output.rs` | Characters and what they're told: the `Characters` query and `Actor` (players and mobs alike), `Outgoing`, the `Outbox` and `flush_outbox`, which delivers it to connections and puppeteers, target candidate lists |
 | `puppet.rs` | Puppeting: `puppet` (`possess`) and `release`, and letting go when the puppet or puppeteer goes |
 | `world.rs` | Zone assets (rooms, doors, item and mob templates, spawns), room entities, the `RoomIndex`, and `sync_world`, which applies zone changes live |
-| `items.rs` | Item entities, Bulk and placement rules, persistence, and the item commands |
+| `items.rs` | Item entities, Bulk and placement rules, persistence, template grants and item conditions (loading, saving, expiring, passing to the holder), and the item commands |
 | `mobs.rs` | Mob entities, wandering and crowding, `summon` and `purge` |
 | `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
@@ -50,7 +50,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `trade.rs` | Haggling (deals with shopkeepers, and the prices they set) and `appraise` |
 | `effects.rs` | The one effect vocabulary spells and techniques share (`Damage`, `Heal`, `Apply`, `Remove`, `Cure`, …), whom each is on, how long conditions last, and what fits where |
 | `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |
-| `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, real items, spawn timers |
+| `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, character and item conditions, real items, spawn timers |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |

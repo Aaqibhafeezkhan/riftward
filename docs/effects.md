@@ -1,6 +1,6 @@
 # Effects, conditions and scripting
 
-[Design summary](README.md) · Status: step 1, conditions as data, is built (see [Conditions, as built](#conditions-as-built)); the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
+[Design summary](README.md) · Status: steps 1 and 2 are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections). Formulas (step 3) are next; the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
 
 **The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, a new active skill (each has its own command, like `pick` or `track`), a new trigger, or a formula other than the built-in ones.
 
@@ -192,8 +192,8 @@ Step 2d (2026-10-26). The `reach` column above became simpler: a condition on an
 
 *Built* (step 1). Conditions are data in `assets/conditions/*.conditions.ron`, hot-reloaded; the code is `src/combat/states.rs`.
 
-- **Seventeen conditions:** the eight that were code (staggered, down, bleeding, held, guarding, exposed, blessed, warded) with their wording unchanged, and nine new ones: poisoned (stacks to 5 doses), burning, stunned, regenerating, rooted, silenced, shielded, weakened, strengthened. Hidden and Nourished stay as they were for now.
-- **Modifiers built:** `Attack`, `Defence`, `DefenceTimes`, `Armour`, `DamageDealt`, `DamageTaken`, `HealthEachTurn`, `Absorb`, `LosesTurn`, `CantFlee`, `CantMove`, `CantCast`. Additive ones count once per point of strength. The rest of the list above arrives as something needs it.
+- **Twenty conditions:** the eight that were code (staggered, down, bleeding, held, guarding, exposed, blessed, warded) with their wording unchanged, nine new ones (poisoned, stacking to 5 doses, burning, stunned, regenerating, rooted, silenced, shielded, weakened, strengthened), and since step 2 asleep, and flaming and envenomed for weapons. Hidden and Nourished stay as they were for now.
+- **Modifiers built:** `Attack`, `Defence`, `DefenceTimes`, `Armour`, `DamageDealt`, `DamageTaken`, `HealthEachTurn`, `Absorb`, `LosesTurn`, `CantFlee`, `CantMove`, `CantCast`, and since step 2 `Resist`, `Weakness` and `Immune`. Additive ones count once per point of strength. The rest of the list above arrives as something needs it.
 - **Stacking:** `Replace`, `Strongest`, `Stack(n)`. **Tags** are kept for cures and immunities to come.
 - **Text from data:** applied (to the target of a technique), each turn, a lost turn, death, fading, a ward taking a blow and breaking, and `looks` hints, chosen by strength left. `affects` lists names, what each does and how long, and `score` the names.
 - **Using any condition:** spells and techniques alike use `Apply(condition, strength, lasts, on)`, where `lasts` is `Minutes(n)`, `Hours(n)` or `Turns(n)` and `on` is `Target` (the default) or `User`. See [Effects, as built](#effects-as-built).
@@ -276,7 +276,7 @@ What spells, techniques, active skills, items and reactions *do*: a list, each w
 | `Create(item, quality)` | | ✓ gathering |
 | `Consume(item)` | Uses up something carried | ✓ bandages, food |
 | `Summon(mob, lasts, allied)` | Calls a mob, for a time, on the user's side | |
-| `Imbue(condition)` | Puts a condition on an item: a flaming sword | |
+| `Imbue(condition)` | Puts a condition on an item: a flaming sword | ✓ Kindle Blade |
 
 **Knowing**
 

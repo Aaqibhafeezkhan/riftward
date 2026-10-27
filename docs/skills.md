@@ -1,6 +1,6 @@
 # Skills
 
-[Design summary](README.md) · Status: the skill core and combat are built (trees as data, levels, progression, active, passive and attack skills, starting skills, `skills`, `use`, `autoattack`); teaching, loot, epiphany and rarity rules are not
+[Design summary](README.md) · Status: the skill core and combat are built (trees as data, levels, progression, active, passive and attack skills, starting skills, `skills`, `use`, `autoattack`); trainers, loot tables and discovery through use are built too; teaching between players, epiphany and rarity rules are not
 
 Characters have no class. What a character can do is the set of skills they have learned, organized into skill trees. Every skill improves only by being used; how that works is in [Progression](progression.md).
 

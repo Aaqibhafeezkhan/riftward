@@ -1,6 +1,6 @@
 # Items, containers and locks
 
-[Design summary](README.md) · Status: built, except decay and traps. Item spawns and unique items are built (see [The living world](world.md#items))
+[Design summary](README.md) · Status: built, except decay and traps. Conditions on single items (a flaming blade) are built too: see [Item conditions](effects.md#item-conditions-as-built). Item spawns and unique items are built (see [The living world](world.md#items))
 
 Items are entities defined by templates in zone files. They can be carried, worn, dropped, or put inside containers. An item becomes **real**, saved to the database, the moment a player touches it, and most items slowly **decay** when left lying around. Doors and containers share one **lock** model: open, closed or locked, with keys, lockpicking, bashing and traps.
 
@@ -137,6 +137,7 @@ At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there'
 - **Touching makes an item real.** Getting, dropping, putting, giving or wearing an item gives it a row in an `items` table: its template, where it is, when it was dropped, and when it decays. From then on every move updates that row, and the item survives restarts wherever it ends up. Looking at or examining an item doesn't count.
 - **Startup restores real items** to their saved locations, removing any whose decay time has passed.
 - **Resets only manage their own spawns.** Once a spawned item is picked up, it is real and no longer the reset's; the next reset spawns a fresh one.
+- **Conditions put on one item** (`Imbue`) are saved with it in `item_conditions`, and come back with it.
 - **Mobs stay temporary** and reset with their zone.
 
 ## Consumables

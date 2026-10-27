@@ -36,7 +36,7 @@ Since a point costs the rating it reaches, shifts aren't all worth the same: a t
 | Obsidiman | 22 Karma |
 | Human | none: 12 Karma instead, and Versatility |
 
-**This is left uneven on purpose for now.** A race is a whole package (shifts, racial skills and any extra Karma), and racial skills aren't built yet: a Windling's Flight and Astral Sight, an Ork's Gahad, a human's Versatility. Each race gets balanced once against its whole package when they are, so a big shift like the Obsidiman's can be paid for with fewer or smaller racial skills. Humans don't open trees without a trainer: Versatility, learning faster, is their edge (2026-10-26).
+**This is left uneven on purpose for now.** A race is a whole package (shifts, racial skills and any extra Karma), and racial skills are only begun (the elves' Fey Mind, resisting sleep and charm, is the first): a Windling's Flight and Astral Sight, an Ork's Gahad, a human's Versatility are still to come. Each race gets balanced once against its whole package when they are, so a big shift like the Obsidiman's can be paid for with fewer or smaller racial skills. Humans don't open trees without a trainer: Versatility, learning faster, is their edge (2026-10-26).
 
 Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to be weak as well as strong. No shift takes an attribute below 1.
 

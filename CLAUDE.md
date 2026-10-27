@@ -50,6 +50,8 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 - **Game events:** systems that make something happen write a `GameEvent` (`events.rs`); announcements, passive-skill triggers and world events listen to it. Add events rather than special cases.
 - **Time:** a one-second heartbeat drives spawns, wandering, recovery, the clock. Heartbeat systems must work from elapsed time and timestamps, never by counting beats.
 
+**Effects:** spells and techniques list what they do in one vocabulary (`effects.rs`: `Damage`, `Apply`, `Imbue`…), and `combat/resolve.rs` resolves every blow, technique and spell the same way: the contest (what the target `resist`s with, plus skills that resist its tags), then damage through armour and resistances, then conditions. Add an effect or modifier there rather than special-casing one spell or skill (`docs/effects.md`).
+
 **Data split:** designed content is RON in `assets/` (zones with rooms/doors/item & mob templates/spawns/world events in `assets/zones/*.zone.ron`, skill trees in `assets/skills/*.skill.ron`, spell books in `assets/spells/*.spells.ron`, conditions in `assets/conditions/*.conditions.ron`, `races.ron`, `damage_types.ron`, `progression.ron` (Karma and experience numbers, read at startup), `backgrounds.ron`), hot-reloaded; `world.rs::sync_world` applies zone changes live. Anything that changes during play is in SQLite (`db.rs`). Items become "real" (persisted) the moment a player touches them; untouched spawns and mobs reset.
 
 ## House rules
@@ -58,7 +60,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 - **Contests are opposed rolls by the ratio rule**: `Dice::opposed` (or `Practice::opposed`), never a hand-made chance or a difference, since ratings are uncapped (`docs/attributes.md#the-ratio-rule`). Fixed difficulties roll too, with no Luck.
 - **Designed content goes in data files**, not code.
 - **A skill's wording lives in its `.skill.ron`, never in code.** Every skill needs a `description`; attacks, techniques, counters and active skills need `text` templates (`{actor}`, `{target}`, and `{harm}` in every damaging hit) for each viewpoint, on hit and miss. `SkillDef::check` enforces this at load and the tree-file test runs it (`docs/skills.md#skill-text`). Code that shows a skill being used fills in its templates with `skills::fill`.
-- **A spell's wording and numbers live in its `.spells.ron`** (`assets/spells/`), checked at load by `SpellDef::check` like skills. Spells resolve inside the combat round (`combat/casting.rs`), so they share blows' damage, deaths and experience; out of a fight, `cast` builds a `Round` to cast at once.
+- **A spell's wording and numbers live in its `.spells.ron`** (`assets/spells/`), checked at load by `SpellDef::check` like skills. Spells resolve inside the combat round: `combat/casting.rs` pays for them and `combat/resolve.rs` resolves them like any blow or technique, so they share blows' damage, deaths and experience; out of a fight, `cast` builds a `Round` to cast at once.
 - **Commands reveal hidden players unless quiet.** Interaction and communication commands show a hidden player when used; mark one `.quiet()` on its `CommandSpec` if doing it shouldn't (whisper, search). Anything choosing a target should filter with `stealth::visible` / `sees` (`src/stealth.rs`).
 - **Schema:** tables use `CREATE TABLE IF NOT EXISTS`; there are no migrations yet. Changing an existing table needs numbered migrations (`PRAGMA user_version`); raise it before doing so.
 - **Zone files:** room ids are local to their zone (cross-zone links use `zone:room`), and comments in a zone file are lost the next time a builder command saves it.
@@ -66,6 +68,8 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 
 ## Git
 
-- Commit only when asked. Work on a branch and open a PR against `main`; don't commit straight to the main branch.
+- Commit only when asked. Work on a feature branch off `master`; "commit and merge" means commit there, then fast-forward `master` (`git merge --ff-only`). Push to `origin` (github.com/Foxworks-Studios/riftward, public) only when asked. Outside contributors open pull requests against `master`.
+- CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, clippy with `-D warnings` and `cargo test` on every push and pull request.
+- Commit as the repository's configured `user.email`; never another address.
 - Commit messages: short imperative summary ("Add item decay"), then a body explaining what and why.
 - Commit zone files and docs; never `mud.db` or `target/`.

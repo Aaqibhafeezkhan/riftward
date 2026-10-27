@@ -108,7 +108,7 @@ Each tradition is a full tree in the same shape as the others, entered through i
 
 ### Racial
 
-A `racial` tree holding each race's abilities, each requiring its race: Heat Sight, Low-Light Vision, Versatility, Stone Skin, Gahad, Tail Combat, Swimming (t'skrang), Flight, Astral Sight. Most need light and darkness first.
+A `racial` tree holding each race's abilities, each requiring its race (the tree exists, with the elves' **Fey Mind**, resisting sleep and charm): Heat Sight, Low-Light Vision, Versatility, Stone Skin, Gahad, Tail Combat, Swimming (t'skrang), Flight, Astral Sight. Most need light and darkness first.
 
 ## What the engine needs
 

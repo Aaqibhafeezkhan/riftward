@@ -1,6 +1,6 @@
 # Magic and Awakening
 
-[Design summary](README.md) · Status: Awakening is built (Magic as latent talent, a teacher for each tradition, foundation skills), and so are spells: `cast`, Drain, and the first two spells of each casting tradition
+[Design summary](README.md) · Status: Awakening is built (Magic as latent talent, a teacher for each tradition, foundation skills), and so are spells: `cast`, Drain, and the first two spells of each casting tradition, and Hermetic's Kindle Blade
 
 Every character starts at Magic 0 and can raise it with Karma from creation onward. On its own, Magic is **latent talent**: it does nothing until the character knows a **casting skill**, a tradition's foundation skill. Knowing one is what it means to be Awakened, and which one decides the character's tradition.
 
@@ -98,10 +98,10 @@ Spells are their own category, separate from skills. **Schools are what improve;
   - **Heal:** health back, up to the most.
   - **Apply** a condition: Bless puts on *blessed* (attacks better), Ward *warded* (takes the next blows' damage in their place, up to its strength, from any blow, weapon or spell; `empowered`, so it grows with the power), Spirit Grasp *held* (can't flee, defends at half, as a grapple leaves). **Remove** and **Cure** take conditions off.
   - **Calm:** an animal (anything that fights with the Beast tree) stops fighting, no one fights it, and it no longer attacks those who come near.
-- **In a fight,** a queued `cast` is cast on the caster's turn in the round, in initiative order like any blow, so its damage, deaths and experience go the way a blow's do (`src/combat/casting.rs`).
+- **In a fight,** a queued `cast` is cast on the caster's turn in the round, in initiative order like any blow, so its damage, deaths and experience go the way a blow's do: `src/combat/casting.rs` pays for it, and `src/combat/resolve.rs` resolves it like any blow.
 - **Mobs cast** by the same rules. A template lists `spells` (and the school skill and attributes they need); on its turn, with its `tactics` chance, a mob picks among its techniques and the spells that would do some good: a spell at its foe, healing itself only when badly hurt, blessing or warding itself only when it isn't already. The three teachers know their tradition's two spells and cast them if attacked.
 - **Lasting effects count down in time, fighting or not,** so a blessing can't be cast, rested on to win back the stamina, and saved for a fight. Each spell says how long its effect lasts in game time (`lasts: Minutes(80)`, `Hours(12)`; a game hour is 7.5 real minutes), and the bearer is told when it fades. `affects` (`aff`) lists everything on you, what it does and how long it has left, in game time and real ("blessed: attacking 2 better, for 1 hour 19 minutes (10 real minutes)"); `score` names them. Durations differ by spell: Bless and Ward last 80 minutes (10 real minutes); an Armour spell, when there is one, might last 12 hours (an hour and a half). A technique's conditions (staggered, held and the rest) still count the bearer's turns, and so does Spirit Grasp's hold.
-- **Later skills can stretch durations or cut Drain:** a caster's lasting effects are timed in one place (`casting.rs`), which such skills would add to, and Drain is resisted in one place (`spells.rs`).
+- **Later skills can stretch durations or cut Drain:** a caster's lasting effects are timed in one place (`combat/effects.rs`), which such skills would add to, and Drain is resisted in one place (`spells.rs`).
 
 ### The first spells (built)
 

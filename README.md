@@ -4,7 +4,7 @@ A classless telnet MUD, written in Rust on a headless [Bevy](https://bevyengine.
 
 There are no classes in Riftward. A character is what they've learned: sword and fire, stealth and herbalism, whatever they practise. Skills grow by being used, the rarest are taught by players who have mastered them, and some are found only by doing something nobody has written down. The world is built mostly from inside the game.
 
-> **Early days.** Riftward is playable but young: one town, the sewers beneath it, and the systems to grow from there. Numbers are first guesses and things change often.
+> **Early days.** Riftward is playable but young: one town, the sewers beneath it, the edge of a forest, and the systems to grow from there. Numbers are first guesses and things change often.
 
 ## What's in it
 
