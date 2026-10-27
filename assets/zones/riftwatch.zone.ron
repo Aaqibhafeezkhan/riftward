@@ -430,6 +430,18 @@
         ),
     },
     mobs: {
+        "training_dummy": (
+            name: "a straw training dummy",
+            keywords: ["dummy", "straw", "training"],
+            here: "A straw training dummy stands on its post, hacked and patched many times over.",
+            description: "A man-shaped bundle of straw lashed to a stout post, wearing a dented pot for a helm. It has been slashed, stabbed, punched and set on fire, and patched after every one. It doesn't hit back, which is the whole idea.",
+            // A thing: it takes blows and never gives one, is worth no experience, and leaves no
+            // corpse. Townsfolk, so the guards leave it be.
+            tags: ["townsfolk"],
+            inanimate: true,
+            attributes: {Body: 1, Agility: 1, Reaction: 1},
+            health: 40,
+        ),
         "town_guard": (
             name: "a town guard",
             tags: ["townsfolk"],
@@ -589,6 +601,18 @@
         ),
     },
     spawns: {
+        "training_dummies": (
+            mob: "training_dummy",
+            room: "training_yard",
+            every: Minutes(10),
+            refill: Keep(2),
+        ),
+        "garrison_dummy": (
+            mob: "training_dummy",
+            room: "garrison_yard",
+            every: Minutes(10),
+            refill: Keep(1),
+        ),
         "shrine_keeper": (
             mob: "shrine_keeper",
             room: "shrine",

@@ -60,6 +60,8 @@ pub struct Fighter {
     pub spells: Option<&'static Spells>,
     /// A mob a builder is playing: it acts on what they queue, not on its own.
     pub puppeted: Has<PuppetedBy>,
+    /// A thing, not a creature: it never acts in a fight.
+    pub inanimate: Has<super::Inanimate>,
     /// The coins they carry: a player's, or a mob's for a pickpocket and its slayer.
     pub purse: Option<&'static mut Purse>,
 }
@@ -83,6 +85,17 @@ pub fn condition(health: f32, max: i32) -> &'static str {
         f if f >= 0.5 => "hurt",
         f if f >= 0.25 => "badly wounded",
         _ => "barely standing",
+    }
+}
+
+/// How battered a thing looks (a training dummy), as `condition` says how hurt someone is.
+fn battered(health: f32, max: i32) -> &'static str {
+    match health / max.max(1) as f32 {
+        f if f >= 1.0 => "untouched",
+        f if f >= 0.75 => "scuffed",
+        f if f >= 0.5 => "battered",
+        f if f >= 0.25 => "coming apart",
+        _ => "about to fall to pieces",
     }
 }
 
@@ -226,6 +239,8 @@ pub fn outmatched(
     targets
         .iter()
         .filter(|(who, _)| fighters.get(**who).is_ok_and(|f| f.player.is_some()))
+        // Beating a thing teaches nothing faster.
+        .filter(|(_, foe)| fighters.get(**foe).is_ok_and(|f| !f.inanimate))
         .filter_map(|(who, foe)| {
             let ((attack, defence), (their_attack, their_defence)) =
                 (ratings(*who)?, ratings(*foe)?);
@@ -990,6 +1005,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         f.vitals.health -= dealt as f32;
         let health = f.vitals.health;
         let max = Maxima::of(&f.attributes, &f.skills, defs, f.base).health;
+        // A thing is broken, not killed, and battered, not hurt.
+        let thing = f.inanimate;
         self.events.write(GameEvent::Damaged {
             who,
             amount: dealt as f32,
@@ -998,10 +1015,19 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             if let Ok(mut f) = self.fighters.get_mut(who) {
                 f.vitals.health = 0.0;
             }
-            tell.lines
-                .push((attacker, format!("\x1b[1mYou have killed {name}!\x1b[0m")));
-            tell.room
-                .push(format!("{} falls, dead.", capitalized(name)));
+            let (yours, seen) = if thing {
+                (
+                    format!("\x1b[1mYou knock {name} to pieces!\x1b[0m"),
+                    format!("{} falls to pieces.", capitalized(name)),
+                )
+            } else {
+                (
+                    format!("\x1b[1mYou have killed {name}!\x1b[0m"),
+                    format!("{} falls, dead.", capitalized(name)),
+                )
+            };
+            tell.lines.push((attacker, yours));
+            tell.room.push(seen);
             self.events.write(GameEvent::Died {
                 who,
                 name: name.to_string(),
@@ -1012,7 +1038,15 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         } else {
             tell.lines.push((
                 attacker,
-                format!("{} is {}.", capitalized(name), condition(health, max)),
+                format!(
+                    "{} is {}.",
+                    capitalized(name),
+                    if thing {
+                        battered(health, max)
+                    } else {
+                        condition(health, max)
+                    }
+                ),
             ));
             false
         }

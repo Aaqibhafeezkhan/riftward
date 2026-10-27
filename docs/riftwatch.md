@@ -144,6 +144,7 @@ None of the locks have keys yet; keys arrive with items.
 | --- | --- | --- | --- |
 | Town guards | North Gate | 2 | Anywhere in town, every 1-3 minutes |
 | A stray dog | Market Square | 1 | Market, stalls, back alley, tinkers, Guild Row |
+| Straw training dummies (`inanimate`: they never hit back, for safe practice) | Training Yard (2), Garrison Yard (1) | 3 | No |
 | The contract clerk | Contract Hall | 1 | No |
 | The herbalist | Herbalist's Stall | 1 | No |
 | The drill sergeant | Training Yard | 1 | No |

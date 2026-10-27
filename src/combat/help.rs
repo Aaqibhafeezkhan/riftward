@@ -11,7 +11,7 @@ use std::collections::{HashMap, VecDeque};
 
 use bevy::prelude::*;
 
-use super::{Dead, Fighting};
+use super::{Dead, Fighting, Inanimate};
 use crate::events::{GameEvent, Way};
 use crate::mobs::{Mob, MobTemplates};
 use crate::net::Connection;
@@ -28,6 +28,7 @@ type Answerers<'w, 's> = Query<
         Without<Dead>,
         Without<PuppetedBy>,
         Without<Connection>,
+        Without<Inanimate>,
     ),
 >;
 

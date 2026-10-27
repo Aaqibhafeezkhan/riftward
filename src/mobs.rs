@@ -10,7 +10,7 @@ use bevy::prelude::*;
 
 use crate::attributes::Attributes;
 use crate::characters::{Races, article};
-use crate::combat::{Aggressive, AutoAttack, Conditions, Fighting, Tactics, the};
+use crate::combat::{Aggressive, AutoAttack, Conditions, Fighting, Inanimate, Tactics, the};
 use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
 use crate::db::{Permission, Role};
 use crate::dice::Dice;
@@ -225,8 +225,11 @@ pub fn spawn_mob(
     if let Some(base) = base {
         entity.insert(base);
     }
-    if def.aggressive {
+    if def.aggressive && !def.inanimate {
         entity.insert(Aggressive);
+    }
+    if def.inanimate {
+        entity.insert(Inanimate);
     }
     // The coins it carries: what a pickpocket can lift, and what's left falls to its slayer.
     if let Some((low, high)) = def.coins {

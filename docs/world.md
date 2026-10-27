@@ -130,6 +130,8 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
 ),
 ```
 
+**A mob can be a thing,** `inanimate: true` (*built*, 2026-10-27): a training dummy. It takes blows and never acts in a fight (no blow back, no flight, no skill), never wanders or picks one, is worth no experience and gives no tough-fight boost to learning, and leaves no corpse, what it held falling where it stood. It reads as a thing: battered and coming apart rather than hurt, knocked to pieces rather than killed. Its spawn puts it back.
+
 **A mob can be born with conditions** (*built*, 2026-10-27): `conditions: [(condition, strength)]` on its template, put on as it spawns and lasting until something ends them (a cure, a `Remove`, or for `hidden`, being noticed and acting). A grey slime born proof against blades, a regenerating Slime Lord, a spider born `hidden` in its web, unseen until someone notices it as they come in. The zone test checks each condition exists.
 
 **A mob can be one of the peoples,** with `race`: its attributes start from that race's (the template's own ratings win where it sets them), it has the race's skills, `look` says "The provisioner is a human.", and its tracks read "a human", as a player's do. Riftwatch's townsfolk are mostly human; the tinker is a dwarf, the drill sergeant an ork, the magister an elf. Beasts have no race. The zone test checks every race exists.

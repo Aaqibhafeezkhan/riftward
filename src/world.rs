@@ -751,6 +751,10 @@ pub struct MobDef {
     /// too: guards go for the rats. Without, it attacks players only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allies: Option<Vec<String>>,
+    /// A thing, not a creature: a training dummy. It never acts in a fight (no blow, no flight, no
+    /// skill), never wanders or picks one, is worth no experience, and leaves no corpse.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub inanimate: bool,
     /// Conditions it's born with, lasting until something ends them: a slime that shrugs off
     /// blades, a beast that's `hidden` in its lair. `[(condition: "regenerating", strength: 2)]`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -818,6 +822,7 @@ impl MobDef {
             aggressive: false,
             tags: Vec::new(),
             allies: None,
+            inanimate: false,
             conditions: Vec::new(),
             coins: None,
             shop: None,

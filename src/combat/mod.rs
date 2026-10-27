@@ -164,6 +164,11 @@ impl Plugin for CombatPlugin {
     }
 }
 
+/// A thing, not a creature (`inanimate` on its template): it never acts in a fight, is worth no
+/// experience, and leaves no corpse.
+#[derive(Component, Debug)]
+pub struct Inanimate;
+
 /// Who someone is fighting.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Fighting(pub Entity);
@@ -280,6 +285,13 @@ fn combat_round(
         if fighter.dead {
             continue;
         }
+        // A thing takes blows but never fights: whatever set it on someone, it isn't.
+        if fighter.inanimate {
+            if fighter.fighting.is_some() {
+                commands.entity(fighter.entity).remove::<Fighting>();
+            }
+            continue;
+        }
         if let Some(Fighting(target)) = fighter.fighting {
             targets.insert(fighter.entity, *target);
         }
@@ -305,9 +317,12 @@ fn combat_round(
     }
     // Who was fighting whom before anyone fought back, for openers.
     let engaged = targets.clone();
-    // Defenders fight back.
+    // Defenders fight back, but things don't.
     let pairs: Vec<(Entity, Entity)> = targets.iter().map(|(a, t)| (*a, *t)).collect();
     for (attacker, target) in pairs {
+        if fighters.get(target).is_ok_and(|f| f.inanimate) {
+            continue;
+        }
         if let std::collections::hash_map::Entry::Vacant(entry) = targets.entry(target) {
             entry.insert(attacker);
             commands.entity(target).insert(Fighting(attacker));
@@ -516,11 +531,13 @@ fn combat_round(
 
     reveal_fighters(&mut commands, &mut events, &fighters, &targets);
 
-    // Experience for every player who fought a fallen foe: the risk they overcame.
+    // Experience for every player who fought a fallen foe: the risk they overcame. A thing
+    // was no risk.
     for &died in &fallen {
         let Some(name) = fighters
             .get(died)
             .ok()
+            .filter(|f| !f.inanimate)
             .and_then(|f| f.mob.map(|m| the(&m.name)))
         else {
             continue;
@@ -853,6 +870,7 @@ type DeadMobs<'w, 's> = Query<
         &'static Mob,
         &'static InRoom,
         Option<&'static Slayer>,
+        Has<Inanimate>,
     ),
     (With<Dead>, mobs::OnlyMobs),
 >;
@@ -884,7 +902,17 @@ pub fn handle_deaths(
     mut purses: Query<&mut Purse>,
 ) {
     let now = unix_now();
-    for (entity, mob, in_room, slayer) in &dead_mobs {
+    for (entity, mob, in_room, slayer, inanimate) in &dead_mobs {
+        // A thing leaves no corpse: what it held falls where it stood.
+        if inanimate {
+            for (_, _, mut location) in &mut items {
+                if location.holder() == Some(entity) {
+                    *location = ItemLocation::Room(in_room.0);
+                }
+            }
+            commands.entity(entity).despawn();
+            continue;
+        }
         let corpse = items::spawn_corpse(
             &mut commands,
             &templates,
@@ -3506,5 +3534,46 @@ mod tests {
             assert_eq!(world.get::<InRoom>(stayed).unwrap().0, row[1]);
             assert!(world.get::<Fighting>(stayed).is_none());
         }
+    }
+
+    #[test]
+    fn a_training_dummy_takes_blows_and_never_fights_back() {
+        let (mut world, room) = world();
+        let trainee = fighter(&mut world, room, 5, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, trainee);
+        sure_hands(&mut world, trainee);
+        // Strong enough that beating it would be worth something, if it were alive.
+        let dummy = fighter(&mut world, room, 200, 1, &[BASIC_ATTACK]);
+        world.entity_mut(dummy).insert(Inanimate);
+        world.entity_mut(trainee).insert(Fighting(dummy));
+        for _ in 0..3 {
+            world.run_system_once(combat_round).unwrap();
+            world.flush();
+        }
+        assert!(
+            world.get::<Vitals>(dummy).unwrap().health < 100.0,
+            "it takes blows"
+        );
+        assert_eq!(
+            world.get::<Vitals>(trainee).unwrap().health,
+            100.0,
+            "never one back"
+        );
+        assert!(world.get::<Fighting>(dummy).is_none());
+        let skills = world.get::<Skills>(trainee).unwrap();
+        assert!(
+            skills.0[BASIC_ATTACK].practice > 0.0,
+            "the trainee practises"
+        );
+        // Worth no experience when it's broken.
+        world.get_mut::<Vitals>(dummy).unwrap().health = 1.0;
+        let before = world.get::<Attributes>(trainee).unwrap().experience();
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get::<Dead>(dummy).is_some());
+        assert_eq!(
+            world.get::<Attributes>(trainee).unwrap().experience(),
+            before
+        );
     }
 }

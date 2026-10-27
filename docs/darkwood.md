@@ -53,7 +53,7 @@ Decided 2026-10-27. Sewer rats and the stray dog are the only fights a new chara
 
 | Rung | Where | For | What's there |
 | --- | --- | --- | --- |
-| **0** | Riftwatch | Brand new | **Training dummies** at the archery butts and in the garrison yard: practise any weapon or technique safely, for skill practice and no experience **(gap: a mob that never fights back)**. Sparring with the drill sergeant |
+| **0** | Riftwatch | Brand new | **Training dummies** in the training yard and the garrison yard (*built*): practise any weapon or technique safely, for skill practice and no experience. Sparring with the drill sergeant |
 | **1** | The sewers' upper tunnels | First fights | Rats as now, **giant cockroaches**, **sewer snakes**, **rat swarms**, the smallest **oozes** ([the sewers' ecology](riftwatch.md#the-sewers-ecology)) |
 | **2** | The forest's edge, the west woods; the sewers' west | Past the rats | **Rabbits and deer** (prey, with the startle window), **foxes**, **adders** (a poisoning bite), **young boars**, crows; **grey slimes** under the town. Foraging, herbs and harvesting between fights |
 | **3** | The brook, the ravine; the Old Cistern, the Warren | Getting capable | **Grown boars**, a **badger**, **giant frogs** at the brook; the **Slime Lord** in the Old Cistern and the **Rat King** in the Warren, the sewers' two hard ends |
@@ -157,7 +157,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Mobs hiding and ambushing** | The spider in its web | Issue #9: mobs use Stealth out of a fight, and open from hiding | Medium |
 | **A bonus that counts allies present** | *Pack Hunter* | A passive bonus `per` ally in the fight, or a formula input `allies` | Small to medium |
 | **`avoids` on templates** | Rats kept from draining into the slimes ([the sewers](riftwatch.md#the-sewers-ecology)); deer keeping out of the wolf den | `avoids: ["slime"]`, by tag or template as `allies` are: wandering and crowding never take a mob into a room holding what it avoids. Only what's named, so rats still go for guards and players. Later, fleeing prefers exits away from it | Small |
-| **A mob that never fights back** | Training dummies | `fights_back: false` on a template: it takes blows and never strikes or flees. It already gives no experience, since beating it is no risk | Small |
+| **Things, not creatures** (*built* 2026-10-27) | Training dummies | `inanimate: true` on a template: it takes blows and never acts in a fight, never wanders or picks one, is worth no experience nor a tough-fight boost, and leaves no corpse; it's battered and knocked to pieces, not hurt and killed | Small |
 | **Spawning from an effect** | Slimes splitting, the Slime Lord shedding slimes | A `Spawn(mob, count)` effect, in a reaction on `Hurt` or on a death (`Kills` is the killer's; this needs the dying one's own reaction, **a `Dies` trigger**) | Small to medium |
 | **Acid that eats gear** | The sewers' slimes | An `acid` damage type is data; acid wearing armour and weapons down needs item condition and wear **(later)** | Later |
 | **Ranged combat** | Bows, the hunter's teaching | Attacking into the next room, ammunition | Large, later |
@@ -166,7 +166,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 
 ## Proposed build order
 
-1. **The low rungs first** (decided 2026-10-27): training dummies in town (the never-fights-back gap), the sewers' new ecology ([riftwatch.md](riftwatch.md#the-sewers-ecology)), and the west woods with their rung-2 and rung-3 creatures and flora, before the deep wood.
+1. **The low rungs first** (decided 2026-10-27): training dummies in town (*built*), the sewers' new ecology ([riftwatch.md](riftwatch.md#the-sewers-ecology)), and the west woods with their rung-2 and rung-3 creatures and flora, before the deep wood.
 2. **Rooms and flora** (data): the rest of the forest: the ravine's falls, the deep wood, the stones and the scar, with their finds and the new herb and food items.
 3. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. No material loot: what they yield waits for harvesting.
 4. **Harvesting** (code, small to medium): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
