@@ -91,6 +91,13 @@ impl Plugin for CommandsPlugin {
                 communication::say,
             )
             .add_command(
+                CommandSpec::new("emote", Communication)
+                    .shortcuts(&["em"])
+                    .usage("emote <action>")
+                    .summary("act something out for the room: 'emote waves' shows 'Grok waves.'; :<action> works too"),
+                communication::emote,
+            )
+            .add_command(
                 CommandSpec::new("whisper", Communication)
                     .usage("whisper <player> <text>")
                     .summary("speak privately to someone in the room")

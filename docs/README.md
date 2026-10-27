@@ -38,7 +38,7 @@ Each document below covers one area and can be read on its own. This page is the
 - Telnet server, one command handled per player per tick, in the order typed.
 - Accounts and characters in SQLite, with roles: player, builder, GM (game master: puppeting and live events) and admin.
 - Zone files in `assets/zones`, hot-reloaded, plus in-game building: `dig`, `desc`, `link`, `zone create`, and more.
-- Communication: `say`, `whisper`, `yell` (zone), `gossip` (global).
+- Communication: `say` (or `'`), `emote` (`em`, or `:`: `:waves` shows "Grok waves."), `whisper`, `yell` (zone), `gossip` (global).
 - Riftwatch, the starting town, and the sewers beneath it ([map](riftwatch.md#map)).
 - Items: templates with Bulk and tags, hands, wear slots, weapons, armour and shields, containers (backpacks, pouches, keyrings, pockets, chests) with automatic placement, encumbrance, keys, and real items that survive restarts.
 - Mobs: templates and spawns in zone files, timed and after-death resets that count their mobs wherever they wander, breeding populations that grow toward a cap and reseed after being wiped out, crowding that pushes them outward, wandering within rooms, a zone or anywhere, equipment that they fight with and drop in their corpses, technique skills used by chance, and the builder `mob`, `spawn`, `summon` and `purge` commands. Item spawns keep rooms stocked and top up containers, and unique items are never made twice. Riftwatch has guards, a stray dog, the contract clerk, the herbalist and the drill sergeant, a signpost, practice swords and a stocked chest in the guild cellar; the sewers have rats.

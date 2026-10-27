@@ -28,6 +28,43 @@ pub fn say(In(inv): In<Invocation>, players: Characters, mut outbox: ResMut<Outb
     deliver(out, &mut outbox);
 }
 
+/// `emote <action>`: everyone in the room, the actor too, sees it done by name: "Grok waves."
+pub fn emote(In(inv): In<Invocation>, players: Characters, mut outbox: ResMut<Outbox>) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let out = if inv.args.is_empty() {
+        vec![Outgoing::line(actor.entity, "Emote what?")]
+    } else {
+        let line = emoted(&actor.name, &inv.args);
+        vec![
+            Outgoing::line(actor.entity, line.clone()),
+            Outgoing::Room {
+                room: actor.room,
+                except: actor.entity,
+                text: line + "\r\n",
+            },
+        ]
+    };
+    deliver(out, &mut outbox);
+}
+
+/// `action` done by `name`, as a sentence: "Grok waves.". A possessive or a comma joins on
+/// without a space ("Grok's eyes narrow."), and a full stop is added unless it ends already.
+fn emoted(name: &str, action: &str) -> String {
+    let action = action.trim();
+    let joined = if action.starts_with(['\'', ',']) {
+        format!("{name}{action}")
+    } else {
+        format!("{name} {action}")
+    };
+    if joined.ends_with(['.', '!', '?', '"', '\'', ')']) {
+        joined
+    } else {
+        joined + "."
+    }
+}
+
 /// Only the target hears the words; everyone else in the room just sees that a whisper happened.
 pub fn whisper(
     In(inv): In<Invocation>,
@@ -164,4 +201,25 @@ pub fn who(
         names.join("\r\n  ")
     );
     deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_emote_reads_as_a_sentence() {
+        assert_eq!(emoted("Grok", "waves"), "Grok waves.");
+        assert_eq!(emoted("Grok", "'s eyes narrow"), "Grok's eyes narrow.");
+        assert_eq!(emoted("Grok", "laughs!"), "Grok laughs!");
+        assert_eq!(emoted("the town guard", "nods"), "the town guard nods.");
+    }
+
+    #[test]
+    fn a_colon_is_an_emote() {
+        assert_eq!(
+            crate::command::split_verb(":waves hello"),
+            ("emote".into(), "waves hello")
+        );
+    }
 }

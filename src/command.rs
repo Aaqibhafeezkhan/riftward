@@ -310,10 +310,14 @@ impl AddCommand for App {
     }
 }
 
-/// Split input into a lowercase verb and the rest. `'hello` is shorthand for `say hello`.
+/// Split input into a lowercase verb and the rest. `'hello` is shorthand for `say hello`, and
+/// `:waves` for `emote waves`.
 pub fn split_verb(line: &str) -> (String, &str) {
     if let Some(text) = line.strip_prefix('\'') {
         return ("say".into(), text.trim());
+    }
+    if let Some(text) = line.strip_prefix(':') {
+        return ("emote".into(), text.trim());
     }
     let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
     (verb.to_ascii_lowercase(), rest.trim())
