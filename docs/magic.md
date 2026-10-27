@@ -42,7 +42,7 @@ The tradition decides which magic opens: hermetics, shamans and clerics get scho
 
 **Inner Discipline is the Adept's school.** A caster's foundation grows by casting and powers their spells; the Adept's foundation does the same for powers. *Built:*
 
-- **It grows with the body's work:** every use of an Adept power practises it (the `UsedTree` trigger), and so does fighting unarmed with Brawling (`UsedSkill("brawling:basics")`), which is how a newly Awakened Adept, who knows no powers yet, starts on the path.
+- **It grows with the body's work:** every use of an Adept power practises it (the `UsedTree` trigger), and so does every attack made with an attack skill, armed or not (`UsedAttack`): a swordsman's swing and a monk's punch alike. That's how a newly Awakened Adept, who knows no powers yet, starts on the path, whatever they fight with (2026-10-27; it was Brawling alone). The pace is worth watching: attacks come every round, though the gain cooldown limits how fast it can level.
 - **It strengthens the powers:** +1 attack with Killing Hands per 5 levels, and +1 damage per 10.
 - **It opens the tree:** Killing Hands (Inner Discipline 0) and Quickened Reflexes (5) are [discovered](skills.md#discovery) while practising it, like any tree's higher skills. The ascetic teaches only Inner Discipline.
 

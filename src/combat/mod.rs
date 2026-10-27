@@ -3146,4 +3146,51 @@ mod tests {
         ));
         assert!(world.get::<Conditions>(thief).unwrap().hidden().is_none());
     }
+
+    #[test]
+    fn a_sword_in_hand_is_swung_with_swordplay_and_practises_it() {
+        let (mut world, room) = world();
+        let (key, swordplay) = skill(
+            "swordplay:basics",
+            SkillKind::Attack {
+                damage: None,
+                cost: Cost::Free,
+                damage_type: "physical".into(),
+            },
+        );
+        world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .insert(key.clone(), swordplay);
+        let fencer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK, "swordplay:basics"]);
+        as_player(&mut world, fencer);
+        let dummy = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let sword = ItemKey::parse("sword", "test");
+        world.resource_mut::<ItemTemplates>().0.insert(
+            sword.clone(),
+            ItemDef {
+                weapon: Some(crate::world::WeaponDef {
+                    skill: key.clone(),
+                    damage: (3, 3),
+                    damage_type: "physical".into(),
+                }),
+                ..ItemDef::named("a sword")
+            },
+        );
+        world.spawn((
+            Item {
+                key: sword,
+                name: "a sword".into(),
+                id: None,
+                state: DoorState::Open,
+                quality: Quality::Standard,
+            },
+            ItemLocation::Held(fencer),
+        ));
+        world.entity_mut(fencer).insert(Fighting(dummy));
+        world.run_system_once(combat_round).unwrap();
+        let skills = world.get::<Skills>(fencer).unwrap();
+        assert!(skills.0[&key].practice > 0.0, "Swordplay practised");
+        assert_eq!(skills.0[BASIC_ATTACK].practice, 0.0, "not Brawling");
+    }
 }

@@ -7,13 +7,13 @@
     attribute: Body,
     skills: {
         // Magic turned inward, through breath and body: the root of all Adept powers. It's the
-        // Adept's school: fighting unarmed and every power used practise it, and it makes the
-        // powers stronger.
+        // Adept's school: every attack made, armed or not, and every power used practise it, and
+        // it makes the powers stronger.
         "foundation": (
             name: "Inner Discipline",
-            description: "Magic turned inward through breath and body. Knowing it, you are Awakened as an Adept. Unarmed fighting and every power you use train it, and it strengthens Killing Hands.",
+            description: "Magic turned inward through breath and body. Knowing it, you are Awakened as an Adept. Every attack you make, with a sword or your fists, and every power you use train it, and it strengthens Killing Hands.",
             kind: Passive(
-                triggers: [UsedTree, UsedSkill("brawling:basics")],
+                triggers: [UsedTree, UsedAttack],
                 bonuses: [
                     (stat: Attack, per: 5, with: "adept:killing_hands"),
                     (stat: Damage, per: 10, with: "adept:killing_hands"),

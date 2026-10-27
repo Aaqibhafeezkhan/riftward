@@ -696,8 +696,11 @@ pub enum Trigger {
     /// One use for every use of another skill in its tree: a discipline that grows with the
     /// powers built on it, like the Adept's Inner Discipline.
     UsedTree,
-    /// One use for every use of this skill (`tree:skill`): Inner Discipline grows with Brawling.
+    /// One use for every use of this skill (`tree:skill`).
     UsedSkill(String),
+    /// One use for every attack made with an attack skill, armed or not: a sword's swing, a
+    /// punch. Inner Discipline grows with it.
+    UsedAttack,
 }
 
 impl Trigger {
@@ -1115,12 +1118,14 @@ pub fn count_use(
 }
 
 /// The skills a character knows that are practised whenever `used` is: passives triggered by
-/// using it, or by using anything in their own tree, like a tradition's discipline growing with
-/// its powers.
+/// using it, by using anything in their own tree, like a tradition's discipline growing with its
+/// powers, or by any attack, when `used` is an attack skill.
 fn grows_with(defs: &SkillDefs, skills: &Skills, used: &str) -> Vec<String> {
-    let Some(tree) = defs.skills.get(used).map(|s| &s.tree) else {
+    let Some(used_skill) = defs.skills.get(used) else {
         return Vec::new();
     };
+    let tree = &used_skill.tree;
+    let attack = matches!(used_skill.def.kind, SkillKind::Attack { .. });
     skills
         .0
         .keys()
@@ -1135,6 +1140,7 @@ fn grows_with(defs: &SkillDefs, skills: &Skills, used: &str) -> Vec<String> {
             triggers.iter().any(|trigger| match trigger {
                 Trigger::UsedTree => &skill.tree == tree,
                 Trigger::UsedSkill(skill) => skill == used,
+                Trigger::UsedAttack => attack,
                 _ => false,
             })
         })
@@ -2116,20 +2122,28 @@ mod tests {
     fn a_discipline_is_practised_by_every_power_in_its_tree() {
         let (key, mut discipline) = tree_skill("adept:foundation", None);
         discipline.def.kind = SkillKind::Passive {
-            triggers: vec![
-                Trigger::UsedTree,
-                Trigger::UsedSkill("brawling:basics".into()),
-            ],
+            triggers: vec![Trigger::UsedTree, Trigger::UsedAttack],
             counter: None,
             reactions: Vec::new(),
             bonuses: Vec::new(),
+        };
+        // Attacks, armed and not.
+        let attack = |key: &str| {
+            let (key, mut skill) = tree_skill(key, None);
+            skill.def.kind = SkillKind::Attack {
+                damage: Some((1, 2)),
+                cost: Cost::Free,
+                damage_type: "physical".into(),
+            };
+            (key, skill)
         };
         let defs = SkillDefs {
             skills: HashMap::from([
                 (key, discipline),
                 tree_skill("adept:killing_hands", None),
-                tree_skill("brawling:basics", None),
-                tree_skill("axes:basics", None),
+                attack("brawling:basics"),
+                attack("swordplay:basics"),
+                tree_skill("athletics:endurance", None),
             ]),
             trees: HashMap::new(),
         };
@@ -2138,7 +2152,8 @@ mod tests {
             "adept:foundation",
             "adept:killing_hands",
             "brawling:basics",
-            "axes:basics",
+            "swordplay:basics",
+            "athletics:endurance",
         ] {
             skills.0.insert(key.into(), SkillState::new("Taught"));
         }
@@ -2158,12 +2173,15 @@ mod tests {
         assert!(practice(&skills, "adept:killing_hands") > 0.0);
         let after_power = practice(&skills, "adept:foundation");
         assert!(after_power > 0.0);
-        // So does the skill it names, but not other trees' skills.
+        // So does every attack, a punch or a sword's swing, but not other trees' other skills.
         use_skill(&mut skills, "brawling:basics");
         let after_brawl = practice(&skills, "adept:foundation");
         assert!(after_brawl > after_power);
-        use_skill(&mut skills, "axes:basics");
-        assert_eq!(practice(&skills, "adept:foundation"), after_brawl);
+        use_skill(&mut skills, "swordplay:basics");
+        let after_sword = practice(&skills, "adept:foundation");
+        assert!(after_sword > after_brawl, "a sword trains it too");
+        use_skill(&mut skills, "athletics:endurance");
+        assert_eq!(practice(&skills, "adept:foundation"), after_sword);
         // Nor does the discipline count itself twice.
         let mut alone = Skills::default();
         alone
