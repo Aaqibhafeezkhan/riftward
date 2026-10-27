@@ -38,6 +38,8 @@ pub enum MobMove {
     Technique(String),
     /// A spell, and at whom.
     Spell(String, Entity),
+    /// An active skill made of effects, and on whom.
+    Ability(String, Entity),
 }
 
 impl Round<'_, '_, '_, '_, '_, '_> {

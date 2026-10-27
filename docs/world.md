@@ -131,7 +131,15 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
 
 Mobs use equipment as players do: a mob holding a sword fights with it (and its Swordplay), its weapon techniques work, and `look` shows what it holds and wears. When it dies, its gear falls into its corpse, with one find from each of its **loot tables**: weighted, ordered worst to best, rolled with the Luck of whoever struck the killing blow, `None` for nothing. Sewer rats sometimes leave a tail; the Rat King leaves a tail or his tooth, and sometimes a healing draught.
 
-Mobs share players' vitals and recover by the same rules, at their own maximums: out of a fight, a hurt or winded mob gets its health and stamina back. Mobs use their skills the way players do. Besides its auto-attack, a mob uses the other combat skills it knows (technique skills like Cleave or Guard): each turn, with its `tactics` chance, it uses one it can right then (its attack ready, the stamina for it), picked at random, in place of its auto-attack. Openers like Backstab are for starting fights, so a mob already in one never picks them.
+Mobs share players' vitals and recover by the same rules, at their own maximums: out of a fight, a hurt or winded mob gets its health and stamina back. Mobs use their skills the way players do. Besides its auto-attack, a mob uses the other combat skills it knows (technique skills like Cleave or Guard, spells, and active skills made of effects, like First Aid): each turn, with its `tactics` chance, it uses one it can right then and that would do some good, picked at random, in place of its auto-attack. A technique needs its attack ready and the stamina; a heal, being below half health; a condition, a target that doesn't have it yet; an active skill, being ready and anything it uses up to hand (a bandage). Openers like Backstab are for starting fights, so a mob already in one never picks them, nor what makes no sense mid-fight: hiding, stealing, finding or reading things.
+
+### Mobs fighting mobs (planned)
+
+Noted 2026-10-27. Today an aggressive mob attacks only players, so when the rats break out into Riftwatch, the guards and the stray dog stand by. Mobs should be able to fight each other:
+
+- **A template says who its allies are,** and `aggressive` means attacking anyone in the room who isn't one. Rats are allies of rats and the Rat King; the town's guards and dogs of the townsfolk and players. A rat in the market then goes for the dog, the dog for the rat, and the guards join in.
+- **Allies might be named by template, by tag** (`vermin`, `townsfolk`), or by spawn, and default to "its own kind" so today's mobs behave as now. A simpler first step: aggressive mobs attack anything not of their own template.
+- **What it touches:** `aggression` (who a mob picks a fight with: today players only, by `kill`), packs (how many gang up on one target), experience and loot (a mob killed by a mob gives no one anything), and whether guards defend players who are attacked.
 
 ## Building mobs and spawns
 

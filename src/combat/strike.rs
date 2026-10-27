@@ -573,14 +573,19 @@ impl Round<'_, '_, '_, '_, '_, '_> {
     }
 
     /// What a mob does this turn instead of its auto-attack, if anything: with its `Tactics`
-    /// chance, a technique it can make now (its attack ready, the stamina for it) or a spell that
-    /// would do some good, picked at random. Openers start fights, so a mob already in one never
+    /// chance, a technique it can make now (its attack ready, the stamina for it), or a spell or
+    /// active skill that would do some good, picked at random. Openers start fights, so a mob already in one never
     /// picks them.
     pub fn mob_move(&mut self, attacker: Entity) -> Option<MobMove> {
-        let spells = self
-            .targets
-            .get(&attacker)
-            .map_or_else(Vec::new, |foe| self.mob_spells(attacker, *foe));
+        let (spells, abilities) = self.targets.get(&attacker).map_or_else(
+            || (Vec::new(), Vec::new()),
+            |foe| {
+                (
+                    self.mob_spells(attacker, *foe),
+                    self.mob_abilities(attacker, *foe),
+                )
+            },
+        );
         let f = self.fighters.get(attacker).ok()?;
         let chance = f.tactics?.0;
         let (stamina, luck) = (f.vitals.stamina, f.attributes.get(Attribute::Luck));
@@ -613,6 +618,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             })
             .map(|key| MobMove::Technique(key.clone()))
             .chain(spells)
+            .chain(abilities)
             .collect();
         if usable.is_empty() || !self.dice.chance(luck, f64::from(chance) / 100.0) {
             return None;

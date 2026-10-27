@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
+use super::casting::MobMove;
 use super::resolve::{Outcome, Use};
 use super::states::HIDDEN;
 use super::states::{ConditionDefs, Imbued, ItemConditions};
@@ -186,6 +187,68 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         });
         self.practise(user, key);
         Ok(Used { outcome, item })
+    }
+
+    /// The active skills `mob` could usefully use now, fighting `foe`: made of effects and aimed
+    /// at someone, ready, affordable, with any item they use up to hand, and doing some good, as
+    /// a mob's spells must. Nothing that only makes sense out of a fight: hiding, stealing,
+    /// finding or reading things.
+    pub(super) fn mob_abilities(&self, mob: Entity, foe: Entity) -> Vec<MobMove> {
+        let Ok(f) = self.fighters.get(mob) else {
+            return Vec::new();
+        };
+        let most = Maxima::of(f.attributes, f.skills, self.defs, f.base).health;
+        let hurt = f.vitals.health < most as f32 / 2.0;
+        let mut usable = Vec::new();
+        for (key, state) in &f.skills.0 {
+            let Some(SkillKind::Active {
+                command: None,
+                aim,
+                cost,
+                uses,
+                effects,
+                ..
+            }) = self.defs.skills.get(key).map(|s| &s.def.kind)
+            else {
+                continue;
+            };
+            let target = match aim {
+                Aim::Foe | Aim::Other => foe,
+                Aim::Ally | Aim::Me => mob,
+                Aim::Lock | Aim::Room | Aim::Item => continue,
+            };
+            let out_of_place = effects.iter().any(|e| match e {
+                Effect::Take(_) | Effect::Find { .. } | Effect::Reveal(_) => true,
+                Effect::Apply { condition, .. } => condition == HIDDEN,
+                _ => false,
+            });
+            let needs = match cost {
+                Cost::Free => 0.0,
+                Cost::Stamina(n) => *n as f32,
+            };
+            let ready = state.ready_at <= self.now && f.vitals.stamina >= needs;
+            let to_hand = uses
+                .as_ref()
+                .is_none_or(|tag| self.carried(mob, tag).is_some());
+            if out_of_place || !ready || !to_hand || self.needed(mob, target, effects).is_err() {
+                continue;
+            }
+            let useful = effects.iter().all(|effect| match effect {
+                Effect::Heal { .. } => hurt,
+                // Not twice: not on itself, nor on a foe that already has it.
+                Effect::Apply { condition, on, .. } => {
+                    let bearer = if *on == Who::User { mob } else { target };
+                    self.fighters
+                        .get(bearer)
+                        .is_ok_and(|b| !b.conditions.has(condition))
+                }
+                _ => true,
+            });
+            if useful {
+                usable.push(MobMove::Ability(key.clone(), target));
+            }
+        }
+        usable
     }
 
     /// Whether there's anything for `effects` to do to `target`: one that only heals and cures

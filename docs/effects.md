@@ -386,7 +386,8 @@ Step 5a (2026-10-27). An active skill is either a command, for what's like nothi
 - **Refusals cost nothing:** one that only heals and cures isn't used on someone unhurt with nothing to cure ("Bob isn't hurt."); one that `uses` an item needs one carried ("You have no bandages."); then the cooldown and the stamina. Once it's tried, the item is used up whether or not it worked, and the skill is practised.
 - **At a foe** (`aim: Foe`), it starts a fight, or carries one on, and the target fights back.
 - **Checked at load:** a command or effects, not both; text for its target, a `miss` when it can fail, and `{harm}` in every line if it does damage; every condition it names exists.
-- **Still to come:** the rest of [every skill as data](#every-skill-as-data); mobs choosing active skills by chance, as they do techniques and spells; and more skills made this way.
+- **Mobs use them too** (2026-10-27): each turn of a fight, with their `tactics` chance, beside techniques and spells, any they know that's ready, affordable, with what it uses up to hand, and would do some good (a heal below half health, a condition the target hasn't got), but nothing that makes no sense mid-fight (hiding, stealing, finding, reading). A hurt mob with First Aid and a bandage binds its own wounds.
+- **Still to come:** more skills made this way.
 
 ### Every skill as data
 
@@ -549,7 +550,7 @@ Each step leaves the game working and designers with more they can do alone.
 2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). So are `Imbue` and saved item conditions (2d). Step 2 is done.
 3. **Formulas** (*built*). The expression evaluator, and every amount in an effect moved into data.
 4. **Triggers and reactions** (*built*). Reactions on conditions, skills and items in a fight (4a), and out of one: entering a room, someone arriving, resting, eating and drinking, a condition taking hold or running out, casting, the start of a turn and every so often (4b).
-5. **Every skill through `use`.** Active skills made of effects, with First Aid the first (5a, *built*). Then [every skill as data](#every-skill-as-data): locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*), rooms as targets with `Find`, and Foraging and Herbalism as data (5c, *built*), `Take` and Pickpocketing as data (5d, *built*), `Reveal`, and Appraisal and Tracking as data (5e, *built*), and Hiding (*built*); their commands are shortcuts. Still open: mobs using active skills by chance.
+5. **Every skill through `use`.** Active skills made of effects, with First Aid the first (5a, *built*). Then [every skill as data](#every-skill-as-data): locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*), rooms as targets with `Find`, and Foraging and Herbalism as data (5c, *built*), `Take` and Pickpocketing as data (5d, *built*), `Reveal`, and Appraisal and Tracking as data (5e, *built*), and Hiding (*built*); their commands are shortcuts; and mobs use active skills in a fight, as they do techniques and spells. Step 5 is done.
 6. **Scripting.** Rhai, exposing the verbs and triggers above.
 
 ## Open questions

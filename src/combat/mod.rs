@@ -348,6 +348,7 @@ fn combat_round(
 
     let mut fallen: HashSet<Entity> = HashSet::new();
     let mut calmed: HashSet<Entity> = HashSet::new();
+    let mut used_up_items: Vec<Entity> = Vec::new();
     let mut imbued = Imbued::gather(item_conditions.iter());
     let mut round = Round {
         fighters: &mut fighters,
@@ -446,15 +447,32 @@ fn combat_round(
         }
         // Mobs choose their own, now and then, unless someone's playing them.
         let puppeted = round.fighters.get(attacker).is_ok_and(|f| f.puppeted);
+        let mut ability = None;
         if technique.is_none() && spell.is_none() && !puppeted {
             match round.mob_move(attacker) {
                 Some(MobMove::Technique(key)) => technique = Some(key),
                 Some(MobMove::Spell(key, whom)) => spell = Some((key, whom)),
+                Some(MobMove::Ability(key, whom)) => ability = Some((key, whom)),
                 None => {}
             }
         }
 
-        let died = if let Some((key, whom)) = spell {
+        // An active skill a mob chose, used as a player's would be: what it uses up goes once
+        // the round is done.
+        let used = ability.and_then(|(key, whom)| {
+            round
+                .ability(attacker, whom, &key)
+                .ok()
+                .map(|used| (used, whom))
+        });
+        let died = if let Some((used, whom)) = used {
+            used_up_items.extend(used.item);
+            if used.outcome.calmed {
+                calm(&mut commands, whom, &targets);
+                calmed.insert(whom);
+            }
+            used.outcome.died
+        } else if let Some((key, whom)) = spell {
             let cast = round.cast(attacker, whom, &key);
             // A foe a spell is cast at fights back, if it wasn't already fighting.
             let hostile = spells.0.get(&key).is_some_and(|s| s.def.aim == Aim::Foe);
@@ -489,6 +507,11 @@ fn combat_round(
         }
     }
     imbued.write_back(&mut item_conditions);
+    for entity in used_up_items {
+        if let Ok((_, item, _)) = items.get(entity) {
+            crate::healing::used_up(&mut commands, &db, entity, item);
+        }
+    }
 
     reveal_fighters(&mut commands, &mut events, &fighters, &targets);
 
@@ -3192,5 +3215,113 @@ mod tests {
         let skills = world.get::<Skills>(fencer).unwrap();
         assert!(skills.0[&key].practice > 0.0, "Swordplay practised");
         assert_eq!(skills.0[BASIC_ATTACK].practice, 0.0, "not Brawling");
+    }
+
+    #[test]
+    fn a_hurt_mob_binds_its_own_wounds_but_a_whole_one_doesnt() {
+        let (mut world, room) = world();
+        let medic = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        first_aid(&mut world, medic);
+        let roll = bandage(&mut world, medic);
+        world
+            .entity_mut(medic)
+            .insert((Tactics(100), Fighting(foe)));
+        // Whole, it fights instead.
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(
+            world.get_entity(roll).is_ok(),
+            "no bandage spent on nothing"
+        );
+        // Badly hurt, it bandages itself, using it up.
+        world.get_mut::<Vitals>(medic).unwrap().health = 30.0;
+        world
+            .get_mut::<Skills>(medic)
+            .unwrap()
+            .0
+            .get_mut("healing:first_aid")
+            .unwrap()
+            .ready_at = 0.0;
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get_entity(roll).is_err(), "the bandage is used up");
+        assert!(world.get::<Vitals>(medic).unwrap().health > 30.0);
+    }
+
+    #[test]
+    fn a_mob_turns_its_skills_on_its_foe_but_not_twice_or_to_hide() {
+        let (mut world, room) = world();
+        let bully = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        active(
+            &mut world,
+            bully,
+            "presence:glare",
+            Aim::Foe,
+            None,
+            None,
+            vec![Effect::Apply {
+                condition: "exposed".into(),
+                strength: Formula::number(1.0),
+                lasts: Lasting::Turns(5),
+                on: Who::Target,
+            }],
+        );
+        stealthy(&mut world, bully, 1000);
+        world
+            .entity_mut(bully)
+            .insert((Tactics(100), Fighting(foe)));
+        // Of these, only the glare does any good in a fight.
+        let moves = world
+            .run_system_once(
+                move |mut fighters: Fighters,
+                      items: ItemQuery,
+                      templates: Res<ItemTemplates>,
+                      defs: Res<SkillDefs>,
+                      spells: Res<SpellDefs>,
+                      conditions: Res<ConditionDefs>,
+                      mut dice: ResMut<Dice>,
+                      db: Res<Database>,
+                      mut events: MessageWriter<GameEvent>,
+                      mut log: ResMut<Outbox>| {
+                    let none = HashMap::new();
+                    let mut imbued = Imbued::default();
+                    let round = Round {
+                        fighters: &mut fighters,
+                        items: &items,
+                        templates: &templates,
+                        defs: &defs,
+                        spells: &spells,
+                        conditions: &conditions,
+                        dice: &mut dice,
+                        db: &db,
+                        events: &mut events,
+                        log: &mut log,
+                        watchers: &[],
+                        engaged: &none,
+                        targets: &none,
+                        auras: &HashMap::new(),
+                        resting: &HashSet::new(),
+                        outmatched: &HashMap::new(),
+                        ambushers: &HashSet::new(),
+                        now: 0.0,
+                        imbued: &mut imbued,
+                    };
+                    round
+                        .mob_abilities(bully, foe)
+                        .into_iter()
+                        .map(|m| match m {
+                            MobMove::Ability(key, whom) => (key, whom),
+                            other => panic!("{other:?}"),
+                        })
+                        .collect::<Vec<_>>()
+                },
+            )
+            .unwrap();
+        assert_eq!(moves, vec![("presence:glare".to_string(), foe)]);
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(foe).unwrap().has("exposed"));
+        assert!(world.get::<Conditions>(bully).unwrap().hidden().is_none());
     }
 }
