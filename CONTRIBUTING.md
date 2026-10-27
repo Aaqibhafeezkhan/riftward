@@ -113,6 +113,8 @@ cargo clippy --all-targets      # should report no warnings
 cargo test
 ```
 
+CI runs the same three on every pull request (`.github/workflows/ci.yml`), with clippy's warnings as errors, so a PR needs all three clean to pass.
+
 Then try your change in a real client against a throwaway database (`MUD_DB=/tmp/scratch.db`). For anything involving more than one player, connect several clients at once; scripted `nc` sessions work well:
 
 ```sh
