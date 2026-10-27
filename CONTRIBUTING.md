@@ -142,7 +142,7 @@ The design lives in [`docs/`](docs/README.md), one document per area, each with 
 
 ## Git
 
-- Work on a branch and open a pull request against `master`; don't commit straight to `master`.
+- Work on a branch and open a pull request against `master`; don't commit straight to `master`. The maintainers work the same way: every change reaches `master` through a pull request with CI green, merged by rebase (contributors' pull requests by squash) so the history stays linear.
 - Write commit messages as a short imperative summary line ("Add item decay"), then a body explaining what changed and why.
 - Commit zone files and docs; never commit `mud.db` or anything from `target/`.
 

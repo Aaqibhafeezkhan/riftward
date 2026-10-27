@@ -68,8 +68,9 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 
 ## Git
 
-- Commit only when asked. Work on a feature branch off `master`; "commit and merge" means commit there, then fast-forward `master` (`git merge --ff-only`). Push to `origin` (github.com/Foxworks-Studios/riftward, public) only when asked. Outside contributors open pull requests against `master`.
-- CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, clippy with `-D warnings` and `cargo test` on every push and pull request.
+- **Everything reaches `master` through a pull request**, ours as well as contributors' (since 2026-10-27); never push to `master` directly. Work on a feature branch off `master`. Commit only when asked; "commit, merge and push" means: commit on the branch, push it, open a PR (`gh pr create`), wait for CI (`gh pr checks <n> --watch`), merge it by rebase (`gh pr merge <n> --rebase --delete-branch`), then `git checkout master && git pull --ff-only`. The remote is `origin`, github.com/Foxworks-Studios/riftward, public.
+- CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, clippy with `-D warnings` and `cargo test` on every push and pull request. A first-time contributor's run from a fork waits for a maintainer to approve it ("Approve and run" on the PR, or `gh api -X POST repos/Foxworks-Studios/riftward/actions/runs/<id>/approve`). If our work leaves a contributor's PR conflicting, maintainers may merge `master` into their branch (they allow maintainer edits). Contributors' PRs are squash-merged (`gh pr merge <n> --squash`), since a branch with merge commits can't be rebased.
+- `master` is protected: a PR and a passing CI check are required, history stays linear, and only rebase and squash merges are allowed; branches are deleted on merge.
 - Commit as the repository's configured `user.email`; never another address.
 - Commit messages: short imperative summary ("Add item decay"), then a body explaining what and why.
 - Commit zone files and docs; never `mud.db` or `target/`.
