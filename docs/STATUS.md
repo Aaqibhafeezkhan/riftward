@@ -47,7 +47,6 @@ Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order
 - A calmed animal stays calm until it dies or resets: there's no time limit yet ([#5](https://github.com/Foxworks-Studios/riftward/issues/5)).
 - Spells come only from teachers: scrolls and grimoires, a spell-holding limit, more schools and great spells costing health are still to come. An admin can know every tradition's foundation; players can't yet, an open question.
 - Spell numbers are first guesses: Drain 2 or 3, resisted at twice that, power = school level + its attribute + Magic, a third of which adds to damage, healing and wards. A teacher at school 20 with Magic 4 casts a Spark or Ward that a new character can't match.
-- A spell readied out of a fight (`Casting`), like an opener, lingers if the fight never starts, and fires at the next one ([#6](https://github.com/Foxworks-Studios/riftward/issues/6)).
 - Races are uneven at the new Karma prices (shifts worth 14 to 22 Karma, humans 12 and Versatility), left until racial skills are built and each race can be balanced as a whole ([Races](characters.md#races)). The first racial skill exists, the elves' Fey Mind (resisting sleep and charm), as an example of skills resisting tags; it adds to their package unbalanced. The rest, Versatility included, are still to come.
 - Karma numbers are first guesses: 20 starting (32 for humans), 5 a level, and skill prices from 6 to 16.
 - Quality odds and multipliers are first guesses (half of found things standard, masterwork ×3 and +2), and so are the rarity multipliers.
