@@ -1,6 +1,6 @@
 # The Darkwood
 
-[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and the Ravine Floor, the North Road and the Hermit's Clearing with its hedge-shaman (zone `forest`). Everything else here is proposed, for review.
+[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and the Ravine Floor, the North Road and the Hermit's Clearing with its hedge-shaman, and (2026-10-27) [the west woods](#the-west-woods-as-built), rungs 2 and 3 (zone `forest`). Everything else here is proposed, for review.
 
 The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. It's where a new character goes once the sewers stop teaching them anything, and where foraging, herb-gathering, tracking and hunting come into their own. It grows more dangerous the further from the road you go: safe-ish near the gate, wild in the deep wood, and strange where the trees grow wrong around an old rift-scar.
 
@@ -19,11 +19,11 @@ flowchart TB
     bend --- east[East Road ✓]
     east -. climb .- ravine[Ravine Floor ✓]
     ravine --- pool[Mossy Falls]
-    bend --- track[Woodcutters' Track]
-    track --- camp[Charcoal Burners' Camp]
-    track --- meadow[Deer Meadow]
-    meadow --- brook[Brook Ford]
-    brook --- thicket[Bramble Thicket]
+    bend --- track[Woodcutters' Track ✓]
+    track --- camp[Charcoal Burners' Camp ✓]
+    track --- meadow[Deer Meadow ✓]
+    meadow --- brook[Brook Ford ✓]
+    brook --- thicket[Bramble Thicket ✓]
     clearing --- deep[Deep Darkwood]
     deep --- hollow[Spider Hollow]
     deep --- den[Wolf Den]
@@ -35,7 +35,7 @@ flowchart TB
 | Reach | Rooms | Named places | Feel | Danger |
 | --- | --- | --- | --- | --- |
 | **The road** ✓ | 4 | Forest Road, the Bend, North Road, East Road, the Hermit's Clearing | Travellers' way; tracks of everything | Low: the odd boar wandering in |
-| **The west woods** | About 14 | Woodcutters' Track, the Charcoal Burners' Camp (the hunter's now), Deer Meadow, Brook Ford, Bramble Thicket | Logged-over, open, sunlit; game and herbs | Low to middle: for characters fresh from the sewers |
+| **The west woods** ✓ | 15 | Woodcutters' Track, the Charcoal Burners' Camp (the hunter's now), Deer Meadow, Brook Ford, Bramble Thicket | Logged-over, open, sunlit; game and herbs | Low to middle: for characters fresh from the sewers |
 | **The ravine and the brook** | About 8 | Ravine Floor ✓, Mossy Falls (a swim behind the falls to a hidden ledge), the brook's banks | Damp, green, quiet; the best herbs | Low, but a climb and a swim to reach |
 | **The deep wood** | About 30 | The Old Wood, Spider Hollow, the Wolf Den, the Bear's Cave, the Old Standing Stones | Dark, old, close; little light, few paths | Middle to high: **guard-strength** characters, around level-10 weapon skills |
 | **The Rift-Scar** | About 4 | The Rift-Scar | A glade where the trees grow wrong and the air hums | High, and rare: the rift-touched |
@@ -46,6 +46,31 @@ flowchart TB
 - **Environments:** `Forest` everywhere but the Deer Meadow (`Field`), Brook Ford and Mossy Falls (`Water` for its pool), and the Bear's Cave (`Cave`).
 - **Terrain:** road on the road; uneven tracks; rough deep wood, thicket and scree; mud at the ford (easy tracking); wading at the brook and the pool (no tracks).
 - **Climbs and swims:** the ravine (Climb 4, built), a swim behind Mossy Falls to a ledge with rare herbs (Swim 4), and a climb up the standing stones' hill.
+
+### The west woods, as built
+
+Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the brook, with danger rising the further you go.
+
+| Room | What's there |
+| --- | --- |
+| Woodcutters' Track, Old Track | The way in, off the Bend; crows overhead |
+| Stump Field | An open clearing; rabbits |
+| Charcoal Burners' Camp | **The hunter**: teaches Foraging and Tracking (Skinning and Butchering once harvesting is built), sells a hunting knife, waterskins and torches, buys trophies, pelts and meat |
+| Birch Wood, Hazel Copse | Foxes; young boars root in the copse |
+| Meadow's Edge, Deer Meadow | Rabbits (a breeding spawn, max 12) and the red deer (a breeding herd, max 6), all skittish |
+| High Meadow | The **red stag**, who stands and fights (antlers 2–5, health 25), and **adders** basking (venomous) |
+| Brook Ford | Where everything drinks; mud for tracks, watercress |
+| Brook Bank, Sett Bank | The **badger** (thick hide, health 14) |
+| Bramble Thicket | **Young boars**, two at a time |
+| Boar Wallow | A **wild boar**: furious when badly hurt, and *Charge*s to knock you down |
+| Reed Pool | **Giant frogs**, whose *Tongue* holds you |
+
+- **Rungs:** rabbits, foxes, crows and adders are rung 2, with the young boars; the wild boar, frogs, badger and stag are rung 3 (the stag nearer 4). Numbers are first guesses for the calibration tool.
+- **Traits, not passives:** what the design called *Boar's Fury*, *Venomous Bite* and *Thick Hide* are [traits](effects.md#traits) (`furious`, `venomous`, `thick_hide`), since they're what a creature is; skittish prey use `skittish`.
+- **New natural attacks** (`beast.skill.ron`): peck, hooves (1–2), antlers (2–5), gore (2–5), and the techniques *Charge* (gore, knocks down) and *Tongue* (holds).
+- **Who fights whom:** boars attack anything not a boar; deer, rabbits and foxes avoid rooms with a boar in them; adders and frogs strike only at people; the stag and badger only fight back.
+- **Flora:** wild garlic in the woods; sorrel and chamomile in the meadows (`Field`); watercress at the brook and the pool (`Water`), which also has kingsfoil and moonpetal.
+- **No pelts or meat yet:** they wait for harvesting, which comes next.
 
 ## The ladder: from the sewers to the deep wood
 
@@ -105,7 +130,7 @@ Decided 2026-10-27. **What has to be cut from a carcass is harvested; what a cre
 
 **New natural attacks** (data, `beast.skill.ron`): a wolf's bite (2–4), a boar's gore (2–5, with a knock-down technique, *Charge*: `Apply(down)`), a bear's maul (3–6), a stag's antlers (2–5), a spider's fangs (1–3).
 
-**New passives** (data): *Boar's Fury*, *Venomous Bite*, *Thick Hide*, *Howl*, and *Pack Hunter* (wolves get an attack bonus with more of the pack in the fight **(gap: a bonus that counts allies present)**).
+**New passives** (data): *Boar's Fury*, *Venomous Bite* and *Thick Hide* (built as traits: `furious`, `venomous`, `thick_hide`), *Howl*, and *Pack Hunter* (wolves get an attack bonus with more of the pack in the fight **(gap: a bonus that counts allies present)**).
 
 ## Flora
 
@@ -136,7 +161,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 ## People and work
 
 - **The hedge-shaman** ✓ in the Hermit's Clearing: Awakens Shamans, teaches Tracking.
-- **A hunter** at the Charcoal Burners' Camp, newly moved in (decided 2026-10-27: a new trainer and shop): teaches Skinning, Butchering and Foraging, and later Bows **(gap: ranged combat)**; buys pelts, fangs, antlers and meat. A trainer and a shop are data.
+- **A hunter** at the Charcoal Burners' Camp, newly moved in (decided 2026-10-27: a new trainer and shop; *built*, teaching Foraging and Tracking until Skinning and Butchering exist): teaches Skinning, Butchering and Foraging, and later Bows **(gap: ranged combat)**; buys pelts, fangs, antlers and meat. A trainer and a shop are data.
 - **What sells:** the provisioner buys meat (food), the herbalist herbs; the hunter pelts, fangs and antlers, all of them harvested, not looted. The hunter teaches Skinning and Butchering. Item values and shop `buys` are data.
 - **Contracts** (when quests exist, [Quests](quests.md)): cull the wolves (Copper), bring the old she-wolf's pelt (Bronze), the rift-touched stag (Silver).
 

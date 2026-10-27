@@ -75,6 +75,111 @@
                 ),
             ),
         ),
+        "peck": (
+            name: "Peck",
+            description: "A bird's sharp beak.",
+            kind: Attack(damage: (1, 1)),
+            text: (
+                hit: (
+                    actor: "Your peck {harm} {target}.",
+                    target: "{actor}'s peck {harm} you.",
+                    room: "{actor}'s peck {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You peck at {target}, but miss.",
+                    target: "{actor} pecks at you, but misses.",
+                    room: "{actor} pecks at {target}, but misses.",
+                ),
+            ),
+        ),
+        "hooves": (
+            name: "Hooves",
+            description: "A deer's lashing hooves.",
+            kind: Attack(damage: (1, 2)),
+            text: (
+                hit: (
+                    actor: "Your hooves {harm} {target}.",
+                    target: "{actor}'s hooves {harm} you.",
+                    room: "{actor}'s hooves {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You lash out at {target}, but miss.",
+                    target: "{actor} lashes out at you with its hooves, but misses.",
+                    room: "{actor} lashes out at {target}, but misses.",
+                ),
+            ),
+        ),
+        "antlers": (
+            name: "Antlers",
+            description: "A stag's antlers, lowered and driven home.",
+            kind: Attack(damage: (2, 5)),
+            text: (
+                hit: (
+                    actor: "Your antlers {harm} {target}.",
+                    target: "{actor}'s antlers {harm} you.",
+                    room: "{actor}'s antlers {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You lower your antlers at {target}, but miss.",
+                    target: "{actor} lowers its antlers at you, but you're clear.",
+                    room: "{actor} lowers its antlers at {target}, but misses.",
+                ),
+            ),
+        ),
+        "gore": (
+            name: "Gore",
+            description: "A boar's tusks, ripping upward.",
+            kind: Attack(damage: (2, 5)),
+            text: (
+                hit: (
+                    actor: "Your tusks {harm} {target}.",
+                    target: "{actor}'s tusks {harm} you.",
+                    room: "{actor}'s tusks {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You rip at {target} with your tusks, but miss.",
+                    target: "{actor} rips at you with its tusks, but misses.",
+                    room: "{actor} rips at {target} with its tusks, but misses.",
+                ),
+            ),
+        ),
+        "charge": (
+            name: "Charge",
+            description: "A boar's charge, head down, that knocks its foe off their feet.",
+            kind: Technique((with: "beast:gore", cost: Stamina(2), damage: 1,
+                effects: [Apply(condition: "down", lasts: Turns(1))])),
+            text: (
+                hit: (
+                    actor: "You charge into {target}, and your tusks {harm} them.",
+                    target: "{actor} charges into you, and its tusks {harm} you.",
+                    room: "{actor} charges into {target}, and its tusks {harm} them.",
+                ),
+                miss: (
+                    actor: "You charge at {target}, but they step aside.",
+                    target: "{actor} charges at you, but you step aside.",
+                    room: "{actor} charges at {target}, who steps aside.",
+                ),
+            ),
+        ),
+        "tongue": (
+            name: "Tongue",
+            description: "A giant frog's sticky tongue, lashing out to hold its prey.",
+            kind: Technique((with: "beast:bite", cost: Stamina(1), strike: Harmless,
+                resist: Some(Attribute(Agility)),
+                effects: [Apply(condition: "held", lasts: Turns(2))])),
+            text: (
+                hit: (
+                    actor: "Your tongue lashes out and sticks fast to {target}.",
+                    target: "{actor}'s tongue lashes out and sticks fast to you!",
+                    room: "{actor}'s tongue lashes out and sticks fast to {target}.",
+                ),
+                miss: (
+                    actor: "Your tongue lashes out at {target}, but misses.",
+                    target: "{actor}'s tongue lashes out at you, but you twist aside.",
+                    room: "{actor}'s tongue lashes out at {target}, but misses.",
+                ),
+            ),
+        ),
         "acid_touch": (
             name: "Acid Touch",
             description: "A slime's touch, burning with acid.",

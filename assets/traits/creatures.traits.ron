@@ -96,6 +96,26 @@
             ),
         )],
     ),
+    // The Darkwood's beasts (docs/darkwood.md#fauna).
+    "furious": (
+        name: "furious",
+        description: "a temper that only grows worse when it's hurt: badly wounded, it fights harder",
+        modifiers: [],
+        reactions: [(
+            on: Hurt(0.5),
+            effects: [Apply(condition: "strengthened", lasts: Turns(5), on: User)],
+            text: (
+                actor: "Pain only makes you angrier.",
+                target: "{actor} squeals with rage and comes on harder!",
+                room: "{actor} squeals with rage and comes on harder!",
+            ),
+        )],
+    ),
+    "thick_hide": (
+        name: "thick hide",
+        description: "a hide so thick that blows have to work to get through it",
+        modifiers: [Armour(2)],
+    ),
     // Prey: a window a quick hunter can strike into, then gone (docs/darkwood.md#prey).
     "skittish": (
         name: "skittish",
