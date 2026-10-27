@@ -274,7 +274,6 @@ fn search(
             found.push(hider);
         }
     }
-    let searcher_hidden = hiders.get(actor.entity).is_ok();
     let players = both.p0();
     let mut out = Vec::new();
     let told = if found.is_empty() {
@@ -293,14 +292,12 @@ fn search(
     for hider in found {
         out.push(Outgoing::line(hider, format!("{} spots you!", actor.name)));
     }
-    // A search is plain to see, unless the searcher is hidden themselves.
-    if !searcher_hidden {
-        out.push(Outgoing::Room {
-            room: actor.room,
-            except: actor.entity,
-            text: format!("{} searches the shadows.\r\n", actor.name),
-        });
-    }
+    // A search is plain to see; a hidden searcher's, only to those who've noticed them.
+    out.push(Outgoing::Room {
+        room: actor.room,
+        except: actor.entity,
+        text: format!("{} searches the shadows.\r\n", actor.name),
+    });
     deliver(out, &mut outbox);
 }
 
