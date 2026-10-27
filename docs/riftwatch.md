@@ -177,7 +177,7 @@ Each basic skill has a home in town. Trainers teach Common and Uncommon skills (
 | Tinkers' Corner | Crafting and repair |
 | Market stalls | The provisioner: Haggling and Appraisal (*built*) |
 | Watchtower | An old ascetic, who Awakens Adepts (*built*) |
-| Darkwood, Hermit's Clearing | Outside town: the hedge-shaman, who Awakens Shamanic students and teaches Tracking (*built*) |
+| Darkwood, Hermit's Clearing | Outside town: the hedge-shaman, who Awakens Shamanic students and teaches Tracking (*built*); see [The Darkwood](darkwood.md) |
 | Contract Hall | Not a trainer: the guild's contract board and clerk (see [Quests and the Adventurers' Guild](quests.md)) |
 
 Guild trainers beyond these can require a guild rank, such as a weaponmaster who only teaches Silver members; the ones above stay open to everyone.

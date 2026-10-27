@@ -31,6 +31,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Effects, conditions and scripting](effects.md) | How designers add skills, spells, conditions and items without code: conditions as data, one effect vocabulary, abilities, formulas, triggers, and Rhai scripting | Conditions, effects, damage types, resisting, item conditions, formulas and reactions in a fight and out of one built (steps 1 to 4); active skills through `use` next |
 | [Money and shops](economy.md) | Copper, silver and gold in a purse, coins from kills, shops that sell, buy and resell, what lessons cost, Haggling and Appraisal | Built |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
+| [The Darkwood](darkwood.md) | The forest beyond the North Gate: its reaches, creatures and food chain, flora, hazards, and what it needs in code | Design; the road and the Hermit's Clearing built |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds as past lives, conditions | Built |
 
 ## What exists today
