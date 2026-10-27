@@ -21,7 +21,7 @@ use crate::items::{Snapshot, bulk_limits, coloured, counted_with};
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver, targets_in_room};
 use crate::skills::{Learner, Practice, fill};
-use crate::stealth::{Hidden, STEALTH, Sneaking, sees, stealth_rating, visible};
+use crate::stealth::{STEALTH, Sneaking, hide_as, sees, stealth_rating, unhide, visible};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::Resting;
 use crate::world::{Door, DoorState, InRoom, Obstacle, Player};
@@ -35,8 +35,8 @@ pub struct View<'w, 's> {
     pub items: ItemQuery<'w, 's>,
     pub templates: Res<'w, ItemTemplates>,
     pub mobs: MobQuery<'w, 's>,
-    /// Who is hidden, and from whom.
-    pub hidden: Query<'w, 's, &'static Hidden>,
+    /// Who is hidden, and from whom: their conditions.
+    pub hidden: Query<'w, 's, &'static Conditions>,
     pub sneaking: Query<'w, 's, (), With<Sneaking>>,
     /// What's on everyone, for what stops them moving and what others see of them.
     pub conditions: Query<'w, 's, &'static Conditions>,
@@ -300,8 +300,8 @@ pub fn travel(
     let (left_seen_by, entered_seen_by) = if view.sneaking.get(entity).is_ok() {
         sneak_through(&actor, to, players, view, practice, commands, &mut out)
     } else {
-        if view.hidden.get(entity).is_ok() {
-            commands.entity(entity).remove::<Hidden>();
+        if view.hidden.get(entity).is_ok_and(|c| c.hidden().is_some()) {
+            unhide(commands, entity);
         }
         (None, None)
     };
@@ -357,6 +357,7 @@ fn sneak_through(
         .hidden
         .get(actor.entity)
         .ok()
+        .and_then(Conditions::hidden)
         .map(|h| h.seen_by.iter().copied().collect());
     let watchers: Vec<Entity> = players
         .iter()
@@ -384,11 +385,7 @@ fn sneak_through(
         }
     }
     let entered = seen_by.iter().copied().collect();
-    commands.entity(actor.entity).insert(Hidden {
-        stealth,
-        luck,
-        seen_by,
-    });
+    hide_as(commands, actor.entity, stealth.round() as i32, seen_by);
     let learner = Learner {
         character_id: actor.character_id,
         race: &actor.race,

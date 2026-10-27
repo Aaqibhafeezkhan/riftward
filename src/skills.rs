@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::{Fighting, Outmatched};
+use crate::combat::{Conditions, Fighting, Outmatched};
 use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
 use crate::conditions::{Condition, Facts};
 use crate::db::{Database, Permission};
@@ -38,7 +38,7 @@ use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
 };
 use crate::spells::{Aim, SpellDefs, Spells};
-use crate::stealth::{Hidden, reveal};
+use crate::stealth::reveal;
 use crate::targeting::{Keywords, Target};
 use crate::vitals::Vitals;
 use crate::world::ron_options;
@@ -1546,7 +1546,7 @@ fn use_cmd(
     defs: Res<SkillDefs>,
     registry: Res<CommandRegistry>,
     (known_spells, spell_defs): (Query<&Spells>, Res<SpellDefs>),
-    (hidden, mut events): (Query<(), With<Hidden>>, MessageWriter<GameEvent>),
+    (conditions, mut events): (Query<&Conditions>, MessageWriter<GameEvent>),
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -1563,7 +1563,10 @@ fn use_cmd(
         Ok(skills) => match defs.find_known_in(skills, &inv.args) {
             None if spell.is_some() => match registry.find("cast", actor.role) {
                 Some((spec, id)) => {
-                    if hidden.get(inv.entity).is_ok() {
+                    if conditions
+                        .get(inv.entity)
+                        .is_ok_and(|c| c.hidden().is_some())
+                    {
                         reveal(
                             &mut commands,
                             &mut events,
@@ -1642,7 +1645,12 @@ fn use_cmd(
                     };
                     match registry.find(verb, actor.role) {
                         Some((spec, id)) => {
-                            if command.is_none() && !quiet && hidden.get(inv.entity).is_ok() {
+                            if command.is_none()
+                                && !quiet
+                                && conditions
+                                    .get(inv.entity)
+                                    .is_ok_and(|c| c.hidden().is_some())
+                            {
                                 reveal(
                                     &mut commands,
                                     &mut events,

@@ -36,7 +36,7 @@ use crate::events::GameEvent;
 use crate::items::{ItemQuery, ItemTemplates};
 use crate::output::{Outbox, Outgoing, deliver};
 use crate::skills::{SkillDefs, SkillText, Skills};
-use crate::stealth::{Hidden, sees};
+use crate::stealth::can_see;
 use crate::targeting::{Keywords, Target};
 use crate::vitals::Resting;
 use crate::world::ron_options;
@@ -476,7 +476,6 @@ fn cast(
     db: Res<Database>,
     mut events: MessageWriter<GameEvent>,
     mut log: ResMut<Outbox>,
-    hidden: Query<&Hidden>,
     resting: Query<Entity, With<Resting>>,
     (time, condition_defs): (Res<Time>, Res<ConditionDefs>),
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
@@ -511,7 +510,7 @@ fn cast(
     }
     let candidates: Vec<(Entity, &Keywords)> = fighters
         .iter()
-        .filter(|f| f.in_room.0 == room && !f.dead && sees(&hidden, inv.entity, f.entity))
+        .filter(|f| f.in_room.0 == room && !f.dead && can_see(inv.entity, f.entity, f.conditions))
         .filter_map(|f| Some((f.entity, f.keywords?)))
         .collect();
     let players: HashSet<Entity> = fighters

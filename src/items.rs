@@ -24,7 +24,7 @@ use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, RoomQuery, deliver, reply_line, targets_in_room,
 };
 use crate::skills::Rarity;
-use crate::stealth::{Hidden, visible};
+use crate::stealth::visible;
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::world::{
@@ -2112,7 +2112,7 @@ fn give(
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
     sheets: Query<&Attributes>,
-    hidden: Query<&Hidden>,
+    hidden: Query<&Conditions>,
     db: Res<Database>,
     mut purses: Query<&mut Purse>,
 ) {
@@ -2148,7 +2148,7 @@ fn give_item(
     players: &Characters,
     keywords: &Query<&Keywords>,
     sheets: &Query<&Attributes>,
-    hidden: &Query<&Hidden>,
+    hidden: &Query<&Conditions>,
 ) -> Result<Vec<Outgoing>, String> {
     let me = mover.me();
     let (what, who) = inv

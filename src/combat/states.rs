@@ -13,7 +13,7 @@
 //! that costs the turn costs it, and those counted in turns count down. Those counted in time end
 //! when their time is up (`expire`).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use bevy::asset::io::Reader;
 use bevy::asset::{AssetLoader, LoadContext, LoadedFolder};
@@ -422,6 +422,8 @@ pub enum Lasts {
     Until(f64),
     /// While this item is worn, held or carried, as its template says.
     Granted(Entity),
+    /// Until something ends it: hiding, until the hider acts openly or is found.
+    Indefinitely,
 }
 
 /// One condition on someone: which, how strong, how strong it started, and for how long.
@@ -432,7 +434,13 @@ pub struct Active {
     /// Its strength when it began, for hints that follow what's left (a ward's shimmer).
     pub most: i32,
     pub lasts: Lasts,
+    /// Those who've seen through it: for `hidden`, everyone who noticed the hider anyway.
+    pub seen_by: HashSet<Entity>,
 }
+
+/// The condition of being out of sight: its strength is how well they hid (Stealth plus Agility),
+/// and those who noticed them anyway are its `seen_by`. See `stealth.rs`.
+pub const HIDDEN: &str = "hidden";
 
 /// Someone's current conditions.
 #[derive(Component, Clone, Debug, Default)]
@@ -476,6 +484,7 @@ impl Conditions {
             strength,
             most: strength,
             lasts,
+            seen_by: HashSet::new(),
         };
         match (stacking, self.0.iter_mut().find(|a| mine(a))) {
             (Stacking::Strongest, Some(old)) => {
@@ -499,6 +508,20 @@ impl Conditions {
 
     pub fn has(&self, key: &str) -> bool {
         self.0.iter().any(|a| a.key == key)
+    }
+
+    /// Their hiding, if they're hidden: its strength is how well they hid.
+    pub fn hidden(&self) -> Option<&Active> {
+        self.0.iter().find(|a| a.key == HIDDEN)
+    }
+
+    pub fn hidden_mut(&mut self) -> Option<&mut Active> {
+        self.0.iter_mut().find(|a| a.key == HIDDEN)
+    }
+
+    /// Whether `viewer` can see them: unless they're hidden and `viewer` hasn't noticed.
+    pub fn seen_by(&self, viewer: Entity) -> bool {
+        self.hidden().is_none_or(|h| h.seen_by.contains(&viewer))
     }
 
     /// End a condition early, whatever its turns or strength: bandaged bleeding stops. Item
@@ -734,6 +757,7 @@ impl Conditions {
                     Lasts::Turns(1) => "for 1 more turn".into(),
                     Lasts::Turns(n) => format!("for {n} more turns"),
                     Lasts::Granted(by) => format!("from {}", item(by)),
+                    Lasts::Indefinitely => "for now".into(),
                 };
                 // `fill` capitalises; a description reads mid-sentence here.
                 Some(format!("{}: {}, {left}", def.name, lower_first(&what)))
@@ -796,6 +820,7 @@ impl Conditions {
                     strength,
                     most,
                     lasts: Lasts::Until(now + (ends_at - unix_now) as f64),
+                    seen_by: HashSet::new(),
                 })
                 .collect(),
         )
@@ -811,6 +836,7 @@ impl Conditions {
                 strength,
                 most: strength,
                 lasts: Lasts::Granted(item),
+                seen_by: HashSet::new(),
             }));
     }
 
@@ -1081,6 +1107,29 @@ mod tests {
         warded.absorb(9, &defs);
         let spent = warded.hints(&defs, "Grok");
         assert_ne!(fresh, spent, "a nearly spent ward looks it");
+    }
+
+    #[test]
+    fn hiding_is_a_condition_seen_through_by_those_who_noticed() {
+        let defs = defs_on_disk();
+        let (noticer, other) = (
+            Entity::from_raw_u32(1).unwrap(),
+            Entity::from_raw_u32(2).unwrap(),
+        );
+        let mut conditions = Conditions::default();
+        assert!(conditions.seen_by(other), "in plain sight");
+        conditions.apply(&defs, HIDDEN, 12, Lasts::Indefinitely);
+        conditions.hidden_mut().unwrap().seen_by.insert(noticer);
+        assert!(conditions.seen_by(noticer));
+        assert!(!conditions.seen_by(other));
+        // It shows in `affects`, it isn't saved over a logout, and it can be ended like any other.
+        assert_eq!(
+            conditions.listed(0.0, &defs, |_| String::new()),
+            ["hidden: out of sight of anyone who hasn't noticed you, for now"]
+        );
+        assert!(conditions.to_saved(0.0, 0).is_empty());
+        assert!(conditions.remove(HIDDEN));
+        assert!(conditions.seen_by(other));
     }
 
     #[test]

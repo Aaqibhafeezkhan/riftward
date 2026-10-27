@@ -12,7 +12,7 @@ use crate::skills::Skills;
 use crate::spells::{
     Aim, can_cast, choose_target, drain_paid, drain_resistance, power, takes_hold,
 };
-use crate::stealth::{Hidden, sees};
+use crate::stealth::can_see;
 use crate::targeting::Keywords;
 use crate::vitals::Maxima;
 
@@ -131,7 +131,6 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         caster: Entity,
         foe: Entity,
         args: &str,
-        hidden: &Query<&Hidden>,
     ) -> Result<(String, Entity), String> {
         let f = self.fighters.get(caster).map_err(|_| String::new())?;
         let known = f.spells.cloned().unwrap_or_default();
@@ -143,7 +142,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let candidates: Vec<(Entity, &Keywords)> = self
             .fighters
             .iter()
-            .filter(|f| f.in_room.0 == room && !f.dead && sees(hidden, caster, f.entity))
+            .filter(|f| f.in_room.0 == room && !f.dead && can_see(caster, f.entity, f.conditions))
             .filter_map(|f| Some((f.entity, f.keywords?)))
             .collect();
         let target = choose_target(&spell.def, caster, Some(foe), words, candidates, |e| {

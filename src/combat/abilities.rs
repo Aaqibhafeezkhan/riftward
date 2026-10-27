@@ -26,7 +26,7 @@ use crate::items::{ItemQuery, ItemTemplates, Snapshot, capitalized};
 use crate::output::{Outbox, Outgoing};
 use crate::skills::{Cost, SkillDefs, SkillKind};
 use crate::spells::{Aim, Aimed, SpellDefs};
-use crate::stealth::{Hidden, sees};
+use crate::stealth::can_see;
 use crate::targeting::Keywords;
 use crate::vitals::{Maxima, Resting};
 
@@ -226,7 +226,6 @@ pub(super) fn ability(
     db: Res<Database>,
     mut events: MessageWriter<GameEvent>,
     mut log: ResMut<Outbox>,
-    hidden: Query<&Hidden>,
     (resting, time): (Query<Entity, With<Resting>>, Res<Time>),
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
 ) {
@@ -249,7 +248,7 @@ pub(super) fn ability(
     let foe = user.fighting.map(|f| f.0);
     let candidates: Vec<(Entity, &Keywords)> = fighters
         .iter()
-        .filter(|f| f.in_room.0 == room && !f.dead && sees(&hidden, inv.entity, f.entity))
+        .filter(|f| f.in_room.0 == room && !f.dead && can_see(inv.entity, f.entity, f.conditions))
         .filter_map(|f| Some((f.entity, f.keywords?)))
         .collect();
     let players: HashSet<Entity> = fighters

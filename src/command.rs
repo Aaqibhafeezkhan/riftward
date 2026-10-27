@@ -17,6 +17,7 @@ use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
 
 use crate::aliases::Aliases;
+use crate::combat::Conditions;
 use crate::combat::the;
 use crate::db::{Permission, Role};
 use crate::events::GameEvent;
@@ -24,7 +25,7 @@ use crate::mobs::Mob;
 use crate::net::{Connection, PlayerInput};
 use crate::output::{Actor, Characters, Outbox, Outgoing, Puppeting, deliver};
 use crate::puppet::OWN_COMMANDS;
-use crate::stealth::{Hidden, reveal};
+use crate::stealth::reveal;
 use crate::world::{InRoom, Player};
 
 pub struct CommandPlugin;
@@ -344,7 +345,7 @@ type Bodies<'w, 's> = Query<
     (
         Option<&'static mut ActionQueue>,
         &'static InRoom,
-        Has<Hidden>,
+        Option<&'static Conditions>,
         Option<&'static Player>,
         Option<&'static Mob>,
     ),
@@ -394,9 +395,10 @@ pub fn dispatch(
             }
             _ => entity,
         };
-        let Ok((queue, in_room, hidden, as_player, as_mob)) = bodies.get_mut(actor) else {
+        let Ok((queue, in_room, conditions, as_player, as_mob)) = bodies.get_mut(actor) else {
             continue;
         };
+        let hidden = conditions.is_some_and(|c| c.hidden().is_some());
         // Acting openly shows someone hiding.
         if hidden && spec.reveals() {
             let name = match (as_player, as_mob) {

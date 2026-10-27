@@ -1,7 +1,8 @@
 //! Stealth: hiding, sneaking, and noticing those who do.
 //!
 //! `hide` (Stealth) makes someone hidden: unseen, untargetable and unannounced to everyone who
-//! didn't notice them. Noticing is an opposed roll, the observer's Intuition against the hider's
+//! didn't notice them. Hidden is a condition (`hidden`, in `assets/conditions/`): its strength
+//! is how well they hid, and its `seen_by` everyone who noticed them anyway. Noticing is an opposed roll, the observer's Intuition against the hider's
 //! Stealth plus Agility, made when they hide, when anyone walks in, and when someone `search`es
 //! (with double their Intuition). Mobs see by the same rules, so an aggressive rat ignores a
 //! player it hasn't noticed. Acting openly or walking away shows a hidden character again (see
@@ -13,7 +14,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::{Dead, Fighting, the};
+use crate::combat::{ConditionDefs, Conditions, Dead, Fighting, HIDDEN, Lasts, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::dice::Dice;
 use crate::events::GameEvent;
@@ -56,33 +57,25 @@ impl Plugin for StealthPlugin {
     }
 }
 
-/// Out of sight: `stealth` is how well they hid (Stealth plus Agility, with their `luck`), and
-/// `seen_by` everyone who noticed them anyway.
-#[derive(Component, Debug, Clone, PartialEq)]
-pub struct Hidden {
-    pub stealth: f64,
-    pub luck: i32,
-    pub seen_by: HashSet<Entity>,
-}
-
 /// Moving quietly: they stay hidden as they go.
 #[derive(Component, Debug)]
 pub struct Sneaking;
 
 /// Whether `viewer` can see `target`: anyone not hidden, or hidden but noticed by them.
-pub fn sees(hidden: &Query<&Hidden>, viewer: Entity, target: Entity) -> bool {
-    viewer == target
-        || hidden
-            .get(target)
-            .ok()
-            .is_none_or(|h| h.seen_by.contains(&viewer))
+pub fn sees(hidden: &Query<&Conditions>, viewer: Entity, target: Entity) -> bool {
+    viewer == target || hidden.get(target).ok().is_none_or(|c| c.seen_by(viewer))
+}
+
+/// Whether `viewer` can see someone with these `conditions`, for those holding them already.
+pub fn can_see(viewer: Entity, target: Entity, conditions: &Conditions) -> bool {
+    viewer == target || conditions.seen_by(viewer)
 }
 
 /// Those of `candidates` that `viewer` can see, for choosing a target.
 pub fn visible<'a>(
     viewer: Entity,
     candidates: Vec<(Entity, &'a Keywords)>,
-    hidden: &Query<&Hidden>,
+    hidden: &Query<&Conditions>,
 ) -> Vec<(Entity, &'a Keywords)> {
     candidates
         .into_iter()
@@ -96,10 +89,16 @@ pub fn stealth_rating(skills: &Skills, attributes: &Attributes) -> f64 {
     f64::from((level + attributes.get(Attribute::Agility)).max(1))
 }
 
-/// Whether an observer with `intuition` and `luck` notices someone hidden, by opposed roll.
-pub fn notices(dice: &mut Dice, intuition: f64, luck: i32, hidden: &Hidden) -> bool {
-    dice.opposed(intuition.max(1.0), luck, hidden.stealth, hidden.luck)
-        .won
+/// Whether an observer with `intuition` and `luck` notices someone who hid this well
+/// (`stealth`, the `hidden` condition's strength) with `their_luck`, by opposed roll.
+pub fn notices(dice: &mut Dice, intuition: f64, luck: i32, stealth: i32, their_luck: i32) -> bool {
+    dice.opposed(
+        intuition.max(1.0),
+        luck,
+        f64::from(stealth.max(1)),
+        their_luck,
+    )
+    .won
 }
 
 /// Show someone hidden again: they're no longer hidden, and the room is told.
@@ -110,7 +109,7 @@ pub fn reveal(
     name: &str,
     room: Entity,
 ) {
-    commands.entity(who).remove::<Hidden>();
+    unhide(commands, who);
     events.write(GameEvent::Revealed {
         who,
         name: name.to_string(),
@@ -118,8 +117,44 @@ pub fn reveal(
     });
 }
 
-/// Everyone hiding, where they are.
-type Hiders<'w, 's> = Query<'w, 's, (Entity, &'static InRoom, &'static mut Hidden)>;
+/// Take `hidden` off someone, quietly: walking away, a fight.
+pub fn unhide(commands: &mut Commands, who: Entity) {
+    commands.entity(who).queue(|mut e: EntityWorldMut| {
+        if let Some(mut conditions) = e.get_mut::<Conditions>() {
+            conditions.remove(HIDDEN);
+        }
+    });
+}
+
+/// Hide someone, as well as `stealth`, seen through by `seen_by` already: it replaces how they
+/// were hidden before, as when a sneak rolls afresh in a new room.
+pub fn hide_as(commands: &mut Commands, who: Entity, stealth: i32, seen_by: HashSet<Entity>) {
+    commands.entity(who).queue(move |mut e: EntityWorldMut| {
+        let id = e.id();
+        e.world_scope(|world| {
+            world.resource_scope(|world, defs: Mut<ConditionDefs>| {
+                if let Some(mut conditions) = world.get_mut::<Conditions>(id)
+                    && conditions.apply(&defs, HIDDEN, stealth, Lasts::Indefinitely)
+                    && let Some(hidden) = conditions.hidden_mut()
+                {
+                    hidden.seen_by = seen_by;
+                }
+            });
+        });
+    });
+}
+
+/// Everyone who might be hiding, where they are, and their Luck.
+type Hiders<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static InRoom,
+        &'static mut Conditions,
+        &'static Attributes,
+    ),
+>;
 
 /// Everyone else in `room`: players and mobs, living.
 type Others<'w, 's> = Query<'w, 's, (Entity, &'static InRoom), (With<Attributes>, Without<Dead>)>;
@@ -151,11 +186,8 @@ fn hide(
             return Err("You can't hide in the middle of a fight!".to_string());
         }
         let ready = practice.begin(actor.entity, STEALTH)?;
-        let mut hidden = Hidden {
-            stealth: f64::from(ready.effectiveness.max(1)),
-            luck: ready.luck,
-            seen_by: HashSet::new(),
-        };
+        let stealth = ready.effectiveness.max(1);
+        let mut seen_by = HashSet::new();
         for &watcher in &watchers {
             let Some((_, _, attributes)) = practice.sheet(watcher) else {
                 continue;
@@ -164,12 +196,11 @@ fn hide(
                 f64::from(attributes.get(Attribute::Intuition)),
                 attributes.get(Attribute::Luck),
             );
-            let hider = hidden.clone();
             if practice
-                .opposed(intuition.max(1.0), luck, hider.stealth, hider.luck)
+                .opposed(intuition.max(1.0), luck, f64::from(stealth), ready.luck)
                 .won
             {
-                hidden.seen_by.insert(watcher);
+                seen_by.insert(watcher);
             }
         }
         let learner = Learner {
@@ -185,18 +216,18 @@ fn hide(
             .and_then(|skill| skill.def.text.clone())
             .ok_or_else(String::new)?;
         // Seen by everyone here: that's no hiding at all.
-        let all_saw = !watchers.is_empty() && hidden.seen_by.len() == watchers.len();
+        let all_saw = !watchers.is_empty() && seen_by.len() == watchers.len();
         let lines = match (all_saw, &text.miss) {
             (true, Some(miss)) => miss,
             _ => &text.hit,
         };
         let with = [("actor", actor.name.as_str())];
         let seen = fill(&lines.room, &with);
-        for &watcher in &hidden.seen_by {
+        for &watcher in &seen_by {
             out.push(Outgoing::line(watcher, seen.clone()));
         }
         if !all_saw {
-            commands.entity(actor.entity).insert(hidden);
+            hide_as(&mut commands, actor.entity, stealth, seen_by);
         }
         let mut told = fill(&lines.actor, &with);
         for line in gains {
@@ -265,11 +296,15 @@ fn search(
     });
     let mut hiders = both.p1();
     let mut found = Vec::new();
-    for (hider, at, mut hidden) in &mut hiders {
+    for (hider, at, mut conditions, theirs) in &mut hiders {
+        let their_luck = theirs.get(Attribute::Luck);
+        let Some(hidden) = conditions.hidden_mut() else {
+            continue;
+        };
         if at.0 != actor.room || hider == actor.entity || hidden.seen_by.contains(&actor.entity) {
             continue;
         }
-        if notices(&mut dice, intuition, luck, &hidden) {
+        if notices(&mut dice, intuition, luck, hidden.strength, their_luck) {
             hidden.seen_by.insert(actor.entity);
             found.push(hider);
         }
@@ -323,11 +358,15 @@ fn notice_newcomers(
             f64::from(attributes.get(Attribute::Intuition)),
             attributes.get(Attribute::Luck),
         );
-        for (hider, at, mut hidden) in &mut hiders {
+        for (hider, at, mut conditions, theirs) in &mut hiders {
+            let their_luck = theirs.get(Attribute::Luck);
+            let Some(hidden) = conditions.hidden_mut() else {
+                continue;
+            };
             if at.0 != *room || hider == *who || hidden.seen_by.contains(who) {
                 continue;
             }
-            if notices(&mut dice, intuition, luck, &hidden) {
+            if notices(&mut dice, intuition, luck, hidden.strength, their_luck) {
                 hidden.seen_by.insert(*who);
                 noticed.push((*who, hider));
             }

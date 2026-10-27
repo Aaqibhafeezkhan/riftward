@@ -192,11 +192,11 @@ Step 2d (2026-10-26). The `reach` column above became simpler: a condition on an
 
 *Built* (step 1). Conditions are data in `assets/conditions/*.conditions.ron`, hot-reloaded; the code is `src/combat/states.rs`.
 
-- **Twenty-one conditions:** the eight that were code (staggered, down, bleeding, held, guarding, exposed, blessed, warded) with their wording unchanged, nine new ones (poisoned, stacking to 5 doses, burning, stunned, regenerating, rooted, silenced, shielded, weakened, strengthened), since step 2 asleep, and flaming and envenomed for weapons, and since step 4 thorns. Hidden and Nourished stay as they were for now.
+- **Twenty-one conditions:** the eight that were code (staggered, down, bleeding, held, guarding, exposed, blessed, warded) with their wording unchanged, nine new ones (poisoned, stacking to 5 doses, burning, stunned, regenerating, rooted, silenced, shielded, weakened, strengthened), since step 2 asleep, and flaming and envenomed for weapons, and since step 4 thorns, and on locks `locked`. **Hidden** is data too (2026-10-27): `hidden`, whose strength is how well they hid and whose `seen_by` is everyone who noticed them anyway, lasting `Indefinitely` (until they act openly, walk away without sneaking, or fight). It shows in `affects`, isn't saved over a logout, and spells, items and cures can put it on or take it off like any other; noticing and who sees whom stay in `stealth.rs`. Nourished stays as it was for now ([#7](https://github.com/Foxworks-Studios/riftward/issues/7)).
 - **Modifiers built:** `Attack`, `Defence`, `DefenceTimes`, `Armour`, `DamageDealt`, `DamageTaken`, `HealthEachTurn`, `Absorb`, `LosesTurn`, `CantFlee`, `CantMove`, `CantCast`, and since step 2 `Resist`, `Weakness` and `Immune`. Additive ones count once per point of strength. The rest of the list above arrives as something needs it.
 - **Stacking:** `Replace`, `Strongest`, `Stack(n)`. **Tags** are kept for cures and immunities to come.
 - **Text from data:** applied (to the target of a technique), each turn, a lost turn, death, fading, a ward taking a blow and breaking, and `looks` hints, chosen by strength left. `affects` lists names, what each does and how long, and `score` the names.
-- **Using any condition:** spells and techniques alike use `Apply(condition, strength, lasts, on)`, where `lasts` is `Minutes(n)`, `Hours(n)` or `Turns(n)` and `on` is `Target` (the default) or `User`. See [Effects, as built](#effects-as-built).
+- **Using any condition:** spells and techniques alike use `Apply(condition, strength, lasts, on)`, where `lasts` is `Minutes(n)`, `Hours(n)`, `Turns(n)` or `Indefinitely` (until something ends it, as hiding is) and `on` is `Target` (the default) or `User`. See [Effects, as built](#effects-as-built).
 - **Items grant conditions:** `grants: [(condition: "shielded", strength: 1, while: Worn)]` on a template, `Worn`, `Held` or `Carried`, kept in step whenever items move.
 - **Saved:** conditions lasting in time are saved with players (`character_conditions`), as when they end, every minute and at logout, and restored at login if they still last.
 - **Checked:** tests fail if a technique, spell or item names a condition that doesn't exist.
@@ -363,7 +363,7 @@ Still to come: one file shape for all of them (a spell, a technique and an activ
 
 ### Active skills, as built
 
-Step 5a (2026-10-27). An active skill is either a command, for what's like nothing else (`hide`, until Hidden is a condition), or made of effects, in its `.skill.ron`, and resolved by `resolve.rs` like any spell or blow. First Aid is the first:
+Step 5a (2026-10-27). An active skill is either a command, for what's like nothing else (`hide`, until Hiding is a skill made of effects), or made of effects, in its `.skill.ron`, and resolved by `resolve.rs` like any spell or blow. First Aid is the first:
 
 ```ron
 "first_aid": (
@@ -416,7 +416,7 @@ Decided 2026-10-27. Every skill becomes data, and the commands that do skills to
   ```
 - **How it's kept:** on a lock, `locked` is its state (`DoorState::Locked`), so zone files, resets and the builders' `door` command are unchanged; the effects act on that state. Skills aimed at a lock can only `Apply` or `Remove` it, for now. `lockwork` (`commands/doors.rs`) resolves them, as `ability` does skills aimed at characters.
 - **New effects:** `Find(table)`, a loot table rolled into the user's hands (Foraging, Gathering, aimed at a room); `Take`, an item moved from someone to the user (Pickpocketing, resisted by the victim's awareness); `Reveal`, telling the user something (Appraisal's value and quality, Tracking's trail), the first effect that only informs.
-- **The order,** each step leaving the game working: locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*); rooms as targets, with `Find`, for foraging and gathering (5c, *built*); `Take`, for stealing (5d, *built*); `Reveal`, for appraising and tracking (5e, *built*); Hiding once Hidden is a condition ([#7](https://github.com/Foxworks-Studios/riftward/issues/7)).
+- **The order,** each step leaving the game working: locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*); rooms as targets, with `Find`, for foraging and gathering (5c, *built*); `Take`, for stealing (5d, *built*); `Reveal`, for appraising and tracking (5e, *built*); Hiding as data, now that `hidden` is a condition.
 
 ## Abilities
 

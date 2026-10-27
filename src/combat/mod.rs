@@ -48,7 +48,7 @@ use crate::output::{Actor, Characters, Outbox, Outgoing, PuppetedBy, RoomQuery, 
 use crate::skills::{Bonus, Practice, SkillDefs, SkillKind, Skills, boosts};
 use crate::spawns::{SpawnedBy, Spawns};
 use crate::spells::{Aim, Casting, SpellDefs};
-use crate::stealth::{Hidden, reveal, sees};
+use crate::stealth::{reveal, sees};
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::vitals::{Maxima, Resting, Vitals};
@@ -57,7 +57,7 @@ use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_
 pub use casting::MobMove;
 #[cfg(test)]
 pub use states::defs_on_disk;
-pub use states::{ConditionDefs, Conditions, Imbued, ItemCondition, ItemConditions, Lasts};
+pub use states::{ConditionDefs, Conditions, HIDDEN, Imbued, ItemCondition, ItemConditions, Lasts};
 pub use strike::{Blow, Fighters, Move, Round, name_of};
 
 /// Seconds in a combat round, and between a player's actions.
@@ -266,7 +266,6 @@ fn combat_round(
     resting_query: Query<Entity, With<Resting>>,
     (readied, casting): (Query<&Readied>, Query<&Casting>),
     rooms: RoomQuery,
-    hidden: Query<&Hidden>,
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
 ) {
     let now = time.elapsed_secs_f64();
@@ -339,7 +338,11 @@ fn combat_round(
     // Attackers their targets haven't noticed: an opener from hiding can't be avoided.
     let ambushers: HashSet<Entity> = targets
         .iter()
-        .filter(|(a, t)| hidden.get(**a).is_ok() && !sees(&hidden, **t, **a))
+        .filter(|(a, t)| {
+            fighters
+                .get(**a)
+                .is_ok_and(|f| f.conditions.hidden().is_some() && !f.conditions.seen_by(**t))
+        })
         .map(|(a, _)| *a)
         .collect();
 
@@ -436,7 +439,7 @@ fn combat_round(
             }
         }
         if let Some(args) = queued_cast {
-            match round.queued_spell(attacker, target, &args, &hidden) {
+            match round.queued_spell(attacker, target, &args) {
                 Ok(chosen) => spell = Some(chosen),
                 Err(refusal) => round.say(attacker, refusal),
             }
@@ -487,7 +490,7 @@ fn combat_round(
     }
     imbued.write_back(&mut item_conditions);
 
-    reveal_fighters(&mut commands, &mut events, &fighters, &targets, &hidden);
+    reveal_fighters(&mut commands, &mut events, &fighters, &targets);
 
     // Experience for every player who fought a fallen foe: the risk they overcame.
     for &died in &fallen {
@@ -603,7 +606,7 @@ fn aggression(
     fights: Query<(Entity, &Fighting)>,
     spawned: Query<&SpawnedBy>,
     spawns: Res<Spawns>,
-    hidden: Query<&Hidden>,
+    hidden: Query<&Conditions>,
     registry: Res<CommandRegistry>,
 ) {
     let Some((kill, id)) = registry
@@ -674,12 +677,11 @@ fn reveal_fighters(
     events: &mut MessageWriter<GameEvent>,
     fighters: &Fighters,
     targets: &HashMap<Entity, Entity>,
-    hidden: &Query<&Hidden>,
 ) {
     let fighting: HashSet<Entity> = targets.keys().chain(targets.values()).copied().collect();
     for who in fighting {
-        if hidden.get(who).is_ok()
-            && let Ok(f) = fighters.get(who)
+        if let Ok(f) = fighters.get(who)
+            && f.conditions.hidden().is_some()
         {
             let name = capitalized(&name_of(f.player, f.mob));
             reveal(commands, events, who, &name, f.in_room.0);
@@ -713,7 +715,7 @@ fn technique(
     keywords: Query<&Keywords>,
     fighting: Query<&Fighting>,
     dead: Query<(), With<Dead>>,
-    hidden: Query<&Hidden>,
+    hidden: Query<&Conditions>,
     defs: Res<SkillDefs>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
@@ -1026,7 +1028,7 @@ fn kill(
     keywords: Query<&Keywords>,
     fighting: Query<&Fighting>,
     dead: Query<(), With<Dead>>,
-    hidden: Query<&Hidden>,
+    hidden: Query<&Conditions>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -1324,7 +1326,6 @@ mod tests {
         StrikeKind, Technique,
     };
     use crate::spells::{Resist, Spell, SpellDef, Spells};
-    use crate::stealth::Hidden;
     use crate::vitals::BaseHealth;
     use crate::world::{ArmourDef, DoorState, Exits, ItemDef, ItemKey, Room, Slot, Terrain};
     use bevy::ecs::message::Messages;
@@ -1607,11 +1608,12 @@ mod tests {
 
     /// Hide `who` from everyone.
     fn hide(world: &mut World, who: Entity) {
-        world.entity_mut(who).insert(Hidden {
-            stealth: 10.0,
-            luck: 0,
-            seen_by: HashSet::new(),
-        });
+        world.get_mut::<Conditions>(who).unwrap().apply(
+            &defs_on_disk(),
+            HIDDEN,
+            10,
+            Lasts::Indefinitely,
+        );
     }
 
     /// A spell for these tests, cast through `school`, with text that says what happened: "You
@@ -2186,7 +2188,13 @@ mod tests {
         world.run_system_once(combat_round).unwrap();
         assert!(world.get::<Vitals>(mark).unwrap().health < 100.0);
         // Blows have been struck: the assassin is seen now.
-        assert!(world.get::<Hidden>(assassin).is_none());
+        assert!(
+            world
+                .get::<Conditions>(assassin)
+                .unwrap()
+                .hidden()
+                .is_none()
+        );
     }
 
     #[test]
@@ -2208,7 +2216,8 @@ mod tests {
         world.flush();
         assert!(world.get::<Fighting>(rat).is_none(), "slipped past");
         // Noticed, they're fair game.
-        world.get_mut::<Hidden>(player).unwrap().seen_by.insert(rat);
+        let mut conditions = world.get_mut::<Conditions>(player).unwrap();
+        conditions.hidden_mut().unwrap().seen_by.insert(rat);
         world.run_system_once(aggression).unwrap();
         world.flush();
         assert_eq!(world.get::<Fighting>(rat).map(|f| f.0), Some(player));

@@ -241,6 +241,8 @@ pub enum Lasting {
     Minutes(u32),
     Hours(u32),
     Turns(u32),
+    /// Until something ends it: hiding lasts until the hider acts openly or is found.
+    Indefinitely,
 }
 
 impl Lasting {
@@ -249,7 +251,7 @@ impl Lasting {
         let minutes = match self {
             Lasting::Minutes(n) => n,
             Lasting::Hours(n) => n * 60,
-            Lasting::Turns(_) => 0,
+            Lasting::Turns(_) | Lasting::Indefinitely => 0,
         };
         f64::from(minutes) * REAL_SECS_PER_GAME_DAY as f64 / (24.0 * 60.0)
     }
@@ -258,6 +260,7 @@ impl Lasting {
     pub fn lasts(self, now: f64) -> Lasts {
         match self {
             Lasting::Turns(n) => Lasts::Turns(n.max(1)),
+            Lasting::Indefinitely => Lasts::Indefinitely,
             time => Lasts::Until(now + time.real_secs()),
         }
     }
@@ -360,6 +363,13 @@ pub fn check(effects: &[Effect]) -> Result<(), String> {
                         Minutes, Hours or charges"
                     .into(),
             );
+        }
+        if let Effect::Imbue {
+            lasts: Some(Lasting::Indefinitely),
+            ..
+        } = effect
+        {
+            return Err("imbues an item indefinitely: leave `lasts` out instead".into());
         }
     }
     Ok(())

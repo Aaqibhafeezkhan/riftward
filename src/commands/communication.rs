@@ -3,9 +3,10 @@
 use bevy::prelude::*;
 
 use crate::characters::Races;
+use crate::combat::Conditions;
 use crate::command::Invocation;
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver, targets_in_room};
-use crate::stealth::{Hidden, sees, visible};
+use crate::stealth::{sees, visible};
 use crate::targeting::{Keywords, Target};
 
 pub fn say(In(inv): In<Invocation>, players: Characters, mut outbox: ResMut<Outbox>) {
@@ -71,7 +72,7 @@ pub fn whisper(
     players: Characters,
     mut outbox: ResMut<Outbox>,
     keywords: Query<&Keywords>,
-    hidden: Query<&Hidden>,
+    hidden: Query<&Conditions>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;

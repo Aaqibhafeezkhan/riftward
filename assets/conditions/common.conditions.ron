@@ -263,6 +263,16 @@
         ),
     ),
 
+    // Out of sight. Its strength is how well they hid (Stealth plus Agility); those who notice
+    // them anyway still see them. Hiding puts it on, until they act openly, walk away without
+    // sneaking, or fight. Who sees whom, and noticing, are in src/stealth.rs.
+    "hidden": (
+        name: "hidden",
+        description: "out of sight of anyone who hasn't noticed you",
+        tags: ["stealth"],
+        modifiers: [],
+    ),
+
     // On locks. A door's or container's lock is shut: Lockpicking and its key take it off, and
     // its key puts it back. How hard it is to pick or force is the lock's own, in the zone file.
     "locked": (
