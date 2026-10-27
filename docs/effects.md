@@ -463,7 +463,7 @@ Step 4a (2026-10-26). Conditions and passive skills can have `reactions`: effect
 - **Numbers:** a condition's reactions see its `strength` in their formulas, a passive skill's see its level as `power`. An optional `chance: "0.25"` (a formula) makes it happen only sometimes.
 - **Text:** every reaction has its own `text`, with `{harm}` in every line if it does damage; checked at load.
 - **No chains:** a reaction never sets off another, so two thorny fighters don't bounce damage back and forth forever. A reaction from a skill practises it.
-- **The first:** the `thorns` condition. Nothing gives it yet; a spell, item or aura can.
+- **The first:** the `thorns` condition. Nothing in the world gives it yet (a spell, item or aura can); to try it, a GM or admin can `condition guard thorns 3 5t`.
 - **Still to come (4b):** triggers outside a fight (entering a room, resting, eating, the heartbeat, a condition taking hold or fading, casting) and at the start of the bearer's turn, which need more game events; and checks on a trigger from the condition language ("only while wielding an axe").
 
 ## Scripting

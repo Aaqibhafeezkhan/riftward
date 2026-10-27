@@ -21,8 +21,17 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::effects::{Effect, Reaction};
+use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::db::Permission;
+use crate::effects::{Effect, Lasting, Reaction};
+use crate::items::capitalized;
+use crate::mobs::{self, MobQuery};
+use crate::output::{
+    Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_in_room,
+    targets_online,
+};
 use crate::skills::fill;
+use crate::targeting::{Keywords, Target};
 use crate::time::span;
 use crate::world::ron_options;
 
@@ -39,8 +48,125 @@ impl Plugin for ConditionsPlugin {
             .register_asset_loader(ConditionBookLoader)
             .init_resource::<ConditionDefs>()
             .add_systems(Startup, load_condition_books)
-            .add_systems(Update, sync_condition_defs);
+            .add_systems(Update, sync_condition_defs)
+            .add_command(
+                CommandSpec::new("condition", Category::Admin)
+                    .usage("condition <who> <condition> [<strength>] [<minutes> | <turns>t] | condition <who> remove <condition>")
+                    .summary("put a condition on someone here or online, or take one off, for testing")
+                    .permission(Permission::Events),
+                condition_cmd,
+            );
     }
+}
+
+/// The strength and duration words after a condition's name: the first number is its strength
+/// (1 without), the next game minutes (10 without), and `5t` is five turns instead.
+fn strength_and_lasting(words: &[&str]) -> Option<(i32, Lasting)> {
+    let (mut strength, mut lasting) = (None, None);
+    for word in words {
+        if let Some(turns) = word.strip_suffix('t') {
+            lasting = Some(Lasting::Turns(turns.parse().ok()?));
+        } else if strength.is_none() {
+            strength = Some(word.parse().ok()?);
+        } else if lasting.is_none() {
+            lasting = Some(Lasting::Minutes(word.parse().ok()?));
+        } else {
+            return None;
+        }
+    }
+    Some((
+        strength.unwrap_or(1),
+        lasting.unwrap_or(Lasting::Minutes(10)),
+    ))
+}
+
+/// `condition <who> <condition> [<strength>] [<minutes> | <turns>t]`: put a condition on someone
+/// here (a mob too) or a player online, for 10 game minutes unless told otherwise;
+/// `condition <who> remove <condition>` takes it off.
+#[allow(clippy::too_many_arguments)]
+fn condition_cmd(
+    In(inv): In<Invocation>,
+    players: Characters,
+    mobs: MobQuery,
+    keywords: Query<&Keywords>,
+    mut bearers: Query<&mut Conditions>,
+    defs: Res<ConditionDefs>,
+    time: Res<Time>,
+    mut outbox: ResMut<Outbox>,
+) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let mut out = Vec::new();
+    let reply = (|| -> Reply {
+        let words: Vec<&str> = inv.args.split_whitespace().collect();
+        let (who, rest) = words.split_first().ok_or_else(|| inv.usage_error())?;
+        let target = Target::parse(who).ok_or_else(|| inv.usage_error())?;
+        // Someone here first, mob or player, then anyone online.
+        let mut candidates = targets_in_room(actor.room, &players, &keywords);
+        candidates.extend(mobs::targets_in(actor.room, &mobs, &keywords));
+        let bearer = target
+            .find_one(inv.entity, candidates)
+            .or_else(|| target.find_one(inv.entity, targets_online(&players, &keywords)))
+            .and_then(|e| Actor::get(&players, e))
+            .ok_or_else(|| {
+                format!(
+                    "There's no one matching {} here or online.",
+                    target.describe()
+                )
+            })?;
+        let mut conditions = bearers
+            .get_mut(bearer.entity)
+            .map_err(|_| format!("{} can't have conditions.", capitalized(&bearer.name)))?;
+        if let ["remove", key] = rest {
+            return if conditions.remove(key) {
+                Ok(format!(
+                    "{} no longer has {key}.",
+                    capitalized(&bearer.name)
+                ))
+            } else {
+                Err(format!("{} doesn't have {key}.", capitalized(&bearer.name)))
+            };
+        }
+        let (key, rest) = rest.split_first().ok_or_else(|| inv.usage_error())?;
+        let def = defs.get(key).ok_or_else(|| {
+            let mut known: Vec<&str> = defs.0.keys().map(String::as_str).collect();
+            known.sort();
+            format!(
+                "There's no condition '{key}'. There are: {}.",
+                known.join(", ")
+            )
+        })?;
+        let (strength, lasting) = strength_and_lasting(rest).ok_or_else(|| inv.usage_error())?;
+        if !conditions.apply(&defs, key, strength, lasting.lasts(time.elapsed_secs_f64())) {
+            return Err(format!("{} is immune to {key}.", capitalized(&bearer.name)));
+        }
+        // Told in the condition's own words, as when anything puts it on.
+        if let Some(applied) = &def.text.applied {
+            let (theirs, seen) = applied.fill(&capitalized(&bearer.name), strength);
+            out.push(Outgoing::line(
+                bearer.entity,
+                format!("\x1b[1m{theirs}\x1b[0m"),
+            ));
+            if let Some(seen) = seen {
+                out.push(Outgoing::Room {
+                    room: bearer.room,
+                    except: bearer.entity,
+                    text: seen + "\r\n",
+                });
+            }
+        }
+        let how_long = match lasting {
+            Lasting::Turns(n) => format!("{n} of their turns"),
+            time => span(time.real_secs()),
+        };
+        Ok(format!(
+            "{} now has {key} at strength {strength}, for {how_long}.",
+            capitalized(&bearer.name)
+        ))
+    })();
+    out.insert(0, reply_line(inv.entity, reply));
+    deliver(out, &mut outbox);
 }
 
 /// A condition, as a designer writes it.
@@ -958,6 +1084,43 @@ mod tests {
         assert_eq!(back.0[0].lasts, Lasts::Until(410.0));
         // Back after it would have ended: gone.
         assert!(Conditions::from_saved(saved, 10.0, 6000).0.is_empty());
+    }
+
+    #[test]
+    fn a_hint_names_a_mob_in_lower_case_but_starts_with_a_capital() {
+        let defs = defs_on_disk();
+        let mut conditions = Conditions::default();
+        conditions.apply(&defs, "thorns", 1, Lasts::Turns(3));
+        assert_eq!(
+            conditions.hints(&defs, "the town guard"),
+            ["Thorns bristle along the town guard's skin."]
+        );
+        let mut asleep = Conditions::default();
+        asleep.apply(&defs, "asleep", 1, Lasts::Turns(3));
+        assert_eq!(
+            asleep.hints(&defs, "the town guard"),
+            ["The town guard is fast asleep."]
+        );
+    }
+
+    #[test]
+    fn the_condition_command_reads_strength_then_time() {
+        assert_eq!(strength_and_lasting(&[]), Some((1, Lasting::Minutes(10))));
+        assert_eq!(
+            strength_and_lasting(&["3"]),
+            Some((3, Lasting::Minutes(10)))
+        );
+        assert_eq!(
+            strength_and_lasting(&["3", "20"]),
+            Some((3, Lasting::Minutes(20)))
+        );
+        assert_eq!(
+            strength_and_lasting(&["2", "4t"]),
+            Some((2, Lasting::Turns(4)))
+        );
+        assert_eq!(strength_and_lasting(&["4t"]), Some((1, Lasting::Turns(4))));
+        assert_eq!(strength_and_lasting(&["lots"]), None);
+        assert_eq!(strength_and_lasting(&["1", "2", "3"]), None);
     }
 
     #[test]

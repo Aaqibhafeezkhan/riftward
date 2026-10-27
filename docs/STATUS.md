@@ -92,6 +92,6 @@ The design docs keep their own open questions; these are the ones that shape the
 
   Then script a session with `nc 127.0.0.1 4001` (end it with `quit`, or `nc` waits forever), or a small Python socket client for things `nc` can't do, like dropping the connection. The first account made on a fresh database is an admin.
 - **Builder and admin commands rewrite zone files.** Back up `assets/zones` before a test that uses them, and restore it after.
-- **Admin commands for testing:** `grantskill`, `setattr`, `setvitals`, `worldflag`, `summon`, `purge`, `goto`, `create`. Note that `create` and `summon` look up templates in the zone you're standing in unless given `zone:id`.
+- **Admin commands for testing:** `grantskill`, `setattr`, `setvitals`, `condition` (put any condition on someone here or online, mobs too: `condition guard thorns 3 5t`), `worldflag`, `summon`, `purge`, `goto`, `create`. Note that `create` and `summon` look up templates in the zone you're standing in unless given `zone:id`.
 - **Stopping a test server:** stop it by the process listening on its port (`lsof -t -iTCP:4001 -sTCP:LISTEN`), never by name, so a real server on 4000 is left alone.
 - **Deterministic combat tests** build a tiny world and run one `combat_round` (see the tests in `src/combat/mod.rs`), which beats chasing dice live.

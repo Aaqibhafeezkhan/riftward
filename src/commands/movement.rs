@@ -48,7 +48,7 @@ impl View<'_, '_> {
     pub fn hints(&self, who: Entity, name: &str) -> String {
         self.conditions
             .get(who)
-            .map(|c| c.hints(&self.condition_defs, &capitalized(name)))
+            .map(|c| c.hints(&self.condition_defs, name))
             .unwrap_or_default()
             .into_iter()
             .map(|hint| hint + "\r\n")

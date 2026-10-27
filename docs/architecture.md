@@ -199,7 +199,7 @@ You release the goblin king and return to yourself.
 | Build | | ✓ | | ✓ | `dig`, `desc`, `link`, `door`, `item`, `mob`, `spawn`, `zone` and the other building commands, `create`, `destroy`, and unlocking any door for testing |
 | Stage | | ✓ | ✓ | ✓ | `goto`, `where`, `summon`, `purge`; room ids show in `look` |
 | Puppet | | | ✓ | ✓ | `puppet` (`possess`), `release` |
-| Events | | | ✓ | ✓ | `worldflag`, `setvitals` |
+| Events | | | ✓ | ✓ | `worldflag`, `setvitals`, `condition` |
 | ManageRoles | | | | ✓ | `role`, `setattr`, `setcoins`, `grantskill` |
 
 `role <account> <player|builder|gm|admin>` sets one. The first account on a new server is an admin.
