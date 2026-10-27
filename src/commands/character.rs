@@ -78,7 +78,11 @@ pub fn score(
     if let Some(purse) = purse {
         text += &format!("    Purse: {}", money::coins(purse.0));
     }
-    let affected = conditions.map_or_else(Vec::new, |c| c.names(&condition_defs));
+    let traits = conditions.map_or_else(Vec::new, |c| c.names(&condition_defs, true));
+    if !traits.is_empty() {
+        text += &format!("\r\n  Traits: {}", traits.join(", "));
+    }
+    let affected = conditions.map_or_else(Vec::new, |c| c.names(&condition_defs, false));
     if !affected.is_empty() {
         text += &format!(
             "\r\n  Affected by: {} (type 'affects' to see for how long)",

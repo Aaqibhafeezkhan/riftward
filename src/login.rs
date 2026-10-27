@@ -923,7 +923,9 @@ fn enter_game(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or_default();
-    let conditions = Conditions::from_saved(saved, now, unix);
+    // And what their race is.
+    let conditions = Conditions::from_saved(saved, now, unix)
+        .with_traits(choices.races.get(&race).into_iter().flat_map(|r| &r.traits));
     let background = character.background.clone().unwrap_or_default();
     let starting = choices
         .races

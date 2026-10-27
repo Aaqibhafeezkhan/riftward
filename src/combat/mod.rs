@@ -60,7 +60,9 @@ use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_
 pub use casting::MobMove;
 #[cfg(test)]
 pub use states::defs_on_disk;
-pub use states::{ConditionDefs, Conditions, HIDDEN, Imbued, ItemCondition, ItemConditions, Lasts};
+pub use states::{
+    ConditionDefs, Conditions, HIDDEN, INANIMATE, Imbued, ItemCondition, ItemConditions, Lasts,
+};
 pub use strike::{Blow, Fighters, Move, Round, name_of};
 
 /// Seconds in a combat round, and between a player's actions.
@@ -1996,7 +1998,7 @@ mod tests {
                         .set(Attribute::Magic, 3);
                     if resists {
                         let (key, fey) = skill(
-                            "racial:fey_mind",
+                            "test:steady_mind",
                             SkillKind::Passive {
                                 triggers: Vec::new(),
                                 bonuses: vec![PassiveBonus {
@@ -2025,6 +2027,29 @@ mod tests {
         let (without, with) = (slept(false), slept(true));
         assert!(without >= 10, "a weak spell mostly works ({without})");
         assert!(with <= 2, "but an elf mostly shrugs it off ({with})");
+    }
+
+    #[test]
+    fn traits_stay_through_cures_and_death_and_help_resist() {
+        let defs = states::defs_on_disk();
+        let mut elf = Conditions::default().with_traits(&["fey_mind".to_string()]);
+        let sleep = ["sleep".to_string()];
+        assert_eq!(elf.withstanding(&defs, &sleep), 4.0);
+        assert!(
+            !elf.apply(&defs, "fey_mind", 1, Lasts::Turns(3)),
+            "not put on as a condition"
+        );
+        assert!(!elf.remove("fey_mind"));
+        elf.apply(&defs, "blessed", 1, Lasts::Turns(3));
+        elf.cure(&defs, "magic");
+        elf.clear();
+        assert!(elf.has("fey_mind"), "cures and death leave it");
+        assert!(!elf.has("blessed"));
+        assert!(
+            elf.listed(0.0, &defs, |_| String::new()).is_empty(),
+            "not in affects"
+        );
+        assert_eq!(elf.names(&defs, true), vec!["Fey Mind".to_string()]);
     }
 
     #[test]

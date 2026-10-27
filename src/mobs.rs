@@ -216,19 +216,21 @@ pub fn spawn_mob(
         Tactics(def.tactics.unwrap_or(DEFAULT_TACTICS)),
         Spells(def.spells.iter().cloned().collect()),
         // What it's born with, hidden in its lair or proof against blades, until something ends it.
+        // And what it is: its own traits, and its race's.
         Conditions::born_with(
             def.conditions
                 .iter()
                 .map(|c| (c.condition.clone(), c.strength)),
-        ),
+        )
+        .with_traits(def.traits.iter().chain(race.iter().flat_map(|r| &r.traits))),
     ));
     if let Some(base) = base {
         entity.insert(base);
     }
-    if def.aggressive && !def.inanimate {
+    if def.aggressive && !def.inanimate() {
         entity.insert(Aggressive);
     }
-    if def.inanimate {
+    if def.inanimate() {
         entity.insert(Inanimate);
     }
     // The coins it carries: what a pickpocket can lift, and what's left falls to its slayer.
@@ -623,11 +625,22 @@ mod tests {
                 strength: 12,
             },
         ];
+        // And what it is: here a thing, and an elf, though no slime is either.
+        slime.traits = vec![crate::combat::INANIMATE.into()];
+        slime.race = Some("elf".into());
         world.insert_resource(MobTemplates(HashMap::from([(key.clone(), slime)])));
         world.insert_resource(ItemTemplates::default());
         world.insert_resource(SkillDefs::default());
         world.insert_resource(Dice::seeded(1));
-        world.insert_resource(Races(Vec::new()));
+        world.insert_resource(Races(vec![crate::characters::RaceDef {
+            id: "elf".into(),
+            name: "Elf".into(),
+            summary: String::new(),
+            attributes: Default::default(),
+            karma: 0,
+            skills: Vec::new(),
+            traits: vec!["fey_mind".into()],
+        }]));
         let room = world.spawn_empty().id();
         let mob = world
             .run_system_once(
@@ -658,6 +671,13 @@ mod tests {
         // Born hidden, it lurks unseen until someone notices it.
         let passer_by = Entity::from_raw_u32(99).unwrap();
         assert!(!conditions.seen_by(passer_by));
+        let defs = crate::combat::defs_on_disk();
+        assert_eq!(
+            conditions.names(&defs, true),
+            vec!["inanimate".to_string(), "Fey Mind".to_string()],
+            "its traits, and its race's"
+        );
+        assert!(world.get::<crate::combat::Inanimate>(mob).is_some());
     }
 
     #[test]
@@ -696,6 +716,7 @@ mod tests {
             attributes: [(crate::attributes::Attribute::Body, 2)].into(),
             karma: 0,
             skills: Vec::new(),
+            traits: Vec::new(),
         }]));
         let room = world.spawn_empty().id();
         let mob = world

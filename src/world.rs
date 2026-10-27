@@ -756,14 +756,14 @@ pub struct MobDef {
     /// they don't drain into the slimes' tunnels; deer avoid wolves.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub avoids: Vec<String>,
-    /// A thing, not a creature: a training dummy. It never acts in a fight (no blow, no flight, no
-    /// skill), never wanders or picks one, is worth no experience, and leaves no corpse.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub inanimate: bool,
     /// Conditions it's born with, lasting until something ends them: a slime that shrugs off
     /// blades, a beast that's `hidden` in its lair. `[(condition: "regenerating", strength: 2)]`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<BornWith>,
+    /// What it is (`assets/traits/`), for good: `["skittish"]`, a grey slime's `["rubbery"]`.
+    /// Cures and death leave them, as they don't conditions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub traits: Vec<String>,
     /// Copper it carries, low to high, rolled when it dies and taken by whoever killed it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coins: Option<(u32, u32)>,
@@ -816,6 +816,13 @@ impl MobDef {
             .any(|a| MobKey::parse(a, &own.zone) == *key || def.tags.contains(a))
     }
 
+    /// Whether it's a thing, not a creature: the `inanimate` trait. A training dummy never acts in
+    /// a fight (no blow, no flight, no skill), never wanders or picks one, is worth no
+    /// experience, and leaves no corpse.
+    pub fn inanimate(&self) -> bool {
+        self.traits.iter().any(|t| t == crate::combat::INANIMATE)
+    }
+
     /// A plain mob with just a name, as builders create them.
     pub fn named(name: &str) -> Self {
         Self {
@@ -835,8 +842,8 @@ impl MobDef {
             tags: Vec::new(),
             allies: None,
             avoids: Vec::new(),
-            inanimate: false,
             conditions: Vec::new(),
+            traits: Vec::new(),
             coins: None,
             shop: None,
             spells: Vec::new(),
@@ -1951,7 +1958,7 @@ mod tests {
             let conditions = crate::combat::defs_on_disk();
             for (item_id, item) in &zone.items {
                 for grant in &item.grants {
-                    if conditions.get(&grant.condition).is_none() {
+                    if conditions.condition(&grant.condition).is_none() {
                         problems.push(format!(
                             "item {}:{item_id}: grants no condition '{}'",
                             zone.id, grant.condition
@@ -1968,11 +1975,17 @@ mod tests {
                 }
                 // Each condition it's born with is a real one.
                 for born in &mob.conditions {
-                    if conditions.get(&born.condition).is_none() {
+                    if conditions.condition(&born.condition).is_none() {
                         problems.push(format!(
                             "mob {}:{mob_id}: no condition '{}'",
                             zone.id, born.condition
                         ));
+                    }
+                }
+                // And each trait a real trait.
+                for key in &mob.traits {
+                    if conditions.trait_def(key).is_none() {
+                        problems.push(format!("mob {}:{mob_id}: no trait '{key}'", zone.id));
                     }
                 }
                 // Each it avoids is a mob template or a tag some mob has.

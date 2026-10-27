@@ -128,12 +128,15 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     allies: ["vermin"],               // with allies, attacks anyone here who isn't one, mobs too
     avoids: ["slime"],                // never wanders into a room holding one
     conditions: [(condition: "hidden", strength: 8)],   // born with, until something ends them
+    traits: ["skittish"],             // what it is, for good (assets/traits/)
 ),
 ```
 
 **A mob can avoid others,** `avoids: [...]` (*built*, 2026-10-27): by tag or template, as `allies` are. Wandering and crowding never take it into a room holding one; nothing else changes, so a rat that avoids slimes still goes for guards and players. It keeps rats from draining into the slimes' tunnels ([the sewers](riftwatch.md#the-sewers-ecology)), and will keep deer out of the wolf den. The zone test checks each name.
 
-**A mob can be a thing,** `inanimate: true` (*built*, 2026-10-27): a training dummy. It takes blows and never acts in a fight (no blow back, no flight, no skill), never wanders or picks one, is worth no experience and gives no tough-fight boost to learning, and leaves no corpse, what it held falling where it stood. It reads as a thing: battered and coming apart rather than hurt, knocked to pieces rather than killed. Its spawn puts it back.
+**A mob can be a thing,** the `inanimate` trait (*built*, 2026-10-27; a template flag until traits came the same day): a training dummy. It takes blows and never acts in a fight (no blow back, no flight, no skill), never wanders or picks one, is worth no experience and gives no tough-fight boost to learning, and leaves no corpse, what it held falling where it stood. It reads as a thing: battered and coming apart rather than hurt, knocked to pieces rather than killed. Its spawn puts it back.
+
+**A mob has traits,** `traits: [...]` (*built*, 2026-10-27): what it is, for good, as opposed to what's happening to it: skittish prey, a thing, a slime's rubbery body ([Traits](effects.md#traits)). Its race's traits come with it. Nothing cures them, and death doesn't clear them. The zone test checks each is a real trait.
 
 **A mob can be born with conditions** (*built*, 2026-10-27): `conditions: [(condition, strength)]` on its template, put on as it spawns and lasting until something ends them (a cure, a `Remove`, or for `hidden`, being noticed and acting). A grey slime born proof against blades, a regenerating Slime Lord, a spider born `hidden` in its web, unseen until someone notices it as they come in. The zone test checks each condition exists.
 
@@ -147,8 +150,8 @@ Mobs share players' vitals and recover by the same rules, at their own maximums:
 
 Noted 2026-10-27. Now and then, instead of an ordinary mob, something more monstrous spawns: a creature mutated by the rifts' energy. A sewer rat the size of a dog with too many eyes; a wolf whose fur crackles. Rare enough to be an event, worth a contract, and a little randomized, so no two are quite alike.
 
-- **Built on conditions a mob is born with:** a mutation is mostly a condition or two put on at spawn (resistances, a reaction, regeneration, more health), plus a name and a line that show it: "a rift-twisted sewer rat, its eyes glowing faintly".
-- **A pool of mutations, as data** (`assets/mutations.ron`): each with its words (an adjective for the name, a line for `look`), its conditions, shifts to attributes and health, and what extra its corpse yields to harvesting (rift-glass, a mutated gland: reagents for later crafts). A mutated mob rolls one, now and then two, from the pool, so they combine.
+- **Built on traits:** a mutation is mostly a trait or two put on at spawn ([Traits](effects.md#traits); decided 2026-10-27, they were conditions it's born with) (resistances, a reaction, regeneration, more health), plus a name and a line that show it: "a rift-twisted sewer rat, its eyes glowing faintly".
+- **A pool of mutations, as data** (`assets/mutations.ron`): each with its words (an adjective for the name, a line for `look`), its traits, shifts to attributes and health, and what extra its corpse yields to harvesting (rift-glass, a mutated gland: reagents for later crafts). A mutated mob rolls one, now and then two, from the pool, so they combine.
 - **How often:** a small chance on every spawn (first guess 1 in 200), higher the nearer the rifts: the Rift-Scar, the undercity. Places could say how rift-touched they are, which ties to the [setting](riftwatch.md#open-questions) once it's decided.
 - **Who:** beasts and slimes by default; a template can opt out (the townsfolk), or carry mutations of its own that only it can take (a slime that splits into more slimes).
 - **Fair warning:** `look` and the room line show it, so a player sees what they're walking into.

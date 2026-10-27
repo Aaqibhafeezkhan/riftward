@@ -2321,7 +2321,7 @@ mod tests {
                     if let Some(effects) = effects {
                         for key in effects.iter().filter_map(Effect::condition) {
                             assert!(
-                                conditions.get(key).is_some(),
+                                conditions.condition(key).is_some(),
                                 "{} {id}: no condition '{key}'",
                                 path.display()
                             );

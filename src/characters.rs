@@ -56,6 +56,9 @@ pub struct RaceDef {
     /// Racial skills, granted once skills exist.
     #[serde(default)]
     pub skills: Vec<String>,
+    /// What every one of the race is (`assets/traits/`), players and mobs alike.
+    #[serde(default)]
+    pub traits: Vec<String>,
 }
 
 impl RaceDef {
@@ -325,7 +328,13 @@ mod tests {
         if ids.len() != races.0.len() {
             problems.push("duplicate race ids".to_string());
         }
+        let traits = crate::combat::defs_on_disk();
         for race in &races.0 {
+            for key in &race.traits {
+                if traits.trait_def(key).is_none() {
+                    problems.push(format!("{}: no trait '{key}'", race.id));
+                }
+            }
             // Each race's shifts net +3 points; a race without shifts gets 12 Karma instead (4 a
             // point, a first raise). Big shifts are worth more than that at real prices (see
             // docs/characters.md#races), which racial skills will balance once they're built.
@@ -442,6 +451,7 @@ mod tests {
             attributes: BTreeMap::from([(Attribute::Strength, -5), (Attribute::Agility, 3)]),
             karma: 0,
             skills: Vec::new(),
+            traits: Vec::new(),
         };
         let attributes = windling.starting_attributes();
         assert_eq!(attributes.get(Attribute::Strength), 1);

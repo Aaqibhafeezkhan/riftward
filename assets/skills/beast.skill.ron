@@ -80,35 +80,5 @@
             description: "The Rat King's will over the rats of the sewers: while he lives, they fight harder.",
             kind: Aura(affects: "sewers:sewer_rat", bonus: (attack: 2, defence: 2, armour: 1)),
         ),
-        // Prey: a window a quick hunter can strike into, then gone (docs/darkwood.md#prey).
-        "skittish": (
-            name: "Skittish",
-            description: "A wild thing's nerves: anyone it doesn't count a friend coming near startles it, and a moment later it bolts. Caught in a fight, it tries to break away, and surely once badly hurt.",
-            kind: Passive(
-                reactions: [
-                    (
-                        on: Arrives,
-                        only: Foes,
-                        effects: [Apply(condition: "startled", lasts: Rounds(2), on: User)],
-                        text: (
-                            actor: "You start at {target}.",
-                            target: "{actor} starts at the sight of you.",
-                            room: "{actor} starts at the sight of {target}.",
-                        ),
-                    ),
-                    (
-                        on: TurnStarts,
-                        chance: "0.5",
-                        effects: [Flee],
-                        text: (actor: "You look for a way out.", room: "{actor} looks wildly for a way out."),
-                    ),
-                    (
-                        on: Hurt(0.5),
-                        effects: [Flee],
-                        text: (actor: "You panic.", room: "{actor} panics."),
-                    ),
-                ],
-            ),
-        ),
     },
 )

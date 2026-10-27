@@ -40,6 +40,10 @@ use crate::world::ron_options;
 const CONDITIONS_PATH: &str = "conditions";
 /// The extension condition files use.
 const CONDITIONS_EXTENSION: &str = "conditions.ron";
+/// Where trait files live, under `assets/`: the same shape as conditions.
+const TRAITS_PATH: &str = "traits";
+/// The extension trait files use.
+const TRAITS_EXTENSION: &str = "traits.ron";
 
 pub struct ConditionsPlugin;
 
@@ -131,8 +135,13 @@ fn condition_cmd(
             };
         }
         let (key, rest) = rest.split_first().ok_or_else(|| inv.usage_error())?;
-        let def = defs.get(key).ok_or_else(|| {
-            let mut known: Vec<&str> = defs.0.keys().map(String::as_str).collect();
+        let def = defs.condition(key).ok_or_else(|| {
+            let mut known: Vec<&str> = defs
+                .0
+                .iter()
+                .filter(|(_, d)| !d.is_trait)
+                .map(|(k, _)| k.as_str())
+                .collect();
             known.sort();
             format!(
                 "There's no condition '{key}'. There are: {}.",
@@ -202,6 +211,10 @@ pub struct ConditionDef {
     pub reactions: Vec<Reaction>,
     #[serde(default)]
     pub text: ConditionText,
+    /// Whether it's a trait (`assets/traits/`): what its bearer is, not what's happening to them.
+    /// Set by the file it comes from.
+    #[serde(skip)]
+    pub is_trait: bool,
 }
 
 /// What happens when a condition is put on someone who already has it.
@@ -235,6 +248,9 @@ pub enum Modifier {
     Weakness(String, f64),
     /// Conditions with this tag don't take hold of them: `Immune("poison")`.
     Immune(String),
+    /// Resists whatever is tagged so this much better in the contest, per point of strength:
+    /// `Withstand("sleep", 4)`, an elf's fey mind. Several tags on one spell count the best once.
+    Withstand(String, f64),
     /// Damage they deal, multiplied.
     DamageDealt(f64),
     /// Damage they take, multiplied.
@@ -310,8 +326,19 @@ impl Told {
 pub struct ConditionDefs(pub HashMap<String, ConditionDef>);
 
 impl ConditionDefs {
+    /// A condition or a trait.
     pub fn get(&self, key: &str) -> Option<&ConditionDef> {
         self.0.get(key)
+    }
+
+    /// A condition, not a trait: what effects put on and take off.
+    pub fn condition(&self, key: &str) -> Option<&ConditionDef> {
+        self.get(key).filter(|d| !d.is_trait)
+    }
+
+    /// A trait, not a condition.
+    pub fn trait_def(&self, key: &str) -> Option<&ConditionDef> {
+        self.get(key).filter(|d| d.is_trait)
     }
 }
 
@@ -424,6 +451,16 @@ pub enum Lasts {
     Granted(Entity),
     /// Until something ends it: hiding, until the hider acts openly or is found.
     Indefinitely,
+    /// For good: a trait, what its bearer is. Cures, removal and death leave it.
+    Trait,
+}
+
+impl Lasts {
+    /// Whether nothing that ends conditions ends it: what an item grants, while the item stays,
+    /// and traits.
+    fn kept(self) -> bool {
+        matches!(self, Lasts::Granted(_) | Lasts::Trait)
+    }
 }
 
 /// One condition on someone: which, how strong, how strong it started, and for how long.
@@ -437,6 +474,11 @@ pub struct Active {
     /// Those who've seen through it: for `hidden`, everyone who noticed the hider anyway.
     pub seen_by: HashSet<Entity>,
 }
+
+/// The trait of being a thing, not a creature: a training dummy. It never acts in a fight, never
+/// wanders or picks one, is worth no experience and leaves no corpse (`combat::Inanimate`, put
+/// on mobs whose template has it).
+pub const INANIMATE: &str = "inanimate";
 
 /// The condition of being out of sight: its strength is how well they hid (Stealth plus Agility),
 /// and those who noticed them anyway are its `seen_by`. See `stealth.rs`.
@@ -470,6 +512,10 @@ impl Conditions {
     /// Put a condition on them, by its stacking rule. Returns whether it took hold: one with a tag
     /// they're immune to doesn't.
     pub fn apply(&mut self, defs: &ConditionDefs, key: &str, strength: i32, lasts: Lasts) -> bool {
+        // A trait isn't put on like a condition.
+        if defs.trait_def(key).is_some() {
+            return false;
+        }
         let tags = defs.get(key).map(|d| d.tags.as_slice()).unwrap_or_default();
         let immune = self
             .modifiers(defs)
@@ -478,7 +524,7 @@ impl Conditions {
             return false;
         }
         let stacking = defs.get(key).map_or(Stacking::Replace, |d| d.stacking);
-        let mine = |a: &Active| a.key == key && !matches!(a.lasts, Lasts::Granted(_));
+        let mine = |a: &Active| a.key == key && !a.lasts.kept();
         let new = Active {
             key: key.to_string(),
             strength,
@@ -526,6 +572,27 @@ impl Conditions {
         )
     }
 
+    /// Add traits (`assets/traits/`), each at strength 1: what a mob's template or a race says its
+    /// bearer is.
+    pub fn with_traits<'a>(mut self, traits: impl IntoIterator<Item = &'a String>) -> Self {
+        for key in traits {
+            if !self
+                .0
+                .iter()
+                .any(|a| a.key == *key && a.lasts == Lasts::Trait)
+            {
+                self.0.push(Active {
+                    key: key.clone(),
+                    strength: 1,
+                    most: 1,
+                    lasts: Lasts::Trait,
+                    seen_by: HashSet::new(),
+                });
+            }
+        }
+        self
+    }
+
     /// Their hiding, if they're hidden: its strength is how well they hid.
     pub fn hidden(&self) -> Option<&Active> {
         self.0.iter().find(|a| a.key == HIDDEN)
@@ -541,19 +608,18 @@ impl Conditions {
     }
 
     /// End a condition early, whatever its turns or strength: bandaged bleeding stops. Item
-    /// grants stay while the item does. Returns whether they had it.
+    /// grants stay while the item does, and traits stay. Returns whether they had it.
     pub fn remove(&mut self, key: &str) -> bool {
         let before = self.0.len();
-        self.0
-            .retain(|a| a.key != key || matches!(a.lasts, Lasts::Granted(_)));
+        self.0.retain(|a| a.key != key || a.lasts.kept());
         self.0.len() < before
     }
 
-    /// End every condition with `tag`, but those items grant: a cure for poison. Returns the
-    /// conditions it ended.
+    /// End every condition with `tag`, but those items grant and traits: a cure for poison.
+    /// Returns the conditions it ended.
     pub fn cure(&mut self, defs: &ConditionDefs, tag: &str) -> Vec<String> {
         let tagged = |a: &Active| {
-            !matches!(a.lasts, Lasts::Granted(_))
+            !a.lasts.kept()
                 && defs
                     .get(&a.key)
                     .is_some_and(|d| d.tags.iter().any(|t| t == tag))
@@ -564,9 +630,9 @@ impl Conditions {
         ended
     }
 
-    /// End every condition but those items grant: death clears them.
+    /// End every condition but those items grant, and traits: death clears them.
     pub fn clear(&mut self) {
-        self.0.retain(|a| matches!(a.lasts, Lasts::Granted(_)));
+        self.0.retain(|a| a.lasts.kept());
     }
 
     /// Each of their modifiers, with the strength it counts at.
@@ -646,6 +712,21 @@ impl Conditions {
             })
             .sum();
         through * (1.0 + weakness).max(0.0)
+    }
+
+    /// How much better they resist something with these `tags` in its contest: the best of
+    /// their `Withstand`s for any one tag.
+    pub fn withstanding(&self, defs: &ConditionDefs, tags: &[String]) -> f64 {
+        tags.iter()
+            .map(|tag| {
+                self.modifiers(defs)
+                    .filter_map(|(m, strength)| match m {
+                        Modifier::Withstand(t, n) if t == tag => Some(n * f64::from(strength)),
+                        _ => None,
+                    })
+                    .sum::<f64>()
+            })
+            .fold(0.0, f64::max)
     }
 
     /// What the damage they deal is multiplied by.
@@ -764,6 +845,7 @@ impl Conditions {
     ) -> Vec<String> {
         self.0
             .iter()
+            .filter(|active| active.lasts != Lasts::Trait)
             .filter_map(|active| {
                 let def = defs.get(&active.key)?;
                 let strength = active.strength.to_string();
@@ -774,6 +856,7 @@ impl Conditions {
                     Lasts::Turns(n) => format!("for {n} more turns"),
                     Lasts::Granted(by) => format!("from {}", item(by)),
                     Lasts::Indefinitely => "for now".into(),
+                    Lasts::Trait => return None,
                 };
                 // `fill` capitalises; a description reads mid-sentence here.
                 Some(format!("{}: {}, {left}", def.name, lower_first(&what)))
@@ -781,11 +864,12 @@ impl Conditions {
             .collect()
     }
 
-    /// Their conditions' names, for `score`.
-    pub fn names(&self, defs: &ConditionDefs) -> Vec<String> {
+    /// Their conditions' names, for `score`; or with `traits`, their traits'.
+    pub fn names(&self, defs: &ConditionDefs, traits: bool) -> Vec<String> {
         let mut names: Vec<String> = self
             .0
             .iter()
+            .filter(|a| (a.lasts == Lasts::Trait) == traits)
             .filter_map(|a| defs.get(&a.key).map(|d| d.name.clone()))
             .collect();
         names.dedup();
@@ -893,10 +977,13 @@ fn lower_first(text: &str) -> String {
 pub struct ConditionBook(pub BTreeMap<String, ConditionDef>);
 
 #[derive(Resource)]
-struct ConditionBooksHandle(#[allow(dead_code)] Handle<LoadedFolder>);
+struct ConditionBooksHandle(#[allow(dead_code)] [Handle<LoadedFolder>; 2]);
 
 fn load_condition_books(mut commands: Commands, assets: Res<AssetServer>) {
-    commands.insert_resource(ConditionBooksHandle(assets.load_folder(CONDITIONS_PATH)));
+    commands.insert_resource(ConditionBooksHandle([
+        assets.load_folder(CONDITIONS_PATH),
+        assets.load_folder(TRAITS_PATH),
+    ]));
 }
 
 /// Rebuild the condition table whenever a file loads, changes or goes away.
@@ -910,10 +997,17 @@ fn sync_condition_defs(
     }
     defs.0.clear();
     for (_, book) in books.iter() {
-        defs.0
-            .extend(book.0.iter().map(|(key, def)| (key.clone(), def.clone())));
+        for (key, def) in &book.0 {
+            if defs.0.insert(key.clone(), def.clone()).is_some() {
+                warn!("'{key}' is defined twice among conditions and traits");
+            }
+        }
     }
-    info!("loaded {} conditions", defs.0.len());
+    let traits = defs.0.values().filter(|d| d.is_trait).count();
+    info!(
+        "loaded {} conditions and {traits} traits",
+        defs.0.len() - traits
+    );
 }
 
 #[derive(TypePath)]
@@ -936,30 +1030,48 @@ impl AssetLoader for ConditionBookLoader {
         &self,
         reader: &mut dyn Reader,
         _settings: &(),
-        _load_context: &mut LoadContext<'_>,
+        load_context: &mut LoadContext<'_>,
     ) -> Result<ConditionBook, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        Ok(ron_options().from_bytes(&bytes)?)
+        let is_trait = load_context
+            .path()
+            .path()
+            .to_string_lossy()
+            .ends_with(TRAITS_EXTENSION);
+        Ok(read_book(&bytes, is_trait)?)
     }
 
     fn extensions(&self) -> &[&str] {
-        &[CONDITIONS_EXTENSION]
+        &[CONDITIONS_EXTENSION, TRAITS_EXTENSION]
     }
 }
 
-/// Every condition in the files on disk, for tests: they must parse, and other files' references
-/// to conditions must be to real ones.
+/// A file of conditions, or of traits.
+fn read_book(bytes: &[u8], is_trait: bool) -> Result<ConditionBook, ron::error::SpannedError> {
+    let mut book: ConditionBook = ron_options().from_bytes(bytes)?;
+    for def in book.0.values_mut() {
+        def.is_trait = is_trait;
+    }
+    Ok(book)
+}
+
+/// Every condition and trait in the files on disk, for tests: they must parse, and other files'
+/// references to them must be to real ones.
 #[cfg(test)]
 pub fn defs_on_disk() -> ConditionDefs {
     let mut defs = ConditionDefs::default();
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/conditions");
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
-        let book: ConditionBook = ron_options()
-            .from_bytes(&std::fs::read(&path).unwrap())
-            .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
-        defs.0.extend(book.0);
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+    for (folder, is_trait) in [(CONDITIONS_PATH, false), (TRAITS_PATH, true)] {
+        for entry in std::fs::read_dir(root.join(folder)).unwrap() {
+            let path = entry.unwrap().path();
+            let book = read_book(&std::fs::read(&path).unwrap(), is_trait)
+                .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+            for key in book.0.keys() {
+                assert!(!defs.0.contains_key(key), "{key} is defined twice");
+            }
+            defs.0.extend(book.0);
+        }
     }
     defs
 }
@@ -996,7 +1108,7 @@ mod tests {
             );
             for key in def.on_hit.iter().filter_map(Effect::condition) {
                 assert!(
-                    defs.get(key).is_some(),
+                    defs.condition(key).is_some(),
                     "{key}: on_hit puts on no condition {key}"
                 );
             }
@@ -1005,7 +1117,10 @@ mod tests {
                     .check()
                     .unwrap_or_else(|err| panic!("{key}: {err}"));
                 for named in reaction.effects.iter().filter_map(Effect::condition) {
-                    assert!(defs.get(named).is_some(), "{key}: no condition {named}");
+                    assert!(
+                        defs.condition(named).is_some(),
+                        "{key}: no condition {named}"
+                    );
                 }
             }
             for m in &def.modifiers {
@@ -1243,6 +1358,7 @@ mod tests {
             on_hit: Vec::new(),
             reactions: Vec::new(),
             text: ConditionText::default(),
+            is_trait: false,
         };
         defs.0.insert(
             "fireproof".into(),

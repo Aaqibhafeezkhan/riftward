@@ -438,7 +438,7 @@
             // A thing: it takes blows and never gives one, is worth no experience, and leaves no
             // corpse. Townsfolk, so the guards leave it be.
             tags: ["townsfolk"],
-            inanimate: true,
+            traits: ["inanimate"],
             attributes: {Body: 1, Agility: 1, Reaction: 1},
             health: 40,
         ),

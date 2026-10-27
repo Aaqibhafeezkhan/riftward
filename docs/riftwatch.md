@@ -144,7 +144,7 @@ None of the locks have keys yet; keys arrive with items.
 | --- | --- | --- | --- |
 | Town guards | North Gate | 2 | Anywhere in town, every 1-3 minutes |
 | A stray dog | Market Square | 1 | Market, stalls, back alley, tinkers, Guild Row |
-| Straw training dummies (`inanimate`: they never hit back, for safe practice) | Training Yard (2), Garrison Yard (1) | 3 | No |
+| Straw training dummies (the `inanimate` trait: they never hit back, for safe practice) | Training Yard (2), Garrison Yard (1) | 3 | No |
 | The contract clerk | Contract Hall | 1 | No |
 | The herbalist | Herbalist's Stall | 1 | No |
 | The drill sergeant | Training Yard | 1 | No |
@@ -203,7 +203,7 @@ The sewers are built for the breeding spawn described in [The living world](worl
 | **Sewer snake** | The Flooded Tunnel, the drains | 1 | Bites when near; the bite poisons | `aggressive` (players only), *Venomous Bite* |
 | **Rat swarm** | The Rat Runs, the Overflow Chamber | 1 | Weak, but several at once | A spawn of rats with a bigger `pack` |
 | **Ooze** | The Western Tunnel, the Cistern's edges | 1 | Slow and small; splits in two when struck hard (`Hurt` → `Spawn`, *built*; the halves a template of their own, so they don't split again) | `aggressive`, `allies: ["slime"]`, `tags: ["slime"]`; an acid touch (an `acid` damage type, data) |
-| **Grey slime** | The Western Tunnel, the Flooded Tunnel | 2 | Shrugs off blades and fists, burns at fire (conditions it's born with, *built*: a condition with `Resist(physical)` and `Weakness(fire)`): torches and Hermetic sparks matter here | As the ooze, tougher |
+| **Grey slime** | The Western Tunnel, the Flooded Tunnel | 2 | Shrugs off blades and fists, burns at fire (a trait, *built*: `Resist(physical)` and `Weakness(fire)`): torches and Hermetic sparks matter here | As the ooze, tougher |
 | **The Slime Lord** | The Old Cistern | 3 | A heaving mass in the black water: while it lives, every slime is stronger, and when hurt it sheds slimes (`Spawn`, *built*) and knits itself whole (born `regenerating`, *built*) | An `Aura` over slimes, as the Rat King's over rats; `AfterDeath(Days(3))` |
 
 - **Slimes eat rats, at a border.** Slimes are aggressive to anything that isn't a slime, rats to anything that isn't vermin, so where they meet they fight, and a player arriving mid-fight finds both sides weakened, or both turned on them. But they meet only at the edges (decided 2026-10-27), or the slimes would end the rat problem: a crowded rat moves to the neighbouring room with the fewest *rats*, so a room of slimes looks empty to it, and rats would flow west and die there for ever. With always an emptier way to go, they'd never gnaw through a grate, and the breakout would never come. So:

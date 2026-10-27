@@ -201,6 +201,18 @@ Step 2d (2026-10-26). The `reach` column above became simpler: a condition on an
 - **Saved:** conditions lasting in time are saved with players (`character_conditions`), as when they end, every minute and at logout, and restored at login if they still last.
 - **Checked:** tests fail if a technique, spell or item names a condition that doesn't exist.
 
+## Traits
+
+Decided and built 2026-10-27. **A trait is what someone is, for good:** a deer's nerves, a dummy being a thing, an elf's fey mind, a slime's rubbery body, a rift-touched mutation. A skill is what someone has learned and gets better at with use; a condition is what's happening to them, and passes. Traits are the third kind.
+
+- **The same shape as a condition** (`assets/traits/*.traits.ron`): a name, a description, `modifiers`, `reactions` and words (`looks`), so everything conditions can do, a trait can, with one engine: a trait's resistances, immunities and reactions work exactly as a condition's do. Keys are shared with conditions, and the tests fail if one is defined twice.
+- **Nothing ends one:** no cure, no `Remove`, no running out, no death. They're held with the bearer's conditions (`Lasts::Trait`), kept as an item's grants are.
+- **Where they come from:** a mob template's `traits: ["skittish"]`, and a race's `traits` in `races.ron` (players and mobs of the race alike), each at strength 1. They aren't saved; they come back from the template or race at every spawn and login.
+- **Not put on like a condition:** `Apply` and the admin `condition` command refuse a trait, and the tests fail if an effect or a mob's `conditions` names one, or `traits` names a condition. Effects that give or take a trait on purpose (lycanthropy, a rift's mark) would be their own, `Grant` and `Revoke`, so no ordinary cure reaches them; not built until something needs them.
+- **Seen:** `score` lists them as Traits, not under Affected by; `affects` leaves them out; their `looks` show when someone looks at the bearer ("The red deer watches you warily, ready to bolt.").
+- **The first:** `inanimate` (the code knows it by name, as it does `hidden`: a mob with it never acts in a fight, never wanders, is worth no experience and leaves no corpse, and it's immune to poison and the mind's arts), `skittish` (prey: see [the Darkwood](darkwood.md#prey-a-window-then-gone)), and the elves' `fey_mind`.
+- **`Withstand(tag, n)`,** a modifier made for traits but open to conditions: the bearer resists anything tagged so this much better in the contest, per point of strength, as a skill's `Resist(tag)` bonus does (the best tag counts once). Fey Mind is `Withstand("sleep", 4)` and `Withstand("charm", 4)`.
+
 ## Damage types
 
 Every attack and harming effect names its type, so armour, resistances and immunities work. **The types are data** (`assets/damage_types.ron`), so designers can add more; these are the first:
@@ -347,7 +359,7 @@ Step 2c-i. Spells and techniques are resisted the same way, and skills made for 
 - **The contest:** the user's rating (a spell's power, a blow's or technique's attack) against what the target `resist`s with: `Evasion` (Reaction, Dodge and a shield, as against a blow), `Dodge` (no shield), or an `Attribute`. One opposed roll by the ratio rule, with both sides' Luck.
 - **Tags:** what a spell or technique *is*, worked out from what it does, with nothing to keep in step: the tags of every condition it puts on, the types of damage it does, and its own `tags: [...]` for anything else (`"charm"`). A sleep spell is `sleep` and `mind` because the asleep condition is; Spark is `force`.
 - **Skills that resist:** a passive skill's `(stat: Resist("sleep"), per: 10, base: 3)` adds to the target's rating against anything with that tag. Only skills that say so help, and only the best matching bonus counts, so a spell that's both `sleep` and `mind` doesn't count two. It's still a roll: a bonus counts for a lot against a weak caster and less against a strong one.
-- **The first:** the elves' racial Fey Mind (`assets/skills/racial.skill.ron`) resists sleep and charm, by 3 and 1 more every 10 levels, like the elves of old tales. Nothing casts sleep yet; the `asleep` condition is there for whatever does.
+- **Traits that resist:** a trait's (or condition's) `Withstand("sleep", 4)` adds to the rating the same way, on top of skills. The elves' Fey Mind is one ([Traits](#traits)): it was a racial skill growing with its level until 2026-10-27, and is now flat, 4 against sleep and charm, since an elf doesn't practise being an elf.
 - **Separate from conditions' `Resist` and `Immune`:** a skill helps win the contest; `Resist` takes damage off after it's lost, and `Immune` keeps a condition from taking hold at all.
 
 ### Abilities, as built

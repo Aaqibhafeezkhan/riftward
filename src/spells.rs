@@ -740,7 +740,10 @@ mod tests {
                 // Every condition it puts on someone is a real one.
                 let conditions = crate::combat::defs_on_disk();
                 for key in spell.effects.iter().filter_map(Effect::condition) {
-                    assert!(conditions.get(key).is_some(), "{id}: no condition '{key}'");
+                    assert!(
+                        conditions.condition(key).is_some(),
+                        "{id}: no condition '{key}'"
+                    );
                 }
                 spell
                     .check()

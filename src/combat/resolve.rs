@@ -145,14 +145,14 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let caught = self.resting.contains(&target) || u.opener;
         let halved = |n: f64| if caught { n / 2.0 } else { n };
-        // Skills made for it help resist what it is: an elf against sleep.
+        // Skills and traits made for it help resist what it is: an elf against sleep.
         let rating = u.resist.map(|resist| {
             let base = match resist {
                 Resist::Evasion => halved(d.conditions.defence(parts.total(), self.conditions)),
                 Resist::Dodge => halved(d.conditions.defence(parts.evasion, self.conditions)),
                 Resist::Attribute(attribute) => f64::from(d.attributes.get(attribute)),
             };
-            base + d_boosts.resisting(&u.tags)
+            base + d_boosts.resisting(&u.tags) + d.conditions.withstanding(self.conditions, &u.tags)
         });
 
         // The user's rating against the target's, by opposed roll; how decisively it wins is how
