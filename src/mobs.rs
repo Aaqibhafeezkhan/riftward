@@ -485,14 +485,22 @@ fn summon(
         .get(actor.room)
         .map(|(_, key, _)| key.zone.clone())
         .unwrap_or_default();
-    let key = MobKey::parse(inv.args.trim(), &zone);
-    match templates.0.get(&key) {
+    let found = crate::world::find_template(
+        &inv.args,
+        &zone,
+        &templates.0,
+        (MobKey::parse, |k: &MobKey| k.zone.as_str()),
+        MobDef::keywords,
+        "mob",
+    );
+    let found = found.and_then(|key| {
+        let def = templates.0.get(&key).ok_or_else(String::new)?;
+        Ok((def, key))
+    });
+    match found {
         _ if inv.args.trim().is_empty() => out.push(Outgoing::line(inv.entity, inv.usage_error())),
-        None => out.push(Outgoing::line(
-            inv.entity,
-            format!("There's no mob template [{key}]."),
-        )),
-        Some(def) => {
+        Err(refusal) => out.push(Outgoing::line(inv.entity, refusal)),
+        Ok((def, key)) => {
             spawn_mob(
                 &mut commands,
                 &templates,

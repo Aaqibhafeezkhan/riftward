@@ -179,7 +179,7 @@ Mobs share players' vitals and recover by the same rules, at their own maximums:
 | `spawn mob <id> <mob>` / `spawn item <id> <item>` / `spawn room <id>` | Change what it spawns, or move it to this room |
 | `spawn contents <id> <item>... \| none` | What an item spawn's container is topped up with on each reset |
 | `spawn remove <id>` | Remove the spawn and its mobs |
-| `summon <mob>` | Bring a mob here that belongs to no spawn, for testing |
+| `summon <mob>` | Bring a mob here that belongs to no spawn, for testing: by its template id (`stray_dog`, `riftwatch:stray_dog`) or the words it answers to (`dog`), this zone first, then every zone |
 | `purge [<mob>]` | Remove a mob here, or every mob here. Its spawn refills at its next reset |
 
 Rooms can be flagged with `flag <indoors|no_wander> <on|off>`, or in the zone file. `no_wander` turns wanderers away; Riftwatch marks its shops, the shrine and the guild's quieter rooms. `indoors` hides the sky, so dawn and dusk pass unannounced; the sewers and the town's halls are indoors.

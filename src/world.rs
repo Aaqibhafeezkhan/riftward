@@ -1035,6 +1035,56 @@ impl Wander {
     }
 }
 
+/// Find a template by what a builder typed: its id (`stray_dog`, or `zone:id` from anywhere), or
+/// failing that, the words it answers to (`dog`, `stray dog`), in `zone` first and then in every
+/// zone. `what` names the kind ("mob", "item") for the reply when none or several match.
+pub fn find_template<K: Clone + fmt::Display + Eq + std::hash::Hash, D>(
+    typed: &str,
+    zone: &str,
+    templates: &HashMap<K, D>,
+    (key, zone_of): (impl Fn(&str, &str) -> K, impl Fn(&K) -> &str),
+    keywords: impl Fn(&D) -> crate::targeting::Keywords,
+    what: &str,
+) -> Result<K, String> {
+    let typed = typed.trim();
+    let exact = key(typed, zone);
+    if templates.contains_key(&exact) {
+        return Ok(exact);
+    }
+    let words: Vec<&str> = typed.split_whitespace().collect();
+    let answers = |def: &D| {
+        let keywords = keywords(def);
+        !words.is_empty() && words.iter().all(|w| keywords.matches(w))
+    };
+    let mut here: Vec<&K> = templates
+        .iter()
+        .filter(|(k, def)| zone_of(k) == zone && answers(def))
+        .map(|(k, _)| k)
+        .collect();
+    if here.is_empty() {
+        here = templates
+            .iter()
+            .filter(|(_, def)| answers(def))
+            .map(|(k, _)| k)
+            .collect();
+    }
+    here.sort_by_key(|k| k.to_string());
+    match here.as_slice() {
+        [one] => Ok((*one).clone()),
+        [] => Err(format!(
+            "There's no {what} template [{exact}], nor one called '{typed}'."
+        )),
+        several => Err(format!(
+            "'{typed}' could be: {}. Use its id.",
+            several
+                .iter()
+                .map(|k| k.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
+}
+
 /// A mob template's full id: its zone and its id there. Written `zone:mob`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MobKey {
@@ -2071,6 +2121,60 @@ mod tests {
             }
         );
         assert_eq!(rats.crowd, Some(6));
+    }
+
+    #[test]
+    fn templates_are_found_by_id_or_by_the_words_they_answer_to() {
+        let mob = |zone: &str, id: &str, name: &str| {
+            (
+                MobKey::parse(&format!("{zone}:{id}"), ""),
+                MobDef::named(name),
+            )
+        };
+        let templates = HashMap::from([
+            mob("riftwatch", "stray_dog", "a stray dog"),
+            mob("riftwatch", "town_guard", "a town guard"),
+            mob("forest", "warden", "a forest guard"),
+            mob("forest", "wolf", "a grey wolf"),
+        ]);
+        let find = |typed: &str, zone: &str| {
+            find_template(
+                typed,
+                zone,
+                &templates,
+                (MobKey::parse, |k: &MobKey| k.zone.as_str()),
+                MobDef::keywords,
+                "mob",
+            )
+            .map(|k| k.to_string())
+        };
+        assert_eq!(
+            find("stray_dog", "riftwatch").unwrap(),
+            "riftwatch:stray_dog"
+        );
+        assert_eq!(
+            find("forest:wolf", "riftwatch").unwrap(),
+            "forest:wolf",
+            "an id from anywhere"
+        );
+        assert_eq!(find("dog", "riftwatch").unwrap(), "riftwatch:stray_dog");
+        assert_eq!(
+            find("grey wolf", "riftwatch").unwrap(),
+            "forest:wolf",
+            "found in another zone"
+        );
+        // A word in this zone wins; elsewhere, two guards are named rather than one guessed.
+        assert_eq!(find("guard", "riftwatch").unwrap(), "riftwatch:town_guard");
+        assert_eq!(find("guard", "forest").unwrap(), "forest:warden");
+        assert_eq!(
+            find("guard", "sewers").unwrap_err(),
+            "'guard' could be: forest:warden, riftwatch:town_guard. Use its id."
+        );
+        assert!(
+            find("dragon", "riftwatch")
+                .unwrap_err()
+                .contains("nor one called 'dragon'")
+        );
     }
 
     #[test]
