@@ -185,6 +185,11 @@ pub struct Inanimate;
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Fighting(pub Entity);
 
+/// Just set upon, and fighting back, but not yet having had a turn: in the first round they act
+/// after whoever attacked them (`first_strike`).
+#[derive(Component, Debug)]
+pub struct DrawnIn;
+
 /// The attack someone makes each round: `None` means the basic attack.
 #[derive(Component, Debug, Clone, Default)]
 pub struct AutoAttack(pub Option<String>);
@@ -328,6 +333,35 @@ fn auras(
         .collect()
 }
 
+/// The turn order, with everyone just drawn into a fight moved after whoever drew them in: a dog
+/// doesn't know it's being attacked until the first blow or spell lands, however quick it is.
+/// `drawn` is everyone just set upon.
+fn first_strike(
+    order: Vec<(i64, Entity)>,
+    drawn: &HashSet<Entity>,
+    targets: &HashMap<Entity, Entity>,
+) -> Vec<(i64, Entity)> {
+    let drawn_in = |who: Entity| drawn.contains(&who).then(|| targets.get(&who)).flatten();
+    let mut waiting: Vec<(i64, Entity)> = Vec::new();
+    let mut out = Vec::with_capacity(order.len());
+    for turn in order {
+        if drawn_in(turn.1).is_some() {
+            waiting.push(turn);
+            continue;
+        }
+        out.push(turn);
+        // Those this one drew in go next, in their own order.
+        let (now, later): (Vec<_>, Vec<_>) = waiting
+            .into_iter()
+            .partition(|(_, who)| drawn_in(*who) == Some(&turn.1));
+        out.extend(now);
+        waiting = later;
+    }
+    // Anyone whose attacker takes no turn still gets theirs.
+    out.extend(waiting);
+    out
+}
+
 /// The technique a queued `use` names, if it is one the player knows.
 fn queued_technique(queue: &ActionQueue, skills: &Skills, defs: &SkillDefs) -> Option<String> {
     let (_, invocation) = queue.peek()?;
@@ -352,7 +386,11 @@ fn combat_round(
     mut events: MessageWriter<GameEvent>,
     mut log: ResMut<Outbox>,
     resting_query: Query<Entity, With<Resting>>,
-    (readied, casting): (Query<&Readied>, Query<&Casting>),
+    (readied, casting, drawn): (
+        Query<&Readied>,
+        Query<&Casting>,
+        Query<Entity, With<DrawnIn>>,
+    ),
     rooms: RoomQuery,
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
 ) {
@@ -422,6 +460,13 @@ fn combat_round(
         })
         .collect();
     order.sort_by(|a, b| b.cmp(a));
+    // Those just set upon: fighting back since the attack, or only now.
+    let mut drawn_in: HashSet<Entity> = drawn.iter().collect();
+    drawn_in.extend(targets.keys().filter(|who| !engaged.contains_key(*who)));
+    for who in &drawn_in {
+        commands.entity(*who).remove::<DrawnIn>();
+    }
+    let order = first_strike(order, &drawn_in, &targets);
 
     let outmatched = strike::outmatched(&fighters, &targets, &auras, &items, &templates, &defs);
     for (who, _) in &alive_players {
@@ -1287,7 +1332,7 @@ fn attack(
     if !foe_fighting {
         commands
             .entity(foe.entity)
-            .insert(Fighting(attacker.entity));
+            .insert((Fighting(attacker.entity), DrawnIn));
     }
     out.push(Outgoing::line(
         attacker.entity,
@@ -3772,6 +3817,57 @@ mod tests {
             assert_eq!(world.get::<InRoom>(stayed).unwrap().0, row[1]);
             assert!(world.get::<Fighting>(stayed).is_none());
         }
+    }
+
+    #[test]
+    fn whoever_starts_a_fight_strikes_before_those_they_draw_in() {
+        // A quick dog against a slow fighter who kills it with the first blow: it never gets to
+        // bite, however much quicker it is.
+        let (mut world, room) = world();
+        let slow = fighter(&mut world, room, 1000, 1, &[BASIC_ATTACK]);
+        sure_hands(&mut world, slow);
+        let dog = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
+        sure_hands(&mut world, dog);
+        world.entity_mut(slow).insert(Fighting(dog));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get::<Dead>(dog).is_some());
+        assert_eq!(
+            world.get::<Vitals>(slow).unwrap().health,
+            100.0,
+            "never bitten"
+        );
+
+        // The same when `kill` has already set the dog fighting back.
+        let dog = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
+        sure_hands(&mut world, dog);
+        world.entity_mut(slow).insert(Fighting(dog));
+        world.entity_mut(dog).insert((Fighting(slow), DrawnIn));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get::<Dead>(dog).is_some());
+        assert_eq!(
+            world.get::<Vitals>(slow).unwrap().health,
+            100.0,
+            "never bitten, though it was fighting back already"
+        );
+        assert!(world.get::<DrawnIn>(dog).is_none());
+    }
+
+    #[test]
+    fn those_drawn_into_a_fight_take_their_turns_after_who_drew_them_in() {
+        let e = |n: u32| Entity::from_raw_u32(n).unwrap();
+        let (wolf, ada, deer, bob) = (e(1), e(2), e(3), e(4));
+        // Ada attacks the wolf, the deer is set upon by Bob; Bob and the wolf are quicker than
+        // those who started it.
+        let drawn = HashSet::from([wolf, deer]);
+        let targets = HashMap::from([(ada, wolf), (wolf, ada), (bob, deer), (deer, bob)]);
+        let order = vec![(90, wolf), (80, deer), (70, ada), (60, bob)];
+        let turns: Vec<Entity> = first_strike(order, &drawn, &targets)
+            .into_iter()
+            .map(|(_, who)| who)
+            .collect();
+        assert_eq!(turns, vec![ada, wolf, bob, deer]);
     }
 
     #[test]
