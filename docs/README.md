@@ -109,7 +109,7 @@ Designed, waiting on other work:
 | Attributes | Ten, uncapped, Shadowrun and Earthdawn flavoured. Base 3 (Luck 1, Magic 0), shifted by race, with 20 Karma to spend, which can go on Magic as latent talent. A point costs the rating it reaches. Karma also unlocks priced skills in a character's trees |
 | Formulas | Contests are opposed rolls that compare ratios, never differences, because ratings are uncapped; steep (k = 3), always rolled, with a margin |
 | Progression | Skills level by use, uncapped but ever slower, with a soft cap of 10 + 2 × character level. Character level comes from experience (victories by risk, discoveries, quests), 1,000 a level, and brings 5 Karma a level |
-| Luck | Every roll has a Luck-based chance to be rolled twice, keeping the better. Group loot uses the group's average Luck |
+| Luck | Each point makes every roll a percent better: chances likelier, amounts bigger, contest ratings stronger, picks from tables further toward the best. No cap. Group loot uses the group's average Luck |
 | Magic | Latent until the character knows a tradition's foundation skill; knowing one is being Awakened. Four traditions, each with a teacher in the world who Awakens anyone with Magic 1 (bought with Karma). Everyone starts mundane |
 | Spells | Their own category, not skills: known, never levelled, cast through a school (a skill) whose level plus Magic is their power. They don't add to character level. Adepts have powers (skills) instead. Everything else, weapon techniques included, is a skill |
 | Commands | Players can define aliases; aliases can't shadow built-in commands |

@@ -2,7 +2,7 @@
 
 [Design summary](README.md) · Status: built
 
-Characters have ten uncapped attributes, raised with Karma. Skills say what a character can do; attributes say how well their body and mind do it. Luck gives every random roll in the game a chance to be rolled twice, keeping the better result.
+Characters have ten uncapped attributes, raised with Karma. Skills say what a character can do; attributes say how well their body and mind do it. Luck makes every random roll in the game a percent better for each point.
 
 ## Attributes
 
@@ -51,29 +51,28 @@ Every contest is an **opposed roll**: each side rolls a performance around their
   | A master (55) on an ordinary lock (4) | fails 0.04% |
 
 - **Always rolled.** Nothing is decided without a roll, so even a one-sided fight plays out; a huge gap just makes the upset effectively never. Upsets that matter (fate, surpassing limits) come from the story, not the dice.
-- **How it's rolled:** each side's performance is its rating times a random factor (k·ln rating plus a Gumbel draw, which makes the odds exactly the curve above), and a side with Luck rolls twice and keeps the better. The margin is the winner's performance over the loser's: 1.1 is a near thing, 2 a decisive win. Margins are there for degrees of success: glancing and crushing blows, critical Backstabs, picks that leave no trace. *Built:* `Dice::opposed`; attacks read the margin as [blows](architecture.md#combat), glancing to crushing.
+- **How it's rolled:** each side's performance is its rating times a random factor (k·ln rating plus a Gumbel draw, which makes the odds exactly the curve above), and a side's Luck makes its rating that many percent stronger before it rolls. The margin is the winner's performance over the loser's: 1.1 is a near thing, 2 a decisive win. Margins are there for degrees of success: glancing and crushing blows, critical Backstabs, picks that leave no trace. *Built:* `Dice::opposed`; attacks read the margin as [blows](architecture.md#combat), glancing to crushing.
 - **Combat and every other contest must follow this rule.** Plain chances that aren't contests (fleeing, a skill's gain roll) stay plain chances.
 
 ## Luck
 
-Every random roll gets a chance, based on the roller's Luck, to be rolled a second time, keeping the better result:
+**Each point of Luck makes a roll a percent better** (decided 2026-10-27; it was a chance to roll twice and keep the better, which did almost nothing at the Luck characters start with). Luck 1 is 1% better, 10 is 10%, 100 doubles a roll, and since attributes have no cap, 200 triples one, though no one is likely to get there. The scale is `luck_scale` in `assets/progression.ron`: the Luck that doubles a roll, 100.
 
 ```math
-\text{lucky chance} = \frac{\text{Luck}}{\text{Luck} + 50}
+\text{roll} \times \left(1 + \frac{\text{Luck}}{100}\right)
 ```
 
-Luck 10 gives 17%, Luck 50 gives 50% and Luck 150 gives 75%. However high Luck goes, its effect never exceeds best of two, so a 1% legendary drop tops out just under 2%. The 50 is a tuning value (`LUCK_SCALE` in `src/dice.rs`).
+| Roll | Luck makes it | At Luck 20 |
+| --- | --- | --- |
+| A chance (a skill gain, a reaction, a discovery) | That much likelier | 18% becomes 21.6% |
+| An amount (damage, healing, a draught) | That much bigger, past the die's top | A d10's 6 is 7.2 |
+| A contest (an attack, a dodge, a lock) | Your rating that much stronger | Swordplay 15 rolls as 18 |
+| A pick from a table (loot, finds) | Further toward the better end | Landing 60% along lands at 72% |
 
-| Roll | Better means |
-| --- | --- |
-| Skill gain | A gain |
-| Hit, damage, dodge | The hit or dodge succeeds, or more damage |
-| Loot tier | The rarer tier |
-| Loot quantity and quality | More, or higher |
-| Traps, hazards, critical failures | The roller escapes the bad outcome |
-| Chance-based epiphany triggers | The trigger fires |
-
-- **Contested rolls** give each side its own lucky chance. If both trigger, they cancel and the original roll stands.
+- **Every point counts.** Whole-number amounts round by chance, so 6 with Luck 1 (6.06) is 7 one time in 16: on average a roll is worth exactly its Luck.
+- **Contests are steep**, so Luck tells there most: Luck 10 makes an even contest about 1.33 times as likely to go your way; Luck 100, which doubles your rating, about eight times.
+- **Rare drops stay rare:** a 1% find becomes 1.5% at Luck 50 and 2% at Luck 100.
+- **Contested rolls** give each side its own Luck, so equal Luck cancels out.
 - **Group loot uses the group's average Luck,** so there is no reason to send the luckiest member to open every chest.
 
 ### The Dice service
