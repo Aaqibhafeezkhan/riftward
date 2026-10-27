@@ -52,6 +52,10 @@ pub struct Connection {
     outbox: Vec<u8>,
     /// Set when the client should be dropped at the end of the frame.
     pub closing: bool,
+    /// With `closing`: the player is leaving their character, not the game. Everything that
+    /// happens when someone leaves happens, then the connection goes back to the character
+    /// menu instead of being dropped (`login::return_to_menu`).
+    pub to_menu: bool,
     /// In game, the connection shows a prompt after each batch of output. Off during login,
     /// which writes its own prompts ("Password: ").
     prompt: bool,
@@ -97,6 +101,14 @@ impl Connection {
     pub fn enable_prompt(&mut self) {
         self.prompt = true;
         self.wants_prompt = true;
+    }
+
+    /// Back to logging in: no longer leaving, and no in-game prompt.
+    pub fn back_to_login(&mut self) {
+        self.closing = false;
+        self.to_menu = false;
+        self.prompt = false;
+        self.wants_prompt = false;
     }
 
     /// Ask the client to stop (or resume) echoing what the user types, for password entry.
@@ -174,6 +186,7 @@ fn accept_connections(mut commands: Commands, listener: Res<Listener>) {
                         // Offer end-of-record prompts; MUD clients accept, others ignore it.
                         outbox: vec![IAC, telnet::WILL, telnet::OPT_EOR],
                         closing: false,
+                        to_menu: false,
                         prompt: false,
                         prompt_text: "> ".into(),
                         at_prompt: false,
@@ -262,7 +275,7 @@ pub fn flush_output(mut connections: Query<&mut Connection>) {
 
 pub fn cleanup_disconnected(mut commands: Commands, connections: Query<(Entity, &Connection)>) {
     for (entity, conn) in &connections {
-        if conn.closing {
+        if conn.closing && !conn.to_menu {
             info!("client {entity} disconnected");
             commands.entity(entity).despawn();
         }

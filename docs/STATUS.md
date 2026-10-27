@@ -22,7 +22,7 @@ Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is co
 - **Items** also have quality (crude to masterwork, per item) and rarity (common to legendary, per template), which set their worth and, for quality, a weapon's damage or armour's protection.
 - **Money and shops:** a copper, silver and gold purse, coins from kills and from mobs' pockets, three Riftwatch shops that sell, buy and resell, spell lessons that cost money, and the Trade tree: Haggling (a deal with each shopkeeper) and Appraisal.
 - **Spells:** spell books as data (`assets/spells/`), `cast` and `spells` (`use` finds spells too), Drain resisted by Willpower, the first two spells of each casting tradition and Hermetic's Kindle Blade, taught by each tradition's teacher, cast in or out of fights by players and mobs alike.
-- **Combat:** rounds in initiative order, auto-attacks, weapons (trained and untrained), techniques for every weapon tree's journeyman tier, conditions (staggered, down, bleeding, held, guarding, exposed), stamina costs, fleeing, death and respawn at the shrine, corpses that keep a player's gear, and death for anyone who quits or disconnects mid-fight.
+- **Combat:** rounds in initiative order, auto-attacks, weapons (trained and untrained), techniques for every weapon tree's journeyman tier, conditions (staggered, down, bleeding, held, guarding, exposed), stamina costs, fleeing, death and respawn at the shrine, corpses that keep a player's gear, and death for anyone who disconnects mid-fight (`quit` refuses in one).
 - **Communication:** `say`, `emote`, `whisper`, `yell` and `gossip`.
 - **World events:** saved world flags and data-driven events. A rat breakout into the city raises the Rat King, whose aura toughens the rats until he dies.
 
@@ -92,7 +92,7 @@ The design docs keep their own open questions; these are the ones that shape the
   MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run
   ```
 
-  Then script a session with `nc 127.0.0.1 4001` (end it with `quit`, or `nc` waits forever), or a small Python socket client for things `nc` can't do, like dropping the connection. The first account made on a fresh database is an admin.
+  Then script a session with `nc 127.0.0.1 4001` (end it with `quit` twice, once to leave the character and once at the menu, or `nc` waits forever), or a small Python socket client for things `nc` can't do, like dropping the connection. The first account made on a fresh database is an admin.
 - **Builder and admin commands rewrite zone files.** Back up `assets/zones` before a test that uses them, and restore it after.
 - **Admin commands for testing:** `grantskill`, `setattr`, `setvitals`, `condition` (put any condition on someone here or online, mobs too: `condition guard thorns 3 5t`), `worldflag`, `summon`, `purge`, `goto`, `create`. `create` and `summon` take a template's id or the words it answers to (`summon dog`, `create short sword fine`), this zone first, then every zone; if several match, they're listed by id.
 - **Stopping a test server:** stop it by the process listening on its port (`lsof -t -iTCP:4001 -sTCP:LISTEN`), never by name, so a real server on 4000 is left alone.

@@ -832,16 +832,39 @@ fn technique(
 /// Fighters who haven't fallen yet.
 type StillFighting = (With<Fighting>, Without<Dead>);
 
-/// Anyone who quits or disconnects in the middle of a fight is cut down as they go: no one
-/// escapes a fight by leaving the game. They die like anyone else, so their gear stays on their
-/// corpse and they wake at the shrine next time.
+/// Fights going on, and what can't fight back, for `in_danger`.
+pub type Fights<'w, 's> = (
+    Query<'w, 's, (Entity, &'static Fighting), Without<Dead>>,
+    Query<'w, 's, (), With<Inanimate>>,
+);
+
+/// Whether `who` is in a fight that can hurt them: fighting something that isn't inanimate, or
+/// set upon by anyone. Hacking at a training dummy is no danger.
+pub fn in_danger(
+    who: Entity,
+    fights: &Query<(Entity, &Fighting), Without<Dead>>,
+    inanimate: &Query<(), With<Inanimate>>,
+) -> bool {
+    fights.iter().any(|(fighter, Fighting(foe))| {
+        (fighter == who && inanimate.get(*foe).is_err()) || *foe == who
+    })
+}
+
+/// Anyone who disconnects in the middle of a fight is cut down as they go: no one escapes a
+/// fight by leaving the game (`quit` refuses while they're in one). They die like anyone else,
+/// so their gear stays on their corpse and they wake at the shrine next time.
 fn abandon_fights(
     mut commands: Commands,
     leaving: Query<(Entity, &Connection, &Player, &InRoom), StillFighting>,
+    fights: Query<(Entity, &Fighting), Without<Dead>>,
+    inanimate: Query<(), With<Inanimate>>,
     mut log: ResMut<Outbox>,
 ) {
     for (entity, conn, player, in_room) in &leaving {
         if !conn.closing {
+            continue;
+        }
+        if !in_danger(entity, &fights, &inanimate) {
             continue;
         }
         commands.entity(entity).insert(Dead).remove::<Fighting>();
@@ -3575,5 +3598,33 @@ mod tests {
             world.get::<Attributes>(trainee).unwrap().experience(),
             before
         );
+    }
+
+    #[test]
+    fn hacking_at_a_dummy_is_no_danger_but_any_real_fight_is() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        let (ada, bob) = (world.spawn_empty().id(), world.spawn_empty().id());
+        let dummy = world.spawn(Inanimate).id();
+        let rat = world.spawn_empty().id();
+        let danger = |world: &mut World, who: Entity| {
+            world
+                .run_system_once(
+                    move |fights: Query<(Entity, &Fighting), Without<Dead>>,
+                          inanimate: Query<(), With<Inanimate>>| {
+                        in_danger(who, &fights, &inanimate)
+                    },
+                )
+                .unwrap()
+        };
+        assert!(!danger(&mut world, ada), "not fighting");
+        world.entity_mut(ada).insert(Fighting(dummy));
+        assert!(!danger(&mut world, ada), "a dummy can't hit back");
+        world.entity_mut(rat).insert(Fighting(ada));
+        assert!(danger(&mut world, ada), "set upon while at the dummy");
+        world.entity_mut(bob).insert(Fighting(rat));
+        assert!(danger(&mut world, bob), "fighting something alive");
+        world.entity_mut(rat).insert(Dead);
+        assert!(!danger(&mut world, ada), "a dead attacker is no danger");
     }
 }

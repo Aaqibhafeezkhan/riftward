@@ -26,8 +26,8 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 ### Testing live
 
 - Never test against the real `mud.db`; use a scratch `MUD_DB`. The first account created on a fresh database becomes an admin.
-- Script sessions with `nc` (end with `quit`, or `nc` waits forever):
-  `( printf 'acct\r\npass\r\n'; sleep 1; printf '1\r\nlook\r\nquit\r\n'; sleep 1 ) | nc 127.0.0.1 4001`
+- Script sessions with `nc` (end with `quit` twice, character then menu, or `nc` waits forever):
+  `( printf 'acct\r\npass\r\n'; sleep 1; printf '1\r\nlook\r\nquit\r\nquit\r\n'; sleep 1 ) | nc 127.0.0.1 4001`
   Use a small Python socket client for things `nc` can't do (e.g. dropping the connection mid-fight).
 - **Builder/admin commands rewrite zone files in `assets/zones/`.** Back the folder up before a test that uses them and restore it after.
 - Stop a test server by the process on its port (`lsof -t -iTCP:4001 -sTCP:LISTEN`), never by name, so a real server on 4000 is left alone.
