@@ -4,12 +4,20 @@
     rarity: Common,
     attribute: Intuition,
     skills: {
-        // `bandage` fills in {target} as the patient: "yourself" for the one bandaging
-        // themselves, "themselves" for the room.
+        // {target} is the patient; bandaging yourself, it's "yourself" in your line and
+        // "themselves" in the room's, as for any skill or spell used on yourself.
         "first_aid": (
             name: "First Aid",
-            description: "Binding wounds with a bandage, with 'bandage [<someone>]', in a fight or out of one. The more they've lost, the harder it is; done well, it heals half your First Aid and stops bleeding. Each try uses up a bandage.",
-            kind: Active(command: "bandage"),
+            description: "Binding wounds with a bandage, with 'use first aid [<someone>]' or 'bandage [<someone>]', in a fight or out of one. The more they've lost, the harder it is; done well, it heals half your First Aid (level plus Intuition) and 1 to 3 more, and stops bleeding. Each try uses up a bandage.",
+            // Your First Aid against half the health they've lost.
+            kind: Active(
+                uses: "bandage",
+                against: "(target.most_health - target.health) / 2",
+                effects: [
+                    Heal(amount: "floor(power / 2) + roll(1, 3)"),
+                    Remove(condition: "bleeding"),
+                ],
+            ),
             text: (
                 hit: (
                     actor: "You bandage {target}.",

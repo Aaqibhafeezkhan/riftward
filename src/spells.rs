@@ -325,31 +325,63 @@ pub fn choose_target(
     candidates: Vec<(Entity, &Keywords)>,
     player: impl Fn(Entity) -> bool,
 ) -> Result<Entity, String> {
-    let words = words.trim();
-    let named = if words.is_empty() {
-        None
-    } else {
-        Some(
-            Target::parse(words)
-                .and_then(|t| t.find_one(caster, candidates))
-                .ok_or_else(|| format!("You don't see {words} here."))?,
-        )
+    let aimed = Aimed {
+        aim: spell.aim,
+        name: &spell.name,
+        verb: "cast",
+        at: "at",
     };
-    let target = match (spell.aim, named) {
-        (_, Some(target)) => target,
-        (Aim::Ally, None) => caster,
-        (Aim::Foe | Aim::Other, None) => {
-            foe.ok_or_else(|| format!("Cast {} at whom?", spell.name))?
+    aimed.choose(caster, foe, words, candidates, player)
+}
+
+/// Something aimed at someone, a spell or an active skill: how, and the words for asking whom.
+pub struct Aimed<'a> {
+    pub aim: Aim,
+    pub name: &'a str,
+    /// "cast", "use".
+    pub verb: &'a str,
+    /// "at", "on": "Cast Spark at whom?", "Use First Aid on whom?"
+    pub at: &'a str,
+}
+
+impl Aimed<'_> {
+    /// The one `words` name among `candidates`, or by default the user's `foe` or the user, as
+    /// its aim says. `player` says who's a player: nothing is aimed at one as a foe.
+    pub fn choose(
+        &self,
+        caster: Entity,
+        foe: Option<Entity>,
+        words: &str,
+        candidates: Vec<(Entity, &Keywords)>,
+        player: impl Fn(Entity) -> bool,
+    ) -> Result<Entity, String> {
+        let (verb, at, name) = (self.verb, self.at, self.name);
+        let words = words.trim();
+        let named = if words.is_empty() {
+            None
+        } else {
+            Some(
+                Target::parse(words)
+                    .and_then(|t| t.find_one(caster, candidates))
+                    .ok_or_else(|| format!("You don't see {words} here."))?,
+            )
+        };
+        let target = match (self.aim, named) {
+            (_, Some(target)) => target,
+            (Aim::Ally, None) => caster,
+            (Aim::Foe | Aim::Other, None) => {
+                foe.ok_or_else(|| format!("{} {name} {at} whom?", crate::items::capitalized(verb)))?
+            }
+        };
+        match self.aim {
+            Aim::Foe | Aim::Other if target == caster => {
+                Err(format!("You can't {verb} {name} {at} yourself."))
+            }
+            Aim::Foe if player(target) && player(caster) => {
+                Err("You can't attack other players.".into())
+            }
+            _ => Ok(target),
         }
-    };
-    match spell.aim {
-        Aim::Foe | Aim::Other if target == caster => {
-            Err(format!("You can't cast {} at yourself.", spell.name))
-        }
-        Aim::Foe if player(target) && player(caster) => {
-            Err("You can't attack other players.".into())
-        }
-        _ => Ok(target),
     }
 }
 

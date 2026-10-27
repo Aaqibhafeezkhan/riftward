@@ -33,13 +33,14 @@ use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
 use crate::effects::{self, Effect, Reaction, Resist};
 use crate::events::GameEvent;
+use crate::formula::Formula;
 use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
 };
-use crate::spells::{SpellDefs, Spells};
+use crate::spells::{Aim, SpellDefs, Spells};
 use crate::stealth::{Hidden, reveal};
 use crate::targeting::{Keywords, Target};
-use crate::vitals::{BaseHealth, Maxima, Vitals};
+use crate::vitals::Vitals;
 use crate::world::ron_options;
 
 /// Asset folder holding one `.skill.ron` file per skill tree.
@@ -211,6 +212,16 @@ impl SkillDef {
         if let SkillKind::Technique(t) = &self.kind {
             effects::check(&t.effects)?;
         }
+        if let SkillKind::Active {
+            command, effects, ..
+        } = &self.kind
+        {
+            match (command, effects.is_empty()) {
+                (Some(_), false) => return Err("does its command or its effects, not both".into()),
+                (None, true) => return Err("needs a command or effects".into()),
+                _ => effects::check(effects)?,
+            }
+        }
         if let SkillKind::Passive { reactions, .. } = &self.kind {
             reactions.iter().try_for_each(Reaction::check)?;
             if reactions.iter().any(|r| r.on.own()) {
@@ -226,7 +237,13 @@ impl SkillDef {
                 counter: Some(_), ..
             } => (true, false),
             // Its command says whether it worked.
-            SkillKind::Active { .. } => (false, true),
+            SkillKind::Active {
+                command: Some(_), ..
+            } => (false, true),
+            // Done to someone else, unless only to yourself; it can fail when it's a contest.
+            SkillKind::Active {
+                resist, against, ..
+            } => (true, resist.is_some() || against.is_some()),
             // Nothing to show.
             SkillKind::Passive { .. } | SkillKind::Aura { .. } => return Ok(()),
         };
@@ -237,6 +254,9 @@ impl SkillDef {
         let hurts = match &self.kind {
             SkillKind::Attack { .. } => true,
             SkillKind::Technique(t) => t.strike == StrikeKind::Hit,
+            SkillKind::Active { effects, .. } => {
+                effects.iter().any(|e| matches!(e, Effect::Damage { .. }))
+            }
             _ => false,
         };
         let lines = [
@@ -315,15 +335,37 @@ fn default_difficulty() -> f64 {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SkillKind {
-    /// Used on purpose, through `command`.
+    /// Used on purpose, with `use`: through its own `command`, for what's like nothing else
+    /// (picking a lock, tracking), or by doing its `effects` to someone, resolved like a spell.
     Active {
         /// The command that performs it: `use lockpicking north` runs `pick north`.
-        command: String,
+        #[serde(default)]
+        command: Option<String>,
         #[serde(default)]
         cost: Cost,
         /// Seconds before it can be used again.
         #[serde(default)]
         cooldown: f64,
+        /// Whom its effects are for: yourself or someone here (the default), or a foe.
+        #[serde(default = "ally")]
+        aim: Aim,
+        /// An item it uses up each try, by tag: First Aid's bandage.
+        #[serde(default)]
+        uses: Option<String>,
+        /// What the target resists it with, by opposed roll against the user's skill (its level
+        /// plus its attribute). Without, it always works, unless it's `against` a difficulty.
+        #[serde(default)]
+        resist: Option<Resist>,
+        /// A fixed difficulty to beat instead, a formula: how bad a wound is to bind,
+        /// `"(target.most_health - target.health) / 2"`.
+        #[serde(default)]
+        against: Option<Formula>,
+        /// What it is, for the skills that resist it, beside the tags of the conditions it puts on.
+        #[serde(default)]
+        tags: Vec<String>,
+        /// What it does. Formulas see the user's skill (level plus attribute) as `power`.
+        #[serde(default)]
+        effects: Vec<Effect>,
     },
     /// Practised whenever one of its triggers happens, and raising numbers as it levels.
     Passive {
@@ -364,6 +406,10 @@ pub enum SkillKind {
         affects: String,
         bonus: Bonus,
     },
+}
+
+fn ally() -> Aim {
+    Aim::Ally
 }
 
 /// A number a passive skill raises as it levels: one point for every `per` levels, plus `base`.
@@ -875,17 +921,6 @@ impl Practice<'_, '_> {
     /// Roll a value in `range`, higher being better, with `who`'s Luck.
     pub fn roll(&mut self, luck: i32, range: std::ops::RangeInclusive<i64>) -> i64 {
         self.dice.range(luck, range)
-    }
-
-    /// The current vitals of `who`, and their maximums (`base` for a mob's own health).
-    pub fn vitals(
-        &mut self,
-        who: Entity,
-        base: Option<&BaseHealth>,
-    ) -> Option<(Mut<'_, Vitals>, Maxima)> {
-        let (skills, vitals, attributes) = self.sheets.get_mut(who).ok()?;
-        let max = Maxima::of(&attributes, &skills, &self.defs, base);
-        Some((vitals, max))
     }
 
     /// Count one use of `key` by `who`: practice, maybe a level, maybe a discovery. Returns what
@@ -1496,21 +1531,38 @@ fn use_cmd(
                     }
                     None => Err(format!("You can't put {} to use yet.", skill.def.name)),
                 },
-                SkillKind::Active { command, .. } => match registry.find(command, actor.role) {
-                    Some((spec, id)) => {
-                        commands.run_system_with(
-                            *id,
-                            Invocation {
-                                entity: inv.entity,
-                                command: spec.name,
-                                usage: spec.usage,
-                                args: target.trim().into(),
-                            },
-                        );
-                        return;
+                // One like nothing else has its own command; the rest are their effects, done by
+                // `ability`, which shows a hidden user as casting does.
+                SkillKind::Active { command, .. } => {
+                    let (verb, args) = match command {
+                        Some(command) => (command.as_str(), target.trim().to_string()),
+                        None => ("ability", format!("{} {}", skill.key, target.trim())),
+                    };
+                    match registry.find(verb, actor.role) {
+                        Some((spec, id)) => {
+                            if command.is_none() && hidden.get(inv.entity).is_ok() {
+                                reveal(
+                                    &mut commands,
+                                    &mut events,
+                                    actor.entity,
+                                    &actor.name,
+                                    actor.room,
+                                );
+                            }
+                            commands.run_system_with(
+                                *id,
+                                Invocation {
+                                    entity: inv.entity,
+                                    command: spec.name,
+                                    usage: spec.usage,
+                                    args,
+                                },
+                            );
+                            return;
+                        }
+                        None => Err(format!("You can't put {} to use yet.", skill.def.name)),
                     }
-                    None => Err(format!("You can't put {} to use yet.", skill.def.name)),
-                },
+                }
             },
         },
         Err(_) => return,
@@ -2114,7 +2166,11 @@ mod tests {
                     .unwrap_or_else(|err| panic!("{} doesn't parse: {err}", path.display()));
                 let conditions = crate::combat::defs_on_disk();
                 for (id, skill) in &tree.skills {
-                    if let SkillKind::Active { command, .. } = &skill.kind {
+                    if let SkillKind::Active {
+                        command: Some(command),
+                        ..
+                    } = &skill.kind
+                    {
                         assert!(!command.is_empty(), "{id} has no command");
                     }
                     if let SkillKind::Attack { damage_type, .. } = &skill.kind {
@@ -2124,9 +2180,14 @@ mod tests {
                             path.display()
                         );
                     }
-                    // Every condition a technique leaves is a real one.
-                    if let SkillKind::Technique(t) = &skill.kind {
-                        for key in t.effects.iter().filter_map(Effect::condition) {
+                    // Every condition a technique or active skill leaves is a real one.
+                    let effects = match &skill.kind {
+                        SkillKind::Technique(t) => Some(&t.effects),
+                        SkillKind::Active { effects, .. } => Some(effects),
+                        _ => None,
+                    };
+                    if let Some(effects) = effects {
+                        for key in effects.iter().filter_map(Effect::condition) {
                             assert!(
                                 conditions.get(key).is_some(),
                                 "{} {id}: no condition '{key}'",

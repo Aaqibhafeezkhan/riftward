@@ -14,6 +14,7 @@
 //!
 //! Players can't fight each other yet.
 
+mod abilities;
 mod casting;
 mod effects;
 mod resolve;
@@ -131,6 +132,15 @@ impl Plugin for CombatPlugin {
                 CommandSpec::new("stop", Category::Character)
                     .summary("forget the actions you've queued up"),
                 stop,
+            )
+            // Run by `use` for an active skill made of effects; players don't type it.
+            .add_command(
+                CommandSpec::new("ability", Category::Interaction)
+                    .usage("use <skill> [<someone>]")
+                    .summary("use an active skill on yourself or someone here")
+                    .quiet()
+                    .unlisted(),
+                abilities::ability,
             )
             // Run by `use` for a technique; players don't type it themselves.
             .add_command(
@@ -2766,5 +2776,178 @@ mod tests {
         react_to_events(&mut world);
         assert!(world.get::<Dead>(bearer).is_some());
         assert_eq!(world.get::<Slayer>(bearer).unwrap().0, bearer);
+    }
+
+    /// Teach `who` an active skill made of these effects, at a level that can't fail an easy
+    /// contest, with First Aid's words.
+    fn active(
+        world: &mut World,
+        who: Entity,
+        key: &str,
+        aim: Aim,
+        uses: Option<&str>,
+        against: Option<&str>,
+        effects: Vec<Effect>,
+    ) {
+        let (key, skill) = skill(
+            key,
+            SkillKind::Active {
+                command: None,
+                cost: Cost::Stamina(2),
+                cooldown: 5.0,
+                aim,
+                uses: uses.map(String::from),
+                resist: None,
+                against: against.map(|f| Formula::parse(f).unwrap()),
+                tags: Vec::new(),
+                effects,
+            },
+        );
+        world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .insert(key.clone(), skill);
+        let mut state = SkillState::new("Template");
+        state.level = 1000;
+        world.get_mut::<Skills>(who).unwrap().0.insert(key, state);
+    }
+
+    /// A bandage in `who`'s hand.
+    fn bandage(world: &mut World, who: Entity) -> Entity {
+        let key = ItemKey::parse("bandage", "test");
+        let def = ItemDef {
+            tags: vec!["bandage".into()],
+            ..ItemDef::named("a bandage")
+        };
+        world
+            .resource_mut::<ItemTemplates>()
+            .0
+            .insert(key.clone(), def);
+        world
+            .spawn((
+                Item {
+                    key,
+                    name: "a bandage".into(),
+                    id: None,
+                    state: DoorState::Open,
+                    quality: Quality::Standard,
+                },
+                ItemLocation::Held(who),
+            ))
+            .id()
+    }
+
+    fn first_aid(world: &mut World, medic: Entity) {
+        active(
+            world,
+            medic,
+            "healing:first_aid",
+            Aim::Ally,
+            Some("bandage"),
+            Some("(target.most_health - target.health) / 2"),
+            vec![
+                Effect::Heal {
+                    amount: Formula::parse("10").unwrap(),
+                },
+                Effect::Remove {
+                    condition: "bleeding".into(),
+                    on: Who::Target,
+                },
+            ],
+        );
+    }
+
+    fn use_ability(world: &mut World, who: Entity, args: &str) {
+        let inv = Invocation {
+            entity: who,
+            command: "ability",
+            usage: "",
+            args: args.into(),
+        };
+        world.run_system_once_with(abilities::ability, inv).unwrap();
+        world.flush();
+    }
+
+    #[test]
+    fn first_aid_binds_a_wound_with_a_bandage() {
+        let (mut world, room) = world();
+        let medic = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let patient = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world
+            .entity_mut(patient)
+            .insert(Keywords::from_name("patient"));
+        first_aid(&mut world, medic);
+        let roll = bandage(&mut world, medic);
+        world.get_mut::<Vitals>(patient).unwrap().health = 50.0;
+        let defs = defs_on_disk();
+        world
+            .get_mut::<Conditions>(patient)
+            .unwrap()
+            .apply(&defs, "bleeding", 1, Lasts::Turns(5));
+        use_ability(&mut world, medic, "healing:first_aid patient");
+        assert_eq!(world.get::<Vitals>(patient).unwrap().health, 60.0);
+        assert!(!world.get::<Conditions>(patient).unwrap().has("bleeding"));
+        assert!(world.get_entity(roll).is_err(), "the bandage is used up");
+        assert_eq!(world.get::<Vitals>(medic).unwrap().stamina, 98.0);
+        assert!(said(&world, medic, "You first_aid the brawler. (+10)"));
+        assert!(said(&world, patient, "The brawler first_aids you. (+10)"));
+        // And it needs a moment before the next.
+        bandage(&mut world, medic);
+        use_ability(&mut world, medic, "healing:first_aid patient");
+        assert!(said(&world, medic, "You need a moment"));
+    }
+
+    #[test]
+    fn first_aid_needs_a_wound_and_a_bandage() {
+        let (mut world, room) = world();
+        let medic = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        first_aid(&mut world, medic);
+        use_ability(&mut world, medic, "healing:first_aid");
+        assert!(said(&world, medic, "You aren't hurt."));
+        world.get_mut::<Vitals>(medic).unwrap().health = 50.0;
+        use_ability(&mut world, medic, "healing:first_aid");
+        assert!(said(&world, medic, "You have no bandages."));
+        assert_eq!(
+            world.get::<Vitals>(medic).unwrap().stamina,
+            100.0,
+            "nothing spent on a refusal"
+        );
+        bandage(&mut world, medic);
+        use_ability(&mut world, medic, "healing:first_aid");
+        assert_eq!(
+            world.get::<Vitals>(medic).unwrap().health,
+            60.0,
+            "on yourself"
+        );
+    }
+
+    #[test]
+    fn an_active_skill_turned_on_a_foe_starts_a_fight() {
+        let (mut world, room) = world();
+        let bully = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let victim = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world
+            .entity_mut(victim)
+            .insert(Keywords::from_name("victim"));
+        active(
+            &mut world,
+            bully,
+            "presence:glare",
+            Aim::Foe,
+            None,
+            None,
+            vec![Effect::Apply {
+                condition: "exposed".into(),
+                strength: Formula::number(1.0),
+                lasts: Lasting::Turns(2),
+                on: Who::Target,
+            }],
+        );
+        use_ability(&mut world, bully, "presence:glare");
+        assert!(said(&world, bully, "Use presence:glare on whom?"));
+        use_ability(&mut world, bully, "presence:glare victim");
+        assert!(world.get::<Conditions>(victim).unwrap().has("exposed"));
+        assert_eq!(world.get::<Fighting>(bully).map(|f| f.0), Some(victim));
+        assert_eq!(world.get::<Fighting>(victim).map(|f| f.0), Some(bully));
     }
 }

@@ -100,6 +100,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             target,
             rating: power,
             resist: spell.resist,
+            against: None,
             tags: effects::tags(&spell.tags, &spell.effects, self.conditions),
             blow: None,
             effects: &spell.effects,

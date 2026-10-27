@@ -283,7 +283,7 @@ The skill core, without combat, proved on non-combat skills first:
   "endurance": (name: "Endurance", attribute: Willpower, kind: Passive(triggers: [StaminaSpent(per: 3)])),
   ```
 
-  An **active** skill names the command that performs it; `use lockpicking north` runs `pick north`, so `use` stays generic and each skill's work lives with the system it acts on. The command checks the skill is known, off its use cooldown and affordable, pays the stamina, does its work, and counts the use. An active skill whose command doesn't exist yet ("You can't put Pickpocketing to use yet") can still be known and taught.
+  An **active** skill either is made of effects, resolved like a spell (First Aid: see [Active skills, as built](effects.md#active-skills-as-built)), or names the command that performs it, for what's like nothing else; `use lockpicking north` runs `pick north`, so `use` stays generic and each skill's work lives with the system it acts on. The command checks the skill is known, off its use cooldown and affordable, pays the stamina, does its work, and counts the use. An active skill whose command doesn't exist yet ("You can't put Pickpocketing to use yet") can still be known and taught.
 
   A **passive** skill lists [game event](architecture.md#game-events) triggers; `StaminaSpent(per: 3)` counts one use for every 3 stamina spent, so Endurance improves as a character exerts themselves, `Dodged` practises Dodge, `Blocked` practises Block, and `HitInArmour` practises Heavy Armour.
 

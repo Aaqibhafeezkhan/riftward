@@ -10,27 +10,19 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::Conditions;
-
-/// The condition a bandage stops.
-const BLEEDING: &str = "bleeding";
-use crate::command::{AddCommand, Category, CommandSpec, Invocation};
-use crate::db::Database;
+use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
+use crate::db::{Database, Role};
 use crate::dice::Dice;
 use crate::events::GameEvent;
-use crate::items::{self, Item, ItemLocation, ItemQuery, ItemTemplates, Snapshot, capitalized};
-use crate::mobs::{self, MobQuery};
-use crate::output::{Actor, Characters, Outbox, Outgoing, deliver, targets_in_room};
-use crate::skills::{Learner, Practice, SkillDefs, Skills, fill};
-use crate::stealth::{Hidden, visible};
-use crate::targeting::{Keywords, Target};
+use crate::items::{self, Item, ItemLocation, ItemQuery, ItemTemplates, Snapshot};
+use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
+use crate::skills::{SkillDefs, Skills};
+use crate::targeting::Keywords;
 use crate::vitals::{BaseHealth, Maxima, Nourished, Vitals};
-use crate::world::{Consume, Player};
+use crate::world::Consume;
 
 /// The skill `bandage` uses.
 const FIRST_AID: &str = "healing:first_aid";
-/// The tag that makes an item a bandage.
-const BANDAGE: &str = "bandage";
 
 pub struct HealingPlugin;
 
@@ -190,7 +182,7 @@ fn consume(inv: Invocation, how: Consume, mut p: Pantry) {
 }
 
 /// An item used up: gone from the world, and from the database if it was real.
-fn used_up(commands: &mut Commands, db: &Database, entity: Entity, item: &Item) {
+pub fn used_up(commands: &mut Commands, db: &Database, entity: Entity, item: &Item) {
     if let Some(id) = item.id
         && let Err(err) = db.delete_item(id)
     {
@@ -199,149 +191,35 @@ fn used_up(commands: &mut Commands, db: &Database, entity: Entity, item: &Item) 
     commands.entity(entity).despawn();
 }
 
-/// `bandage [<someone>]`: First Aid. Uses up a bandage you carry; whether it helps is your First
-/// Aid (level plus Intuition) against half the health they've lost, by opposed roll.
-/// If it does, it heals half your First Aid plus 1 to 3, and stops their bleeding.
-#[allow(clippy::too_many_arguments)]
+/// `bandage [<someone>]`: First Aid, by its old name. It's an active skill made of effects
+/// (`healing.skill.ron`), so this is `use first aid`.
 fn bandage(
     In(inv): In<Invocation>,
     mut commands: Commands,
-    players: Characters,
     mut outbox: ResMut<Outbox>,
-    mobs: MobQuery,
-    items: ItemQuery,
-    keywords: Query<&Keywords>,
-    templates: Res<ItemTemplates>,
-    mut practice: Practice,
-    mut conditions: Query<&mut Conditions>,
-    bases: Query<&BaseHealth>,
-    hidden: Query<&Hidden>,
-    db: Res<Database>,
+    sheets: Query<&Skills>,
+    registry: Res<CommandRegistry>,
 ) {
-    let Some(actor) = Actor::get(&players, inv.entity) else {
+    if !sheets
+        .get(inv.entity)
+        .is_ok_and(|s| s.0.contains_key(FIRST_AID))
+    {
+        outbox.0.push(Outgoing::line(
+            inv.entity,
+            "You don't know First Aid. A healer could teach you.",
+        ));
+        return;
+    }
+    let Some((spec, id)) = registry.find("ability", Role::Player) else {
         return;
     };
-    let mut out = Vec::new();
-    let mut gains = Vec::new();
-    let reply = (|| {
-        // Who: someone here, or yourself.
-        let patient = if inv.args.trim().is_empty() {
-            actor.entity
-        } else {
-            let target = Target::parse(inv.args.trim()).ok_or_else(|| inv.usage_error())?;
-            let mut candidates = targets_in_room(actor.room, &players, &keywords);
-            candidates.extend(mobs::targets_in(actor.room, &mobs, &keywords));
-            let candidates = visible(actor.entity, candidates, &hidden);
-            target
-                .find_one(actor.entity, candidates)
-                .ok_or_else(|| format!("You don't see {} here.", target.describe()))?
-        };
-        let me = patient == actor.entity;
-        let name = if me {
-            "yourself".to_string()
-        } else {
-            players
-                .get(patient)
-                .ok()
-                .and_then(|(_, p, _, _)| p.map(|p: &Player| p.name.clone()))
-                .or_else(|| {
-                    mobs.get(patient)
-                        .ok()
-                        .map(|(_, m, _)| crate::combat::the(&m.name))
-                })
-                .unwrap_or_else(|| "someone".into())
-        };
-        let (missing, bleeding) = {
-            let (vitals, max) = practice
-                .vitals(patient, bases.get(patient).ok())
-                .ok_or_else(String::new)?;
-            let bleeding = conditions.get(patient).is_ok_and(|c| c.has(BLEEDING));
-            (max.health as f32 - vitals.health, bleeding)
-        };
-        if missing < 1.0 && !bleeding {
-            return Err(if me {
-                "You aren't hurt.".to_string()
-            } else {
-                format!("{} isn't hurt.", capitalized(&name))
-            });
-        }
-        // A bandage you carry.
-        let snapshot = Snapshot::new(items.iter().map(|(e, i, l)| (e, i, *l)), &templates);
-        let roll_of_cloth = items
-            .iter()
-            .find(|(entity, item, _)| {
-                snapshot.root(*entity).and_then(ItemLocation::holder) == Some(actor.entity)
-                    && templates
-                        .0
-                        .get(&item.key)
-                        .is_some_and(|def| def.tags.iter().any(|t| t == BANDAGE))
-            })
-            .map(|(entity, item, _)| (entity, item))
-            .ok_or("You have no bandages.")?;
-        let ready = practice.begin(actor.entity, FIRST_AID)?;
-        let skill = f64::from(ready.effectiveness.max(1));
-        // Half the health they've lost is how hard the wound is to treat.
-        let wound = f64::from((missing / 2.0).max(1.0));
-        let helped = practice.opposed(skill, ready.luck, wound, 0).won;
-        let healed = if helped {
-            let healed = ready.effectiveness / 2 + practice.roll(ready.luck, 1..=3) as i32;
-            if let Some((mut vitals, max)) = practice.vitals(patient, bases.get(patient).ok()) {
-                vitals.health += healed as f32;
-                vitals.clamp(max);
-            }
-            if let Ok(mut conditions) = conditions.get_mut(patient) {
-                conditions.remove(BLEEDING);
-            }
-            Some(healed)
-        } else {
-            None
-        };
-        used_up(&mut commands, &db, roll_of_cloth.0, roll_of_cloth.1);
-        let learner = Learner {
-            character_id: actor.character_id,
-            race: &actor.race,
-            boost: 1.0,
-        };
-        gains = practice.exercise(actor.entity, learner, FIRST_AID);
-
-        // Told in First Aid's words.
-        let text = practice
-            .defs
-            .skills
-            .get(FIRST_AID)
-            .and_then(|skill| skill.def.text.clone())
-            .ok_or_else(String::new)?;
-        let lines = match (helped, &text.miss) {
-            (false, Some(miss)) => miss,
-            _ => &text.hit,
-        };
-        let healed = healed.map_or_else(String::new, |n| format!(" (+{n})"));
-        // Everyone else here sees it; a patient who's a player is told their own way.
-        let theirs = if me { "themselves" } else { name.as_str() };
-        let seen = fill(&lines.room, &[("actor", &actor.name), ("target", theirs)]);
-        for (watcher, _, _, at) in &players {
-            if at.0 == actor.room && watcher != actor.entity && watcher != patient {
-                out.push(Outgoing::line(watcher, seen.clone()));
-            }
-        }
-        if !me && let Some(told) = &lines.target {
-            out.push(Outgoing::line(
-                patient,
-                fill(told, &[("actor", &actor.name), ("target", "you")]) + &healed,
-            ));
-        }
-        Ok(fill(&lines.actor, &[("actor", &actor.name), ("target", &name)]) + &healed)
-    })();
-    match reply {
-        Ok(text) | Err(text) if !text.is_empty() => {
-            out.insert(0, Outgoing::line(actor.entity, text))
-        }
-        _ => {}
-    }
-    out.extend(
-        gains
-            .into_iter()
-            .map(|line| Outgoing::line(actor.entity, line)),
+    commands.run_system_with(
+        *id,
+        Invocation {
+            entity: inv.entity,
+            command: spec.name,
+            usage: spec.usage,
+            args: format!("{FIRST_AID} {}", inv.args.trim()),
+        },
     );
-    deliver(out, &mut outbox);
 }

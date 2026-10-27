@@ -865,6 +865,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             target,
             rating,
             resist: t.map_or(Some(Resist::Evasion), |t| t.resist),
+            against: None,
             tags: effects::tags(
                 t.map_or(&[][..], |t| &t.tags),
                 &all_effects,

@@ -34,8 +34,11 @@ pub(super) struct Use<'a> {
     pub target: Entity,
     /// The user's side of the contest: an attack rating, or a caster's power.
     pub rating: i32,
-    /// The target's side; without, it always lands.
+    /// The target's side; without, it always lands, unless it's `against` a difficulty.
     pub resist: Option<Resist>,
+    /// A fixed difficulty to beat instead of the target's resistance, rolled without Luck on its
+    /// side: how bad a wound is to bind.
+    pub against: Option<f64>,
     /// What it is (`effects::tags`), for the target's skills that resist it.
     pub tags: Vec<String>,
     /// A blow's damage, for an attack or a technique that strikes to hurt.
@@ -151,15 +154,17 @@ impl Round<'_, '_, '_, '_, '_, '_> {
 
         // The user's rating against the target's, by opposed roll; how decisively it wins is how
         // hard it lands. An opener from hiding can't be dodged: Backstab from the shadows lands.
-        let (hit, blow, margin) = match rating {
+        let theirs = match (rating, u.against) {
+            (Some(rating), _) => Some((f64::from(rating.max(1)), d_luck)),
+            (None, Some(difficulty)) => Some((difficulty.max(1.0), 0)),
+            (None, None) => None,
+        };
+        let (hit, blow, margin) = match theirs {
             None => (true, Blow::Solid, 1.0),
-            Some(rating) => {
-                let contest = self.dice.opposed(
-                    f64::from(u.rating.max(1)),
-                    a_luck,
-                    f64::from(rating.max(1)),
-                    d_luck,
-                );
+            Some((theirs, their_luck)) => {
+                let contest =
+                    self.dice
+                        .opposed(f64::from(u.rating.max(1)), a_luck, theirs, their_luck);
                 let ambush = u.opener && self.ambushers.contains(&user);
                 match (ambush, contest.won) {
                     (true, false) => (true, Blow::Solid, contest.margin),
@@ -479,6 +484,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 target: other,
                 rating: 0,
                 resist: None,
+                against: None,
                 tags: Vec::new(),
                 blow: None,
                 effects: &effects,
