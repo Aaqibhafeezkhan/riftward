@@ -432,6 +432,10 @@
     mobs: {
         "town_guard": (
             name: "a town guard",
+            tags: ["townsfolk"],
+            // Goes for any stranger to the town, a rat or worse; never townsfolk or players.
+            allies: ["townsfolk", "players"],
+            aggressive: true,
             race: "human",
             keywords: ["town", "guard", "watchman"],
             here: "A town guard keeps watch, one hand resting on the hilt of a short sword.",
@@ -447,6 +451,10 @@
         ),
         "stray_dog": (
             name: "a stray dog",
+            tags: ["townsfolk"],
+            // Goes for any stranger to the town, a rat or worse; never townsfolk or players.
+            allies: ["townsfolk", "players"],
+            aggressive: true,
             keywords: ["stray", "dog", "mutt"],
             here: "A scruffy stray dog noses through the gutter for scraps.",
             description: "A lean, rangy mutt of no particular breed, with one torn ear and a hopeful tail. Every market stall-keeper knows it, and most of them pretend not to feed it.",
@@ -457,6 +465,7 @@
         ),
         "contract_clerk": (
             name: "the contract clerk",
+            tags: ["townsfolk"],
             race: "human",
             keywords: ["contract", "clerk"],
             here: "The contract clerk sits behind a desk heaped with ledgers, pen scratching.",
@@ -464,6 +473,7 @@
         ),
         "herbalist": (
             name: "the herbalist",
+            tags: ["townsfolk"],
             race: "human",
             keywords: ["herbalist", "woman"],
             here: "The herbalist sorts dried leaves into bundles, muttering their names.",
@@ -478,6 +488,7 @@
         ),
         "provisioner": (
             name: "the provisioner",
+            tags: ["townsfolk"],
             race: "human",
             keywords: ["provisioner", "stallholder", "merchant"],
             here: "The provisioner leans on a counter stacked with loaves, packs and folded cloth, calling out prices.",
@@ -496,6 +507,7 @@
         ),
         "tinker": (
             name: "the tinker",
+            tags: ["townsfolk"],
             race: "dwarf",
             keywords: ["tinker", "mender"],
             here: "The tinker sits at a cluttered bench, hammering a dent out of a pot.",
@@ -512,6 +524,7 @@
         ),
         "hooded_figure": (
             name: "a hooded figure",
+            tags: ["townsfolk"],
             race: "human",
             keywords: ["hooded", "figure", "stranger"],
             here: "A hooded figure leans in a doorway, so still you almost missed them.",
@@ -522,6 +535,7 @@
         ),
         "drill_sergeant": (
             name: "the drill sergeant",
+            tags: ["townsfolk"],
             race: "ork",
             keywords: ["drill", "sergeant"],
             here: "The drill sergeant paces the yard, barking at anyone who stands still.",
@@ -542,6 +556,7 @@
         ),
         "shrine_keeper": (
             name: "the keeper of the shrine",
+            tags: ["townsfolk"],
             race: "human",
             keywords: ["keeper", "shrine", "priestess"],
             here: "The keeper of the shrine tends the candles, murmuring a prayer over each.",
@@ -553,6 +568,7 @@
         ),
         "magister": (
             name: "the magister",
+            tags: ["townsfolk"],
             race: "elf",
             keywords: ["magister", "scholar", "mage"],
             here: "The magister sits at the reading desk, quill scratching beside a towering stack of books.",
@@ -564,6 +580,7 @@
         ),
         "ascetic": (
             name: "an old ascetic",
+            tags: ["townsfolk"],
             race: "human",
             keywords: ["old", "ascetic", "monk"],
             here: "An old ascetic sits cross-legged at the parapet, breathing slowly, utterly still.",

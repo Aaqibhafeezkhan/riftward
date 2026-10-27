@@ -124,6 +124,8 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     health: 3,                        // instead of 8 + Body / 2; Toughness still adds to it
     tactics: 25,                      // % chance a turn to use a combat skill instead (default 25)
     aggressive: true,                 // attacks players in its room, with `kill`
+    tags: ["vermin"],                 // what it is, for others' allies
+    allies: ["vermin"],               // with allies, attacks anyone here who isn't one, mobs too
 ),
 ```
 
@@ -133,13 +135,31 @@ Mobs use equipment as players do: a mob holding a sword fights with it (and its 
 
 Mobs share players' vitals and recover by the same rules, at their own maximums: out of a fight, a hurt or winded mob gets its health and stamina back. Mobs use their skills the way players do. Besides its auto-attack, a mob uses the other combat skills it knows (technique skills like Cleave or Guard, spells, and active skills made of effects, like First Aid): each turn, with its `tactics` chance, it uses one it can right then and that would do some good, picked at random, in place of its auto-attack. A technique needs its attack ready and the stamina; a heal, being below half health; a condition, a target that doesn't have it yet; an active skill, being ready and anything it uses up to hand (a bandage). Openers like Backstab are for starting fights, so a mob already in one never picks them, nor what makes no sense mid-fight: hiding, stealing, finding or reading things.
 
-### Mobs fighting mobs (planned)
+### Mobs fighting mobs
 
-Noted 2026-10-27. Today an aggressive mob attacks only players, so when the rats break out into Riftwatch, the guards and the stray dog stand by. Mobs should be able to fight each other:
+*Built* (2026-10-27). A mob template can say what it is, `tags: ["vermin"]`, and who an aggressive one leaves alone, `allies`: tags, templates (`sewer_rat`, `zone:mob`) or `players`, and always its own kind. With `allies`, an aggressive mob attacks anyone in the room it has noticed who isn't one, mobs as well as players; without, it attacks players only, as before.
 
-- **A template says who its allies are,** and `aggressive` means attacking anyone in the room who isn't one. Rats are allies of rats and the Rat King; the town's guards and dogs of the townsfolk and players. A rat in the market then goes for the dog, the dog for the rat, and the guards join in.
-- **Allies might be named by template, by tag** (`vermin`, `townsfolk`), or by spawn, and default to "its own kind" so today's mobs behave as now. A simpler first step: aggressive mobs attack anything not of their own template.
-- **What it touches:** `aggression` (who a mob picks a fight with: today players only, by `kill`), packs (how many gang up on one target), experience and loot (a mob killed by a mob gives no one anything), and whether guards defend players who are attacked.
+```ron
+"town_guard": (
+    name: "a town guard",
+    tags: ["townsfolk"],
+    allies: ["townsfolk", "players"],   // any stranger to the town, a rat or worse
+    aggressive: true,
+    ...
+),
+"sewer_rat": (
+    tags: ["vermin"],
+    allies: ["vermin"],                 // players, and the guards and dogs of the town
+    aggressive: true,
+    ...
+),
+```
+
+- **In Riftwatch** every townsperson is `townsfolk`, and the guards and the stray dog are aggressive towards anything that isn't, so when the rats break out the guards and the dog fight them. The rats and the Rat King are `vermin`, aggressive to everyone else.
+- **The same rules as against a player:** a fight is picked as `kill` picks one (`attack` in `combat/mod.rs`), only on someone noticed, and a spawn's `pack` limits how many gang up on one.
+- **Kills:** a mob killed by a mob gives no one experience, and its coins stay in its corpse; only a player's kill takes them.
+- **The zone test** checks every ally is `players`, a mob template, or a tag some mob has.
+- **Next, reinforcements** (planned): a guard losing a fight shouts for help, and the other guards nearby come running. A reaction on `Hurt(0.5)` with a new effect, say `CallForHelp(rooms: n)`, bringing allies within `n` rooms to the fight; its allies are the ones that answer.
 
 ## Building mobs and spawns
 

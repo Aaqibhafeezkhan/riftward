@@ -51,6 +51,9 @@
     mobs: {
         "sewer_rat": (
             name: "a sewer rat",
+            tags: ["vermin"],
+            // Goes for anyone who isn't vermin: players, and the guards and dogs of the town.
+            allies: ["vermin"],
             keywords: ["sewer", "rat"],
             here: "A sewer rat scurries along the edge of the channel.",
             description: "A fat, filthy rat as long as your forearm, not counting the tail. It watches you with bright black eyes and doesn't seem nearly as afraid as it should be.",
@@ -64,6 +67,9 @@
         ),
         "rat_king": (
             name: "the Rat King",
+            tags: ["vermin"],
+            // Goes for anyone who isn't vermin: players, and the guards and dogs of the town.
+            allies: ["vermin"],
             keywords: ["rat", "king"],
             here: "The Rat King squats on a mound of gnawed bones, a dozen tails knotted together beneath it.",
             description: "Not one rat but a seething knot of them, their tails fused into a single tangled mass, moving with one mind. Dozens of black eyes turn to follow you. It is the size of a dog, and it is hungry.",

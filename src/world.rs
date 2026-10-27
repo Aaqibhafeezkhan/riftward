@@ -731,9 +731,18 @@ pub struct MobDef {
     /// its attack; without one, 25.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tactics: Option<u32>,
-    /// Attacks players who come near, instead of only fighting back.
+    /// Attacks who comes near, instead of only fighting back: players, or with `allies`, anyone
+    /// who isn't one.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub aggressive: bool,
+    /// What it is, for others' `allies`: `vermin`, `townsfolk`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    /// Who an aggressive mob leaves alone, by tag (`vermin`), template (`sewer_rat` or
+    /// `zone:mob`) or `players`; its own kind always is. Set, it attacks anyone else here, mobs
+    /// too: guards go for the rats. Without, it attacks players only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allies: Option<Vec<String>>,
     /// Copper it carries, low to high, rolled when it dies and taken by whoever killed it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coins: Option<(u32, u32)>,
@@ -750,6 +759,24 @@ pub struct MobDef {
 }
 
 impl MobDef {
+    /// Whether, aggressive, it leaves `other` alone: `None` for a player, or a mob's template key
+    /// and template. Without `allies`, everyone but players is spared; with, only its own kind
+    /// and those its allies name.
+    pub fn spares(&self, own: &MobKey, other: Option<(&MobKey, &MobDef)>) -> bool {
+        let Some(allies) = &self.allies else {
+            return other.is_some();
+        };
+        match other {
+            None => allies.iter().any(|a| a == "players"),
+            Some((key, def)) => {
+                key == own
+                    || allies
+                        .iter()
+                        .any(|a| MobKey::parse(a, &own.zone) == *key || def.tags.contains(a))
+            }
+        }
+    }
+
     /// A plain mob with just a name, as builders create them.
     pub fn named(name: &str) -> Self {
         Self {
@@ -766,6 +793,8 @@ impl MobDef {
             health: None,
             tactics: None,
             aggressive: false,
+            tags: Vec::new(),
+            allies: None,
             coins: None,
             shop: None,
             spells: Vec::new(),
@@ -1844,6 +1873,18 @@ mod tests {
                     && !races.contains(race)
                 {
                     problems.push(format!("mob {}:{mob_id}: no race '{race}'", zone.id));
+                }
+                // Each ally is players, a mob template, or a tag some mob has.
+                for ally in mob.allies.iter().flatten() {
+                    let tagged = zones
+                        .iter()
+                        .any(|z| z.mobs.values().any(|m| m.tags.contains(ally)));
+                    if ally != "players" && !tagged && !mob_exists(&MobKey::parse(ally, &zone.id)) {
+                        problems.push(format!(
+                            "mob {}:{mob_id}: ally '{ally}' is no mob, tag or 'players'",
+                            zone.id
+                        ));
+                    }
                 }
             }
             // A shop's goods must exist and have a price, or they'd quietly go unsold.
