@@ -35,6 +35,8 @@ pub struct Progression {
     pub discovery_experience: u64,
     /// Experience for Awakening to a magical tradition.
     pub awakening_experience: u64,
+    /// Real minutes for a skill's practice to halve while it goes unused.
+    pub practice_half_life_minutes: f64,
 }
 
 /// Where the progression numbers live, from where the server runs.

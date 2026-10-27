@@ -1,5 +1,5 @@
-// How characters grow: Karma and experience. Read when the server starts, so restart it after a
-// change. See docs/progression.md#character-level-and-experience.
+// How characters grow: Karma, experience, and how fast practice fades. Read when the server
+// starts, so restart it after a change. See docs/progression.md#character-level-and-experience.
 (
     // Karma every character starts with (a race can add more: humans get 12).
     starting_karma: 20,
@@ -16,4 +16,8 @@
     discovery_experience: 50,
     // Experience for Awakening to a magical tradition.
     awakening_experience: 100,
+    // Real minutes for a skill's practice (how warmed up it is) to halve while it goes unused:
+    // a break of an hour or two keeps most of it, an evening away leaves it cold.
+    // See docs/progression.md#the-gain-roll.
+    practice_half_life_minutes: 240,
 )

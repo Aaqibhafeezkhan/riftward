@@ -48,8 +48,6 @@ pub const SKILLS_PATH: &str = "skills";
 /// The extension skill tree files use.
 const SKILL_EXTENSION: &str = "skill.ron";
 
-/// How long practice takes to halve while a skill goes unused, in seconds.
-const PRACTICE_HALF_LIFE: f64 = 30.0 * 60.0;
 /// The gain chance of an untouched skill at level 0, before practice and difficulty.
 const BASE_GAIN_CHANCE: f64 = 0.25;
 /// The level at which the gain chance is half its first: it's 25 / (25 + level) of it.
@@ -829,7 +827,9 @@ pub struct Skills(pub BTreeMap<String, SkillState>);
 
 /// Practice after `elapsed` seconds unused.
 pub fn faded(practice: f64, elapsed: i64) -> f64 {
-    practice * 0.5f64.powf(elapsed.max(0) as f64 / PRACTICE_HALF_LIFE)
+    // How long practice takes to halve while a skill goes unused (`progression.ron`).
+    let half_life = crate::attributes::progression().practice_half_life_minutes * 60.0;
+    practice * 0.5f64.powf(elapsed.max(0) as f64 / half_life.max(1.0))
 }
 
 /// The chance one use gains a level.
@@ -1893,9 +1893,11 @@ mod tests {
     }
 
     #[test]
-    fn practice_halves_every_half_hour() {
-        assert!(close(faded(0.88, 1800), 0.44));
-        assert!(close(faded(0.88, 7200), 0.055));
+    fn practice_halves_every_half_life() {
+        // However long `progression.ron` says that is.
+        let half_life = crate::attributes::progression().practice_half_life_minutes * 60.0;
+        assert!(close(faded(0.88, half_life as i64), 0.44));
+        assert!(close(faded(0.88, (half_life * 4.0) as i64), 0.055));
         assert!(close(faded(0.5, 0), 0.5));
     }
 
