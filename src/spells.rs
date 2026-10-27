@@ -130,6 +130,8 @@ pub enum Aim {
     Room,
     /// An item the user can reach, carried or here: Appraisal. Active skills only, for now.
     Item,
+    /// The user and no one else: Stealth's hiding.
+    Me,
 }
 
 pub use crate::effects::Resist;
@@ -383,6 +385,10 @@ impl Aimed<'_> {
             )
         };
         let target = match (self.aim, named) {
+            (Aim::Me, Some(target)) if target != caster => {
+                return Err(format!("You can only {verb} {name} {at} yourself."));
+            }
+            (Aim::Me, _) => caster,
             (_, Some(target)) => target,
             (Aim::Ally, None) => caster,
             (Aim::Foe | Aim::Other, None) => {

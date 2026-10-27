@@ -12,9 +12,12 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use super::resolve::{Outcome, Use};
+use super::states::HIDDEN;
 use super::states::{ConditionDefs, Imbued, ItemConditions};
+use super::strike::told;
 use super::strike::{Fighters, Round};
 use super::{Fighting, calm, fell};
+use crate::attributes::Attribute;
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
 use crate::db::Role;
@@ -72,6 +75,19 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             return Err("You can't steal from other players.".into());
         }
         self.needed(user, target, effects)?;
+        // Hiding is plain to see in a fight.
+        let hiding = effects.iter().find_map(|e| match e {
+            Effect::Apply {
+                condition,
+                strength,
+                lasts,
+                on: Who::User,
+            } if condition == HIDDEN => Some((strength, *lasts)),
+            _ => None,
+        });
+        if hiding.is_some() && self.fighters.get(user).is_ok_and(|f| f.fighting.is_some()) {
+            return Err("You can't hide in the middle of a fight!".into());
+        }
         let item = match uses {
             Some(tag) => Some(
                 self.carried(user, tag)
@@ -96,17 +112,57 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 (state.ready_at - now).ceil()
             ));
         }
-        state.ready_at = now + cooldown;
         let power = state.level as i32 + f.attributes.get(skill.attribute);
+        let luck = f.attributes.get(Attribute::Luck);
+        if let Cost::Stamina(n) = *cost
+            && f.vitals.stamina < n as f32
+        {
+            return Err("You're too tired. Rest a little first.".into());
+        }
+        if let Some(state) = f.skills.0.get_mut(key) {
+            state.ready_at = now + cooldown;
+        }
         if let Cost::Stamina(n) = *cost {
-            if f.vitals.stamina < n as f32 {
-                return Err("You're too tired. Rest a little first.".into());
-            }
             f.vitals.stamina -= n as f32;
             self.events.write(GameEvent::StaminaSpent {
                 who: user,
                 amount: n as f32,
             });
+        }
+
+        // Hiding: everyone here rolls to notice, their Intuition against how well the user hid,
+        // before anything is told, so only those who noticed see it. Seen by them all, it fails.
+        let mut effects = effects.clone();
+        if let Some((strength, lasts)) = hiding {
+            let inputs = self.inputs(user, user, power, 1.0);
+            let stealth = strength.amount(&inputs, self.dice, luck).max(1);
+            let (seen_by, everyone) = self.notice(user, stealth, luck);
+            if everyone {
+                let name = capitalized(&self.name(user));
+                let miss = text.miss.as_ref().unwrap_or(&text.hit);
+                // Done to themselves, as `resolve` says it.
+                let (mine, ..) = told(miss, &name, "yourself");
+                let (.., seen) = told(miss, &name, "themselves");
+                let room = self.fighters.get(user).map(|f| f.in_room.0);
+                self.say(user, mine);
+                if let Ok(room) = room {
+                    self.tell_room(room, user, user, &seen);
+                }
+                self.practise(user, key);
+                return Ok(Used {
+                    outcome: Outcome::default(),
+                    item,
+                });
+            }
+            let lasts = lasts.lasts(now);
+            if let Ok(mut f) = self.fighters.get_mut(user)
+                && f.conditions.apply(self.conditions, HIDDEN, stealth, lasts)
+                && let Some(hidden) = f.conditions.hidden_mut()
+            {
+                hidden.seen_by = seen_by;
+            }
+            effects
+                .retain(|e| !matches!(e, Effect::Apply { condition, .. } if condition == HIDDEN));
         }
 
         let difficulty = against.as_ref().map(|against| {
@@ -119,9 +175,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             rating: power,
             resist: *resist,
             against: difficulty,
-            tags: effects::tags(tags, effects, self.conditions),
+            tags: effects::tags(tags, &effects, self.conditions),
             blow: None,
-            effects,
+            effects: &effects,
             power,
             text,
             opener: false,
@@ -169,6 +225,39 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         } else {
             format!("{} isn't hurt.", capitalized(&self.name(target)))
         })
+    }
+
+    /// Everyone else here rolls to notice `who` hiding as well as `stealth`, with their `luck`:
+    /// their Intuition against it, by opposed roll. Returns those who did, and whether that's all
+    /// of them (and there was anyone to see).
+    fn notice(&mut self, who: Entity, stealth: i32, luck: i32) -> (HashSet<Entity>, bool) {
+        let Ok(room) = self.fighters.get(who).map(|f| f.in_room.0) else {
+            return (HashSet::new(), false);
+        };
+        let watchers: Vec<(Entity, f64, i32)> = self
+            .fighters
+            .iter()
+            .filter(|f| f.entity != who && f.in_room.0 == room && !f.dead)
+            .map(|f| {
+                (
+                    f.entity,
+                    f64::from(f.attributes.get(Attribute::Intuition).max(1)),
+                    f.attributes.get(Attribute::Luck),
+                )
+            })
+            .collect();
+        let mut seen_by = HashSet::new();
+        for &(watcher, intuition, their_luck) in &watchers {
+            if self
+                .dice
+                .opposed(intuition, their_luck, f64::from(stealth), luck)
+                .won
+            {
+                seen_by.insert(watcher);
+            }
+        }
+        let everyone = !watchers.is_empty() && seen_by.len() == watchers.len();
+        (seen_by, everyone)
     }
 
     /// An item `who` carries (in hand or in something they carry) with this tag.

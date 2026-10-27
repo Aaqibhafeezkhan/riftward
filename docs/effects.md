@@ -2,7 +2,7 @@
 
 [Design summary](README.md) · Status: steps 1 to 4 are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections), formulas (step 3), and reactions in a fight and out of one (step 4). Step 5 has begun: active skills can be made of effects (5a); the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
 
-**The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, an active skill that works on something other than a character (Stealth's `hide` still has its own command, until Hidden is a condition; one that does effects to someone is data already, like First Aid), a new trigger, or a formula other than the built-in ones.
+**The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, an active skill that needs a new kind of target or effect (every skill in the world is data now: First Aid, Lockpicking, Foraging, Pickpocketing, Tracking, Hiding), a new trigger, or a formula other than the built-in ones.
 
 This doc proposes the vocabulary that removes those needs: **conditions as data**, **one effect vocabulary** shared by spells, techniques, skills and items, **formulas** in data, **triggers** for reactions, and, last, **scripting** (Rhai) for the long tail that data can't express.
 
@@ -363,7 +363,7 @@ Still to come: one file shape for all of them (a spell, a technique and an activ
 
 ### Active skills, as built
 
-Step 5a (2026-10-27). An active skill is either a command, for what's like nothing else (`hide`, until Hiding is a skill made of effects), or made of effects, in its `.skill.ron`, and resolved by `resolve.rs` like any spell or blow. First Aid is the first:
+Step 5a (2026-10-27). An active skill is either a command, for what's like nothing else (none left in the world's data since 2026-10-27; the field stays for one that needs it), or made of effects, in its `.skill.ron`, and resolved by `resolve.rs` like any spell or blow. First Aid is the first:
 
 ```ron
 "first_aid": (
@@ -380,7 +380,7 @@ Step 5a (2026-10-27). An active skill is either a command, for what's like nothi
 ),
 ```
 
-- **Fields:** `aim` (`Ally`, the default: yourself unless you name someone; `Foe`; `Other`; `Lock`, a door or closable container, by direction or name; `Room`, the room the user is in; `Item`, an item the user can reach, carried or here), `cost` (`Stamina(n)`), `cooldown` in seconds, `uses` (an item tag), `resist` (what the target resists with, as a spell's) or `against` (a fixed difficulty, rolled without Luck), `tags`, `effects`, `provokes`: when it fails, a mob it was tried on turns on the user, and `quiet`: using it doesn't show a hidden user (Tracking, Appraisal). Neither `resist` nor `against`: it always works. An `Other` skill needn't tell its target anything: a pickpocket's mark doesn't notice.
+- **Fields:** `aim` (`Ally`, the default: yourself unless you name someone; `Foe`; `Other`; `Lock`, a door or closable container, by direction or name; `Room`, the room the user is in; `Item`, an item the user can reach, carried or here; `Me`, the user and no one else), `cost` (`Stamina(n)`), `cooldown` in seconds, `uses` (an item tag), `resist` (what the target resists with, as a spell's) or `against` (a fixed difficulty, rolled without Luck), `tags`, `effects`, `provokes`: when it fails, a mob it was tried on turns on the user, and `quiet`: using it doesn't show a hidden user (Tracking, Appraisal). Neither `resist` nor `against`: it always works. An `Other` skill needn't tell its target anything: a pickpocket's mark doesn't notice.
 - **Power:** the user's skill, its level plus its attribute, is both their side of the contest and `power` in its formulas.
 - **Using one:** `use first aid [<someone>]`, in a fight or out of one; it's an action, so in a fight it takes the user's turn. Old commands can stay as shortcuts: `bandage` is `use first aid`. A hidden user is revealed, as casting does.
 - **Refusals cost nothing:** one that only heals and cures isn't used on someone unhurt with nothing to cure ("Bob isn't hurt."); one that `uses` an item needs one carried ("You have no bandages."); then the cooldown and the stamina. Once it's tried, the item is used up whether or not it worked, and the skill is practised.
@@ -414,9 +414,10 @@ Decided 2026-10-27. Every skill becomes data, and the commands that do skills to
   kind: Active(aim: Room, cooldown: 3, quiet: true,
       against: "target.ground * (1 + age / 10)", effects: [Reveal(Tracks)]),
   ```
+- **Hiding** (*built*, 2026-10-27): Stealth is data, `aim: Me` (only yourself: `use stealth bob` is refused), `quiet`, and `Apply(condition: "hidden", strength: "power", lasts: Indefinitely, on: User)`; `hide` is a shortcut. What's particular to hiding stays in `combat/abilities.rs`: it can't be done in a fight, and as it's done everyone else here rolls to notice (their Intuition against its strength), before anything is told, so the skill's room line reaches only those who noticed; seen by them all, it fails, in its `miss` words. `sneak` stays a command: it's a way of moving, not a use of the skill. Within a round too, what a hidden character does is told only to those who've noticed them, so bystanders who haven't spotted an ambusher see them step out of the shadows after the blow, not the blow itself.
 - **How it's kept:** on a lock, `locked` is its state (`DoorState::Locked`), so zone files, resets and the builders' `door` command are unchanged; the effects act on that state. Skills aimed at a lock can only `Apply` or `Remove` it, for now. `lockwork` (`commands/doors.rs`) resolves them, as `ability` does skills aimed at characters.
 - **New effects:** `Find(table)`, a loot table rolled into the user's hands (Foraging, Gathering, aimed at a room); `Take`, an item moved from someone to the user (Pickpocketing, resisted by the victim's awareness); `Reveal`, telling the user something (Appraisal's value and quality, Tracking's trail), the first effect that only informs.
-- **The order,** each step leaving the game working: locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*); rooms as targets, with `Find`, for foraging and gathering (5c, *built*); `Take`, for stealing (5d, *built*); `Reveal`, for appraising and tracking (5e, *built*); Hiding as data, now that `hidden` is a condition.
+- **The order,** each step leaving the game working: locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*); rooms as targets, with `Find`, for foraging and gathering (5c, *built*); `Take`, for stealing (5d, *built*); `Reveal`, for appraising and tracking (5e, *built*); Hiding as data (*built*, 2026-10-27).
 
 ## Abilities
 
@@ -548,7 +549,7 @@ Each step leaves the game working and designers with more they can do alone.
 2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). So are `Imbue` and saved item conditions (2d). Step 2 is done.
 3. **Formulas** (*built*). The expression evaluator, and every amount in an effect moved into data.
 4. **Triggers and reactions** (*built*). Reactions on conditions, skills and items in a fight (4a), and out of one: entering a room, someone arriving, resting, eating and drinking, a condition taking hold or running out, casting, the start of a turn and every so often (4b).
-5. **Every skill through `use`.** Active skills made of effects, with First Aid the first (5a, *built*). Then [every skill as data](#every-skill-as-data): locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*), rooms as targets with `Find`, and Foraging and Herbalism as data (5c, *built*), `Take` and Pickpocketing as data (5d, *built*), `Reveal`, and Appraisal and Tracking as data (5e, *built*), and Hiding; their commands become shortcuts.
+5. **Every skill through `use`.** Active skills made of effects, with First Aid the first (5a, *built*). Then [every skill as data](#every-skill-as-data): locks as targets, with `locked` as a condition, and Lockpicking as data (5b, *built*), rooms as targets with `Find`, and Foraging and Herbalism as data (5c, *built*), `Take` and Pickpocketing as data (5d, *built*), `Reveal`, and Appraisal and Tracking as data (5e, *built*), and Hiding (*built*); their commands are shortcuts. Still open: mobs using active skills by chance.
 6. **Scripting.** Rhai, exposing the verbs and triggers above.
 
 ## Open questions

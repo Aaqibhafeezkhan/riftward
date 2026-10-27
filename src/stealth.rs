@@ -14,13 +14,14 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::attributes::{Attribute, Attributes};
-use crate::combat::{ConditionDefs, Conditions, Dead, Fighting, HIDDEN, Lasts, the};
-use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::combat::{ConditionDefs, Conditions, HIDDEN, Lasts, the};
+use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
+use crate::db::Role;
 use crate::dice::Dice;
 use crate::events::GameEvent;
 use crate::mobs::Mob;
 use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
-use crate::skills::{Learner, Practice, Skills, fill};
+use crate::skills::Skills;
 use crate::targeting::Keywords;
 use crate::world::InRoom;
 
@@ -156,92 +157,22 @@ type Hiders<'w, 's> = Query<
     ),
 >;
 
-/// Everyone else in `room`: players and mobs, living.
-type Others<'w, 's> = Query<'w, 's, (Entity, &'static InRoom), (With<Attributes>, Without<Dead>)>;
-
-fn others_in(others: &Others, room: Entity, but: Entity) -> Vec<Entity> {
-    others
-        .iter()
-        .filter(|(e, r)| r.0 == room && *e != but)
-        .map(|(e, _)| e)
-        .collect()
-}
-
-/// `hide`: slip out of sight. Everyone here rolls to notice; those who do still see you.
-fn hide(
-    In(inv): In<Invocation>,
-    mut commands: Commands,
-    mut seen: ParamSet<(Characters, Others)>,
-    mut outbox: ResMut<Outbox>,
-    mut practice: Practice,
-    fighting: Query<(), With<Fighting>>,
-) {
-    let Some(actor) = Actor::get(&seen.p0(), inv.entity) else {
+/// `hide`: Stealth, by its old name. It's an active skill made of effects
+/// (`stealth.skill.ron`) that puts `hidden` on its user, so this is `use stealth`; how hiding
+/// is noticed as it happens is in `combat/abilities.rs`.
+fn hide(In(inv): In<Invocation>, mut commands: Commands, registry: Res<CommandRegistry>) {
+    let Some((spec, id)) = registry.find("ability", Role::Player) else {
         return;
     };
-    let watchers = others_in(&seen.p1(), actor.room, actor.entity);
-    let mut out = Vec::new();
-    let reply = (|| {
-        if fighting.get(actor.entity).is_ok() {
-            return Err("You can't hide in the middle of a fight!".to_string());
-        }
-        let ready = practice.begin(actor.entity, STEALTH)?;
-        let stealth = ready.effectiveness.max(1);
-        let mut seen_by = HashSet::new();
-        for &watcher in &watchers {
-            let Some((_, _, attributes)) = practice.sheet(watcher) else {
-                continue;
-            };
-            let (intuition, luck) = (
-                f64::from(attributes.get(Attribute::Intuition)),
-                attributes.get(Attribute::Luck),
-            );
-            if practice
-                .opposed(intuition.max(1.0), luck, f64::from(stealth), ready.luck)
-                .won
-            {
-                seen_by.insert(watcher);
-            }
-        }
-        let learner = Learner {
-            character_id: actor.character_id,
-            race: &actor.race,
-            boost: 1.0,
-        };
-        let gains = practice.exercise(actor.entity, learner, STEALTH);
-        let text = practice
-            .defs
-            .skills
-            .get(STEALTH)
-            .and_then(|skill| skill.def.text.clone())
-            .ok_or_else(String::new)?;
-        // Seen by everyone here: that's no hiding at all.
-        let all_saw = !watchers.is_empty() && seen_by.len() == watchers.len();
-        let lines = match (all_saw, &text.miss) {
-            (true, Some(miss)) => miss,
-            _ => &text.hit,
-        };
-        let with = [("actor", actor.name.as_str())];
-        let seen = fill(&lines.room, &with);
-        for &watcher in &seen_by {
-            out.push(Outgoing::line(watcher, seen.clone()));
-        }
-        if !all_saw {
-            hide_as(&mut commands, actor.entity, stealth, seen_by);
-        }
-        let mut told = fill(&lines.actor, &with);
-        for line in gains {
-            told += &format!("\r\n{line}");
-        }
-        Ok(told)
-    })();
-    match reply {
-        Ok(text) | Err(text) if !text.is_empty() => {
-            out.insert(0, Outgoing::line(actor.entity, text))
-        }
-        _ => {}
-    }
-    deliver(out, &mut outbox);
+    commands.run_system_with(
+        *id,
+        Invocation {
+            entity: inv.entity,
+            command: spec.name,
+            usage: spec.usage,
+            args: STEALTH.to_string(),
+        },
+    );
 }
 
 /// `sneak`: start or stop moving quietly.

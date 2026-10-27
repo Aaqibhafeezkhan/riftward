@@ -44,7 +44,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `healing.rs` | `eat` and `drink` for consumables, and `bandage`, a shortcut for `use first aid` |
 | `gathering.rs` | Active skills aimed at the room that `Find` (`roomwork`; `forage` and `gather` are shortcuts), from a room's finds, and how finds deplete and grow back |
 | `tracking.rs` | Tracks left in rooms by whoever walks through, and active skills that read them (`trackwork`; `track` is a shortcut to Tracking) |
-| `stealth.rs` | Hiding, sneaking and noticing: `hide`, `sneak`, `search`, who sees whom (the `hidden` condition and who has seen through it), and revealing |
+| `stealth.rs` | Hiding, sneaking and noticing: `hide` (a shortcut to Stealth, data whose hiding rules are in `combat/abilities.rs`), `sneak`, `search`, who sees whom (the `hidden` condition and who has seen through it), and revealing |
 | `money.rs` | The purse, coins and how amounts read and are written, giving coins, the admin `setcoins` |
 | `shops.rs` | Shopkeepers: `list`, `buy`, `sell`, `value`, prices and resale |
 | `trade.rs` | Haggling (deals with shopkeepers, and the prices they set), and active skills aimed at an item (`itemwork`; `appraise` is a shortcut to Appraisal) |

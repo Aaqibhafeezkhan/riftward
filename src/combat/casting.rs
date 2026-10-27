@@ -177,7 +177,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 .ok()?;
                 let target = match spell.aim {
                     Aim::Foe | Aim::Other => foe,
-                    Aim::Ally => mob,
+                    Aim::Ally | Aim::Me => mob,
                     Aim::Lock | Aim::Room | Aim::Item => return None,
                 };
                 let target_skills = self.fighters.get(target).ok()?.skills;

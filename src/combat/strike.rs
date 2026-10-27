@@ -508,10 +508,15 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         }
     }
 
-    /// Tell everyone in `room` but `a` and `b`.
+    /// Tell everyone in `room` but `a` and `b`; while `a` is hidden, only those who've noticed
+    /// them, as for every room message about a hidden character (`output.rs`).
     pub(super) fn tell_room(&mut self, room: Entity, a: Entity, b: Entity, line: &str) {
         for &(player, at) in self.watchers {
-            if at == room && player != a && player != b {
+            let sees = self
+                .fighters
+                .get(a)
+                .map_or(true, |f| f.conditions.seen_by(player));
+            if at == room && player != a && player != b && sees {
                 self.log.0.push(Outgoing::line(player, line.to_string()));
             }
         }

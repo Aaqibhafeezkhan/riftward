@@ -3055,4 +3055,95 @@ mod tests {
         assert!(said(&world, thief, "You can't steal from other players."));
         assert_eq!(world.get::<Purse>(mark).unwrap().0, 250);
     }
+
+    /// Teach `who` Stealth as it is in its file: hiding as well as their Stealth, at this level.
+    fn stealthy(world: &mut World, who: Entity, level: u32) {
+        let (key, skill) = skill(
+            "stealth:basics",
+            SkillKind::Active {
+                command: None,
+                quiet: true,
+                provokes: false,
+                cost: Cost::Free,
+                cooldown: 0.0,
+                aim: Aim::Me,
+                uses: None,
+                resist: None,
+                against: None,
+                tags: Vec::new(),
+                effects: vec![Effect::Apply {
+                    condition: HIDDEN.into(),
+                    strength: Formula::parse("power").unwrap(),
+                    lasts: Lasting::Indefinitely,
+                    on: Who::User,
+                }],
+            },
+        );
+        world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .insert(key.clone(), skill);
+        let mut state = SkillState::new("Template");
+        state.level = level;
+        world.get_mut::<Skills>(who).unwrap().0.insert(key, state);
+    }
+
+    #[test]
+    fn hiding_is_seen_only_by_those_who_notice() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let guard = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, guard);
+        stealthy(&mut world, thief, 1000);
+        use_ability(&mut world, thief, "stealth:basics");
+        let conditions = world.get::<Conditions>(thief).unwrap();
+        let hidden = conditions.hidden().expect("hidden");
+        assert!(hidden.strength > 1000, "as well as their Stealth");
+        assert!(!conditions.seen_by(guard));
+        assert!(said(&world, thief, "You basics yourself."));
+        assert!(
+            !said(&world, guard, "basics"),
+            "the guard didn't notice, so sees nothing"
+        );
+    }
+
+    #[test]
+    fn hiding_in_front_of_watchful_eyes_fails() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let guard = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, guard);
+        world
+            .get_mut::<Attributes>(guard)
+            .unwrap()
+            .set(Attribute::Intuition, 1000);
+        stealthy(&mut world, thief, 0);
+        use_ability(&mut world, thief, "stealth:basics");
+        assert!(world.get::<Conditions>(thief).unwrap().hidden().is_none());
+        assert!(said(&world, thief, "You miss with a basics at yourself."));
+        assert!(said(&world, guard, "miss with a basics"), "everyone saw");
+    }
+
+    #[test]
+    fn no_hiding_in_a_fight_or_hiding_someone_else() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let guard = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(guard).insert(Keywords::from_name("guard"));
+        stealthy(&mut world, thief, 1000);
+        use_ability(&mut world, thief, "stealth:basics guard");
+        assert!(said(
+            &world,
+            thief,
+            "You can only use stealth:basics on yourself."
+        ));
+        world.entity_mut(thief).insert(Fighting(guard));
+        use_ability(&mut world, thief, "stealth:basics");
+        assert!(said(
+            &world,
+            thief,
+            "You can't hide in the middle of a fight!"
+        ));
+        assert!(world.get::<Conditions>(thief).unwrap().hidden().is_none());
+    }
 }
