@@ -11,7 +11,7 @@ use bevy::prelude::*;
 
 use super::strike::{Blow, Round, Telling, defence_rating, gear, harm, shield_block, told};
 use crate::attributes::Attribute;
-use crate::effects::{self, Effect, Resist, Who};
+use crate::effects::{self, Effect, Reaction, Resist, When, Who};
 use crate::events::GameEvent;
 use crate::items::capitalized;
 use crate::skills::{SkillKind, SkillText, Trigger, boosts, fill};
@@ -48,6 +48,8 @@ pub(super) struct Use<'a> {
     pub opener: bool,
     /// Told to the target in red: an attack, not a blessing.
     pub harmful: bool,
+    /// A reaction being resolved, which sets off no more.
+    pub reacting: bool,
 }
 
 /// What came of it.
@@ -123,6 +125,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 }
             }
         };
+
+        // For `Hurt` reactions: how hurt the target was before.
+        let health_before = self.fighters.get(target).map_or(0.0, |f| f.vitals.health);
 
         // Done to themselves, they're "yourself" to the user and "themselves" to the room.
         let own = user == target;
@@ -310,7 +315,131 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             }
         }
         self.tell(tell, room, user, target);
+
+        // What the bearers of reactions do about it, told after it: thorns tearing at whoever
+        // struck. Reactions set off no more.
+        if !u.reacting {
+            let mut reactions = Vec::new();
+            if out.hit && u.harmful && user != target {
+                reactions.push((target, user, When::Struck));
+                reactions.push((user, target, When::Hits));
+                let health = self.fighters.get(target).map_or(0.0, |f| f.vitals.health);
+                for share in self.hurt_shares(target) {
+                    let line = share * d_most as f32;
+                    if health_before >= line && health < line && health > 0.0 {
+                        reactions.push((target, user, When::Hurt(f64::from(share))));
+                    }
+                }
+            }
+            if out.died.contains(&target) && user != target {
+                reactions.push((user, target, When::Kills));
+            }
+            if out.dodged {
+                reactions.push((target, user, When::Dodges));
+            }
+            for (bearer, other, when) in reactions {
+                for died in self.react(bearer, other, when) {
+                    if !out.died.contains(&died) {
+                        out.died.push(died);
+                    }
+                }
+            }
+        }
         out
+    }
+
+    /// The `Hurt` shares `who`'s reactions watch for.
+    fn hurt_shares(&self, who: Entity) -> Vec<f32> {
+        self.reactions_of(who)
+            .into_iter()
+            .filter_map(|(r, ..)| match r.on {
+                When::Hurt(share) => Some(share as f32),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Every reaction `who` has, from their conditions (an item's among them) and their passive
+    /// skills, with the strength or skill it comes from: (reaction, strength, power, skill).
+    fn reactions_of(&self, who: Entity) -> Vec<(Reaction, i32, i32, Option<String>)> {
+        let Ok(f) = self.fighters.get(who) else {
+            return Vec::new();
+        };
+        let mut found = Vec::new();
+        for active in &f.conditions.0 {
+            if let Some(def) = self.conditions.get(&active.key) {
+                for r in &def.reactions {
+                    found.push((r.clone(), active.strength, 0, None));
+                }
+            }
+        }
+        for (key, state) in &f.skills.0 {
+            if let Some(SkillKind::Passive { reactions, .. }) =
+                self.defs.skills.get(key).map(|s| &s.def.kind)
+            {
+                for r in reactions {
+                    found.push((r.clone(), 1, state.level as i32, Some(key.clone())));
+                }
+            }
+        }
+        found
+    }
+
+    /// Set off `bearer`'s reactions to `when`, at `other`. Returns who they killed.
+    pub(super) fn react(&mut self, bearer: Entity, other: Entity, when: When) -> Vec<Entity> {
+        let mut died = Vec::new();
+        for (reaction, strength, power, skill) in self.reactions_of(bearer) {
+            if reaction.on != when {
+                continue;
+            }
+            // Not from beyond the grave, and not at the dead, but for a killing.
+            let standing = |e: Entity| {
+                self.fighters
+                    .get(e)
+                    .is_ok_and(|f| !f.dead && f.vitals.health > 0.0)
+            };
+            if !standing(bearer) || (when != When::Kills && !standing(other)) {
+                break;
+            }
+            if let Some(chance) = &reaction.chance {
+                let inputs = self.inputs(bearer, other, power, 1.0);
+                let p = chance
+                    .with_strength(f64::from(strength))
+                    .eval(&inputs, self.dice, 0);
+                if !self.dice.chance(0, p) {
+                    continue;
+                }
+            }
+            let effects: Vec<Effect> = reaction
+                .effects
+                .iter()
+                .map(|e| e.with_strength(strength))
+                .collect();
+            let harmful = effects.iter().any(|e| matches!(e, Effect::Damage { .. }));
+            let text = SkillText {
+                hit: reaction.text.clone(),
+                miss: None,
+            };
+            let outcome = self.resolve(Use {
+                user: bearer,
+                target: other,
+                rating: 0,
+                resist: None,
+                tags: Vec::new(),
+                blow: None,
+                effects: &effects,
+                power,
+                text: &text,
+                opener: false,
+                harmful,
+                reacting: true,
+            });
+            died.extend(outcome.died);
+            if let Some(skill) = skill {
+                self.practise(bearer, &skill);
+            }
+        }
+        died
     }
 
     /// A roll between `low` and `high`, either way about.

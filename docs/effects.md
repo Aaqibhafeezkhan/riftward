@@ -1,6 +1,6 @@
 # Effects, conditions and scripting
 
-[Design summary](README.md) · Status: steps 1 to 3 are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections). So are formulas (step 3). Triggers and reactions (step 4) are next; the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
+[Design summary](README.md) · Status: steps 1 to 3, and reactions in a fight from step 4, are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections). So are formulas (step 3) and reactions in a fight (step 4a). Triggers outside a fight (4b) are next; the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
 
 **The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, a new active skill (each has its own command, like `pick` or `track`), a new trigger, or a formula other than the built-in ones.
 
@@ -192,7 +192,7 @@ Step 2d (2026-10-26). The `reach` column above became simpler: a condition on an
 
 *Built* (step 1). Conditions are data in `assets/conditions/*.conditions.ron`, hot-reloaded; the code is `src/combat/states.rs`.
 
-- **Twenty conditions:** the eight that were code (staggered, down, bleeding, held, guarding, exposed, blessed, warded) with their wording unchanged, nine new ones (poisoned, stacking to 5 doses, burning, stunned, regenerating, rooted, silenced, shielded, weakened, strengthened), and since step 2 asleep, and flaming and envenomed for weapons. Hidden and Nourished stay as they were for now.
+- **Twenty-one conditions:** the eight that were code (staggered, down, bleeding, held, guarding, exposed, blessed, warded) with their wording unchanged, nine new ones (poisoned, stacking to 5 doses, burning, stunned, regenerating, rooted, silenced, shielded, weakened, strengthened), since step 2 asleep, and flaming and envenomed for weapons, and since step 4 thorns. Hidden and Nourished stay as they were for now.
 - **Modifiers built:** `Attack`, `Defence`, `DefenceTimes`, `Armour`, `DamageDealt`, `DamageTaken`, `HealthEachTurn`, `Absorb`, `LosesTurn`, `CantFlee`, `CantMove`, `CantCast`, and since step 2 `Resist`, `Weakness` and `Immune`. Additive ones count once per point of strength. The rest of the list above arrives as something needs it.
 - **Stacking:** `Replace`, `Strongest`, `Stack(n)`. **Tags** are kept for cures and immunities to come.
 - **Text from data:** applied (to the target of a technique), each turn, a lost turn, death, fading, a ward taking a blow and breaking, and `looks` hints, chosen by strength left. `affects` lists names, what each does and how long, and `score` the names.
@@ -443,6 +443,29 @@ A trigger can also check a condition from the condition language (✓): "only wh
 reactions: [(on: Hit, effects: [Damage(amount: "2", type: piercing, armour: false, to: Attacker)])],
 ```
 
+### Reactions, as built
+
+Step 4a (2026-10-26). Conditions and passive skills can have `reactions`: effects that happen by themselves when the bearer does or suffers something in a fight. Items react through the conditions they grant or are imbued with.
+
+```ron
+"thorns": (
+    ...
+    reactions: [(
+        on: Struck,
+        effects: [Damage(amount: "strength", type: "physical")],
+        text: (actor: "Your thorny hide {harm} {target}.", target: "{actor}'s thorny hide {harm} you.", room: "..."),
+    )],
+),
+```
+
+- **Triggers (`on`):** `Hits` (the bearer lands something meant to harm), `Struck` (the bearer is hit by it), `Dodges` (a blow, not a shield block), `Kills`, and `Hurt(share)` (a hit leaves the bearer below that share of their most health, having been above it).
+- **Who's who:** a reaction is resolved like any spell or blow, by `combat/resolve.rs`, with the bearer as the user and the other fighter as the target. Effects are `on: Target` by default, so thorns land on the attacker; `on: User` is the bearer (a last stand raising their own guard). It always lands: nothing resists a reaction, though armour and resistances still take their share of its damage.
+- **Numbers:** a condition's reactions see its `strength` in their formulas, a passive skill's see its level as `power`. An optional `chance: "0.25"` (a formula) makes it happen only sometimes.
+- **Text:** every reaction has its own `text`, with `{harm}` in every line if it does damage; checked at load.
+- **No chains:** a reaction never sets off another, so two thorny fighters don't bounce damage back and forth forever. A reaction from a skill practises it.
+- **The first:** the `thorns` condition. Nothing gives it yet; a spell, item or aura can.
+- **Still to come (4b):** triggers outside a fight (entering a room, resting, eating, the heartbeat, a condition taking hold or fading, casting) and at the start of the bearer's turn, which need more game events; and checks on a trigger from the condition language ("only while wielding an axe").
+
 ## Scripting
 
 **For the long tail data can't express:** Angorim glowing when orcs are near, a quest's logic, a boss changing phase at half health. Most designs should never need it; if many do, the vocabulary above is missing something, and the fix is to add to it.
@@ -460,7 +483,7 @@ Each step leaves the game working and designers with more they can do alone.
 1. **Conditions as data** (*built*). The built conditions move to `assets/conditions/`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
 2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). So are `Imbue` and saved item conditions (2d). Step 2 is done.
 3. **Formulas** (*built*). The expression evaluator, and every amount in an effect moved into data.
-4. **Triggers and reactions.** More game events; reactions on conditions, skills and items.
+4. **Triggers and reactions.** Reactions on conditions, skills and items in a fight are built (4a). Next (4b): more game events, for triggers outside a fight and at the start of a turn.
 5. **Active skills through `use`.** Most bespoke commands become abilities.
 6. **Scripting.** Rhai, exposing the verbs and triggers above.
 

@@ -21,7 +21,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::effects::Effect;
+use crate::effects::{Effect, Reaction};
 use crate::skills::fill;
 use crate::time::span;
 use crate::world::ron_options;
@@ -60,6 +60,10 @@ pub struct ConditionDef {
     /// `[Apply(condition: "poisoned", ...)]`. Nothing on a character.
     #[serde(default)]
     pub on_hit: Vec<Effect>,
+    /// What it does by itself when its bearer hits, is struck, dodges, kills or is hurt: thorns
+    /// tearing at an attacker. Effects' formulas see the condition's `strength`.
+    #[serde(default)]
+    pub reactions: Vec<Reaction>,
     #[serde(default)]
     pub text: ConditionText,
 }
@@ -811,6 +815,14 @@ mod tests {
                     "{key}: on_hit puts on no condition {key}"
                 );
             }
+            for reaction in &def.reactions {
+                reaction
+                    .check()
+                    .unwrap_or_else(|err| panic!("{key}: {err}"));
+                for named in reaction.effects.iter().filter_map(Effect::condition) {
+                    assert!(defs.get(named).is_some(), "{key}: no condition {named}");
+                }
+            }
             for m in &def.modifiers {
                 if let Modifier::Resist(kind, _) | Modifier::Weakness(kind, _) = m {
                     assert!(
@@ -984,6 +996,7 @@ mod tests {
             stacking: Stacking::Replace,
             modifiers,
             on_hit: Vec::new(),
+            reactions: Vec::new(),
             text: ConditionText::default(),
         };
         defs.0.insert(

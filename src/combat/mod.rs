@@ -1277,7 +1277,7 @@ fn stop(In(inv): In<Invocation>, mut outbox: ResMut<Outbox>, mut queues: Query<&
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::effects::{Effect, Lasting, Who};
+    use crate::effects::{Effect, Lasting, Reaction, When, Who};
     use crate::formula::Formula;
     use crate::items::Item;
     use crate::skills::{
@@ -1344,6 +1344,7 @@ mod tests {
                         triggers: Vec::new(),
                         bonuses: Vec::new(),
                         counter: Some(BASIC_ATTACK.into()),
+                        reactions: Vec::new(),
                     },
                 ),
                 skill(
@@ -1618,6 +1619,7 @@ mod tests {
                 triggers: Vec::new(),
                 bonuses: Vec::new(),
                 counter: None,
+                reactions: Vec::new(),
             },
         )]);
         world
@@ -1837,6 +1839,7 @@ mod tests {
                                     with: None,
                                 }],
                                 counter: None,
+                                reactions: Vec::new(),
                             },
                         );
                         world
@@ -1915,6 +1918,142 @@ mod tests {
         );
         assert!(on_club[0].ends_at.is_some());
         assert!(said(&world, mage, "Flames run along your weapon!"));
+    }
+
+    /// Teach `who` a passive skill whose one reaction is `on`, doing `effects`.
+    fn reacting(world: &mut World, who: Entity, key: &str, on: When, effects: Vec<Effect>) {
+        let lines = Lines {
+            actor: "You react to {target}.".into(),
+            target: Some("{actor} reacts to you.".into()),
+            room: "{actor} reacts to {target}.".into(),
+            beyond: None,
+        };
+        let (key, skill) = skill(
+            key,
+            SkillKind::Passive {
+                triggers: Vec::new(),
+                bonuses: Vec::new(),
+                counter: None,
+                reactions: vec![Reaction {
+                    on,
+                    chance: None,
+                    effects,
+                    text: lines,
+                }],
+            },
+        );
+        world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .insert(key.clone(), skill);
+        world
+            .get_mut::<Skills>(who)
+            .unwrap()
+            .0
+            .insert(key, SkillState::new("Template"));
+    }
+
+    fn on_self(condition: &str) -> Effect {
+        Effect::Apply {
+            condition: condition.into(),
+            strength: Formula::number(1.0),
+            lasts: Lasting::Turns(3),
+            on: Who::User,
+        }
+    }
+
+    #[test]
+    fn thorns_tear_at_whoever_strikes_but_set_off_nothing_more() {
+        let (mut world, room) = world();
+        let defs = defs_on_disk();
+        let striker = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        sure_hands(&mut world, striker);
+        let thorny = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        for who in [striker, thorny] {
+            world
+                .get_mut::<Conditions>(who)
+                .unwrap()
+                .apply(&defs, "thorns", 3, Lasts::Turns(10));
+        }
+        // The thorny one can't strike back, so only their thorns answer.
+        world
+            .get_mut::<Conditions>(thorny)
+            .unwrap()
+            .apply(&defs, "stunned", 1, Lasts::Turns(2));
+        world.entity_mut(striker).insert(Fighting(thorny));
+        world.run_system_once(combat_round).unwrap();
+        assert_eq!(
+            world.get::<Vitals>(striker).unwrap().health,
+            97.0,
+            "3 thorns"
+        );
+        assert!(said(&world, thorny, "Your thorny hide"));
+        assert!(
+            !said(&world, striker, "Your thorny hide"),
+            "the striker's own thorns don't answer the thorns"
+        );
+    }
+
+    #[test]
+    fn a_reaction_at_no_chance_never_happens() {
+        let (mut world, room) = world();
+        let defs = defs_on_disk();
+        let striker = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        sure_hands(&mut world, striker);
+        let thorny = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world
+            .resource_mut::<ConditionDefs>()
+            .0
+            .get_mut("thorns")
+            .unwrap()
+            .reactions[0]
+            .chance = Some(Formula::number(0.0));
+        let mut conditions = world.get_mut::<Conditions>(thorny).unwrap();
+        conditions.apply(&defs, "thorns", 3, Lasts::Turns(10));
+        conditions.apply(&defs, "stunned", 1, Lasts::Turns(2));
+        world.entity_mut(striker).insert(Fighting(thorny));
+        world.run_system_once(combat_round).unwrap();
+        assert_eq!(world.get::<Vitals>(striker).unwrap().health, 100.0);
+    }
+
+    #[test]
+    fn a_killing_sets_off_a_reaction() {
+        // The victor is strengthened.
+        let (mut world, room) = world();
+        let victor = fighter(&mut world, room, 1000, 1, &[BASIC_ATTACK]);
+        let victim = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        reacting(
+            &mut world,
+            victor,
+            "test:bloodlust",
+            When::Kills,
+            vec![on_self("strengthened")],
+        );
+        world.entity_mut(victor).insert(Fighting(victim));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(victor).unwrap().has("strengthened"));
+    }
+
+    #[test]
+    fn a_bad_wound_sets_off_a_reaction() {
+        // Below half: the wounded raise their guard.
+        let (mut world, room) = world();
+        let striker = fighter(&mut world, room, 40, 1, &[BASIC_ATTACK]);
+        sure_hands(&mut world, striker);
+        let wounded = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.get_mut::<Vitals>(wounded).unwrap().health = 60.0;
+        reacting(
+            &mut world,
+            wounded,
+            "test:last_stand",
+            When::Hurt(0.5),
+            vec![on_self("guarding")],
+        );
+        world.entity_mut(striker).insert(Fighting(wounded));
+        world.run_system_once(combat_round).unwrap();
+        let health = world.get::<Vitals>(wounded).unwrap().health;
+        assert!(health > 0.0 && health < 50.0, "{health}");
+        assert!(world.get::<Conditions>(wounded).unwrap().has("guarding"));
     }
 
     #[test]

@@ -31,7 +31,7 @@ use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocat
 use crate::conditions::{Condition, Facts};
 use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
-use crate::effects::{self, Effect, Resist};
+use crate::effects::{self, Effect, Reaction, Resist};
 use crate::events::GameEvent;
 use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
@@ -211,6 +211,9 @@ impl SkillDef {
         if let SkillKind::Technique(t) = &self.kind {
             effects::check(&t.effects)?;
         }
+        if let SkillKind::Passive { reactions, .. } = &self.kind {
+            reactions.iter().try_for_each(Reaction::check)?;
+        }
         let (target, miss) = match &self.kind {
             // Struck at someone, so their view and a miss are needed.
             SkillKind::Attack { .. } => (true, true),
@@ -329,6 +332,10 @@ pub enum SkillKind {
         /// Riposte. Practised each time it fires.
         #[serde(default)]
         counter: Option<String>,
+        /// What it does by itself when its bearer hits, is struck, dodges, kills or is hurt.
+        /// Effects' formulas see the skill's level as `power`. Practised each time one fires.
+        #[serde(default)]
+        reactions: Vec<Reaction>,
     },
     /// A special move made with an attack skill, in place of the auto-attack: `use cleave`.
     Technique(Technique),
@@ -1762,6 +1769,7 @@ mod tests {
                 kind: SkillKind::Passive {
                     triggers: Vec::new(),
                     counter: None,
+                    reactions: Vec::new(),
                     bonuses: vec![
                         PassiveBonus {
                             stat: Stat::MaxHealth,
@@ -1824,6 +1832,7 @@ mod tests {
                 kind: SkillKind::Passive {
                     triggers: Vec::new(),
                     counter: None,
+                    reactions: Vec::new(),
                     bonuses: Vec::new(),
                 },
                 mastery: 50,
@@ -1947,6 +1956,7 @@ mod tests {
                 Trigger::UsedSkill("brawling:basics".into()),
             ],
             counter: None,
+            reactions: Vec::new(),
             bonuses: Vec::new(),
         };
         let defs = SkillDefs {

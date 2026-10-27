@@ -107,6 +107,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             text: &spell.text,
             opener: false,
             harmful: spell.aim == Aim::Foe,
+            reacting: false,
         });
         cast.died = outcome.died;
         if outcome.calmed {

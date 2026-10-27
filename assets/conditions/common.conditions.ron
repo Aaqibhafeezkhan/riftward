@@ -142,6 +142,27 @@
         ),
     ),
 
+    // Reacting by themselves.
+    "thorns": (
+        name: "thorns",
+        description: "thorns that tear at whoever strikes you, for {strength} damage",
+        tags: ["magic", "nature"],
+        modifiers: [],
+        reactions: [(
+            on: Struck,
+            effects: [Damage(amount: "strength", type: "physical")],
+            text: (
+                actor: "Your thorny hide {harm} {target}.",
+                target: "{actor}'s thorny hide {harm} you.",
+                room: "{actor}'s thorny hide {harm} {target}.",
+            ),
+        )],
+        text: (
+            fades: (bearer: "Your thorns wither away."),
+            looks: ["Thorns bristle along {bearer}'s skin."],
+        ),
+    ),
+
     // Magic.
     "blessed": (
         name: "blessed",

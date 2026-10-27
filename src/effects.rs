@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::attributes::Attribute;
 use crate::combat::{ConditionDefs, Lasts};
 use crate::formula::Formula;
+use crate::skills::Lines;
 use crate::time::REAL_SECS_PER_GAME_DAY;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -97,6 +98,66 @@ pub enum Resist {
 /// A blow's resistance, for techniques that don't name another.
 pub fn evasion() -> Option<Resist> {
     Some(Resist::Evasion)
+}
+
+/// Something a condition or passive skill does by itself when its bearer does or suffers
+/// something: thorns that tear at whoever strikes its bearer. It's resolved like any spell or
+/// blow, with the bearer as the user and the other one in the fight as the target, so its
+/// effects (`on: Target` by default) land on the other one. A reaction never sets off another.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Reaction {
+    pub on: When,
+    /// The odds it happens, 0 to 1, a formula (`"0.25"`, `"strength / 10"`); always, without.
+    #[serde(default)]
+    pub chance: Option<Formula>,
+    pub effects: Vec<Effect>,
+    /// What everyone sees, `{actor}` the bearer and `{target}` the other one, with `{harm}` in
+    /// every line if it does damage.
+    pub text: Lines,
+}
+
+/// When a reaction happens.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub enum When {
+    /// The bearer lands a blow, technique or spell meant to harm.
+    Hits,
+    /// The bearer is hit by one.
+    Struck,
+    /// The bearer dodges a blow (not a shield block).
+    Dodges,
+    /// The bearer kills someone.
+    Kills,
+    /// A hit leaves the bearer below this share of their most health, having been above it:
+    /// `Hurt(0.25)`.
+    Hurt(f64),
+}
+
+impl Reaction {
+    /// Whether it's complete, so nothing is forgotten.
+    pub fn check(&self) -> Result<(), String> {
+        if self.effects.is_empty() {
+            return Err("a reaction needs effects".into());
+        }
+        check(&self.effects)?;
+        let harms = self
+            .effects
+            .iter()
+            .any(|e| matches!(e, Effect::Damage { .. }));
+        let lines = [
+            Some(&self.text.actor),
+            self.text.target.as_ref(),
+            Some(&self.text.room),
+        ];
+        if harms
+            && lines
+                .into_iter()
+                .flatten()
+                .any(|line| !line.contains("{harm}"))
+        {
+            return Err("a reaction that does damage needs {harm} in every line".into());
+        }
+        Ok(())
+    }
 }
 
 /// Whom an effect is on.
@@ -323,6 +384,30 @@ mod tests {
             0,
         );
         assert_eq!(worked, 6.0);
+    }
+
+    #[test]
+    fn a_reaction_that_hurts_says_how_much() {
+        let lines = |text: &str| Lines {
+            actor: text.into(),
+            target: Some(text.into()),
+            room: text.into(),
+            beyond: None,
+        };
+        let mut thorns = Reaction {
+            on: When::Struck,
+            chance: None,
+            effects: vec![Effect::Damage {
+                amount: Formula::number(2.0),
+                damage_type: "physical".into(),
+            }],
+            text: lines("Thorns {harm} {target}."),
+        };
+        assert!(thorns.check().is_ok());
+        thorns.text = lines("Thorns prick {target}.");
+        assert!(thorns.check().unwrap_err().contains("{harm}"));
+        thorns.effects.clear();
+        assert!(thorns.check().is_err(), "a reaction does something");
     }
 
     #[test]

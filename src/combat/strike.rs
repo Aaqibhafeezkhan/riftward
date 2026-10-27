@@ -860,6 +860,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             text: &text,
             opener: t.is_some_and(|t| t.opener),
             harmful: true,
+            reacting: false,
         });
         died.extend(outcome.died);
         if outcome.hit
