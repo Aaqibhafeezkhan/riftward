@@ -1,6 +1,6 @@
 # The Darkwood
 
-[Design summary](README.md) · Status: a design (2026-10-27). Built: the road north from the gate, the Bend, the East Road and the Ravine Floor, the North Road and the Hermit's Clearing with its hedge-shaman (zone `forest`). Everything else here is proposed, for review.
+[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and the Ravine Floor, the North Road and the Hermit's Clearing with its hedge-shaman (zone `forest`). Everything else here is proposed, for review.
 
 The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. It's where a new character goes once the sewers stop teaching them anything, and where foraging, herb-gathering, tracking and hunting come into their own. It grows more dangerous the further from the road you go: safe-ish near the gate, wild in the deep wood, and strange where the trees grow wrong around an old rift-scar.
 
@@ -8,7 +8,7 @@ The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. 
 
 ## Map
 
-About twenty rooms, in four reaches out from the Bend. Existing rooms are marked ✓.
+**About 60 rooms** (decided 2026-10-27), about the size of Riftwatch and its sewers together, in five reaches out from the Bend. The map below shows the named places; each reach is filled out with more rooms of its kind between them (the counts in the table). Existing rooms are marked ✓.
 
 ```mermaid
 flowchart TB
@@ -32,17 +32,36 @@ flowchart TB
     stones --- scar[The Rift-Scar]
 ```
 
-| Reach | Rooms | Feel | Danger |
-| --- | --- | --- | --- |
-| **The road** ✓ | Forest Road, the Bend, North Road, East Road | Travellers' way; tracks of everything | Low: the odd boar wandering in |
-| **The west woods** | Woodcutters' Track, Charcoal Burners' Camp (abandoned), Deer Meadow, Brook Ford, Bramble Thicket | Logged-over, open, sunlit; game and herbs | Low to middle: boar, the meadow's grazers |
-| **The ravine** | Ravine Floor ✓, Mossy Falls (a swim behind the falls to a hidden ledge) | Damp, green, quiet; the best herbs | Low, but a climb and a swim to reach |
-| **The deep wood** | Deep Darkwood (several rooms of it), Spider Hollow, Wolf Den, Bear's Cave, Old Standing Stones | Dark, old, close; little light | Middle to high: wolves, a bear, spiders |
-| **The rift-scar** | The Rift-Scar | A glade where the trees grow wrong and the air hums | High, and rare: the rift-touched |
+| Reach | Rooms | Named places | Feel | Danger |
+| --- | --- | --- | --- | --- |
+| **The road** ✓ | 4 | Forest Road, the Bend, North Road, East Road, the Hermit's Clearing | Travellers' way; tracks of everything | Low: the odd boar wandering in |
+| **The west woods** | About 14 | Woodcutters' Track, the Charcoal Burners' Camp (the hunter's now), Deer Meadow, Brook Ford, Bramble Thicket | Logged-over, open, sunlit; game and herbs | Low to middle: for characters fresh from the sewers |
+| **The ravine and the brook** | About 8 | Ravine Floor ✓, Mossy Falls (a swim behind the falls to a hidden ledge), the brook's banks | Damp, green, quiet; the best herbs | Low, but a climb and a swim to reach |
+| **The deep wood** | About 30 | The Old Wood, Spider Hollow, the Wolf Den, the Bear's Cave, the Old Standing Stones | Dark, old, close; little light, few paths | Middle to high: **guard-strength** characters, around level-10 weapon skills |
+| **The Rift-Scar** | About 4 | The Rift-Scar | A glade where the trees grow wrong and the air hums | High, and rare: the rift-touched |
+
+- **A region, not a maze.** Thirty rooms of deep wood need landmarks and a few trails (a fallen giant, a stream to follow, the stones on their hill) so it can be learned; the rooms between them vary in description, finds and who lives there, rather than repeating. It's big enough to get turned around in, which makes **Navigation** and getting lost worth building ([What needs code](#what-needs-code)).
+- **Danger by reach** (decided 2026-10-27): the west woods for characters past the sewers; the deep wood for those who could hold their own against a town guard; the bear, the old she-wolf and the Rift-Scar beyond that.
 
 - **Environments:** `Forest` everywhere but the Deer Meadow (`Field`), Brook Ford and Mossy Falls (`Water` for its pool), and the Bear's Cave (`Cave`).
 - **Terrain:** road on the road; uneven tracks; rough deep wood, thicket and scree; mud at the ford (easy tracking); wading at the brook and the pool (no tracks).
 - **Climbs and swims:** the ravine (Climb 4, built), a swim behind Mossy Falls to a ledge with rare herbs (Swim 4), and a climb up the standing stones' hill.
+
+## The ladder: from the sewers to the deep wood
+
+Decided 2026-10-27. Sewer rats and the stray dog are the only fights a new character has, and the deep wood is for those who could take on a guard; between them is a gap that would take forever to climb. A fight is worth experience only while it was at least a one-in-ten risk, so once a character outclasses rats they earn nothing from them, and their skills grow only from swings that end most fights in one. So content is built as a ladder of rungs, each a little harder than the last, and the west woods are the real next step after the sewers: their rooms run from safe beside the road to risky beside the deep wood, so a character finds their level by walking further in.
+
+| Rung | Where | For | What's there |
+| --- | --- | --- | --- |
+| **0** | Riftwatch | Brand new | **Training dummies** at the archery butts and in the garrison yard: practise any weapon or technique safely, for skill practice and no experience **(gap: a mob that never fights back)**. Sparring with the drill sergeant |
+| **1** | The sewers' upper tunnels | First fights | Rats as now, **giant cockroaches**, **sewer snakes**, **rat swarms**, the smallest **oozes** ([the sewers' ecology](riftwatch.md#the-sewers-ecology)) |
+| **2** | The forest's edge, the west woods; the sewers' west | Past the rats | **Rabbits and deer** (prey, with the startle window), **foxes**, **adders** (a poisoning bite), **young boars**, crows; **grey slimes** under the town. Foraging, herbs and harvesting between fights |
+| **3** | The brook, the ravine; the Old Cistern, the Warren | Getting capable | **Grown boars**, a **badger**, **giant frogs** at the brook; the **Slime Lord** in the Old Cistern and the **Rat King** in the Warren, the sewers' two hard ends |
+| **4** | The deep wood's edge | Guard-strength | **Lone wolves**, **forest spiders**, the **red stag** |
+| **5** | The deep wood, the Wolf Den, the Bear's Cave, the Rift-Scar | Strong | **Wolf packs** and the **old she-wolf**, the **bear**, the **rift-touched** |
+
+- **Tuning:** each rung is first guesses, to be played (issue #13). The one-in-ten cut-off for experience (`worthwhile_risk` in `progression.ron`) is a lever too, but the ladder is the real answer.
+- **The fauna below** fills rungs 2 to 5; rung 0 is in Riftwatch and rung 1 in the sewers.
 
 ## Fauna
 
@@ -50,6 +69,11 @@ Each creature with what it does and which existing data does it. Numbers are fir
 
 | Creature | Where | How it behaves | Built from | Harvest |
 | --- | --- | --- | --- | --- |
+| **Fox** | West woods | Quick and wary: bolts like prey, but bites if cornered | *Skittish*, a bite (1–3) | A fox pelt |
+| **Adder** | West woods, the road's verges | Lies still; bites if trodden near, and the bite poisons | `aggressive` with no `allies`, so only at players; *Venomous Bite* | A snakeskin; a venom sac |
+| **Young boar** | West woods | A boar not grown into its temper: rung 2's fighter | As the boar, weaker | Pork |
+| **Badger** | Brook, west woods' far edge | Stubborn and tough for its size; fights to the end | High Body, *Thick Hide* | A badger pelt |
+| **Giant frog** | Brook Ford | Leaps out of the water; a sticky tongue that holds | A technique *Tongue*: `Apply(held)` | Frog legs (meat) |
 | **Rabbit** | Meadow, west woods | Breeds fast, harmless; bolts from anyone **(gap: flee)** | Breeding spawn, `crowd`, `tags: ["game"]`; *Skittish* (see [Prey](#prey-a-window-then-gone)) | Meat; a rabbit pelt |
 | **Red deer** | Meadow, brook | A small herd, wandering the west woods; bolts **(gap: flee)**; a stag fights back hard | Breeding spawn with `reseed`; `tags: ["game"]`; the stag a `Keep(1)` spawn with a gore attack; *Skittish* | Venison; a hide; antlers (stag) |
 | **Wild boar** | Thicket, west woods, the road now and then | Bad-tempered: attacks anyone not a boar; **enrages** when hurt | `aggressive`, `allies: ["boar"]`; passive skill *Boar's Fury*: reaction `Hurt(0.5)` → `Apply(strengthened)` on itself | Pork; a tusk |
@@ -106,13 +130,13 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 - **Spider Hollow's webs:** walking in, you may be caught (`held`) **(gap: room reactions)**.
 - **The deep wood is dark:** hard to see in, and harder at night **(gap: room conditions, darkness and sight)**. A torch would help (torches are planned items).
 - **Getting lost** in the deep wood without Navigation **(gap, later: a Navigation skill and lost-ness)**.
-- **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded **(gap: room conditions with `Every` reactions)**.
+- **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded **(gap: room conditions with `Every` reactions)**. It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
 - **Night** changes the forest: more wolves, fewer deer **(gap: time-of-day spawns)**.
 
 ## People and work
 
 - **The hedge-shaman** ✓ in the Hermit's Clearing: Awakens Shamans, teaches Tracking.
-- **A hunter** at the Charcoal Burners' Camp, newly moved in: teaches Foraging and, later, Bows **(gap: ranged combat)**; buys pelts and meat. A shop is data.
+- **A hunter** at the Charcoal Burners' Camp, newly moved in (decided 2026-10-27: a new trainer and shop): teaches Skinning, Butchering and Foraging, and later Bows **(gap: ranged combat)**; buys pelts, fangs, antlers and meat. A trainer and a shop are data.
 - **What sells:** the provisioner buys meat (food), the herbalist herbs; the hunter pelts, fangs and antlers, all of them harvested, not looted. The hunter teaches Skinning and Butchering. Item values and shop `buys` are data.
 - **Contracts** (when quests exist, [Quests](quests.md)): cull the wolves (Copper), bring the old she-wolf's pelt (Bronze), the rift-touched stag (Silver).
 
@@ -132,22 +156,28 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Room conditions and reactions** | Thickets, webs, darkness, the Rift-Scar's hum | Rooms carry conditions as characters do; their reactions fire on `Enters` and `Every` for whoever is there | Medium |
 | **Mobs hiding and ambushing** | The spider in its web | Issue #9: mobs use Stealth out of a fight, and open from hiding | Medium |
 | **A bonus that counts allies present** | *Pack Hunter* | A passive bonus `per` ally in the fight, or a formula input `allies` | Small to medium |
+| **Crowding avoids enemies** | Rats and slimes kept to their sides of a border ([the sewers](riftwatch.md#the-sewers-ecology)); deer keeping out of the wolf den | A crowding mob counts a room holding something hostile to it as full, and won't wander in | Small |
+| **A mob that never fights back** | Training dummies | `fights_back: false` on a template: it takes blows and never strikes or flees. It already gives no experience, since beating it is no risk | Small |
+| **Spawning from an effect** | Slimes splitting, the Slime Lord shedding slimes | A `Spawn(mob, count)` effect, in a reaction on `Hurt` or on a death (`Kills` is the killer's; this needs the dying one's own reaction, **a `Dies` trigger**) | Small to medium |
+| **Acid that eats gear** | The sewers' slimes | An `acid` damage type is data; acid wearing armour and weapons down needs item condition and wear **(later)** | Later |
 | **Ranged combat** | Bows, the hunter's teaching | Attacking into the next room, ammunition | Large, later |
-| **Navigation and getting lost** | The deep wood | Later | Medium, later |
+| **Navigation and getting lost** | The deep wood's thirty rooms | Without Navigation, a move in the deep wood may take you a different way than you meant, more often the further from a landmark; Navigation (Survival) against how tangled the wood is. Rooms say how easy they are to lose your way in | Medium |
 
 ## Proposed build order
 
-1. **Rooms and flora** (data): the west woods, the ravine's falls, the deep wood, the stones and the scar, with their finds and the new herb and food items.
-2. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. No material loot: what they yield waits for harvesting.
-3. **Harvesting** (code, small to medium): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
-4. **Fleeing** (code, small to medium), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
-5. **Mob starting conditions** (code, small), for the rift-touched stag; **consumables with effects** for deathcaps.
-6. **Time-of-day spawns** and **ambient lines** (code, small).
-7. **Room conditions and reactions** (code, medium), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.
+1. **The low rungs first** (decided 2026-10-27): training dummies in town (the never-fights-back gap), the sewers' new ecology ([riftwatch.md](riftwatch.md#the-sewers-ecology)), and the west woods with their rung-2 and rung-3 creatures and flora, before the deep wood.
+2. **Rooms and flora** (data): the rest of the forest: the ravine's falls, the deep wood, the stones and the scar, with their finds and the new herb and food items.
+3. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. No material loot: what they yield waits for harvesting.
+4. **Harvesting** (code, small to medium): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
+5. **Fleeing** (code, small to medium), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
+6. **Mob starting conditions** (code, small), for the rift-touched stag; **consumables with effects** for deathcaps.
+7. **Time-of-day spawns** and **ambient lines** (code, small).
+8. **Room conditions and reactions** (code, medium), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.
 
 ## Open questions
 
-- [ ] **Levels:** where should a character be to survive the deep wood: guard-strength (level-10 skills), or more?
-- [ ] **How many rooms of deep wood:** a handful, or a small maze (and does getting lost matter)?
-- [ ] **The rift-scar:** a hint of the wider story now, or held back until the setting is decided ([Riftwatch](riftwatch.md#open-questions))?
-- [ ] **The hunter:** a new trainer and shop at the camp, or the provisioner and the drill sergeant cover it?
+- [x] **How big:** about 60 rooms, the deep wood a region of about 30 with landmarks and trails (2026-10-27).
+- [x] **Levels:** the west woods for characters past the sewers, the deep wood guard-strength (level-10 weapon skills), its bosses beyond (2026-10-27).
+- [x] **The Rift-Scar:** a hint of the wider story now: a strange glade, the rift-touched stag and riftbloom, description that suggests without explaining, until the setting is decided ([Riftwatch](riftwatch.md#open-questions)) (2026-10-27).
+- [x] **The hunter:** a new trainer and shop at the charcoal camp (2026-10-27).
+- [ ] **Navigation:** build getting lost with the deep wood, or after it?

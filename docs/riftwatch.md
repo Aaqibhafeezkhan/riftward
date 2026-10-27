@@ -192,8 +192,51 @@ The sewers are built for the breeding spawn described in [The living world](worl
 - **A breakout raises the Rat King.** The first rat to reach the city through an open grate sets off an alarm in the streets, and the Rat King appears in the Warren, making every rat in the sewers tougher until someone kills him. See [The Rat King](world.md#the-rat-king-built).
 - **Hooks for later:** the barred Outflow Arch (a way beyond the walls), the Smugglers' Nook (someone's been using it), the Ossuary under the shrine, and the Drowned Stair beneath the Old Cistern, which is far older than the sewers and carved in an unknown script.
 
+## The sewers' ecology
+
+*Planned* (2026-10-27). The rats are the sewers' east, and a second ecology takes the west: **slimes**, bred in the Old Cistern's black water. The two meet in the middle tunnels and fight there, since neither counts the other an ally. With a few small creatures besides, the sewers become the first two rungs of [the ladder](darkwood.md#the-ladder-from-the-sewers-to-the-deep-wood), not just rats.
+
+| Creature | Where | Rung | How it behaves | Built from |
+| --- | --- | --- | --- | --- |
+| **Giant cockroach** | Everywhere, the upper tunnels most | 1 | Harmless-ish, scuttles; breeds | Breeding spawn, a weak bite, `tags: ["vermin"]` |
+| **Sewer snake** | The Flooded Tunnel, the drains | 1 | Bites when near; the bite poisons | `aggressive` (players only), *Venomous Bite* |
+| **Rat swarm** | The Rat Runs, the Overflow Chamber | 1 | Weak, but several at once | A spawn of rats with a bigger `pack` |
+| **Ooze** | The Western Tunnel, the Cistern's edges | 1 | Slow and small; splits in two when struck hard **(gap: spawning from an effect)** | `aggressive`, `allies: ["slime"]`, `tags: ["slime"]`; an acid touch (an `acid` damage type, data) |
+| **Grey slime** | The Western Tunnel, the Flooded Tunnel | 2 | Shrugs off blades and fists, burns at fire **(gap: conditions a mob starts with, for `Resist(physical)` and `Weakness(fire)`)**: torches and Hermetic sparks matter here | As the ooze, tougher |
+| **The Slime Lord** | The Old Cistern | 3 | A heaving mass in the black water: while it lives, every slime is stronger, and when hurt it sheds slimes **(gap: spawning)** and knits itself whole **(gap: starting conditions, `regenerating`)** | An `Aura` over slimes, as the Rat King's over rats; `AfterDeath(Days(3))` |
+
+- **Slimes eat rats, at a border.** Slimes are aggressive to anything that isn't a slime, rats to anything that isn't vermin, so where they meet they fight, and a player arriving mid-fight finds both sides weakened, or both turned on them. But they meet only at the edges (decided 2026-10-27), or the slimes would end the rat problem: a crowded rat moves to the neighbouring room with the fewest *rats*, so a room of slimes looks empty to it, and rats would flow west and die there for ever. With always an emptier way to go, they'd never gnaw through a grate, and the breakout would never come. So:
+  - **Crowding treats a room holding enemies as full** **(gap, small)**: a crowding mob won't wander into a room where something would attack it. Rats pile up on their own side, the pressure builds toward the eastern grates as before, and the breakout comes as designed. Prey keeps out of a predator's den the same way in the [Darkwood](darkwood.md).
+  - **Slimes keep to their own tunnels** (data): their spawn wanders only among the Cistern, the Western Tunnel and the Ossuary.
+  - **The Guild Tunnel and the Ossuary are the border:** both sides can reach them, so that's where they skirmish when one pushes, but neither floods the other. The rats' way to the city, the Stalls Culvert, is on their own side, four rooms from the Warren, so the border doesn't stand between them and a breakout.
+- **Harvest, not loot:** a slime's corpse yields **slime jelly** to Butchering (a reagent, for Brewing later), and the Slime Lord's a **heart of the deep** (rare).
+- **Two hard ends:** the Rat King in the Warren and the Slime Lord in the Cistern are rung 3, so a character can go one way or the other.
+
+### Larger sewers
+
+The sewers have hooks already: the Drowned Stair beneath the Old Cistern, the Sunken Hall carved in an unknown script, the Ossuary under the shrine, the barred Outflow Arch, the Smugglers' Nook. Growing the sewers grows rungs 1 to 3:
+
+- **The undercity:** below the Drowned Stair and the Sunken Hall, the old city itself (see below): its streets and halls, flooded, collapsed and sealed, a lower level of the sewers, darker, with the slimes' source and stranger things, for rung 3 and beyond. Much larger than the sewers above it, as the old city was larger than Riftwatch, so it can grow for a long time.
+
+### The old city beneath
+
+Decided 2026-10-27. **Riftwatch was built on the ruins of a much older and larger city.** The sewers' oldest parts are that city's: the Old Cistern, far older than the tunnels around it; the Sunken Hall and its pillars carved in an unknown script; the massive dressed stone under the keep. Riftwatch's builders dug their drains into what they found, and walled up or flooded what they didn't understand.
+
+- **What's known in town:** that the foundations are old, and the script unread. Who built the old city, why it fell, and whether it has to do with the rifts are left open with the rest of the setting (below); the ruins hint, as the Rift-Scar does, without explaining.
+- **Where it shows:** the cistern, the Sunken Hall and the keep's foundations now; the undercity below the Drowned Stair when the sewers grow; and, above ground, perhaps a few things in town that are older than they look (a well, a wall's lower courses, the shrine's stones).
+- **The catacombs:** the Ossuary runs on into burial passages under the shrine, the place for the restless dead when there are any.
+- **The smugglers' way:** the Nook leads somewhere: a smugglers' route out under the wall, with smugglers (people, not beasts) who don't want to be found.
+
+### A larger city
+
+More of Riftwatch is welcome too ([#12](https://github.com/Foxworks-Studios/riftward/issues/12)), and it helps the ladder from the other side: more to do between fights, more people to sell to and learn from. Ideas that fit the town:
+
+- **A poor quarter or slums** by the Outflow Arch: cutpurses (people for Pickpocketing to work on, and to be robbed by), stray cats and dogs, the smugglers' contacts. Rung 1 to 2 trouble in the streets.
+- **The docks or a river landing,** if Riftwatch has water: fishing, trade, the Sailing tree later.
+- **Workshops,** where the crafts will be taught: a smithy, a tannery (where pelts go), an apothecary.
+
 ## Open questions
 
 - [ ] **The lord:** name, title and household, for the Great Hall and the Lord's Solar.
-- [ ] **How Riftwatch fits the setting:** its place relative to the barrier and the rifts, and what the watchtower actually watches.
+- [ ] **How Riftwatch fits the setting:** its place relative to the barrier and the rifts, and what the watchtower actually watches. Decided so far: it stands on the ruins of a much older, larger city ([The old city beneath](#the-old-city-beneath)); who built that city and why it fell are still open.
 - [x] **Shops:** the herbalist, the provisioner in the Vendor Stalls and the tinker in Tinkers' Corner; see [Money and shops](economy.md#riftwatchs-shops).
