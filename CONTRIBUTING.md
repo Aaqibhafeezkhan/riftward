@@ -129,7 +129,7 @@ CI runs the same three on every pull request (`.github/workflows/ci.yml`), with 
 Then try your change in a real client against a throwaway database (`MUD_DB=/tmp/scratch.db`). For anything involving more than one player, connect several clients at once; scripted `nc` sessions work well:
 
 ```sh
-( printf 'myaccount\r\nmypassword\r\n'; sleep 1; printf '1\r\nlook\r\nquit\r\n'; sleep 1 ) | nc localhost 4000
+( printf 'myaccount\r\nmypassword\r\n'; sleep 1; printf '1\r\nlook\r\nquit\r\nquit\r\n'; sleep 1 ) | nc localhost 4000
 ```
 
 ## Design documents

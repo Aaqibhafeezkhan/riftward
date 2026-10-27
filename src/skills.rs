@@ -48,8 +48,6 @@ pub const SKILLS_PATH: &str = "skills";
 /// The extension skill tree files use.
 const SKILL_EXTENSION: &str = "skill.ron";
 
-/// How long practice takes to halve while a skill goes unused, in seconds.
-const PRACTICE_HALF_LIFE: f64 = 30.0 * 60.0;
 /// The gain chance of an untouched skill at level 0, before practice and difficulty.
 const BASE_GAIN_CHANCE: f64 = 0.25;
 /// The level at which the gain chance is half its first: it's 25 / (25 + level) of it.
@@ -470,9 +468,9 @@ fn ally() -> Aim {
     Aim::Ally
 }
 
-/// A number a passive skill raises as it levels: one point for every `per` levels, plus `base`.
-/// With `with`, it only counts for attacks made with that skill: Bladework's accuracy is for
-/// swords.
+/// A number a passive skill raises as it levels: a point for every `per` levels, growing a
+/// fraction with each one, plus `base`, so level 1 and level 2 differ. With `with`, it only counts
+/// for attacks made with that skill: Bladework's accuracy is for swords.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PassiveBonus {
     pub stat: Stat,
@@ -517,55 +515,53 @@ pub enum Stat {
 /// Everything a character's passive skills add up to.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Boosts {
-    pub max_health: i32,
-    pub max_stamina: i32,
-    pub attack: i32,
-    pub defence: i32,
-    pub damage: i32,
-    pub armour: i32,
-    pub initiative: i32,
-    pub pierce: i32,
-    pub armour_ease: i32,
-    pub block: i32,
+    pub max_health: f64,
+    pub max_stamina: f64,
+    pub attack: f64,
+    pub defence: f64,
+    pub damage: f64,
+    pub armour: f64,
+    pub initiative: f64,
+    pub pierce: f64,
+    pub armour_ease: f64,
+    pub block: f64,
     /// What only counts with one skill, by `tree:skill`.
     pub with: HashMap<String, WithSkill>,
     /// Added to resisting what carries a tag, by tag.
-    pub resist: HashMap<String, i32>,
+    pub resist: HashMap<String, f64>,
 }
 
 /// Bonuses for attacks made with one skill.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WithSkill {
-    pub attack: i32,
-    pub damage: i32,
-    pub pierce: i32,
+    pub attack: f64,
+    pub damage: f64,
+    pub pierce: f64,
 }
 
 impl Boosts {
     /// Attack bonus for an attack made with `skill`.
-    pub fn attack_with(&self, skill: &str) -> i32 {
-        self.attack + self.with.get(skill).map_or(0, |w| w.attack)
+    pub fn attack_with(&self, skill: &str) -> f64 {
+        self.attack + self.with.get(skill).map_or(0.0, |w| w.attack)
     }
 
     /// Damage bonus for an attack made with `skill`.
-    pub fn damage_with(&self, skill: &str) -> i32 {
-        self.damage + self.with.get(skill).map_or(0, |w| w.damage)
+    pub fn damage_with(&self, skill: &str) -> f64 {
+        self.damage + self.with.get(skill).map_or(0.0, |w| w.damage)
     }
 
     /// Added to resisting something carrying `tags`: the best of their bonuses that match, so a
     /// sleep spell that's also a mind spell doesn't count both.
-    pub fn resisting(&self, tags: &[String]) -> i32 {
+    pub fn resisting(&self, tags: &[String]) -> f64 {
         tags.iter()
             .filter_map(|tag| self.resist.get(tag))
             .copied()
-            .max()
-            .unwrap_or(0)
-            .max(0)
+            .fold(0.0, f64::max)
     }
 
     /// Armour ignored by an attack made with `skill`.
-    pub fn pierce_with(&self, skill: &str) -> i32 {
-        self.pierce + self.with.get(skill).map_or(0, |w| w.pierce)
+    pub fn pierce_with(&self, skill: &str) -> f64 {
+        self.pierce + self.with.get(skill).map_or(0.0, |w| w.pierce)
     }
 }
 
@@ -578,7 +574,9 @@ pub fn boosts(skills: &Skills, defs: &SkillDefs) -> Boosts {
             continue;
         };
         for bonus in bonuses {
-            let value = bonus.base + (state.level / bonus.per.max(1)) as i32;
+            // Every level counts: a point for every `per` levels, a fraction of one for each.
+            let value =
+                f64::from(bonus.base) + f64::from(state.level) / f64::from(bonus.per.max(1));
             match (&bonus.with, &bonus.stat) {
                 (Some(skill), Stat::Attack) => {
                     total.with.entry(skill.clone()).or_default().attack += value
@@ -696,8 +694,11 @@ pub enum Trigger {
     /// One use for every use of another skill in its tree: a discipline that grows with the
     /// powers built on it, like the Adept's Inner Discipline.
     UsedTree,
-    /// One use for every use of this skill (`tree:skill`): Inner Discipline grows with Brawling.
+    /// One use for every use of this skill (`tree:skill`).
     UsedSkill(String),
+    /// One use for every attack made with an attack skill, armed or not: a sword's swing, a
+    /// punch. Inner Discipline grows with it.
+    UsedAttack,
 }
 
 impl Trigger {
@@ -826,7 +827,9 @@ pub struct Skills(pub BTreeMap<String, SkillState>);
 
 /// Practice after `elapsed` seconds unused.
 pub fn faded(practice: f64, elapsed: i64) -> f64 {
-    practice * 0.5f64.powf(elapsed.max(0) as f64 / PRACTICE_HALF_LIFE)
+    // How long practice takes to halve while a skill goes unused (`progression.ron`).
+    let half_life = crate::attributes::progression().practice_half_life_minutes * 60.0;
+    practice * 0.5f64.powf(elapsed.max(0) as f64 / half_life.max(1.0))
 }
 
 /// The chance one use gains a level.
@@ -1115,12 +1118,14 @@ pub fn count_use(
 }
 
 /// The skills a character knows that are practised whenever `used` is: passives triggered by
-/// using it, or by using anything in their own tree, like a tradition's discipline growing with
-/// its powers.
+/// using it, by using anything in their own tree, like a tradition's discipline growing with its
+/// powers, or by any attack, when `used` is an attack skill.
 fn grows_with(defs: &SkillDefs, skills: &Skills, used: &str) -> Vec<String> {
-    let Some(tree) = defs.skills.get(used).map(|s| &s.tree) else {
+    let Some(used_skill) = defs.skills.get(used) else {
         return Vec::new();
     };
+    let tree = &used_skill.tree;
+    let attack = matches!(used_skill.def.kind, SkillKind::Attack { .. });
     skills
         .0
         .keys()
@@ -1135,6 +1140,7 @@ fn grows_with(defs: &SkillDefs, skills: &Skills, used: &str) -> Vec<String> {
             triggers.iter().any(|trigger| match trigger {
                 Trigger::UsedTree => &skill.tree == tree,
                 Trigger::UsedSkill(skill) => skill == used,
+                Trigger::UsedAttack => attack,
                 _ => false,
             })
         })
@@ -1887,9 +1893,11 @@ mod tests {
     }
 
     #[test]
-    fn practice_halves_every_half_hour() {
-        assert!(close(faded(0.88, 1800), 0.44));
-        assert!(close(faded(0.88, 7200), 0.055));
+    fn practice_halves_every_half_life() {
+        // However long `progression.ron` says that is.
+        let half_life = crate::attributes::progression().practice_half_life_minutes * 60.0;
+        assert!(close(faded(0.88, half_life as i64), 0.44));
+        assert!(close(faded(0.88, (half_life * 4.0) as i64), 0.055));
         assert!(close(faded(0.5, 0), 0.5));
     }
 
@@ -1966,22 +1974,24 @@ mod tests {
         let mut state = SkillState::new("Admin");
         state.level = 23;
         skills.0.insert("athletics:toughness".into(), state);
+        // Every level counts: 23 levels at a point per 5 is 4.6, and at one per 10 on top of a
+        // point to start, 3.3.
         let boosts = boosts(&skills, &defs);
-        assert_eq!(boosts.max_health, 4);
-        assert_eq!(boosts.attack_with("swordplay:basics"), 3);
-        assert_eq!(boosts.attack_with("axes:basics"), 0);
+        assert!(close(boosts.max_health, 4.6));
+        assert!(close(boosts.attack_with("swordplay:basics"), 3.3));
+        assert_eq!(boosts.attack_with("axes:basics"), 0.0);
     }
 
     #[test]
     fn the_best_matching_resistance_counts() {
         let boosts = Boosts {
-            resist: HashMap::from([("sleep".into(), 5), ("mind".into(), 2)]),
+            resist: HashMap::from([("sleep".into(), 5.0), ("mind".into(), 2.0)]),
             ..Boosts::default()
         };
         let tags = |list: &[&str]| list.iter().map(|t| t.to_string()).collect::<Vec<_>>();
-        assert_eq!(boosts.resisting(&tags(&["mind", "sleep"])), 5, "not both");
-        assert_eq!(boosts.resisting(&tags(&["mind"])), 2);
-        assert_eq!(boosts.resisting(&tags(&["fire"])), 0);
+        assert_eq!(boosts.resisting(&tags(&["mind", "sleep"])), 5.0, "not both");
+        assert_eq!(boosts.resisting(&tags(&["mind"])), 2.0);
+        assert_eq!(boosts.resisting(&tags(&["fire"])), 0.0);
     }
 
     /// A skill in `tree` requiring `requires`.
@@ -2116,20 +2126,28 @@ mod tests {
     fn a_discipline_is_practised_by_every_power_in_its_tree() {
         let (key, mut discipline) = tree_skill("adept:foundation", None);
         discipline.def.kind = SkillKind::Passive {
-            triggers: vec![
-                Trigger::UsedTree,
-                Trigger::UsedSkill("brawling:basics".into()),
-            ],
+            triggers: vec![Trigger::UsedTree, Trigger::UsedAttack],
             counter: None,
             reactions: Vec::new(),
             bonuses: Vec::new(),
+        };
+        // Attacks, armed and not.
+        let attack = |key: &str| {
+            let (key, mut skill) = tree_skill(key, None);
+            skill.def.kind = SkillKind::Attack {
+                damage: Some((1, 2)),
+                cost: Cost::Free,
+                damage_type: "physical".into(),
+            };
+            (key, skill)
         };
         let defs = SkillDefs {
             skills: HashMap::from([
                 (key, discipline),
                 tree_skill("adept:killing_hands", None),
-                tree_skill("brawling:basics", None),
-                tree_skill("axes:basics", None),
+                attack("brawling:basics"),
+                attack("swordplay:basics"),
+                tree_skill("athletics:endurance", None),
             ]),
             trees: HashMap::new(),
         };
@@ -2138,7 +2156,8 @@ mod tests {
             "adept:foundation",
             "adept:killing_hands",
             "brawling:basics",
-            "axes:basics",
+            "swordplay:basics",
+            "athletics:endurance",
         ] {
             skills.0.insert(key.into(), SkillState::new("Taught"));
         }
@@ -2158,12 +2177,15 @@ mod tests {
         assert!(practice(&skills, "adept:killing_hands") > 0.0);
         let after_power = practice(&skills, "adept:foundation");
         assert!(after_power > 0.0);
-        // So does the skill it names, but not other trees' skills.
+        // So does every attack, a punch or a sword's swing, but not other trees' other skills.
         use_skill(&mut skills, "brawling:basics");
         let after_brawl = practice(&skills, "adept:foundation");
         assert!(after_brawl > after_power);
-        use_skill(&mut skills, "axes:basics");
-        assert_eq!(practice(&skills, "adept:foundation"), after_brawl);
+        use_skill(&mut skills, "swordplay:basics");
+        let after_sword = practice(&skills, "adept:foundation");
+        assert!(after_sword > after_brawl, "a sword trains it too");
+        use_skill(&mut skills, "athletics:endurance");
+        assert_eq!(practice(&skills, "adept:foundation"), after_sword);
         // Nor does the discipline count itself twice.
         let mut alone = Skills::default();
         alone
@@ -2299,7 +2321,7 @@ mod tests {
                     if let Some(effects) = effects {
                         for key in effects.iter().filter_map(Effect::condition) {
                             assert!(
-                                conditions.get(key).is_some(),
+                                conditions.condition(key).is_some(),
                                 "{} {id}: no condition '{key}'",
                                 path.display()
                             );

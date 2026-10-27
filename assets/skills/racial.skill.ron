@@ -1,22 +1,11 @@
-// Racial skills: what each race is born with, granted when a character is made (and to mobs of
-// the race). Nobody teaches them. See docs/characters.md#races; most are still to come.
+// Racial skills: what each race can do from birth and gets better at with use, granted when a
+// character is made (and to mobs of the race). Nobody teaches them. What a race simply *is* (an
+// elf's fey mind) is a trait instead, in assets/traits/races.traits.ron. See
+// docs/characters.md#races; most are still to come.
 (
     name: "Racial",
     rarity: Rare,
     attribute: Willpower,
     skills: {
-        // Like the elves of old tales: magic that would put them to sleep or bend their minds
-        // finds little purchase.
-        "fey_mind": (
-            name: "Fey Mind",
-            description: "An elf's mind is hard to lull or bend: you resist sleep and charm better than others, by 3 and 1 more for every 10 levels.",
-            kind: Passive(
-                triggers: [],
-                bonuses: [
-                    (stat: Resist("sleep"), per: 10, base: 3),
-                    (stat: Resist("charm"), per: 10, base: 3),
-                ],
-            ),
-        ),
     },
 )

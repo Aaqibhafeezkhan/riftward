@@ -11,10 +11,14 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
+use super::casting::MobMove;
 use super::resolve::{Outcome, Use};
+use super::states::HIDDEN;
 use super::states::{ConditionDefs, Imbued, ItemConditions};
+use super::strike::told;
 use super::strike::{Fighters, Round};
 use super::{Fighting, calm, fell};
+use crate::attributes::Attribute;
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
 use crate::db::Role;
@@ -23,6 +27,7 @@ use crate::effects::{self, Effect, Who};
 use crate::events::GameEvent;
 use crate::healing::used_up;
 use crate::items::{ItemQuery, ItemTemplates, Snapshot, capitalized};
+use crate::mobs::MobTemplates;
 use crate::output::{Outbox, Outgoing};
 use crate::skills::{Cost, SkillDefs, SkillKind};
 use crate::spells::{Aim, Aimed, SpellDefs};
@@ -72,6 +77,19 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             return Err("You can't steal from other players.".into());
         }
         self.needed(user, target, effects)?;
+        // Hiding is plain to see in a fight.
+        let hiding = effects.iter().find_map(|e| match e {
+            Effect::Apply {
+                condition,
+                strength,
+                lasts,
+                on: Who::User,
+            } if condition == HIDDEN => Some((strength, *lasts)),
+            _ => None,
+        });
+        if hiding.is_some() && self.fighters.get(user).is_ok_and(|f| f.fighting.is_some()) {
+            return Err("You can't hide in the middle of a fight!".into());
+        }
         let item = match uses {
             Some(tag) => Some(
                 self.carried(user, tag)
@@ -96,17 +114,57 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 (state.ready_at - now).ceil()
             ));
         }
-        state.ready_at = now + cooldown;
         let power = state.level as i32 + f.attributes.get(skill.attribute);
+        let luck = f.attributes.get(Attribute::Luck);
+        if let Cost::Stamina(n) = *cost
+            && f.vitals.stamina < n as f32
+        {
+            return Err("You're too tired. Rest a little first.".into());
+        }
+        if let Some(state) = f.skills.0.get_mut(key) {
+            state.ready_at = now + cooldown;
+        }
         if let Cost::Stamina(n) = *cost {
-            if f.vitals.stamina < n as f32 {
-                return Err("You're too tired. Rest a little first.".into());
-            }
             f.vitals.stamina -= n as f32;
             self.events.write(GameEvent::StaminaSpent {
                 who: user,
                 amount: n as f32,
             });
+        }
+
+        // Hiding: everyone here rolls to notice, their Intuition against how well the user hid,
+        // before anything is told, so only those who noticed see it. Seen by them all, it fails.
+        let mut effects = effects.clone();
+        if let Some((strength, lasts)) = hiding {
+            let inputs = self.inputs(user, user, power, 1.0);
+            let stealth = strength.amount(&inputs, self.dice, luck).max(1);
+            let (seen_by, everyone) = self.notice(user, stealth, luck);
+            if everyone {
+                let name = capitalized(&self.name(user));
+                let miss = text.miss.as_ref().unwrap_or(&text.hit);
+                // Done to themselves, as `resolve` says it.
+                let (mine, ..) = told(miss, &name, "yourself");
+                let (.., seen) = told(miss, &name, "themselves");
+                let room = self.fighters.get(user).map(|f| f.in_room.0);
+                self.say(user, mine);
+                if let Ok(room) = room {
+                    self.tell_room(room, user, user, &seen);
+                }
+                self.practise(user, key);
+                return Ok(Used {
+                    outcome: Outcome::default(),
+                    item,
+                });
+            }
+            let lasts = lasts.lasts(now);
+            if let Ok(mut f) = self.fighters.get_mut(user)
+                && f.conditions.apply(self.conditions, HIDDEN, stealth, lasts)
+                && let Some(hidden) = f.conditions.hidden_mut()
+            {
+                hidden.seen_by = seen_by;
+            }
+            effects
+                .retain(|e| !matches!(e, Effect::Apply { condition, .. } if condition == HIDDEN));
         }
 
         let difficulty = against.as_ref().map(|against| {
@@ -116,12 +174,12 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let outcome = self.resolve(Use {
             user,
             target,
-            rating: power,
+            rating: f64::from(power),
             resist: *resist,
             against: difficulty,
-            tags: effects::tags(tags, effects, self.conditions),
+            tags: effects::tags(tags, &effects, self.conditions),
             blow: None,
-            effects,
+            effects: &effects,
             power,
             text,
             opener: false,
@@ -130,6 +188,68 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         });
         self.practise(user, key);
         Ok(Used { outcome, item })
+    }
+
+    /// The active skills `mob` could usefully use now, fighting `foe`: made of effects and aimed
+    /// at someone, ready, affordable, with any item they use up to hand, and doing some good, as
+    /// a mob's spells must. Nothing that only makes sense out of a fight: hiding, stealing,
+    /// finding or reading things.
+    pub(super) fn mob_abilities(&self, mob: Entity, foe: Entity) -> Vec<MobMove> {
+        let Ok(f) = self.fighters.get(mob) else {
+            return Vec::new();
+        };
+        let most = Maxima::of(f.attributes, f.skills, self.defs, f.base).health;
+        let hurt = f.vitals.health < most as f32 / 2.0;
+        let mut usable = Vec::new();
+        for (key, state) in &f.skills.0 {
+            let Some(SkillKind::Active {
+                command: None,
+                aim,
+                cost,
+                uses,
+                effects,
+                ..
+            }) = self.defs.skills.get(key).map(|s| &s.def.kind)
+            else {
+                continue;
+            };
+            let target = match aim {
+                Aim::Foe | Aim::Other => foe,
+                Aim::Ally | Aim::Me => mob,
+                Aim::Lock | Aim::Room | Aim::Item => continue,
+            };
+            let out_of_place = effects.iter().any(|e| match e {
+                Effect::Take(_) | Effect::Find { .. } | Effect::Reveal(_) => true,
+                Effect::Apply { condition, .. } => condition == HIDDEN,
+                _ => false,
+            });
+            let needs = match cost {
+                Cost::Free => 0.0,
+                Cost::Stamina(n) => *n as f32,
+            };
+            let ready = state.ready_at <= self.now && f.vitals.stamina >= needs;
+            let to_hand = uses
+                .as_ref()
+                .is_none_or(|tag| self.carried(mob, tag).is_some());
+            if out_of_place || !ready || !to_hand || self.needed(mob, target, effects).is_err() {
+                continue;
+            }
+            let useful = effects.iter().all(|effect| match effect {
+                Effect::Heal { .. } => hurt,
+                // Not twice: not on itself, nor on a foe that already has it.
+                Effect::Apply { condition, on, .. } => {
+                    let bearer = if *on == Who::User { mob } else { target };
+                    self.fighters
+                        .get(bearer)
+                        .is_ok_and(|b| !b.conditions.has(condition))
+                }
+                _ => true,
+            });
+            if useful {
+                usable.push(MobMove::Ability(key.clone(), target));
+            }
+        }
+        usable
     }
 
     /// Whether there's anything for `effects` to do to `target`: one that only heals and cures
@@ -169,6 +289,39 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         } else {
             format!("{} isn't hurt.", capitalized(&self.name(target)))
         })
+    }
+
+    /// Everyone else here rolls to notice `who` hiding as well as `stealth`, with their `luck`:
+    /// their Intuition against it, by opposed roll. Returns those who did, and whether that's all
+    /// of them (and there was anyone to see).
+    fn notice(&mut self, who: Entity, stealth: i32, luck: i32) -> (HashSet<Entity>, bool) {
+        let Ok(room) = self.fighters.get(who).map(|f| f.in_room.0) else {
+            return (HashSet::new(), false);
+        };
+        let watchers: Vec<(Entity, f64, i32)> = self
+            .fighters
+            .iter()
+            .filter(|f| f.entity != who && f.in_room.0 == room && !f.dead)
+            .map(|f| {
+                (
+                    f.entity,
+                    f64::from(f.attributes.get(Attribute::Intuition).max(1)),
+                    f.attributes.get(Attribute::Luck),
+                )
+            })
+            .collect();
+        let mut seen_by = HashSet::new();
+        for &(watcher, intuition, their_luck) in &watchers {
+            if self
+                .dice
+                .opposed(intuition, their_luck, f64::from(stealth), luck)
+                .won
+            {
+                seen_by.insert(watcher);
+            }
+        }
+        let everyone = !watchers.is_empty() && seen_by.len() == watchers.len();
+        (seen_by, everyone)
     }
 
     /// An item `who` carries (in hand or in something they carry) with this tag.
@@ -220,7 +373,7 @@ pub(super) fn ability(
     mut commands: Commands,
     mut fighters: Fighters,
     items: ItemQuery,
-    templates: Res<ItemTemplates>,
+    (templates, mobs): (Res<ItemTemplates>, Res<MobTemplates>),
     (defs, spells, condition_defs): (Res<SkillDefs>, Res<SpellDefs>, Res<ConditionDefs>),
     mut dice: ResMut<Dice>,
     db: Res<Database>,
@@ -286,6 +439,7 @@ pub(super) fn ability(
         fighters: &mut fighters,
         items: &items,
         templates: &templates,
+        mobs: &mobs,
         defs: &defs,
         spells: &spells,
         conditions: &condition_defs,

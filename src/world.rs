@@ -419,6 +419,14 @@ pub struct ItemDef {
     pub consumable: Option<ConsumableDef>,
 }
 
+/// A condition a mob is born with, and how strong.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct BornWith {
+    pub condition: String,
+    #[serde(default = "full_strength")]
+    pub strength: i32,
+}
+
 /// A condition an item gives whoever has it, and how they must have it.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Grant {
@@ -731,9 +739,31 @@ pub struct MobDef {
     /// its attack; without one, 25.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tactics: Option<u32>,
-    /// Attacks players who come near, instead of only fighting back.
+    /// Attacks who comes near, instead of only fighting back: players, or with `allies`, anyone
+    /// who isn't one.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub aggressive: bool,
+    /// What it is, for others' `allies`: `vermin`, `townsfolk`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    /// Who an aggressive mob leaves alone, by tag (`vermin`), template (`sewer_rat` or
+    /// `zone:mob`) or `players`; its own kind always is. Set, it attacks anyone else here, mobs
+    /// too: guards go for the rats. Without, it attacks players only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allies: Option<Vec<String>>,
+    /// What its mobs keep away from, by tag (`slime`) or template, as `allies` names them:
+    /// wandering and crowding never take them into a room holding one. Rats avoid slimes, so
+    /// they don't drain into the slimes' tunnels; deer avoid wolves.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub avoids: Vec<String>,
+    /// Conditions it's born with, lasting until something ends them: a slime that shrugs off
+    /// blades, a beast that's `hidden` in its lair. `[(condition: "regenerating", strength: 2)]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<BornWith>,
+    /// What it is (`assets/traits/`), for good: `["skittish"]`, a grey slime's `["rubbery"]`.
+    /// Cures and death leave them, as they don't conditions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub traits: Vec<String>,
     /// Copper it carries, low to high, rolled when it dies and taken by whoever killed it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coins: Option<(u32, u32)>,
@@ -750,6 +780,49 @@ pub struct MobDef {
 }
 
 impl MobDef {
+    /// Whether, aggressive, it leaves `other` alone: `None` for a player, or a mob's template key
+    /// and template. Without `allies`, everyone but players is spared; with, only its own kind
+    /// and those its allies name.
+    pub fn spares(&self, own: &MobKey, other: Option<(&MobKey, &MobDef)>) -> bool {
+        let Some(allies) = &self.allies else {
+            return other.is_some();
+        };
+        match other {
+            None => allies.iter().any(|a| a == "players"),
+            Some((key, def)) => {
+                key == own
+                    || allies
+                        .iter()
+                        .any(|a| MobKey::parse(a, &own.zone) == *key || def.tags.contains(a))
+            }
+        }
+    }
+
+    /// Whether it counts `other` an ally: `None` for a player, or a mob's template key and
+    /// template. Its own kind always, and those its `allies` name; without `allies`, its own kind
+    /// alone. Allies come to each other's help (`combat/help.rs`).
+    pub fn allied(&self, own: &MobKey, other: Option<(&MobKey, &MobDef)>) -> bool {
+        let named = |a: &String| match other {
+            None => a == "players",
+            Some((key, def)) => MobKey::parse(a, &own.zone) == *key || def.tags.contains(a),
+        };
+        other.is_some_and(|(key, _)| key == own) || self.allies.iter().flatten().any(named)
+    }
+
+    /// Whether its mobs keep away from a mob of template `key`, `def`: one its `avoids` names.
+    pub fn avoids_mob(&self, own: &MobKey, key: &MobKey, def: &MobDef) -> bool {
+        self.avoids
+            .iter()
+            .any(|a| MobKey::parse(a, &own.zone) == *key || def.tags.contains(a))
+    }
+
+    /// Whether it's a thing, not a creature: the `inanimate` trait. A training dummy never acts in
+    /// a fight (no blow, no flight, no skill), never wanders or picks one, is worth no
+    /// experience, and leaves no corpse.
+    pub fn inanimate(&self) -> bool {
+        self.traits.iter().any(|t| t == crate::combat::INANIMATE)
+    }
+
     /// A plain mob with just a name, as builders create them.
     pub fn named(name: &str) -> Self {
         Self {
@@ -766,6 +839,11 @@ impl MobDef {
             health: None,
             tactics: None,
             aggressive: false,
+            tags: Vec::new(),
+            allies: None,
+            avoids: Vec::new(),
+            conditions: Vec::new(),
+            traits: Vec::new(),
             coins: None,
             shop: None,
             spells: Vec::new(),
@@ -1003,6 +1081,56 @@ impl Wander {
                 Some(*secs)
             }
         }
+    }
+}
+
+/// Find a template by what a builder typed: its id (`stray_dog`, or `zone:id` from anywhere), or
+/// failing that, the words it answers to (`dog`, `stray dog`), in `zone` first and then in every
+/// zone. `what` names the kind ("mob", "item") for the reply when none or several match.
+pub fn find_template<K: Clone + fmt::Display + Eq + std::hash::Hash, D>(
+    typed: &str,
+    zone: &str,
+    templates: &HashMap<K, D>,
+    (key, zone_of): (impl Fn(&str, &str) -> K, impl Fn(&K) -> &str),
+    keywords: impl Fn(&D) -> crate::targeting::Keywords,
+    what: &str,
+) -> Result<K, String> {
+    let typed = typed.trim();
+    let exact = key(typed, zone);
+    if templates.contains_key(&exact) {
+        return Ok(exact);
+    }
+    let words: Vec<&str> = typed.split_whitespace().collect();
+    let answers = |def: &D| {
+        let keywords = keywords(def);
+        !words.is_empty() && words.iter().all(|w| keywords.matches(w))
+    };
+    let mut here: Vec<&K> = templates
+        .iter()
+        .filter(|(k, def)| zone_of(k) == zone && answers(def))
+        .map(|(k, _)| k)
+        .collect();
+    if here.is_empty() {
+        here = templates
+            .iter()
+            .filter(|(_, def)| answers(def))
+            .map(|(k, _)| k)
+            .collect();
+    }
+    here.sort_by_key(|k| k.to_string());
+    match here.as_slice() {
+        [one] => Ok((*one).clone()),
+        [] => Err(format!(
+            "There's no {what} template [{exact}], nor one called '{typed}'."
+        )),
+        several => Err(format!(
+            "'{typed}' could be: {}. Use its id.",
+            several
+                .iter()
+                .map(|k| k.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
     }
 }
 
@@ -1830,7 +1958,7 @@ mod tests {
             let conditions = crate::combat::defs_on_disk();
             for (item_id, item) in &zone.items {
                 for grant in &item.grants {
-                    if conditions.get(&grant.condition).is_none() {
+                    if conditions.condition(&grant.condition).is_none() {
                         problems.push(format!(
                             "item {}:{item_id}: grants no condition '{}'",
                             zone.id, grant.condition
@@ -1844,6 +1972,45 @@ mod tests {
                     && !races.contains(race)
                 {
                     problems.push(format!("mob {}:{mob_id}: no race '{race}'", zone.id));
+                }
+                // Each condition it's born with is a real one.
+                for born in &mob.conditions {
+                    if conditions.condition(&born.condition).is_none() {
+                        problems.push(format!(
+                            "mob {}:{mob_id}: no condition '{}'",
+                            zone.id, born.condition
+                        ));
+                    }
+                }
+                // And each trait a real trait.
+                for key in &mob.traits {
+                    if conditions.trait_def(key).is_none() {
+                        problems.push(format!("mob {}:{mob_id}: no trait '{key}'", zone.id));
+                    }
+                }
+                // Each it avoids is a mob template or a tag some mob has.
+                for avoided in &mob.avoids {
+                    let tagged = zones
+                        .iter()
+                        .any(|z| z.mobs.values().any(|m| m.tags.contains(avoided)));
+                    if !tagged && !mob_exists(&MobKey::parse(avoided, &zone.id)) {
+                        problems.push(format!(
+                            "mob {}:{mob_id}: avoids '{avoided}', no mob or tag",
+                            zone.id
+                        ));
+                    }
+                }
+                // Each ally is players, a mob template, or a tag some mob has.
+                for ally in mob.allies.iter().flatten() {
+                    let tagged = zones
+                        .iter()
+                        .any(|z| z.mobs.values().any(|m| m.tags.contains(ally)));
+                    if ally != "players" && !tagged && !mob_exists(&MobKey::parse(ally, &zone.id)) {
+                        problems.push(format!(
+                            "mob {}:{mob_id}: ally '{ally}' is no mob, tag or 'players'",
+                            zone.id
+                        ));
+                    }
                 }
             }
             // A shop's goods must exist and have a price, or they'd quietly go unsold.
@@ -2030,6 +2197,60 @@ mod tests {
             }
         );
         assert_eq!(rats.crowd, Some(6));
+    }
+
+    #[test]
+    fn templates_are_found_by_id_or_by_the_words_they_answer_to() {
+        let mob = |zone: &str, id: &str, name: &str| {
+            (
+                MobKey::parse(&format!("{zone}:{id}"), ""),
+                MobDef::named(name),
+            )
+        };
+        let templates = HashMap::from([
+            mob("riftwatch", "stray_dog", "a stray dog"),
+            mob("riftwatch", "town_guard", "a town guard"),
+            mob("forest", "warden", "a forest guard"),
+            mob("forest", "wolf", "a grey wolf"),
+        ]);
+        let find = |typed: &str, zone: &str| {
+            find_template(
+                typed,
+                zone,
+                &templates,
+                (MobKey::parse, |k: &MobKey| k.zone.as_str()),
+                MobDef::keywords,
+                "mob",
+            )
+            .map(|k| k.to_string())
+        };
+        assert_eq!(
+            find("stray_dog", "riftwatch").unwrap(),
+            "riftwatch:stray_dog"
+        );
+        assert_eq!(
+            find("forest:wolf", "riftwatch").unwrap(),
+            "forest:wolf",
+            "an id from anywhere"
+        );
+        assert_eq!(find("dog", "riftwatch").unwrap(), "riftwatch:stray_dog");
+        assert_eq!(
+            find("grey wolf", "riftwatch").unwrap(),
+            "forest:wolf",
+            "found in another zone"
+        );
+        // A word in this zone wins; elsewhere, two guards are named rather than one guessed.
+        assert_eq!(find("guard", "riftwatch").unwrap(), "riftwatch:town_guard");
+        assert_eq!(find("guard", "forest").unwrap(), "forest:warden");
+        assert_eq!(
+            find("guard", "sewers").unwrap_err(),
+            "'guard' could be: forest:warden, riftwatch:town_guard. Use its id."
+        );
+        assert!(
+            find("dragon", "riftwatch")
+                .unwrap_err()
+                .contains("nor one called 'dragon'")
+        );
     }
 
     #[test]

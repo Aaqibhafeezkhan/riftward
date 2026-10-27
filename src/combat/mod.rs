@@ -17,7 +17,10 @@
 mod abilities;
 mod casting;
 mod effects;
+mod fleeing;
+mod help;
 mod resolve;
+mod spawning;
 mod states;
 mod strike;
 mod triggers;
@@ -57,7 +60,9 @@ use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_
 pub use casting::MobMove;
 #[cfg(test)]
 pub use states::defs_on_disk;
-pub use states::{ConditionDefs, Conditions, HIDDEN, Imbued, ItemCondition, ItemConditions, Lasts};
+pub use states::{
+    ConditionDefs, Conditions, HIDDEN, INANIMATE, Imbued, ItemCondition, ItemConditions, Lasts,
+};
 pub use strike::{Blow, Fighters, Move, Round, name_of};
 
 /// Seconds in a combat round, and between a player's actions.
@@ -90,6 +95,12 @@ impl Plugin for CombatPlugin {
                         .run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
                     // Then what conditions and skills do about what happened, out of the round.
                     (triggers::triggers, triggers::react).chain(),
+                    // Those who heard a shout for help come running.
+                    help::answer_calls,
+                    // Those an effect brought into being arrive.
+                    spawning::spawn_from_effects,
+                    // And those an effect told to run, run.
+                    fleeing::flee_from_effects,
                     abandon_fights,
                     handle_deaths,
                 )
@@ -164,6 +175,11 @@ impl Plugin for CombatPlugin {
     }
 }
 
+/// A thing, not a creature (`inanimate` on its template): it never acts in a fight, is worth no
+/// experience, and leaves no corpse.
+#[derive(Component, Debug)]
+pub struct Inanimate;
+
 /// Who someone is fighting.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Fighting(pub Entity);
@@ -215,13 +231,18 @@ pub struct Readied {
     pub ready_at: f64,
 }
 
+/// Those out of a fight with a move or spell still prepared.
+type Prepared<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, Option<&'static Readied>, Option<&'static Casting>),
+    (Or<(With<Readied>, With<Casting>)>, Without<Fighting>),
+>;
+
 /// Drop prepared moves that never get a first turn, rather than carrying them into a later fight.
 fn expire_readied(
     mut commands: Commands,
-    ready: Query<
-        (Entity, Option<&Readied>, Option<&Casting>),
-        (Or<(With<Readied>, With<Casting>)>, Without<Fighting>),
-    >,
+    ready: Prepared,
     time: Res<Time>,
     skills: Res<SkillDefs>,
     spells: Res<SpellDefs>,
@@ -237,10 +258,8 @@ fn expire_readied(
                 .get(&readied.skill)
                 .map_or(readied.skill.as_str(), |skill| skill.def.name.as_str());
             commands.entity(entity).remove::<Readied>();
-            log.0.push(Outgoing::line(
-                entity,
-                format!("You let your {name} fade."),
-            ));
+            log.0
+                .push(Outgoing::line(entity, format!("You let your {name} fade.")));
         }
         if let Some(casting) = casting
             && now >= casting.ready_at + READY_TIMEOUT_SECS
@@ -250,10 +269,8 @@ fn expire_readied(
                 .get(&casting.spell)
                 .map_or(casting.spell.as_str(), |spell| spell.def.name.as_str());
             commands.entity(entity).remove::<Casting>();
-            log.0.push(Outgoing::line(
-                entity,
-                format!("You let your {name} fade."),
-            ));
+            log.0
+                .push(Outgoing::line(entity, format!("You let your {name} fade.")));
         }
     }
 }
@@ -303,7 +320,7 @@ fn combat_round(
     mut commands: Commands,
     mut fighters: Fighters,
     items: ItemQuery,
-    templates: Res<ItemTemplates>,
+    (templates, mobs): (Res<ItemTemplates>, Res<MobTemplates>),
     (defs, spells, condition_defs): (Res<SkillDefs>, Res<SpellDefs>, Res<ConditionDefs>),
     mut dice: ResMut<Dice>,
     db: Res<Database>,
@@ -322,6 +339,13 @@ fn combat_round(
     let mut alive_players: Vec<(Entity, Entity)> = Vec::new();
     for fighter in &fighters {
         if fighter.dead {
+            continue;
+        }
+        // A thing takes blows but never fights: whatever set it on someone, it isn't.
+        if fighter.inanimate {
+            if fighter.fighting.is_some() {
+                commands.entity(fighter.entity).remove::<Fighting>();
+            }
             continue;
         }
         if let Some(Fighting(target)) = fighter.fighting {
@@ -349,16 +373,19 @@ fn combat_round(
     }
     // Who was fighting whom before anyone fought back, for openers.
     let engaged = targets.clone();
-    // Defenders fight back.
+    // Defenders fight back, but things don't.
     let pairs: Vec<(Entity, Entity)> = targets.iter().map(|(a, t)| (*a, *t)).collect();
     for (attacker, target) in pairs {
+        if fighters.get(target).is_ok_and(|f| f.inanimate) {
+            continue;
+        }
         if let std::collections::hash_map::Entry::Vacant(entry) = targets.entry(target) {
             entry.insert(attacker);
             commands.entity(target).insert(Fighting(attacker));
         }
     }
 
-    // Initiative: Reaction + Intuition, plus a roll.
+    // Initiative: Reaction + Intuition, plus a roll; in hundredths, so a passive's fraction counts.
     let mut order: Vec<(i64, Entity)> = targets
         .keys()
         .filter_map(|entity| {
@@ -366,10 +393,8 @@ fn combat_round(
             let luck = fighter.attributes.get(Attribute::Luck);
             let roll = dice.range(luck, 1..=6);
             let quick = boosts(fighter.skills, &defs).initiative;
-            Some((
-                i64::from(fighter.attributes.initiative() + quick) + roll,
-                *entity,
-            ))
+            let rating = f64::from(fighter.attributes.initiative()) + quick + roll as f64;
+            Some(((rating * 100.0).round() as i64, *entity))
         })
         .collect();
     order.sort_by(|a, b| b.cmp(a));
@@ -395,11 +420,13 @@ fn combat_round(
 
     let mut fallen: HashSet<Entity> = HashSet::new();
     let mut calmed: HashSet<Entity> = HashSet::new();
+    let mut used_up_items: Vec<Entity> = Vec::new();
     let mut imbued = Imbued::gather(item_conditions.iter());
     let mut round = Round {
         fighters: &mut fighters,
         items: &items,
         templates: &templates,
+        mobs: &mobs,
         defs: &defs,
         spells: &spells,
         conditions: &condition_defs,
@@ -493,15 +520,32 @@ fn combat_round(
         }
         // Mobs choose their own, now and then, unless someone's playing them.
         let puppeted = round.fighters.get(attacker).is_ok_and(|f| f.puppeted);
+        let mut ability = None;
         if technique.is_none() && spell.is_none() && !puppeted {
             match round.mob_move(attacker) {
                 Some(MobMove::Technique(key)) => technique = Some(key),
                 Some(MobMove::Spell(key, whom)) => spell = Some((key, whom)),
+                Some(MobMove::Ability(key, whom)) => ability = Some((key, whom)),
                 None => {}
             }
         }
 
-        let died = if let Some((key, whom)) = spell {
+        // An active skill a mob chose, used as a player's would be: what it uses up goes once
+        // the round is done.
+        let used = ability.and_then(|(key, whom)| {
+            round
+                .ability(attacker, whom, &key)
+                .ok()
+                .map(|used| (used, whom))
+        });
+        let died = if let Some((used, whom)) = used {
+            used_up_items.extend(used.item);
+            if used.outcome.calmed {
+                calm(&mut commands, whom, &targets);
+                calmed.insert(whom);
+            }
+            used.outcome.died
+        } else if let Some((key, whom)) = spell {
             let cast = round.cast(attacker, whom, &key);
             // A foe a spell is cast at fights back, if it wasn't already fighting.
             let hostile = spells.0.get(&key).is_some_and(|s| s.def.aim == Aim::Foe);
@@ -536,14 +580,21 @@ fn combat_round(
         }
     }
     imbued.write_back(&mut item_conditions);
+    for entity in used_up_items {
+        if let Ok((_, item, _)) = items.get(entity) {
+            crate::healing::used_up(&mut commands, &db, entity, item);
+        }
+    }
 
     reveal_fighters(&mut commands, &mut events, &fighters, &targets);
 
-    // Experience for every player who fought a fallen foe: the risk they overcame.
+    // Experience for every player who fought a fallen foe: the risk they overcame. A thing
+    // was no risk.
     for &died in &fallen {
         let Some(name) = fighters
             .get(died)
             .ok()
+            .filter(|f| !f.inanimate)
             .and_then(|f| f.mob.map(|m| the(&m.name)))
         else {
             continue;
@@ -641,33 +692,40 @@ fn expire_conditions(
     }
 }
 
-/// Aggressive mobs pick a fight with a player in their room, with `kill`, as a player would: only
-/// one they've noticed (an unseen one slips past), and no more of a spawn's mobs ganging up on one
-/// player than its `pack` allows; the rest wait their turn. A puppeted mob leaves it to whoever is
-/// playing it.
+/// Everyone living, where they are, and whether a mob (and which) or a player.
+type Present<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static InRoom, Option<&'static Mob>, Has<Player>),
+    (Or<(With<Player>, With<Mob>)>, Without<Dead>),
+>;
+
+/// Aggressive mobs pick a fight with someone in their room: players, or, for a mob with `allies`,
+/// anyone who isn't one (guards go for the rats, rats for the guards). Only those they've noticed
+/// (an unseen one slips past), and no more of a spawn's mobs ganging up on one than its `pack`
+/// allows; the rest wait their turn. A puppeted mob leaves it to whoever is playing it.
 #[allow(clippy::too_many_arguments)]
 fn aggression(
     mut commands: Commands,
-    aggressors: Query<(Entity, &InRoom, Option<&SpawnedBy>), Aggressors>,
-    players: Query<(Entity, &InRoom, &Player), Without<Dead>>,
+    aggressors: Query<(Entity, &InRoom, &Mob, Option<&SpawnedBy>), Aggressors>,
+    present: Present,
+    characters: Characters,
     fights: Query<(Entity, &Fighting)>,
     spawned: Query<&SpawnedBy>,
-    spawns: Res<Spawns>,
+    (spawns, templates): (Res<Spawns>, Res<MobTemplates>),
     hidden: Query<&Conditions>,
-    registry: Res<CommandRegistry>,
+    mut outbox: ResMut<Outbox>,
 ) {
-    let Some((kill, id)) = registry
-        .find("kill", crate::db::Role::Player)
-        .map(|(spec, id)| (spec.clone(), *id))
-    else {
-        return;
-    };
     let spawn_of = |entity: Entity| spawned.get(entity).ok().map(|s| s.0.clone());
     // Who's set on whom: those already fighting, and those picking a fight now.
     let mut on: Vec<(Entity, Entity)> = fights.iter().map(|(a, f)| (a, f.0)).collect();
-    let mut players: Vec<_> = players.iter().collect();
-    players.sort_by_key(|(entity, ..)| *entity);
-    for (mob, in_room, spawned_by) in &aggressors {
+    let mut present: Vec<_> = present.iter().collect();
+    present.sort_by_key(|(entity, ..)| *entity);
+    let mut out = Vec::new();
+    for (mob, in_room, me, spawned_by) in &aggressors {
+        let Some(def) = templates.0.get(&me.key) else {
+            continue;
+        };
         let pack = spawned_by
             .and_then(|s| spawns.0.get(&s.0))
             .and_then(|def| def.pack);
@@ -681,22 +739,35 @@ fn aggression(
                 (ganging as u32) < limit
             })
         };
-        let Some((victim, _, player)) = players.iter().find(|(victim, room, _)| {
-            room.0 == in_room.0 && room_for(*victim, &on) && sees(&hidden, mob, *victim)
-        }) else {
+        let hostile = |other: Option<&Mob>| {
+            let other = other.and_then(|m| Some((&m.key, templates.0.get(&m.key)?)));
+            !def.spares(&me.key, other)
+        };
+        let victim = present.iter().find(|(victim, room, other, player)| {
+            *victim != mob
+                && room.0 == in_room.0
+                && hostile(other.filter(|_| !player))
+                && room_for(*victim, &on)
+                && sees(&hidden, mob, *victim)
+        });
+        let (Some((victim, ..)), Some(attacker)) = (victim, Actor::get(&characters, mob)) else {
             continue;
         };
-        on.push((mob, *victim));
-        commands.run_system_with(
-            id,
-            Invocation {
-                entity: mob,
-                command: kill.name,
-                usage: kill.usage,
-                args: player.name.clone(),
-            },
+        let Some(foe) = Actor::get(&characters, *victim) else {
+            continue;
+        };
+        let foe_fighting = on.iter().any(|(a, _)| *a == foe.entity);
+        on.push((mob, foe.entity));
+        attack(
+            &mut commands,
+            &characters,
+            &attacker,
+            &foe,
+            foe_fighting,
+            &mut out,
         );
     }
+    deliver(out, &mut outbox);
 }
 
 /// Aggressive mobs free to pick a fight: alive, not in one, and not being played.
@@ -821,16 +892,39 @@ fn technique(
 /// Fighters who haven't fallen yet.
 type StillFighting = (With<Fighting>, Without<Dead>);
 
-/// Anyone who quits or disconnects in the middle of a fight is cut down as they go: no one
-/// escapes a fight by leaving the game. They die like anyone else, so their gear stays on their
-/// corpse and they wake at the shrine next time.
+/// Fights going on, and what can't fight back, for `in_danger`.
+pub type Fights<'w, 's> = (
+    Query<'w, 's, (Entity, &'static Fighting), Without<Dead>>,
+    Query<'w, 's, (), With<Inanimate>>,
+);
+
+/// Whether `who` is in a fight that can hurt them: fighting something that isn't inanimate, or
+/// set upon by anyone. Hacking at a training dummy is no danger.
+pub fn in_danger(
+    who: Entity,
+    fights: &Query<(Entity, &Fighting), Without<Dead>>,
+    inanimate: &Query<(), With<Inanimate>>,
+) -> bool {
+    fights.iter().any(|(fighter, Fighting(foe))| {
+        (fighter == who && inanimate.get(*foe).is_err()) || *foe == who
+    })
+}
+
+/// Anyone who disconnects in the middle of a fight is cut down as they go: no one escapes a
+/// fight by leaving the game (`quit` refuses while they're in one). They die like anyone else,
+/// so their gear stays on their corpse and they wake at the shrine next time.
 fn abandon_fights(
     mut commands: Commands,
     leaving: Query<(Entity, &Connection, &Player, &InRoom), StillFighting>,
+    fights: Query<(Entity, &Fighting), Without<Dead>>,
+    inanimate: Query<(), With<Inanimate>>,
     mut log: ResMut<Outbox>,
 ) {
     for (entity, conn, player, in_room) in &leaving {
         if !conn.closing {
+            continue;
+        }
+        if !in_danger(entity, &fights, &inanimate) {
             continue;
         }
         commands.entity(entity).insert(Dead).remove::<Fighting>();
@@ -859,6 +953,7 @@ type DeadMobs<'w, 's> = Query<
         &'static Mob,
         &'static InRoom,
         Option<&'static Slayer>,
+        Has<Inanimate>,
     ),
     (With<Dead>, mobs::OnlyMobs),
 >;
@@ -890,7 +985,17 @@ pub fn handle_deaths(
     mut purses: Query<&mut Purse>,
 ) {
     let now = unix_now();
-    for (entity, mob, in_room, slayer) in &dead_mobs {
+    for (entity, mob, in_room, slayer, inanimate) in &dead_mobs {
+        // A thing leaves no corpse: what it held falls where it stood.
+        if inanimate {
+            for (_, _, mut location) in &mut items {
+                if location.holder() == Some(entity) {
+                    *location = ItemLocation::Room(in_room.0);
+                }
+            }
+            commands.entity(entity).despawn();
+            continue;
+        }
         let corpse = items::spawn_corpse(
             &mut commands,
             &templates,
@@ -915,6 +1020,7 @@ pub fn handle_deaths(
             let carried = purses.get(entity).map_or(0, |purse| purse.0);
             if let Some(slayer) = slayer
                 && let Some(killer) = Actor::get(&players, slayer.0)
+                && killer.character_id.is_some()
                 && let Ok(mut purse) = purses.get_mut(killer.entity)
             {
                 let found = carried;
@@ -1112,39 +1218,61 @@ fn kill(
             format!("You don't see {} here.", inv.args.trim()),
         )),
         Some(foe) => {
-            let (foe, name) = (foe.entity, foe.name);
-            if fighting.get(inv.entity).is_ok_and(|f| f.0 == foe) {
+            if fighting.get(inv.entity).is_ok_and(|f| f.0 == foe.entity) {
                 out.push(Outgoing::line(
                     inv.entity,
-                    format!("You're already fighting {name}!"),
+                    format!("You're already fighting {}!", foe.name),
                 ));
             } else {
-                commands
-                    .entity(inv.entity)
-                    .insert(Fighting(foe))
-                    .remove::<Resting>();
-                if fighting.get(foe).is_err() {
-                    commands.entity(foe).insert(Fighting(inv.entity));
-                }
-                out.push(Outgoing::line(
-                    inv.entity,
-                    format!("\x1b[1mYou attack {name}!\x1b[0m"),
-                ));
-                // The one attacked is told so; everyone else sees it.
-                for (other, _, _, in_room) in &players {
-                    let line = if other == foe {
-                        format!("\x1b[1;31m{} attacks you!\x1b[0m", actor.name)
-                    } else {
-                        format!("{} attacks {name}!", actor.name)
-                    };
-                    if in_room.0 == actor.room && other != inv.entity {
-                        out.push(Outgoing::line(other, line));
-                    }
-                }
+                let foe_fighting = fighting.get(foe.entity).is_ok();
+                attack(
+                    &mut commands,
+                    &players,
+                    &actor,
+                    &foe,
+                    foe_fighting,
+                    &mut out,
+                );
             }
         }
     }
     deliver(out, &mut outbox);
+}
+
+/// `attacker` picks a fight with `foe`, as `kill` does: they fight, `foe` fights back unless
+/// already busy with someone else, and the room sees it.
+fn attack(
+    commands: &mut Commands,
+    players: &Characters,
+    attacker: &Actor,
+    foe: &Actor,
+    foe_fighting: bool,
+    out: &mut Vec<Outgoing>,
+) {
+    commands
+        .entity(attacker.entity)
+        .insert(Fighting(foe.entity))
+        .remove::<Resting>();
+    if !foe_fighting {
+        commands
+            .entity(foe.entity)
+            .insert(Fighting(attacker.entity));
+    }
+    out.push(Outgoing::line(
+        attacker.entity,
+        format!("\x1b[1mYou attack {}!\x1b[0m", foe.name),
+    ));
+    // The one attacked is told so; everyone else sees it.
+    for (other, _, _, in_room) in players {
+        let line = if other == foe.entity {
+            format!("\x1b[1;31m{} attacks you!\x1b[0m", attacker.name)
+        } else {
+            format!("{} attacks {}!", attacker.name, foe.name)
+        };
+        if in_room.0 == attacker.room && other != attacker.entity {
+            out.push(Outgoing::line(other, line));
+        }
+    }
 }
 
 /// `flee`: try to run from a fight through a random open exit.
@@ -1491,6 +1619,7 @@ mod tests {
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Outbox::default());
         world.insert_resource(Spawns::default());
+        world.init_resource::<MobTemplates>();
         world.init_resource::<Messages<GameEvent>>();
         let room = world
             .spawn((
@@ -1922,7 +2051,7 @@ mod tests {
                         .set(Attribute::Magic, 3);
                     if resists {
                         let (key, fey) = skill(
-                            "racial:fey_mind",
+                            "test:steady_mind",
                             SkillKind::Passive {
                                 triggers: Vec::new(),
                                 bonuses: vec![PassiveBonus {
@@ -1951,6 +2080,29 @@ mod tests {
         let (without, with) = (slept(false), slept(true));
         assert!(without >= 10, "a weak spell mostly works ({without})");
         assert!(with <= 2, "but an elf mostly shrugs it off ({with})");
+    }
+
+    #[test]
+    fn traits_stay_through_cures_and_death_and_help_resist() {
+        let defs = states::defs_on_disk();
+        let mut elf = Conditions::default().with_traits(&["fey_mind".to_string()]);
+        let sleep = ["sleep".to_string()];
+        assert_eq!(elf.withstanding(&defs, &sleep), 4.0);
+        assert!(
+            !elf.apply(&defs, "fey_mind", 1, Lasts::Turns(3)),
+            "not put on as a condition"
+        );
+        assert!(!elf.remove("fey_mind"));
+        elf.apply(&defs, "blessed", 1, Lasts::Turns(3));
+        elf.cure(&defs, "magic");
+        elf.clear();
+        assert!(elf.has("fey_mind"), "cures and death leave it");
+        assert!(!elf.has("blessed"));
+        assert!(
+            elf.listed(0.0, &defs, |_| String::new()).is_empty(),
+            "not in affects"
+        );
+        assert_eq!(elf.names(&defs, true), vec!["Fey Mind".to_string()]);
     }
 
     #[test]
@@ -2030,6 +2182,7 @@ mod tests {
                 reactions: vec![Reaction {
                     on,
                     chance: None,
+                    only: None,
                     effects,
                     text: lines,
                 }],
@@ -2125,6 +2278,93 @@ mod tests {
         world.entity_mut(victor).insert(Fighting(victim));
         world.run_system_once(combat_round).unwrap();
         assert!(world.get::<Conditions>(victor).unwrap().has("strengthened"));
+    }
+
+    #[test]
+    fn a_dying_sets_off_a_reaction_at_the_killer() {
+        // A dying curse: the killer is weakened.
+        let (mut world, room) = world();
+        let victor = fighter(&mut world, room, 1000, 1, &[BASIC_ATTACK]);
+        let victim = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let curse = Effect::Apply {
+            condition: "weakened".into(),
+            strength: Formula::number(1.0),
+            lasts: Lasting::Turns(3),
+            on: Who::Target,
+        };
+        reacting(&mut world, victim, "test:curse", When::Dies, vec![curse]);
+        world.entity_mut(victor).insert(Fighting(victim));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Dead>(victim).is_some());
+        assert!(world.get::<Conditions>(victor).unwrap().has("weakened"));
+    }
+
+    #[test]
+    fn a_reaction_for_foes_only_ignores_allies() {
+        // Struck by its own kind, nothing; by a rat, it bristles.
+        let (mut world, room) = world();
+        aggressive_template(&mut world, None);
+        let deer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let herdmate = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        reacting(
+            &mut world,
+            deer,
+            "test:bristle",
+            When::Struck,
+            vec![on_self("strengthened")],
+        );
+        if let Some(SkillKind::Passive { reactions, .. }) = world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .get_mut("test:bristle")
+            .map(|s| &mut s.def.kind)
+        {
+            reactions[0].only = Some(crate::effects::Only::Foes);
+        }
+        sure_hands(&mut world, herdmate);
+        world.entity_mut(herdmate).insert(Fighting(deer));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get::<Vitals>(deer).unwrap().health < 100.0, "struck");
+        assert!(!world.get::<Conditions>(deer).unwrap().has("strengthened"));
+        let rat = other_mob(&mut world, room, "rat", &["vermin"]);
+        sure_hands(&mut world, rat);
+        world.entity_mut(herdmate).remove::<Fighting>();
+        world.entity_mut(deer).remove::<Fighting>();
+        world.entity_mut(rat).insert(Fighting(deer));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(deer).unwrap().has("strengthened"));
+    }
+
+    #[test]
+    fn a_dying_ooze_splits_and_the_halves_fight_its_killer() {
+        let (mut world, room) = world();
+        let half = MobKey::parse("test:half", "");
+        world.insert_resource(MobTemplates(HashMap::from([(
+            half.clone(),
+            crate::world::MobDef::named("half an ooze"),
+        )])));
+        world.insert_resource(crate::characters::Races::default());
+        let victor = fighter(&mut world, room, 1000, 1, &[BASIC_ATTACK]);
+        let ooze = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        // A bare id is in the ooze's own zone.
+        let split = Effect::Spawn {
+            mob: "half".into(),
+            count: Formula::number(2.0),
+        };
+        reacting(&mut world, ooze, "test:split", When::Dies, vec![split]);
+        world.entity_mut(victor).insert(Fighting(ooze));
+        world.run_system_once(combat_round).unwrap();
+        world.run_system_once(spawning::spawn_from_effects).unwrap();
+        world.flush();
+        let halves: Vec<(Entity, Option<Entity>)> = world
+            .query::<(Entity, &Mob, &InRoom, Option<&Fighting>)>()
+            .iter(&world)
+            .filter(|(_, mob, at, _)| mob.key == half && at.0 == room)
+            .map(|(e, _, _, fighting)| (e, fighting.map(|f| f.0)))
+            .collect();
+        assert_eq!(halves.len(), 2);
+        assert!(halves.iter().all(|(_, foe)| *foe == Some(victor)));
     }
 
     #[test]
@@ -2236,6 +2476,7 @@ mod tests {
             Fighting(mark),
             Readied {
                 skill: "brawling:backstab".into(),
+                ready_at: 0.0,
             },
         ));
         world.run_system_once(combat_round).unwrap();
@@ -2259,12 +2500,7 @@ mod tests {
         as_player(&mut world, player);
         world.entity_mut(player).insert(Keywords::from_name("Grok"));
         hide(&mut world, player);
-        // Aggressive mobs pick their fights with `kill`, as a player would.
-        let kill_id = world.register_system(kill);
-        world.insert_resource(CommandRegistry::of(vec![(
-            CommandSpec::new("kill", Category::Interaction),
-            kill_id,
-        )]));
+        aggressive_template(&mut world, None);
         world.run_system_once(aggression).unwrap();
         world.flush();
         assert!(world.get::<Fighting>(rat).is_none(), "slipped past");
@@ -2375,6 +2611,7 @@ mod tests {
         // Piercing 3 of its 4 leaves 1 of armour: 3 gets through.
         world.entity_mut(attacker).insert(Readied {
             skill: "brawling:jab".into(),
+            ready_at: 0.0,
         });
         world.run_system_once(combat_round).unwrap();
         assert_eq!(world.get::<Vitals>(knight).unwrap().health, 97.0);
@@ -2434,6 +2671,7 @@ mod tests {
             Fighting(first),
             Readied {
                 skill: "brawling:cleave".into(),
+                ready_at: 0.0,
             },
         ));
         world.entity_mut(second).insert(Fighting(cleaver));
@@ -2451,6 +2689,7 @@ mod tests {
             Fighting(foe),
             Readied {
                 skill: "brawling:trip".into(),
+                ready_at: 0.0,
             },
         ));
         world.run_system_once(combat_round).unwrap();
@@ -2485,6 +2724,7 @@ mod tests {
                 Fighting(foe),
                 Readied {
                     skill: "brawling:trip".into(),
+                    ready_at: 0.0,
                 },
             ));
             world.run_system_once(combat_round).unwrap();
@@ -2675,6 +2915,7 @@ mod tests {
             .map(|(on, effect)| Reaction {
                 on,
                 chance: None,
+                only: None,
                 effects: vec![effect],
                 text: reaction_lines(),
             })
@@ -3110,6 +3351,467 @@ mod tests {
         assert_eq!(world.get::<Purse>(mark).unwrap().0, 250);
     }
 
+    /// Teach `who` Stealth as it is in its file: hiding as well as their Stealth, at this level.
+    fn stealthy(world: &mut World, who: Entity, level: u32) {
+        let (key, skill) = skill(
+            "stealth:basics",
+            SkillKind::Active {
+                command: None,
+                quiet: true,
+                provokes: false,
+                cost: Cost::Free,
+                cooldown: 0.0,
+                aim: Aim::Me,
+                uses: None,
+                resist: None,
+                against: None,
+                tags: Vec::new(),
+                effects: vec![Effect::Apply {
+                    condition: HIDDEN.into(),
+                    strength: Formula::parse("power").unwrap(),
+                    lasts: Lasting::Indefinitely,
+                    on: Who::User,
+                }],
+            },
+        );
+        world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .insert(key.clone(), skill);
+        let mut state = SkillState::new("Template");
+        state.level = level;
+        world.get_mut::<Skills>(who).unwrap().0.insert(key, state);
+    }
+
+    #[test]
+    fn hiding_is_seen_only_by_those_who_notice() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let guard = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, guard);
+        stealthy(&mut world, thief, 1000);
+        use_ability(&mut world, thief, "stealth:basics");
+        let conditions = world.get::<Conditions>(thief).unwrap();
+        let hidden = conditions.hidden().expect("hidden");
+        assert!(hidden.strength > 1000, "as well as their Stealth");
+        assert!(!conditions.seen_by(guard));
+        assert!(said(&world, thief, "You basics yourself."));
+        assert!(
+            !said(&world, guard, "basics"),
+            "the guard didn't notice, so sees nothing"
+        );
+    }
+
+    #[test]
+    fn hiding_in_front_of_watchful_eyes_fails() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let guard = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, guard);
+        world
+            .get_mut::<Attributes>(guard)
+            .unwrap()
+            .set(Attribute::Intuition, 1000);
+        stealthy(&mut world, thief, 0);
+        use_ability(&mut world, thief, "stealth:basics");
+        assert!(world.get::<Conditions>(thief).unwrap().hidden().is_none());
+        assert!(said(&world, thief, "You miss with a basics at yourself."));
+        assert!(said(&world, guard, "miss with a basics"), "everyone saw");
+    }
+
+    #[test]
+    fn no_hiding_in_a_fight_or_hiding_someone_else() {
+        let (mut world, room) = world();
+        let thief = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let guard = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(guard).insert(Keywords::from_name("guard"));
+        stealthy(&mut world, thief, 1000);
+        use_ability(&mut world, thief, "stealth:basics guard");
+        assert!(said(
+            &world,
+            thief,
+            "You can only use stealth:basics on yourself."
+        ));
+        world.entity_mut(thief).insert(Fighting(guard));
+        use_ability(&mut world, thief, "stealth:basics");
+        assert!(said(
+            &world,
+            thief,
+            "You can't hide in the middle of a fight!"
+        ));
+        assert!(world.get::<Conditions>(thief).unwrap().hidden().is_none());
+    }
+
+    #[test]
+    fn a_sword_in_hand_is_swung_with_swordplay_and_practises_it() {
+        let (mut world, room) = world();
+        let (key, swordplay) = skill(
+            "swordplay:basics",
+            SkillKind::Attack {
+                damage: None,
+                cost: Cost::Free,
+                damage_type: "physical".into(),
+            },
+        );
+        world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .insert(key.clone(), swordplay);
+        let fencer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK, "swordplay:basics"]);
+        as_player(&mut world, fencer);
+        let dummy = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let sword = ItemKey::parse("sword", "test");
+        world.resource_mut::<ItemTemplates>().0.insert(
+            sword.clone(),
+            ItemDef {
+                weapon: Some(crate::world::WeaponDef {
+                    skill: key.clone(),
+                    damage: (3, 3),
+                    damage_type: "physical".into(),
+                }),
+                ..ItemDef::named("a sword")
+            },
+        );
+        world.spawn((
+            Item {
+                key: sword,
+                name: "a sword".into(),
+                id: None,
+                state: DoorState::Open,
+                quality: Quality::Standard,
+            },
+            ItemLocation::Held(fencer),
+        ));
+        world.entity_mut(fencer).insert(Fighting(dummy));
+        world.run_system_once(combat_round).unwrap();
+        let skills = world.get::<Skills>(fencer).unwrap();
+        assert!(skills.0[&key].practice > 0.0, "Swordplay practised");
+        assert_eq!(skills.0[BASIC_ATTACK].practice, 0.0, "not Brawling");
+    }
+
+    #[test]
+    fn a_hurt_mob_binds_its_own_wounds_but_a_whole_one_doesnt() {
+        let (mut world, room) = world();
+        let medic = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        first_aid(&mut world, medic);
+        let roll = bandage(&mut world, medic);
+        world
+            .entity_mut(medic)
+            .insert((Tactics(100), Fighting(foe)));
+        // Whole, it fights instead.
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(
+            world.get_entity(roll).is_ok(),
+            "no bandage spent on nothing"
+        );
+        // Badly hurt, it bandages itself, using it up.
+        world.get_mut::<Vitals>(medic).unwrap().health = 30.0;
+        world
+            .get_mut::<Skills>(medic)
+            .unwrap()
+            .0
+            .get_mut("healing:first_aid")
+            .unwrap()
+            .ready_at = 0.0;
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get_entity(roll).is_err(), "the bandage is used up");
+        assert!(world.get::<Vitals>(medic).unwrap().health > 30.0);
+    }
+
+    #[test]
+    fn a_mob_turns_its_skills_on_its_foe_but_not_twice_or_to_hide() {
+        let (mut world, room) = world();
+        let bully = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        active(
+            &mut world,
+            bully,
+            "presence:glare",
+            Aim::Foe,
+            None,
+            None,
+            vec![Effect::Apply {
+                condition: "exposed".into(),
+                strength: Formula::number(1.0),
+                lasts: Lasting::Turns(5),
+                on: Who::Target,
+            }],
+        );
+        stealthy(&mut world, bully, 1000);
+        world
+            .entity_mut(bully)
+            .insert((Tactics(100), Fighting(foe)));
+        // Of these, only the glare does any good in a fight.
+        let moves = world
+            .run_system_once(
+                move |mut fighters: Fighters,
+                      items: ItemQuery,
+                      templates: Res<ItemTemplates>,
+                      defs: Res<SkillDefs>,
+                      spells: Res<SpellDefs>,
+                      conditions: Res<ConditionDefs>,
+                      mut dice: ResMut<Dice>,
+                      db: Res<Database>,
+                      mut events: MessageWriter<GameEvent>,
+                      mut log: ResMut<Outbox>| {
+                    let none = HashMap::new();
+                    let mut imbued = Imbued::default();
+                    let mobs = MobTemplates::default();
+                    let round = Round {
+                        fighters: &mut fighters,
+                        items: &items,
+                        templates: &templates,
+                        mobs: &mobs,
+                        defs: &defs,
+                        spells: &spells,
+                        conditions: &conditions,
+                        dice: &mut dice,
+                        db: &db,
+                        events: &mut events,
+                        log: &mut log,
+                        watchers: &[],
+                        engaged: &none,
+                        targets: &none,
+                        auras: &HashMap::new(),
+                        resting: &HashSet::new(),
+                        outmatched: &HashMap::new(),
+                        ambushers: &HashSet::new(),
+                        now: 0.0,
+                        imbued: &mut imbued,
+                    };
+                    round
+                        .mob_abilities(bully, foe)
+                        .into_iter()
+                        .map(|m| match m {
+                            MobMove::Ability(key, whom) => (key, whom),
+                            other => panic!("{other:?}"),
+                        })
+                        .collect::<Vec<_>>()
+                },
+            )
+            .unwrap();
+        assert_eq!(moves, vec![("presence:glare".to_string(), foe)]);
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(foe).unwrap().has("exposed"));
+        assert!(world.get::<Conditions>(bully).unwrap().hidden().is_none());
+    }
+
+    /// Make every test mob's template (`test:mob`) aggressive, sparing `allies`.
+    fn aggressive_template(world: &mut World, allies: Option<Vec<String>>) {
+        let def = crate::world::MobDef {
+            aggressive: true,
+            allies,
+            ..crate::world::MobDef::named("a brawler")
+        };
+        world.insert_resource(MobTemplates(HashMap::from([(
+            MobKey::parse("test:mob", ""),
+            def,
+        )])));
+    }
+
+    /// Spawn a mob of another template, `test:<id>`, tagged with `tags`.
+    fn other_mob(world: &mut World, room: Entity, id: &str, tags: &[&str]) -> Entity {
+        let key = MobKey::parse(&format!("test:{id}"), "");
+        let def = crate::world::MobDef {
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            ..crate::world::MobDef::named(id)
+        };
+        world
+            .resource_mut::<MobTemplates>()
+            .0
+            .insert(key.clone(), def);
+        let who = fighter(world, room, 1, 1, &[BASIC_ATTACK]);
+        world.get_mut::<Mob>(who).unwrap().key = key;
+        who
+    }
+
+    #[test]
+    fn aggressive_mobs_with_allies_attack_mobs_that_arent() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, Some(vec!["townsfolk".into(), "players".into()]));
+        let guard = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(guard).insert(Aggressive);
+        let baker = other_mob(&mut world, room, "baker", &["townsfolk"]);
+        let player = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, player);
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        assert!(
+            world.get::<Fighting>(guard).is_none(),
+            "townsfolk and players are spared"
+        );
+        let rat = other_mob(&mut world, room, "rat", &["vermin"]);
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        assert_eq!(world.get::<Fighting>(guard).map(|f| f.0), Some(rat));
+        assert_eq!(
+            world.get::<Fighting>(rat).map(|f| f.0),
+            Some(guard),
+            "fights back"
+        );
+        assert!(world.get::<Fighting>(baker).is_none());
+        assert!(said(&world, player, "attacks"), "the room sees it");
+    }
+
+    #[test]
+    fn aggressive_mobs_without_allies_still_go_only_for_players() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, None);
+        let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(rat).insert(Aggressive);
+        let dog = other_mob(&mut world, room, "dog", &[]);
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        assert!(world.get::<Fighting>(rat).is_none(), "leaves the dog alone");
+        assert!(world.get::<Fighting>(dog).is_none());
+    }
+
+    /// A row of rooms east of `room`, each joined to the last both ways. Returns them in order.
+    fn rooms_east(world: &mut World, room: Entity, count: usize) -> Vec<Entity> {
+        use crate::world::Exit;
+        let mut row = vec![room];
+        for i in 0..count {
+            let next = world
+                .spawn((
+                    Room {
+                        name: format!("Room {i}"),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(&format!("test:room{i}"), ""),
+                    Exits::default(),
+                ))
+                .id();
+            let last = *row.last().unwrap();
+            let exit = |to| Exit {
+                to,
+                door: None,
+                needs: None,
+            };
+            world
+                .get_mut::<Exits>(last)
+                .unwrap()
+                .0
+                .insert("east".into(), exit(next));
+            world
+                .get_mut::<Exits>(next)
+                .unwrap()
+                .0
+                .insert("west".into(), exit(last));
+            row.push(next);
+        }
+        row
+    }
+
+    #[test]
+    fn allies_within_earshot_come_running_to_a_call_for_help() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, Some(vec!["townsfolk".into(), "players".into()]));
+        let row = rooms_east(&mut world, room, 3);
+        let caller = fighter(&mut world, row[0], 1, 1, &[BASIC_ATTACK]);
+        let rat = other_mob(&mut world, row[0], "rat", &["vermin"]);
+        world.entity_mut(caller).insert(Fighting(rat));
+        // Two rooms off, a guard hears; three off, one doesn't. A rat and a dog nearby aren't
+        // the caller's allies.
+        let near = fighter(&mut world, row[2], 1, 1, &[BASIC_ATTACK]);
+        let far = fighter(&mut world, row[3], 1, 1, &[BASIC_ATTACK]);
+        let other_rat = other_mob(&mut world, row[1], "rat", &["vermin"]);
+        let dog = other_mob(&mut world, row[1], "dog", &[]);
+        world.init_resource::<Messages<GameEvent>>();
+        world.write_message(GameEvent::CalledForHelp {
+            who: caller,
+            foe: rat,
+            rooms: 2,
+        });
+        world.run_system_once(help::answer_calls).unwrap();
+        world.flush();
+        assert_eq!(world.get::<InRoom>(near).unwrap().0, row[0], "came running");
+        assert_eq!(world.get::<Fighting>(near).map(|f| f.0), Some(rat));
+        assert_eq!(
+            world.get::<InRoom>(far).unwrap().0,
+            row[3],
+            "out of earshot"
+        );
+        for stayed in [other_rat, dog] {
+            assert_eq!(world.get::<InRoom>(stayed).unwrap().0, row[1]);
+            assert!(world.get::<Fighting>(stayed).is_none());
+        }
+    }
+
+    #[test]
+    fn a_training_dummy_takes_blows_and_never_fights_back() {
+        let (mut world, room) = world();
+        let trainee = fighter(&mut world, room, 5, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, trainee);
+        sure_hands(&mut world, trainee);
+        // Strong enough that beating it would be worth something, if it were alive.
+        let dummy = fighter(&mut world, room, 200, 1, &[BASIC_ATTACK]);
+        world.entity_mut(dummy).insert(Inanimate);
+        world.entity_mut(trainee).insert(Fighting(dummy));
+        for _ in 0..3 {
+            world.run_system_once(combat_round).unwrap();
+            world.flush();
+        }
+        assert!(
+            world.get::<Vitals>(dummy).unwrap().health < 100.0,
+            "it takes blows"
+        );
+        assert_eq!(
+            world.get::<Vitals>(trainee).unwrap().health,
+            100.0,
+            "never one back"
+        );
+        assert!(world.get::<Fighting>(dummy).is_none());
+        let skills = world.get::<Skills>(trainee).unwrap();
+        assert!(
+            skills.0[BASIC_ATTACK].practice > 0.0,
+            "the trainee practises"
+        );
+        // Worth no experience when it's broken.
+        world.get_mut::<Vitals>(dummy).unwrap().health = 1.0;
+        let before = world.get::<Attributes>(trainee).unwrap().experience();
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(world.get::<Dead>(dummy).is_some());
+        assert_eq!(
+            world.get::<Attributes>(trainee).unwrap().experience(),
+            before
+        );
+    }
+
+    #[test]
+    fn hacking_at_a_dummy_is_no_danger_but_any_real_fight_is() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        let (ada, bob) = (world.spawn_empty().id(), world.spawn_empty().id());
+        let dummy = world.spawn(Inanimate).id();
+        let rat = world.spawn_empty().id();
+        let danger = |world: &mut World, who: Entity| {
+            world
+                .run_system_once(
+                    move |fights: Query<(Entity, &Fighting), Without<Dead>>,
+                          inanimate: Query<(), With<Inanimate>>| {
+                        in_danger(who, &fights, &inanimate)
+                    },
+                )
+                .unwrap()
+        };
+        assert!(!danger(&mut world, ada), "not fighting");
+        world.entity_mut(ada).insert(Fighting(dummy));
+        assert!(!danger(&mut world, ada), "a dummy can't hit back");
+        world.entity_mut(rat).insert(Fighting(ada));
+        assert!(danger(&mut world, ada), "set upon while at the dummy");
+        world.entity_mut(bob).insert(Fighting(rat));
+        assert!(danger(&mut world, bob), "fighting something alive");
+        world.entity_mut(rat).insert(Dead);
+        assert!(!danger(&mut world, ada), "a dead attacker is no danger");
+    }
+
     #[test]
     fn prepared_moves_expire_and_tell_the_player() {
         let mut world = World::new();
@@ -3133,10 +3835,13 @@ mod tests {
             })
             .id();
         let engaged = world
-            .spawn((Fighting(target), Readied {
-                skill: "brawling:jab".into(),
-                ready_at: -6.0,
-            }))
+            .spawn((
+                Fighting(target),
+                Readied {
+                    skill: "brawling:jab".into(),
+                    ready_at: -6.0,
+                },
+            ))
             .id();
 
         world.run_system_once(expire_readied).unwrap();
@@ -3147,5 +3852,4 @@ mod tests {
         assert!(said(&world, opener, "You let your brawling:backstab fade."));
         assert!(said(&world, caster, "You let your arcane:spark fade."));
     }
-
 }

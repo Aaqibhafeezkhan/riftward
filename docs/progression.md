@@ -10,10 +10,10 @@ What counts as a "use" depends on the skill's kind: activating an active skill, 
 
 Each known skill stores its `level`, a `practice` value from 0 to 1, `last_used`, and `next_gain_at`. On every use:
 
-1. **Practice fades** with the time since the last use, halving every 30 minutes:
+1. **Practice fades** with the time since the last use, halving every 4 hours (`practice_half_life_minutes` in `assets/progression.ron`; it was 30 minutes until 2026-10-27, which cost a player most of their warm-up over a short break):
 
    ```math
-   p' = p \cdot 0.5^{\Delta t / 30\,\text{min}}
+   p' = p \cdot 0.5^{\Delta t / 4\,\text{h}}
    ```
 
 2. **Roll for a gain**, unless the skill is on cooldown:
@@ -39,8 +39,9 @@ For a skill at level 10, within its soft cap (base chance 18%):
 | First use, cold | 0.00 | 4% |
 | After 10 uses in a row | 0.65 | 13% |
 | After 20 uses in a row | 0.88 | 16% |
-| Warmed up, then a 30-minute break | 0.44 | 10% |
-| Warmed up, then 2 hours away | 0.06 | 4% |
+| Warmed up, then an hour's break | 0.74 | 14% |
+| Warmed up, then 4 hours away | 0.44 | 10% |
+| Warmed up, then a day away | 0.01 | 4% |
 
 ## Gain cooldown
 

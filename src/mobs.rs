@@ -10,7 +10,7 @@ use bevy::prelude::*;
 
 use crate::attributes::Attributes;
 use crate::characters::{Races, article};
-use crate::combat::{Aggressive, AutoAttack, Fighting, Tactics, the};
+use crate::combat::{Aggressive, AutoAttack, Conditions, Fighting, Inanimate, Tactics, the};
 use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
 use crate::db::{Permission, Role};
 use crate::dice::Dice;
@@ -215,12 +215,23 @@ pub fn spawn_mob(
         AutoAttack(def.attack.clone()),
         Tactics(def.tactics.unwrap_or(DEFAULT_TACTICS)),
         Spells(def.spells.iter().cloned().collect()),
+        // What it's born with, hidden in its lair or proof against blades, until something ends it.
+        // And what it is: its own traits, and its race's.
+        Conditions::born_with(
+            def.conditions
+                .iter()
+                .map(|c| (c.condition.clone(), c.strength)),
+        )
+        .with_traits(def.traits.iter().chain(race.iter().flat_map(|r| &r.traits))),
     ));
     if let Some(base) = base {
         entity.insert(base);
     }
-    if def.aggressive {
+    if def.aggressive && !def.inanimate() {
         entity.insert(Aggressive);
+    }
+    if def.inanimate() {
+        entity.insert(Inanimate);
     }
     // The coins it carries: what a pickpocket can lift, and what's left falls to its slayer.
     if let Some((low, high)) = def.coins {
@@ -292,7 +303,8 @@ pub fn wander(
     mut doors: Query<&mut Door>,
     mut dice: ResMut<Dice>,
     mut mobs: Query<(Entity, &SpawnedBy, &InRoom, &mut Wanderer), Idle>,
-    names: Query<&Mob>,
+    everyone: Query<(&Mob, &InRoom)>,
+    templates: Res<MobTemplates>,
     registry: Res<CommandRegistry>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -311,6 +323,11 @@ pub fn wander(
     let crowd = |crowds: &HashMap<(SpawnKey, Entity), u32>, key: &SpawnKey, room: Entity| {
         crowds.get(&(key.clone(), room)).copied().unwrap_or(0)
     };
+    // Which kinds of mob are in each room, for those who avoid some.
+    let mut kinds: HashMap<Entity, Vec<&MobKey>> = HashMap::new();
+    for (mob, in_room) in &everyone {
+        kinds.entry(in_room.0).or_default().push(&mob.key);
+    }
     for (entity, spawned_by, in_room, mut wanderer) in &mut mobs {
         if wanderer.next > elapsed {
             continue;
@@ -332,6 +349,22 @@ pub fn wander(
         let Ok((_, _, exits)) = rooms.get(in_room.0) else {
             continue;
         };
+        // Never into a room holding what it avoids.
+        let me = everyone.get(entity).ok().map(|(m, _)| &m.key);
+        let mine = me.and_then(|k| Some((k, templates.0.get(k)?)));
+        let shunned = |room: Entity| {
+            let Some((own, def)) = mine.filter(|(_, d)| !d.avoids.is_empty()) else {
+                return false;
+            };
+            kinds.get(&room).is_some_and(|here| {
+                here.iter().any(|key| {
+                    templates
+                        .0
+                        .get(*key)
+                        .is_some_and(|other| def.avoids_mob(own, key, other))
+                })
+            })
+        };
         // Packed in, they'll break through a closed door to somewhere emptier.
         let breach = def
             .breach
@@ -346,7 +379,7 @@ pub fn wander(
             .0
             .iter()
             // Mobs keep to where they can walk: no climbing or swimming.
-            .filter(|(_, exit)| exit.needs.is_none() && passable(exit.door))
+            .filter(|(_, exit)| exit.needs.is_none() && passable(exit.door) && !shunned(exit.to))
             .filter(|(_, exit)| {
                 rooms.get(exit.to).is_ok_and(|(room, key, _)| {
                     may_enter(&def.wander, &spawned_by.0, key, room.no_wander)
@@ -381,7 +414,9 @@ pub fn wander(
             && let Ok(mut door) = doors.get_mut(door)
         {
             door.state = DoorState::Open;
-            let name = names.get(entity).map_or("something", |m| m.name.as_str());
+            let name = everyone
+                .get(entity)
+                .map_or("something", |(m, _)| m.name.as_str());
             let fill =
                 |text: &str| text.replace("{actor}", name).replace("{door}", &door.the()) + "\r\n";
             outbox.0.push(Outgoing::Room {
@@ -485,14 +520,22 @@ fn summon(
         .get(actor.room)
         .map(|(_, key, _)| key.zone.clone())
         .unwrap_or_default();
-    let key = MobKey::parse(inv.args.trim(), &zone);
-    match templates.0.get(&key) {
+    let found = crate::world::find_template(
+        &inv.args,
+        &zone,
+        &templates.0,
+        (MobKey::parse, |k: &MobKey| k.zone.as_str()),
+        MobDef::keywords,
+        "mob",
+    );
+    let found = found.and_then(|key| {
+        let def = templates.0.get(&key).ok_or_else(String::new)?;
+        Ok((def, key))
+    });
+    match found {
         _ if inv.args.trim().is_empty() => out.push(Outgoing::line(inv.entity, inv.usage_error())),
-        None => out.push(Outgoing::line(
-            inv.entity,
-            format!("There's no mob template [{key}]."),
-        )),
-        Some(def) => {
+        Err(refusal) => out.push(Outgoing::line(inv.entity, refusal)),
+        Ok((def, key)) => {
             spawn_mob(
                 &mut commands,
                 &templates,
@@ -568,6 +611,76 @@ mod tests {
     use bevy::ecs::system::RunSystemOnce;
 
     #[test]
+    fn mobs_are_born_with_their_conditions() {
+        let mut world = World::new();
+        let key = MobKey::parse("sewers:grey_slime", "");
+        let mut slime = MobDef::named("a grey slime");
+        slime.conditions = vec![
+            crate::world::BornWith {
+                condition: "shielded".into(),
+                strength: 3,
+            },
+            crate::world::BornWith {
+                condition: crate::combat::HIDDEN.into(),
+                strength: 12,
+            },
+        ];
+        // And what it is: here a thing, and an elf, though no slime is either.
+        slime.traits = vec![crate::combat::INANIMATE.into()];
+        slime.race = Some("elf".into());
+        world.insert_resource(MobTemplates(HashMap::from([(key.clone(), slime)])));
+        world.insert_resource(ItemTemplates::default());
+        world.insert_resource(SkillDefs::default());
+        world.insert_resource(Dice::seeded(1));
+        world.insert_resource(Races(vec![crate::characters::RaceDef {
+            id: "elf".into(),
+            name: "Elf".into(),
+            summary: String::new(),
+            attributes: Default::default(),
+            karma: 0,
+            skills: Vec::new(),
+            traits: vec!["fey_mind".into()],
+        }]));
+        let room = world.spawn_empty().id();
+        let mob = world
+            .run_system_once(
+                move |mut commands: Commands,
+                      mobs: Res<MobTemplates>,
+                      items: Res<ItemTemplates>,
+                      defs: Res<SkillDefs>,
+                      races: Res<Races>,
+                      mut dice: ResMut<Dice>| {
+                    spawn_mob(
+                        &mut commands,
+                        &mobs,
+                        &items,
+                        &defs,
+                        &key,
+                        room,
+                        &races,
+                        &mut dice,
+                    )
+                },
+            )
+            .unwrap()
+            .unwrap();
+        let conditions = world.get::<Conditions>(mob).unwrap();
+        assert!(conditions.has("shielded"));
+        assert_eq!(conditions.0[0].strength, 3);
+        assert_eq!(conditions.0[0].lasts, crate::combat::Lasts::Indefinitely);
+        // Born hidden, it lurks unseen until someone notices it.
+        let passer_by = Entity::from_raw_u32(99).unwrap();
+        assert!(!conditions.seen_by(passer_by));
+        let defs = crate::combat::defs_on_disk();
+        assert_eq!(
+            conditions.names(&defs, true),
+            vec!["inanimate".to_string(), "Fey Mind".to_string()],
+            "its traits, and its race's"
+        );
+        assert!(world.get::<crate::combat::Inanimate>(mob).is_some());
+    }
+
+    #[test]
     fn mobs_are_made_with_their_gear() {
         let mut world = World::new();
         let key = MobKey::parse("town:guard", "");
@@ -603,6 +716,7 @@ mod tests {
             attributes: [(crate::attributes::Attribute::Body, 2)].into(),
             karma: 0,
             skills: Vec::new(),
+            traits: Vec::new(),
         }]));
         let room = world.spawn_empty().id();
         let mob = world
@@ -689,6 +803,7 @@ mod tests {
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Dice::seeded(3));
         world.insert_resource(Outbox::default());
+        world.insert_resource(MobTemplates::default());
         let go = world.register_system(|In(_): In<Invocation>| {});
         world.insert_resource(CommandRegistry::of(vec![(
             CommandSpec::new("go", Category::Movement),
@@ -826,6 +941,119 @@ mod tests {
         );
         world.run_system_once(wander).unwrap();
         assert!(!world.get::<Door>(grate).unwrap().is_open());
+    }
+
+    /// Where wandering mobs went: the direction each `go` was given.
+    #[derive(Resource, Default)]
+    struct Went(Vec<String>);
+
+    #[test]
+    fn crowded_mobs_keep_out_of_rooms_holding_what_they_avoid() {
+        use crate::command::CommandSpec;
+        use crate::world::{Every, Exit, Exits, Refill, Room, SpawnDef, Terrain};
+
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(Dice::seeded(3));
+        world.insert_resource(Outbox::default());
+        world.insert_resource(Went::default());
+        let go = world.register_system(|In(inv): In<Invocation>, mut went: ResMut<Went>| {
+            went.0.push(inv.args);
+        });
+        world.insert_resource(CommandRegistry::of(vec![(
+            CommandSpec::new("go", Category::Movement),
+            go,
+        )]));
+        let rats = SpawnKey::parse("sewers:rats", "");
+        world.insert_resource(Spawns(HashMap::from([(
+            rats.clone(),
+            SpawnDef {
+                mob: Some("rat".into()),
+                item: None,
+                contents: Vec::new(),
+                room: "middle".into(),
+                every: Every::Minutes(20),
+                refill: Refill::Keep(1),
+                wander: Wander::Anywhere { secs: (30, 120) },
+                crowd: Some(2),
+                pack: None,
+                breach: None,
+                when: None,
+            },
+        )])));
+        let (rat_key, slime_key) = (
+            MobKey::parse("sewers:rat", ""),
+            MobKey::parse("sewers:slime", ""),
+        );
+        let mut rat = MobDef::named("a sewer rat");
+        rat.avoids = vec!["slime".into()];
+        let mut slime = MobDef::named("a grey slime");
+        slime.tags = vec!["slime".into()];
+        world.insert_resource(MobTemplates(HashMap::from([
+            (rat_key.clone(), rat),
+            (slime_key.clone(), slime),
+        ])));
+        let room = |world: &mut World, id: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: id.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(id, ""),
+                ))
+                .id()
+        };
+        let (middle, east, west) = (
+            room(&mut world, "sewers:middle"),
+            room(&mut world, "sewers:east"),
+            room(&mut world, "sewers:west"),
+        );
+        let exit = |to| Exit {
+            to,
+            door: None,
+            needs: None,
+        };
+        world.entity_mut(middle).insert(Exits(
+            [
+                ("east".to_string(), exit(east)),
+                ("west".to_string(), exit(west)),
+            ]
+            .into(),
+        ));
+        for here in [east, west] {
+            world.entity_mut(here).insert(Exits::default());
+        }
+        let mob = |world: &mut World, key: &MobKey, name: &str, at: Entity| {
+            world
+                .spawn((
+                    Mob {
+                        key: key.clone(),
+                        name: name.into(),
+                        here: String::new(),
+                        description: String::new(),
+                        race: None,
+                    },
+                    InRoom(at),
+                ))
+                .id()
+        };
+        // A slime sits in the east room; six rats crowd the middle, three over their limit.
+        mob(&mut world, &slime_key, "a grey slime", east);
+        for _ in 0..6 {
+            let rat = mob(&mut world, &rat_key, "a sewer rat", middle);
+            world
+                .entity_mut(rat)
+                .insert((SpawnedBy(rats.clone()), Wanderer { next: 0.0 }));
+        }
+        world.run_system_once(wander).unwrap();
+        world.flush();
+        let went = &world.resource::<Went>().0;
+        assert!(!went.is_empty(), "crowded, they move on");
+        assert!(went.iter().all(|dir| dir == "west"), "never east: {went:?}");
     }
 
     #[test]

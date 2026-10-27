@@ -5,8 +5,8 @@ use bevy::prelude::*;
 use crate::aliases::{self, Aliases};
 use crate::attributes::{self, Attributes};
 use crate::characters::{Backgrounds, Races};
-use crate::combat::the;
 use crate::combat::{ConditionDefs, Conditions};
+use crate::combat::{Fights, in_danger, the};
 use crate::command::{CommandRegistry, Invocation};
 use crate::db::Database;
 use crate::items::capitalized;
@@ -78,7 +78,11 @@ pub fn score(
     if let Some(purse) = purse {
         text += &format!("    Purse: {}", money::coins(purse.0));
     }
-    let affected = conditions.map_or_else(Vec::new, |c| c.names(&condition_defs));
+    let traits = conditions.map_or_else(Vec::new, |c| c.names(&condition_defs, true));
+    if !traits.is_empty() {
+        text += &format!("\r\n  Traits: {}", traits.join(", "));
+    }
+    let affected = conditions.map_or_else(Vec::new, |c| c.names(&condition_defs, false));
     if !affected.is_empty() {
         text += &format!(
             "\r\n  Affected by: {} (type 'affects' to see for how long)",
@@ -188,14 +192,23 @@ pub fn unalias(
 pub fn quit(
     In(inv): In<Invocation>,
     players: Characters,
+    (fights, inanimate): Fights,
     mut outbox: ResMut<Outbox>,
     mut connections: Query<&mut Connection>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
+    if in_danger(actor.entity, &fights, &inanimate) {
+        let text = "You can't leave in the middle of a fight. Flee it first.";
+        deliver(
+            vec![reply_line(actor.entity, Err(text.into()))],
+            &mut outbox,
+        );
+        return;
+    }
     let out = vec![
-        Outgoing::line(actor.entity, "Farewell!"),
+        Outgoing::line(actor.entity, "You leave the world for now."),
         Outgoing::Room {
             room: actor.room,
             except: actor.entity,
@@ -203,7 +216,9 @@ pub fn quit(
         },
     ];
     deliver(out, &mut outbox);
+    // Leave as if disconnecting, but back to the character menu (`login::return_to_menu`).
     if let Ok(mut conn) = connections.get_mut(actor.entity) {
         conn.closing = true;
+        conn.to_menu = true;
     }
 }

@@ -124,14 +124,64 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     health: 3,                        // instead of 8 + Body / 2; Toughness still adds to it
     tactics: 25,                      // % chance a turn to use a combat skill instead (default 25)
     aggressive: true,                 // attacks players in its room, with `kill`
+    tags: ["vermin"],                 // what it is, for others' allies
+    allies: ["vermin"],               // with allies, attacks anyone here who isn't one, mobs too
+    avoids: ["slime"],                // never wanders into a room holding one
+    conditions: [(condition: "hidden", strength: 8)],   // born with, until something ends them
+    traits: ["skittish"],             // what it is, for good (assets/traits/)
 ),
 ```
+
+**A mob can avoid others,** `avoids: [...]` (*built*, 2026-10-27): by tag or template, as `allies` are. Wandering and crowding never take it into a room holding one; nothing else changes, so a rat that avoids slimes still goes for guards and players. It keeps rats from draining into the slimes' tunnels ([the sewers](riftwatch.md#the-sewers-ecology)), and will keep deer out of the wolf den. The zone test checks each name.
+
+**A mob can be a thing,** the `inanimate` trait (*built*, 2026-10-27; a template flag until traits came the same day): a training dummy. It takes blows and never acts in a fight (no blow back, no flight, no skill), never wanders or picks one, is worth no experience and gives no tough-fight boost to learning, and leaves no corpse, what it held falling where it stood. It reads as a thing: battered and coming apart rather than hurt, knocked to pieces rather than killed. Its spawn puts it back.
+
+**A mob has traits,** `traits: [...]` (*built*, 2026-10-27): what it is, for good, as opposed to what's happening to it: skittish prey, a thing, a slime's rubbery body ([Traits](effects.md#traits)). Its race's traits come with it. Nothing cures them, and death doesn't clear them. The zone test checks each is a real trait.
+
+**A mob can be born with conditions** (*built*, 2026-10-27): `conditions: [(condition, strength)]` on its template, put on as it spawns and lasting until something ends them (a cure, a `Remove`, or for `hidden`, being noticed and acting). A grey slime born proof against blades, a regenerating Slime Lord, a spider born `hidden` in its web, unseen until someone notices it as they come in. The zone test checks each condition exists.
 
 **A mob can be one of the peoples,** with `race`: its attributes start from that race's (the template's own ratings win where it sets them), it has the race's skills, `look` says "The provisioner is a human.", and its tracks read "a human", as a player's do. Riftwatch's townsfolk are mostly human; the tinker is a dwarf, the drill sergeant an ork, the magister an elf. Beasts have no race. The zone test checks every race exists.
 
 Mobs use equipment as players do: a mob holding a sword fights with it (and its Swordplay), its weapon techniques work, and `look` shows what it holds and wears. When it dies, its gear falls into its corpse, with one find from each of its **loot tables**: weighted, ordered worst to best, rolled with the Luck of whoever struck the killing blow, `None` for nothing. Sewer rats sometimes leave a tail; the Rat King leaves a tail or his tooth, and sometimes a healing draught.
 
-Mobs share players' vitals and recover by the same rules, at their own maximums: out of a fight, a hurt or winded mob gets its health and stamina back. Mobs use their skills the way players do. Besides its auto-attack, a mob uses the other combat skills it knows (technique skills like Cleave or Guard): each turn, with its `tactics` chance, it uses one it can right then (its attack ready, the stamina for it), picked at random, in place of its auto-attack. Openers like Backstab are for starting fights, so a mob already in one never picks them.
+Mobs share players' vitals and recover by the same rules, at their own maximums: out of a fight, a hurt or winded mob gets its health and stamina back. Mobs use their skills the way players do. Besides its auto-attack, a mob uses the other combat skills it knows (technique skills like Cleave or Guard, spells, and active skills made of effects, like First Aid): each turn, with its `tactics` chance, it uses one it can right then and that would do some good, picked at random, in place of its auto-attack. A technique needs its attack ready and the stamina; a heal, being below half health; a condition, a target that doesn't have it yet; an active skill, being ready and anything it uses up to hand (a bandage). Openers like Backstab are for starting fights, so a mob already in one never picks them, nor what makes no sense mid-fight: hiding, stealing, finding or reading things.
+
+### Rift-touched mutations (planned)
+
+Noted 2026-10-27. Now and then, instead of an ordinary mob, something more monstrous spawns: a creature mutated by the rifts' energy. A sewer rat the size of a dog with too many eyes; a wolf whose fur crackles. Rare enough to be an event, worth a contract, and a little randomized, so no two are quite alike.
+
+- **Built on traits:** a mutation is mostly a trait or two put on at spawn ([Traits](effects.md#traits); decided 2026-10-27, they were conditions it's born with) (resistances, a reaction, regeneration, more health), plus a name and a line that show it: "a rift-twisted sewer rat, its eyes glowing faintly".
+- **A pool of mutations, as data** (`assets/mutations.ron`): each with its words (an adjective for the name, a line for `look`), its traits, shifts to attributes and health, and what extra its corpse yields to harvesting (rift-glass, a mutated gland: reagents for later crafts). A mutated mob rolls one, now and then two, from the pool, so they combine.
+- **How often:** a small chance on every spawn (first guess 1 in 200), higher the nearer the rifts: the Rift-Scar, the undercity. Places could say how rift-touched they are, which ties to the [setting](riftwatch.md#open-questions) once it's decided.
+- **Who:** beasts and slimes by default; a template can opt out (the townsfolk), or carry mutations of its own that only it can take (a slime that splits into more slimes).
+- **Fair warning:** `look` and the room line show it, so a player sees what they're walking into.
+- **The rift-touched stag** of the Darkwood becomes the first designed one: a stag with a fixed mutation, not a rolled one.
+
+### Mobs fighting mobs
+
+*Built* (2026-10-27). A mob template can say what it is, `tags: ["vermin"]`, and who an aggressive one leaves alone, `allies`: tags, templates (`sewer_rat`, `zone:mob`) or `players`, and always its own kind. With `allies`, an aggressive mob attacks anyone in the room it has noticed who isn't one, mobs as well as players; without, it attacks players only, as before.
+
+```ron
+"town_guard": (
+    name: "a town guard",
+    tags: ["townsfolk"],
+    allies: ["townsfolk", "players"],   // any stranger to the town, a rat or worse
+    aggressive: true,
+    ...
+),
+"sewer_rat": (
+    tags: ["vermin"],
+    allies: ["vermin"],                 // players, and the guards and dogs of the town
+    aggressive: true,
+    ...
+),
+```
+
+- **In Riftwatch** every townsperson is `townsfolk`, and the guards and the stray dog are aggressive towards anything that isn't, so when the rats break out the guards and the dog fight them. The rats and the Rat King are `vermin`, aggressive to everyone else.
+- **The same rules as against a player:** a fight is picked as `kill` picks one (`attack` in `combat/mod.rs`), only on someone noticed, and a spawn's `pack` limits how many gang up on one.
+- **Kills:** a mob killed by a mob gives no one experience, and its coins stay in its corpse; only a player's kill takes them.
+- **The zone test** checks every ally is `players`, a mob template, or a tag some mob has.
+- **Reinforcements** (*built*, 2026-10-27): a guard losing a fight shouts for help, and those nearby who count them an ally come running. It's the Command tree's **Call for Help** (`command:call_for_help`), a passive whose reaction, on dropping below half health, is `CallForHelp(rooms: 2)`: allies within two rooms, through exits anyone could walk (open doors, no climbing), who aren't fighting, dead or being played, walk in (seen arriving, as anyone walking in is) and join the fight against the caller's foe, a player too. An ally is the caller's own kind or one its `allies` name (`MobDef::allied`, stricter than `spares`: without `allies`, only its own kind); so a guard's call brings the other guards and the stray dog, but never a rat. Town guards know it. `combat/help.rs` answers the calls.
 
 ## Building mobs and spawns
 
@@ -151,7 +201,7 @@ Mobs share players' vitals and recover by the same rules, at their own maximums:
 | `spawn mob <id> <mob>` / `spawn item <id> <item>` / `spawn room <id>` | Change what it spawns, or move it to this room |
 | `spawn contents <id> <item>... \| none` | What an item spawn's container is topped up with on each reset |
 | `spawn remove <id>` | Remove the spawn and its mobs |
-| `summon <mob>` | Bring a mob here that belongs to no spawn, for testing |
+| `summon <mob>` | Bring a mob here that belongs to no spawn, for testing: by its template id (`stray_dog`, `riftwatch:stray_dog`) or the words it answers to (`dog`), this zone first, then every zone |
 | `purge [<mob>]` | Remove a mob here, or every mob here. Its spawn refills at its next reset |
 
 Rooms can be flagged with `flag <indoors|no_wander> <on|off>`, or in the zone file. `no_wander` turns wanderers away; Riftwatch marks its shops, the shrine and the guild's quieter rooms. `indoors` hides the sky, so dawn and dusk pass unannounced; the sewers and the town's halls are indoors.

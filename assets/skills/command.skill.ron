@@ -1,0 +1,27 @@
+// A skill tree. Its id is the file name: skills here are `command:<id>`. Leading others in a
+// fight: calling them to it now, rallying and ordering them later. Nothing teaches it yet; the
+// town's guards are born to it.
+(
+    name: "Command",
+    rarity: Common,
+    attribute: Charisma,
+    skills: {
+        // When a fight turns against you, you shout, and allies within two rooms who aren't busy
+        // come running. Who answers is whoever counts you an ally (see `allies` on mobs).
+        "call_for_help": (
+            name: "Call for Help",
+            description: "When a fight turns against you, below half your health, you shout for help, and allies within two rooms who aren't busy come running to join it.",
+            kind: Passive(
+                reactions: [(
+                    on: Hurt(0.5),
+                    effects: [CallForHelp(rooms: 2)],
+                    text: (
+                        actor: "You shout for help!",
+                        target: "{actor} shouts for help!",
+                        room: "{actor} shouts for help!",
+                    ),
+                )],
+            ),
+        ),
+    },
+)

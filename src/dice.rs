@@ -1,13 +1,13 @@
-//! Every random roll in the game goes through `Dice`, which applies the roller's Luck: a lucky
-//! roll is rolled a second time and the better result kept. However high Luck goes, the effect
-//! never exceeds "best of two". Nothing else in the game should own a random number generator.
+//! Every random roll in the game goes through `Dice`, which applies the roller's Luck: each point
+//! is a percent better (`luck_scale` in `progression.ron` is the Luck that doubles a roll). A
+//! chance is that much likelier, an amount that much bigger, a contest rating that much stronger,
+//! and a pick from a table that much further toward its best end. Every point counts, and Luck,
+//! like every attribute, has no cap. Nothing else in the game should own a random number
+//! generator.
 
 use bevy::prelude::*;
 use rand::rngs::{SmallRng, SysRng};
 use rand::{RngExt, SeedableRng};
-
-/// Luck at which half of all rolls get a second chance. Higher = Luck matters more slowly.
-pub const LUCK_SCALE: f64 = 50.0;
 
 pub struct DicePlugin;
 
@@ -17,10 +17,11 @@ impl Plugin for DicePlugin {
     }
 }
 
-/// The chance, from 0 to 1, that a roll by someone with this much Luck is rolled twice.
-pub fn lucky_chance(luck: i32) -> f64 {
-    let luck = f64::from(luck.max(0));
-    luck / (luck + LUCK_SCALE)
+/// How much better than plain a roll by someone with this much Luck is: 1 with none, 1.1 with
+/// Luck 10 (at the default `luck_scale` of 100), 2 with Luck 100.
+pub fn luck_boost(luck: i32) -> f64 {
+    let scale = crate::attributes::progression().luck_scale.max(1.0);
+    1.0 + f64::from(luck.max(0)) / scale
 }
 
 #[derive(Resource)]
@@ -28,8 +29,6 @@ pub struct Dice {
     rng: SmallRng,
 }
 
-// Gameplay doesn't roll anything yet; skills will be the first user.
-#[cfg_attr(not(test), allow(dead_code))]
 impl Dice {
     pub fn from_os() -> Self {
         Self {
@@ -38,67 +37,62 @@ impl Dice {
     }
 
     /// Deterministic dice, for tests and simulations.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn seeded(seed: u64) -> Self {
         Self {
             rng: SmallRng::seed_from_u64(seed),
         }
     }
 
-    fn lucky(&mut self, luck: i32) -> bool {
-        let p = lucky_chance(luck);
-        p > 0.0 && self.rng.random_bool(p)
-    }
-
-    /// A yes/no roll that succeeds with probability `p`; Luck gives a second try on a miss.
+    /// A yes/no roll that succeeds with probability `p`, Luck percent likelier.
     pub fn chance(&mut self, luck: i32, p: f64) -> bool {
-        let p = p.clamp(0.0, 1.0);
-        self.rng.random_bool(p) || (self.lucky(luck) && self.rng.random_bool(p))
+        let p = (p.clamp(0.0, 1.0) * luck_boost(luck)).min(1.0);
+        self.rng.random_bool(p)
     }
 
-    /// A value in `range`, where higher is better for the roller.
+    /// An amount in `range`, where higher is better for the roller, then Luck percent more. It
+    /// can go past the top: luck hits harder. Whole numbers round by chance, so on average a
+    /// roll is worth exactly its Luck: 6 with Luck 1 is 6.06, which is 7 one time in 16.
     pub fn range(&mut self, luck: i32, range: std::ops::RangeInclusive<i64>) -> i64 {
-        let first = self.rng.random_range(range.clone());
-        if self.lucky(luck) {
-            first.max(self.rng.random_range(range))
-        } else {
-            first
+        let rolled = self.rng.random_range(range);
+        if luck <= 0 {
+            return rolled;
         }
+        let lucky = rolled as f64 * luck_boost(luck);
+        let whole = lucky.floor();
+        let up = self.rng.random_bool((lucky - whole).clamp(0.0, 1.0));
+        whole as i64 + i64::from(up)
     }
 
     /// Pick from a weighted table ordered worst to best, e.g. loot tiers from Common to
-    /// Legendary. Returns `None` if every weight is zero.
+    /// Legendary: where the roll lands along the table, pushed Luck percent toward its best end.
+    /// Returns `None` if every weight is zero.
     pub fn pick<'a, T>(&mut self, luck: i32, table: &'a [(T, u32)]) -> Option<&'a T> {
-        let first = self.weighted_index(table)?;
-        let index = if self.lucky(luck) {
-            first.max(self.weighted_index(table)?)
-        } else {
-            first
-        };
-        table.get(index).map(|(item, _)| item)
-    }
-
-    fn weighted_index<T>(&mut self, table: &[(T, u32)]) -> Option<usize> {
         let total: u64 = table.iter().map(|(_, w)| u64::from(*w)).sum();
         if total == 0 {
             return None;
         }
-        let mut roll = self.rng.random_range(0..total);
-        for (i, (_, weight)) in table.iter().enumerate() {
+        let landed = self.rng.random_range(0.0..total as f64) * luck_boost(luck);
+        let mut at = landed.min(total as f64 - 1.0) as u64;
+        for (item, weight) in table {
             let weight = u64::from(*weight);
-            if roll < weight {
-                return Some(i);
+            if at < weight {
+                return Some(item);
             }
-            roll -= weight;
+            at -= weight;
         }
         None
     }
 
-    /// An opposed roll, `a` against `b`: each side rolls a performance around its rating, and
-    /// the higher wins. The weaker side wins (weaker / stronger)^STEEPNESS as often as the
-    /// stronger, whatever the scale, so 5 against 10 is the same contest as 50 against 100. A
-    /// side with Luck rolls twice and keeps the better. A fixed difficulty rolls with no Luck.
+    /// An opposed roll, `a` against `b`: each side rolls a performance around its rating, made
+    /// Luck percent stronger, and the higher wins. The weaker side wins (weaker /
+    /// stronger)^STEEPNESS as often as the stronger, whatever the scale, so 5 against 10 is the
+    /// same contest as 50 against 100. A fixed difficulty rolls with no Luck.
     pub fn opposed(&mut self, a: f64, luck_a: i32, b: f64, luck_b: i32) -> Contest {
-        let (a, b) = (self.perform(a, luck_a), self.perform(b, luck_b));
+        let (a, b) = (
+            self.perform(a * luck_boost(luck_a)),
+            self.perform(b * luck_boost(luck_b)),
+        );
         Contest {
             won: a > b,
             margin: ((a - b).abs() / STEEPNESS).exp(),
@@ -107,15 +101,8 @@ impl Dice {
 
     /// A performance: STEEPNESS times the log of the rating, plus a Gumbel draw. The difference
     /// of two Gumbel draws is logistic, which makes the odds exactly a^k / (a^k + b^k).
-    fn perform(&mut self, rating: f64, luck: i32) -> f64 {
-        let base = STEEPNESS * rating.max(0.1).ln();
-        let first = self.gumbel();
-        let roll = if self.lucky(luck) {
-            first.max(self.gumbel())
-        } else {
-            first
-        };
-        base + roll
+    fn perform(&mut self, rating: f64) -> f64 {
+        STEEPNESS * rating.max(0.1).ln() + self.gumbel()
     }
 
     /// A standard Gumbel draw.
@@ -156,12 +143,12 @@ mod tests {
     }
 
     #[test]
-    fn lucky_chance_follows_the_curve() {
-        assert_eq!(lucky_chance(0), 0.0);
-        assert_eq!(lucky_chance(-5), 0.0);
-        assert!((lucky_chance(10) - 1.0 / 6.0).abs() < 1e-9);
-        assert_eq!(lucky_chance(50), 0.5);
-        assert!(lucky_chance(1_000_000) < 1.0);
+    fn each_point_of_luck_is_a_percent() {
+        assert_eq!(luck_boost(0), 1.0);
+        assert_eq!(luck_boost(-5), 1.0);
+        assert!((luck_boost(10) - 1.1).abs() < 1e-9);
+        assert!((luck_boost(100) - 2.0).abs() < 1e-9);
+        assert!((luck_boost(200) - 3.0).abs() < 1e-9, "no cap");
     }
 
     #[test]
@@ -171,22 +158,18 @@ mod tests {
     }
 
     #[test]
-    fn luck_gives_a_second_try() {
+    fn luck_makes_a_chance_that_much_likelier() {
         let mut dice = Dice::seeded(2);
-        let (p, l) = (0.2, lucky_chance(50));
-        assert_near(rate(|| dice.chance(50, p)), p + (1.0 - p) * l * p);
+        assert_near(rate(|| dice.chance(50, 0.2)), 0.3);
+        assert_near(rate(|| dice.chance(1, 0.5)), 0.505);
+        assert!(
+            (0..1000).all(|_| dice.chance(1000, 0.5)),
+            "never past certain"
+        );
     }
 
     #[test]
-    fn luck_never_exceeds_best_of_two() {
-        let mut dice = Dice::seeded(3);
-        let p = 0.01;
-        let rate = rate(|| dice.chance(i32::MAX, p));
-        assert!(rate < 1.0 - (1.0 - p) * (1.0 - p) + 0.002, "got {rate}");
-    }
-
-    #[test]
-    fn certain_and_impossible_rolls_ignore_luck() {
+    fn certain_and_impossible_rolls_stay_so() {
         let mut dice = Dice::seeded(4);
         assert!((0..1000).all(|_| dice.chance(1000, 1.0)));
         assert!((0..1000).all(|_| !dice.chance(1000, 0.0)));
@@ -197,19 +180,24 @@ mod tests {
         let table = [("common", 90), ("rare", 9), ("legendary", 1)];
         let mut dice = Dice::seeded(5);
         assert_near(rate(|| dice.pick(0, &table) == Some(&"legendary")), 0.01);
+        // Half again as far along: anything landing past two thirds of the way reaches the end.
         let lucky = rate(|| dice.pick(50, &table) == Some(&"legendary"));
-        assert!(lucky > 0.012 && lucky < 0.0199, "got {lucky}");
+        assert!((0.32..0.35).contains(&lucky), "got {lucky}");
         assert_eq!(dice.pick(10, &[("nothing", 0)]), None);
     }
 
     #[test]
-    fn luck_raises_ranges() {
+    fn luck_makes_amounts_that_much_bigger_on_average() {
         let mut dice = Dice::seeded(6);
         let mean = |dice: &mut Dice, luck| {
             (0..TRIALS).map(|_| dice.range(luck, 1..=10)).sum::<i64>() as f64 / f64::from(TRIALS)
         };
         assert!((mean(&mut dice, 0) - 5.5).abs() < 0.05);
-        assert!(mean(&mut dice, 50) > 5.9);
+        assert!(
+            (mean(&mut dice, 1) - 5.555).abs() < 0.05,
+            "even a point counts"
+        );
+        assert!((mean(&mut dice, 50) - 8.25).abs() < 0.05);
     }
 
     /// The weaker side's share of wins: (a / b)^k against 1.
@@ -236,11 +224,18 @@ mod tests {
     }
 
     #[test]
-    fn luck_helps_and_equal_luck_cancels_in_contests() {
+    fn luck_strengthens_a_side_and_equal_luck_cancels_in_contests() {
         let mut dice = Dice::seeded(8);
         assert_near(rate(|| dice.opposed(10.0, 30, 10.0, 30).won), 0.5);
-        assert!(rate(|| dice.opposed(10.0, 100, 10.0, 0).won) > 0.55);
-        assert!(rate(|| dice.opposed(10.0, 0, 10.0, 100).won) < 0.45);
+        // Luck 100 doubles a rating: 20 against 10.
+        assert_near(
+            rate(|| dice.opposed(10.0, 100, 10.0, 0).won),
+            curve(20.0, 10.0),
+        );
+        assert_near(
+            rate(|| dice.opposed(10.0, 0, 10.0, 100).won),
+            curve(10.0, 20.0),
+        );
     }
 
     #[test]

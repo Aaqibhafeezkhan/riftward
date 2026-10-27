@@ -86,7 +86,28 @@ pub enum Effect {
     /// Something the user learns, and nothing else changes: an item's worth, a room's tracks. Only
     /// in an active skill aimed at what it reveals. See [`Revealed`].
     Reveal(Revealed),
+    /// The user's allies within `rooms` of them who aren't busy come running, and join the fight
+    /// against the target: a losing guard shouting for help. Who answers is whoever counts the
+    /// user an ally (`allies` on their templates, and always their own kind).
+    CallForHelp { rooms: u32 },
+    /// `count` (a formula, 1 unless it says) more mobs of a template come into being where the
+    /// user is, and join the fight against the target, unless that's the user: an ooze splitting
+    /// when struck hard, the Slime Lord shedding slimes. `mob` is a template id in the user's own
+    /// zone, or `zone:id`. They belong to no spawn, so they never come back once killed. At most
+    /// `SPAWN_MOST` at once.
+    Spawn {
+        mob: String,
+        #[serde(default = "one")]
+        count: Formula,
+    },
+    /// The user runs: in a fight, they try to break away as `flee` does (its stamina, its
+    /// chance, held fast by `CantFlee`); out of one, they bolt through a random way anyone could
+    /// walk, away from rooms holding what they `avoid`. A startled deer, a beaten wolf.
+    Flee,
 }
+
+/// The most mobs one `Spawn` brings, whatever its count says.
+pub const SPAWN_MOST: u32 = 10;
 
 /// What `Reveal` tells the user. Each is read off what the skill is aimed at.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,10 +162,22 @@ pub struct Reaction {
     /// The odds it happens, 0 to 1, a formula (`"0.25"`, `"strength / 10"`); always, without.
     #[serde(default)]
     pub chance: Option<Formula>,
+    /// Who the other one must be for it to happen: `only: Foes`. Anyone, without.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub only: Option<Only>,
     pub effects: Vec<Effect>,
     /// What everyone sees, `{actor}` the bearer and `{target}` the other one, with `{harm}` in
     /// every line if it does damage.
     pub text: Lines,
+}
+
+/// A check on who the other one in a reaction is.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Only {
+    /// Not the bearer's ally: for a mob, not its own kind nor one its `allies` name
+    /// (`MobDef::allied`); for a player, not another player. A deer startles at a wolf or a
+    /// hunter coming in, not at another deer.
+    Foes,
 }
 
 /// When a reaction happens.
@@ -158,6 +191,9 @@ pub enum When {
     Dodges,
     /// The bearer kills someone.
     Kills,
+    /// The bearer is killed, by whoever is the other one (themselves, for bleeding to death).
+    /// The only reaction that answers from beyond the grave.
+    Dies,
     /// A hit leaves the bearer below this share of their most health, having been above it:
     /// `Hurt(0.25)`.
     Hurt(f64),
@@ -241,6 +277,9 @@ pub enum Lasting {
     Minutes(u32),
     Hours(u32),
     Turns(u32),
+    /// So many combat rounds' worth of real time (`ROUND_SECS` each), in a fight or out of one,
+    /// unlike `Turns`: a startled deer's two rounds before it bolts.
+    Rounds(u32),
     /// Until something ends it: hiding lasts until the hider acts openly or is found.
     Indefinitely,
 }
@@ -251,6 +290,7 @@ impl Lasting {
         let minutes = match self {
             Lasting::Minutes(n) => n,
             Lasting::Hours(n) => n * 60,
+            Lasting::Rounds(n) => return f64::from(n) * crate::combat::ROUND_SECS,
             Lasting::Turns(_) | Lasting::Indefinitely => 0,
         };
         f64::from(minutes) * REAL_SECS_PER_GAME_DAY as f64 / (24.0 * 60.0)
@@ -274,6 +314,8 @@ impl Effect {
             | Effect::Remove { on, .. }
             | Effect::Cure { on, .. }
             | Effect::Imbue { on, .. } => *on,
+            // Wherever the user is, whether or not anything lands.
+            Effect::Spawn { .. } | Effect::Flee => Who::User,
             _ => Who::Target,
         }
     }
@@ -481,6 +523,7 @@ mod tests {
         let mut thorns = Reaction {
             on: When::Struck,
             chance: None,
+            only: None,
             effects: vec![Effect::Damage {
                 amount: Formula::number(2.0),
                 damage_type: "physical".into(),

@@ -4,12 +4,18 @@
     rarity: Common,
     attribute: Agility,
     skills: {
-        // `hide` shows the room line only to those who noticed; the miss is when everyone there
-        // saw it. `sneak` keeps a character hidden as they move, practising this too.
+        // Hiding puts `hidden` on you, as well as your Stealth (level plus Agility). Everyone here
+        // rolls to notice as you do: the room line goes only to those who did, and the miss is
+        // when everyone saw. `sneak` keeps a character hidden as they move, practising this too.
         "basics": (
             name: "Stealth",
-            description: "Going unseen: 'hide' to slip out of sight, 'sneak' to stay hidden as you move. Anyone may notice you, by their Intuition against your Stealth and Agility; acting openly or walking away shows you, unless you're sneaking. A Backstab from hiding can't be avoided.",
-            kind: Active(command: "hide", cooldown: 3),
+            description: "Going unseen: 'hide' (or 'use stealth') to slip out of sight, 'sneak' to stay hidden as you move. Anyone may notice you, by their Intuition against your Stealth and Agility; acting openly or walking away shows you, unless you're sneaking. You can't hide in a fight. A Backstab from hiding can't be avoided.",
+            kind: Active(
+                aim: Me,
+                cooldown: 3,
+                quiet: true,
+                effects: [Apply(condition: "hidden", strength: "power", lasts: Indefinitely, on: User)],
+            ),
             text: (
                 hit: (
                     actor: "You slip into the shadows.",

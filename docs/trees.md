@@ -68,7 +68,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 | --- | --- | --- |
 | **Thievery** ✓ | Agility | **Lockpicking** ✓, **Pickpocketing** ✓ (coins from mobs with `steal`; players later), **Disarm Traps**, **Fence** (with Trade: sell stolen goods) |
 | **Stealth** | Agility | **Sneak** (move without being announced), **Hide** (unseen while still), **Shadowing** (follow unseen), capstone **Vanish** (hide mid-fight) |
-| **Survival** | Intuition | **Foraging** (find food and herbs, by terrain), **Tracking** (see who passed and where they went), **Camping** (rest well outdoors), **Navigation** |
+| **Survival** | Intuition | **Foraging** (find food and herbs, by terrain), **Tracking** (see who passed and where they went), **Skinning** and **Butchering** (working a beast's corpse for its pelt, meat and trophies: see [Harvest, not loot](darkwood.md#harvest-not-loot)), **Camping** (rest well outdoors), **Navigation** |
 | **Nature** | Intuition | **Herbalism** (know and gather herbs), **Brewing** (with Crafting: draughts and poultices) |
 | **Healing** | Intuition | **First Aid** (bind wounds out of a fight, with bandages), **Treat Poison**, **Surgery** (expert) |
 | **Animals** | Charisma | **Animal Handling** (calm an angry beast, so it won't attack you), **Riding**, **Taming** (a companion) |
@@ -81,6 +81,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 | **Crafting** | Logic (Strength for Smithing) | **Smithing**, **Leatherwork**, **Carpentry**, **Scribing** (copy scrolls), each a tree of its own later |
 | **Lore** | Logic | **Lore** (study a mob or item: what it is, how tough), **Bestiary**, **Rift Lore**, **Languages** |
 | **Performance** | Charisma | **Performance** (play for coin; inspire companions, as an aura) |
+| **Command** ✓ | Charisma | **Call for Help** ✓ (passive: below half health, allies within two rooms come running), **Rally**, **Orders**. Not taught yet: the town's guards have it |
 | **Sailing** | Intuition | **Sailing**: boats and rivers, when the world has them |
 
 ### Magic
@@ -108,7 +109,7 @@ Each tradition is a full tree in the same shape as the others, entered through i
 
 ### Racial
 
-A `racial` tree holding each race's abilities, each requiring its race (the tree exists, with the elves' **Fey Mind**, resisting sleep and charm): Heat Sight, Low-Light Vision, Versatility, Stone Skin, Gahad, Tail Combat, Swimming (t'skrang), Flight, Astral Sight. Most need light and darkness first.
+A `racial` tree holding each race's abilities, each requiring its race (the tree exists, empty since the elves' **Fey Mind** became a [trait](effects.md#traits) on 2026-10-27; what a race simply *is*, rather than does and improves at, is a trait): Heat Sight, Low-Light Vision, Versatility, Stone Skin, Gahad, Tail Combat, Swimming (t'skrang), Flight, Astral Sight. Most need light and darkness first.
 
 ## What the engine needs
 
@@ -141,7 +142,7 @@ Each step adds its trees' entry skills to the trainers in Riftwatch: the drill s
 
 ## Step 1, as built
 
-- **Passive bonuses.** A passive skill can raise a stat by one point per so many levels, optionally only for one attack skill: `bonuses: [(stat: MaxHealth, per: 5)]`, or `(stat: Attack, per: 10, with: "swordplay:basics")` for a Bladework. Stats: max health, max stamina, attack, defence, damage, armour, initiative, and since armour, pierce, armour ease and block, and `Resist(tag)`, which helps resist spells and techniques carrying that tag (see [Resisting](effects.md#resisting-as-built)). Maximum health and stamina everywhere (the prompt, `score`, recovery, respawning) now include them.
+- **Passive bonuses.** A passive skill can raise a stat by a point per so many levels, growing a fraction with every level (decided 2026-10-27: `per: 5` is +0.2 a level, so level 1 and level 2 differ, with no steps). Ratings, damage, armour and the rest keep the fraction, since contests are rolled as ratios; only maximum health and stamina, which are whole points, count it once it adds up to one, optionally only for one attack skill: `bonuses: [(stat: MaxHealth, per: 5)]`, or `(stat: Attack, per: 10, with: "swordplay:basics")` for a Bladework. Stats: max health, max stamina, attack, defence, damage, armour, initiative, and since armour, pierce, armour ease and block, and `Resist(tag)`, which helps resist spells and techniques carrying that tag (see [Resisting](effects.md#resisting-as-built)). Maximum health and stamina everywhere (the prompt, `score`, recovery, respawning) now include them.
 - **Conditions** on any fighter, counted in their turns: **staggered** (loses a turn), **down** (loses a turn, defends at half until then), **bleeding** (hurts each turn), **held** (can't flee, defends at half), **guarding** (defends better), **exposed** (defends at half until their next turn). Code in `src/combat/states.rs`.
 - **Techniques,** a skill kind: a special move made with an attack skill, in place of the auto-attack, through the action queue (`use cleave`). Each has a stamina cost, and can add accuracy and damage, be harmless (a grab), not strike at all (a guard), carry effects, or be an **opener** that can start a fight (`use backstab rat`) and lands easily on someone unaware. A technique without its weapon in hand, or its stamina, falls back to the auto-attack with a word why.
 
@@ -163,7 +164,7 @@ Each step adds its trees' entry skills to the trainers in Riftwatch: the drill s
   | Axe Fighting | **Cleave** (carries into a second foe, even when it kills the first, 3), **Hew** (+3 damage, −2 accuracy, 2) |
   | Hammer Fighting | **Stagger** (target loses a turn, 4), **Crush** (ignores armour, +1, 2) |
   | Staff Fighting | **Sweep** (knocks down, 3), **Guard** (+4 defence for 2 turns, no strike, 1) |
-  | Athletics | **Toughness** (+1 max health per 5 levels, practised by taking damage); **Endurance** now gives +1 max stamina per 5 levels |
+  | Athletics | **Toughness** (+1 max health per 5 levels, a fifth with each, practised by taking damage); **Endurance** now gives +1 max stamina per 5 levels |
   | Adept | **Killing Hands** (unarmed, 2–4: the Adept's weapon), **Quickened Reflexes** (+initiative, and +defence, practised by dodging) |
 
 - **Mobs** use whatever skills their templates give them: technique skills now and then, by their `tactics` chance (see [The living world](world.md)), as well as auras and passives.
@@ -188,14 +189,14 @@ Built. Armour is **damage reduction**: every hit loses its wearer's armour, **ev
   | buckler / round shield | held | block 2 / 4 | 0 / 1 | 1 / 2 |
 
   The training yard keeps a padded jack, a leather cap and a buckler; the locked armory keeps mail, a helm, a round shield, gauntlets and greaves. Town guards wear studded leather and an iron helm, and carry a round shield.
-- **Skills work both sides of it.** In armour: **Heavy Armour** (the Armour tree's entry, practised by taking hits in armour; eases the penalty by 1 per 10 levels) and **Block** (the Shields tree's entry, practised by blocking; adds 1 to a shield's block per 10 levels). Out of it: the Adept's Quickened Reflexes, and an unarmoured Evasion later. Both entries are taught by the drill sergeant; their higher skills are to come.
+- **Skills work both sides of it.** In armour: **Heavy Armour** (the Armour tree's entry, practised by taking hits in armour; eases the penalty by 1 per 10 levels, a tenth with each) and **Block** (the Shields tree's entry, practised by blocking; adds 1 to a shield's block per 10 levels). Out of it: the Adept's Quickened Reflexes, and an unarmoured Evasion later. Both entries are taught by the drill sergeant; their higher skills are to come.
 - **Piercing answers armour.** `Pierce(n)`, a technique effect, ignores `n` points of armour: **Lunge** has 1 (the point finds a gap), **Backstab** 2 (between the plates). A passive can add piercing too, `(stat: Pierce, per: 10, with: "knives:basics")`. **Crush** ignores armour entirely, so it's the answer to plate.
 
 ## Stealth
 
 Built.
 
-- **Stealth** (`stealth:basics`, Agility) is its tree's entry: `hide` to slip out of sight, `sneak` to stay hidden on the move. The hooded figure in Riftwatch's Back Alley teaches it (and Lockpicking and Pickpocketing), and the Poacher and Street Urchin backgrounds start with it. **Shadowing** (follow someone unseen) is its journeyman skill and **Vanish** (hide mid-fight) its capstone, both to come.
+- **Stealth** (`stealth:basics`, Agility) is its tree's entry: `hide` (or `use stealth`, a skill made of effects) to slip out of sight, never in a fight, `sneak` to stay hidden on the move. The hooded figure in Riftwatch's Back Alley teaches it (and Lockpicking and Pickpocketing), and the Poacher and Street Urchin backgrounds start with it. **Shadowing** (follow someone unseen) is its journeyman skill and **Vanish** (hide mid-fight) its capstone, both to come.
 - **Noticing** is an opposed roll: an observer's Intuition against the hider's Stealth plus Agility, rolled when they hide, when anyone walks into the room, and when someone `search`es, with double their Intuition. Those who notice still see them; to everyone else they're gone: not listed, not targetable, and their comings and goings unannounced. Mobs see by the same rules, so aggressive mobs leave unnoticed players alone.
 - **Acting openly shows you** ("Grok steps out of the shadows."): any interaction or communication, unless it's quiet (whispering, searching, hiding, tracking), and walking away. Looking, checking your inventory and other character commands don't. **Sneaking** keeps you hidden as you move: those who noticed you see you go, and in each new room everyone rolls again.
 - **Quiet things done from hiding are seen only by those who've noticed you:** reading tracks or weighing an item's worth in the shadows doesn't tell the rest of the room "Grok studies the ground." (2026-10-27; the rule is in `output.rs`, for every room message about a hidden character.)

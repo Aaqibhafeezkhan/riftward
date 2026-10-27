@@ -34,6 +34,7 @@ use crate::dice::Dice;
 use crate::effects::{self, Effect};
 use crate::events::GameEvent;
 use crate::items::{ItemQuery, ItemTemplates};
+use crate::mobs::MobTemplates;
 use crate::output::{Outbox, Outgoing, deliver};
 use crate::skills::{SkillDefs, SkillText, Skills};
 use crate::stealth::can_see;
@@ -130,6 +131,8 @@ pub enum Aim {
     Room,
     /// An item the user can reach, carried or here: Appraisal. Active skills only, for now.
     Item,
+    /// The user and no one else: Stealth's hiding.
+    Me,
 }
 
 pub use crate::effects::Resist;
@@ -384,6 +387,10 @@ impl Aimed<'_> {
             )
         };
         let target = match (self.aim, named) {
+            (Aim::Me, Some(target)) if target != caster => {
+                return Err(format!("You can only {verb} {name} {at} yourself."));
+            }
+            (Aim::Me, _) => caster,
             (_, Some(target)) => target,
             (Aim::Ally, None) => caster,
             (Aim::Foe | Aim::Other, None) => {
@@ -470,7 +477,7 @@ fn cast(
     mut commands: Commands,
     mut fighters: Fighters,
     items: ItemQuery,
-    templates: Res<ItemTemplates>,
+    (templates, mobs): (Res<ItemTemplates>, Res<MobTemplates>),
     defs: Res<SkillDefs>,
     spells: Res<SpellDefs>,
     mut dice: ResMut<Dice>,
@@ -584,6 +591,7 @@ fn cast(
         fighters: &mut fighters,
         items: &items,
         templates: &templates,
+        mobs: &mobs,
         defs: &defs,
         spells: &spells,
         conditions: &condition_defs,
@@ -734,7 +742,10 @@ mod tests {
                 // Every condition it puts on someone is a real one.
                 let conditions = crate::combat::defs_on_disk();
                 for key in spell.effects.iter().filter_map(Effect::condition) {
-                    assert!(conditions.get(key).is_some(), "{id}: no condition '{key}'");
+                    assert!(
+                        conditions.condition(key).is_some(),
+                        "{id}: no condition '{key}'"
+                    );
                 }
                 spell
                     .check()

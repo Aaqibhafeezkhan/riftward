@@ -7,7 +7,7 @@
         // A weapon skill: no damage of its own, it needs a sword in hand.
         "basics": (
             name: "Swordplay",
-            description: "Fighting with a sword in hand. You do the sword's damage, and a point more for every 10 levels.",
+            description: "Fighting with a sword in hand. Your skill and Agility are your aim, every level of it counting, and the more surely you land a blow, the harder it hits, from a glancing one to a crushing one. You do the sword's damage.",
             kind: Attack(),
             text: (
                 hit: (

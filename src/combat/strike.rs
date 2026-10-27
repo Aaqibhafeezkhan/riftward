@@ -18,7 +18,7 @@ use crate::dice::Dice;
 use crate::effects::{self, Resist, Who};
 use crate::events::GameEvent;
 use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
-use crate::mobs::Mob;
+use crate::mobs::{Mob, MobTemplates};
 use crate::money::Purse;
 use crate::output::PuppetedBy;
 use crate::output::{Outbox, Outgoing};
@@ -33,7 +33,6 @@ use crate::world::{ArmourDef, InRoom, Player, WeaponDef};
 
 /// The skill that helps avoid attacks.
 const DODGE: &str = "athletics:dodge";
-/// Levels of a weapon skill for each extra point of damage with that weapon.
 /// Stamina a riposte takes.
 const RIPOSTE_COST: f32 = 1.0;
 
@@ -61,6 +60,8 @@ pub struct Fighter {
     pub spells: Option<&'static Spells>,
     /// A mob a builder is playing: it acts on what they queue, not on its own.
     pub puppeted: Has<PuppetedBy>,
+    /// A thing, not a creature: it never acts in a fight.
+    pub inanimate: Has<super::Inanimate>,
     /// The coins they carry: a player's, or a mob's for a pickpocket and its slayer.
     pub purse: Option<&'static mut Purse>,
 }
@@ -87,6 +88,17 @@ pub fn condition(health: f32, max: i32) -> &'static str {
     }
 }
 
+/// How battered a thing looks (a training dummy), as `condition` says how hurt someone is.
+fn battered(health: f32, max: i32) -> &'static str {
+    match health / max.max(1) as f32 {
+        f if f >= 1.0 => "untouched",
+        f if f >= 0.75 => "scuffed",
+        f if f >= 0.5 => "battered",
+        f if f >= 0.25 => "coming apart",
+        _ => "about to fall to pieces",
+    }
+}
+
 /// An attack's rating with `skill`: its level and attribute, plus auras and passive bonuses.
 fn attack_rating(
     attributes: &Attributes,
@@ -94,9 +106,10 @@ fn attack_rating(
     skill: &Skill,
     aura: Bonus,
     boosts: &Boosts,
-) -> i32 {
+) -> f64 {
     let level = skills.0.get(&skill.key).map_or(0, |s| s.level as i32);
-    level + attributes.get(skill.attribute) + aura.attack + boosts.attack_with(&skill.key)
+    f64::from(level + attributes.get(skill.attribute) + aura.attack)
+        + boosts.attack_with(&skill.key)
 }
 
 /// Defence before conditions: Reaction and Dodge, plus auras and passive bonuses.
@@ -108,29 +121,30 @@ pub(super) fn defence_rating(
     gear: &ArmourDef,
 ) -> Defence {
     let dodge = skills.0.get(DODGE).map_or(0, |s| s.level as i32);
-    let penalty = (gear.penalty - boosts.armour_ease).max(0);
+    let penalty = (f64::from(gear.penalty) - boosts.armour_ease).max(0.0);
     Defence {
-        evasion: attributes.get(Attribute::Reaction) + dodge + aura.defence + boosts.defence
+        evasion: f64::from(attributes.get(Attribute::Reaction) + dodge + aura.defence)
+            + boosts.defence
             - penalty,
         block: if gear.block > 0 {
-            gear.block + boosts.block
+            f64::from(gear.block) + boosts.block
         } else {
-            0
+            0.0
         },
     }
 }
 
 /// Defence before conditions, in its two parts: getting out of the way, and a shield in the way.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Defence {
     /// Reaction, Dodge and the rest, less what armour takes off.
-    pub evasion: i32,
+    pub evasion: f64,
     /// A held shield's block.
-    pub block: i32,
+    pub block: f64,
 }
 
 impl Defence {
-    pub fn total(self) -> i32 {
+    pub fn total(self) -> f64 {
         self.evasion + self.block
     }
 }
@@ -220,11 +234,13 @@ pub fn outmatched(
             &gear(entity, items, templates),
         )
         .total();
-        Some((f64::from(attack.max(1)), f64::from(defence.max(1))))
+        Some((attack.max(1.0), defence.max(1.0)))
     };
     targets
         .iter()
         .filter(|(who, _)| fighters.get(**who).is_ok_and(|f| f.player.is_some()))
+        // Beating a thing teaches nothing faster.
+        .filter(|(_, foe)| fighters.get(**foe).is_ok_and(|f| !f.inanimate))
         .filter_map(|(who, foe)| {
             let ((attack, defence), (their_attack, their_defence)) =
                 (ratings(*who)?, ratings(*foe)?);
@@ -459,6 +475,8 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub fighters: &'a mut Fighters<'w, 's>,
     pub items: &'a ItemQuery<'iw, 'is>,
     pub templates: &'a ItemTemplates,
+    /// Mob templates, for who counts whom an ally.
+    pub mobs: &'a MobTemplates,
     pub defs: &'a SkillDefs,
     pub conditions: &'a ConditionDefs,
     pub spells: &'a SpellDefs,
@@ -508,10 +526,15 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         }
     }
 
-    /// Tell everyone in `room` but `a` and `b`.
+    /// Tell everyone in `room` but `a` and `b`; while `a` is hidden, only those who've noticed
+    /// them, as for every room message about a hidden character (`output.rs`).
     pub(super) fn tell_room(&mut self, room: Entity, a: Entity, b: Entity, line: &str) {
         for &(player, at) in self.watchers {
-            if at == room && player != a && player != b {
+            let sees = self
+                .fighters
+                .get(a)
+                .map_or(true, |f| f.conditions.seen_by(player));
+            if at == room && player != a && player != b && sees {
                 self.log.0.push(Outgoing::line(player, line.to_string()));
             }
         }
@@ -568,14 +591,19 @@ impl Round<'_, '_, '_, '_, '_, '_> {
     }
 
     /// What a mob does this turn instead of its auto-attack, if anything: with its `Tactics`
-    /// chance, a technique it can make now (its attack ready, the stamina for it) or a spell that
-    /// would do some good, picked at random. Openers start fights, so a mob already in one never
+    /// chance, a technique it can make now (its attack ready, the stamina for it), or a spell or
+    /// active skill that would do some good, picked at random. Openers start fights, so a mob already in one never
     /// picks them.
     pub fn mob_move(&mut self, attacker: Entity) -> Option<MobMove> {
-        let spells = self
-            .targets
-            .get(&attacker)
-            .map_or_else(Vec::new, |foe| self.mob_spells(attacker, *foe));
+        let (spells, abilities) = self.targets.get(&attacker).map_or_else(
+            || (Vec::new(), Vec::new()),
+            |foe| {
+                (
+                    self.mob_spells(attacker, *foe),
+                    self.mob_abilities(attacker, *foe),
+                )
+            },
+        );
         let f = self.fighters.get(attacker).ok()?;
         let chance = f.tactics?.0;
         let (stamina, luck) = (f.vitals.stamina, f.attributes.get(Attribute::Luck));
@@ -608,6 +636,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             })
             .map(|key| MobMove::Technique(key.clone()))
             .chain(spells)
+            .chain(abilities)
             .collect();
         if usable.is_empty() || !self.dice.chance(luck, f64::from(chance) / 100.0) {
             return None;
@@ -842,13 +871,14 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let (accuracy, extra) = t.map_or((0, 0), |t| (t.accuracy, t.damage));
         let a_aura = self.auras.get(&attacker).copied().unwrap_or_default();
         let a_boosts = boosts(&a_skills, self.defs);
-        let rating =
-            attack_rating(&a_attributes, &a_skills, skill, a_aura, &a_boosts) + accuracy + blessing;
+        let rating = attack_rating(&a_attributes, &a_skills, skill, a_aura, &a_boosts)
+            + f64::from(accuracy + blessing);
         // A grab only applies its effects; anything else hurts.
         let harmless = t.is_some_and(|t| t.strike == StrikeKind::Harmless);
         let blow = (!harmless).then(|| BlowDamage {
             damage,
-            bonus: a_attributes.get(Attribute::Strength) / 2 + a_boosts.damage_with(&key) + extra,
+            bonus: f64::from(a_attributes.get(Attribute::Strength) / 2 + extra)
+                + a_boosts.damage_with(&key),
             damage_type,
             pierce: a_boosts.pierce_with(&key),
         });
@@ -977,6 +1007,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         f.vitals.health -= dealt as f32;
         let health = f.vitals.health;
         let max = Maxima::of(&f.attributes, &f.skills, defs, f.base).health;
+        // A thing is broken, not killed, and battered, not hurt.
+        let thing = f.inanimate;
         self.events.write(GameEvent::Damaged {
             who,
             amount: dealt as f32,
@@ -985,10 +1017,19 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             if let Ok(mut f) = self.fighters.get_mut(who) {
                 f.vitals.health = 0.0;
             }
-            tell.lines
-                .push((attacker, format!("\x1b[1mYou have killed {name}!\x1b[0m")));
-            tell.room
-                .push(format!("{} falls, dead.", capitalized(name)));
+            let (yours, seen) = if thing {
+                (
+                    format!("\x1b[1mYou knock {name} to pieces!\x1b[0m"),
+                    format!("{} falls to pieces.", capitalized(name)),
+                )
+            } else {
+                (
+                    format!("\x1b[1mYou have killed {name}!\x1b[0m"),
+                    format!("{} falls, dead.", capitalized(name)),
+                )
+            };
+            tell.lines.push((attacker, yours));
+            tell.room.push(seen);
             self.events.write(GameEvent::Died {
                 who,
                 name: name.to_string(),
@@ -999,7 +1040,15 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         } else {
             tell.lines.push((
                 attacker,
-                format!("{} is {}.", capitalized(name), condition(health, max)),
+                format!(
+                    "{} is {}.",
+                    capitalized(name),
+                    if thing {
+                        battered(health, max)
+                    } else {
+                        condition(health, max)
+                    }
+                ),
             ));
             false
         }

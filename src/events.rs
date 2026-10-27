@@ -92,6 +92,23 @@ pub enum GameEvent {
     Rested { who: Entity },
     /// Someone ate (or, with `drink`, drank) something.
     Consumed { who: Entity, drink: bool },
+    /// `who` shouted for help against `foe`, heard within `rooms` (`combat/help.rs`).
+    CalledForHelp {
+        who: Entity,
+        foe: Entity,
+        rooms: u32,
+    },
+    /// `who` is to run, by an effect (`combat/fleeing.rs`).
+    Flees { who: Entity },
+    /// `count` mobs of `mob` are to come into being in `room`, by `who`'s doing, and fight `foe`
+    /// unless that's `who` (`combat/spawning.rs`).
+    Spawns {
+        who: Entity,
+        foe: Entity,
+        mob: MobKey,
+        count: u32,
+        room: Entity,
+    },
 }
 
 /// How someone moved.
@@ -147,7 +164,10 @@ fn text(event: &GameEvent) -> Option<String> {
         | GameEvent::ConditionApplied { .. }
         | GameEvent::ConditionFaded { .. }
         | GameEvent::Rested { .. }
-        | GameEvent::Consumed { .. } => return None,
+        | GameEvent::Consumed { .. }
+        | GameEvent::CalledForHelp { .. }
+        | GameEvent::Spawns { .. }
+        | GameEvent::Flees { .. } => return None,
     };
     Some(line + "\r\n")
 }
@@ -198,7 +218,10 @@ fn announce(
             | GameEvent::ConditionApplied { .. }
             | GameEvent::ConditionFaded { .. }
             | GameEvent::Rested { .. }
-            | GameEvent::Consumed { .. } => {}
+            | GameEvent::Consumed { .. }
+            | GameEvent::CalledForHelp { .. }
+            | GameEvent::Spawns { .. }
+            | GameEvent::Flees { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, _, in_room) in &players {
                     let outdoors = rooms.get(in_room.0).is_ok_and(|(room, _, _)| !room.indoors);

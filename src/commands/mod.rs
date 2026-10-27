@@ -156,7 +156,7 @@ impl Plugin for CommandsPlugin {
                 character::unalias,
             )
             .add_command(
-                CommandSpec::new("quit", Character).summary("leave the game"),
+                CommandSpec::new("quit", Character).summary("leave your character, back to the character menu"),
                 character::quit,
             );
     }

@@ -21,7 +21,7 @@
         ),
         "endurance": (
             name: "Endurance",
-            description: "Staying power. Every bit of stamina you spend trains it, and it raises your stamina by 1 for every 5 levels.",
+            description: "Staying power. Every bit of stamina you spend trains it, and it deepens your stamina, a fifth of a point with every level.",
             attribute: Willpower,
             kind: Passive(
                 triggers: [StaminaSpent(per: 3)],
@@ -65,7 +65,7 @@
         ),
         "toughness": (
             name: "Toughness",
-            description: "Taking a beating and staying up. The damage you take trains it, and it raises your health by 1 for every 5 levels.",
+            description: "Taking a beating and staying up. The damage you take trains it, and it adds to your health, a fifth of a point with every level.",
             kind: Passive(
                 triggers: [Damaged(per: 3)],
                 bonuses: [(stat: MaxHealth, per: 5)],

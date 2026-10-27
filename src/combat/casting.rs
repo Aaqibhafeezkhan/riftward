@@ -38,6 +38,8 @@ pub enum MobMove {
     Technique(String),
     /// A spell, and at whom.
     Spell(String, Entity),
+    /// An active skill made of effects, and on whom.
+    Ability(String, Entity),
 }
 
 impl Round<'_, '_, '_, '_, '_, '_> {
@@ -98,7 +100,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let outcome = self.resolve(Use {
             user: caster,
             target,
-            rating: power,
+            rating: f64::from(power),
             resist: spell.resist,
             against: None,
             tags: effects::tags(&spell.tags, &spell.effects, self.conditions),
@@ -177,7 +179,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 .ok()?;
                 let target = match spell.aim {
                     Aim::Foe | Aim::Other => foe,
-                    Aim::Ally => mob,
+                    Aim::Ally | Aim::Me => mob,
                     Aim::Lock | Aim::Room | Aim::Item => return None,
                 };
                 let target_skills = self.fighters.get(target).ok()?.skills;

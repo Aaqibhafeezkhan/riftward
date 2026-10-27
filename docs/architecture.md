@@ -24,7 +24,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `main.rs` | Builds the app: a 30 Hz loop, logging, asset loading with file watching, and the plugins below |
 | `net.rs` | TCP listener; one entity per connection with a `Connection` component; queues each client's lines and hands out one per tick as a `PlayerInput` message; flushes output at the end of the frame, marking prompts for clients that want it |
 | `telnet.rs` | The telnet protocol: a parser that separates commands from text, and the options negotiated (echo for passwords, end-of-record for prompts) |
-| `login.rs` | Login state machine: account, password (hidden with telnet echo control), new accounts, character choice, and character creation (race, Karma, background, description) |
+| `login.rs` | Login state machine: account, password (hidden with telnet echo control), new accounts, character choice, and character creation (race, Karma, background, description); `quit` in the game comes back to the character menu, on a fresh entity, and `quit` there disconnects |
 | `command.rs` | The command system: `CommandSpec` registry, the dispatcher (alias expansion, permission hiding, unknown commands), generated `help`, and prompts |
 | `commands/` | Player commands, one system each: `movement` (look, go, directions), `communication` (say, emote, whisper, yell, gossip, who), `character` (score, raise, alias, unalias, quit) |
 | `build.rs` | Builder and admin commands, registered with a permission |
@@ -37,14 +37,14 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
 | `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
-| `combat/` | Combat: the round, death and respawn and the commands (`mod.rs`), attacks, techniques and ripostes (`strike.rs`), casting spells and mobs' choice of them (`casting.rs`), active skills made of effects, and `steal`, a shortcut to Pickpocketing (`abilities.rs`), resolving any blow, technique or spell, from the contest to what it does (`resolve.rs`), carrying out effects and the armour and resistances damage goes through (`effects.rs`), conditions as data and what they do (`states.rs`, from `assets/conditions/`), reactions set off by game events, out of the round (`triggers.rs`) |
+| `combat/` | Combat: the round, death and respawn and the commands (`mod.rs`), attacks, techniques and ripostes (`strike.rs`), casting spells and mobs' choice of them (`casting.rs`), active skills made of effects, and `steal`, a shortcut to Pickpocketing (`abilities.rs`), resolving any blow, technique or spell, from the contest to what it does (`resolve.rs`), carrying out effects and the armour and resistances damage goes through (`effects.rs`), conditions and traits as data and what they do (`states.rs`, from `assets/conditions/` and `assets/traits/`), reactions set off by game events, out of the round (`triggers.rs`), allies answering a call for help (`help.rs`), mobs an effect brings into being (`spawning.rs`), and those an effect makes run (`fleeing.rs`) |
 | `world_events.rs` | World flags, world events from zone files, and the admin `worldflag` |
 | `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
 | `vitals.rs` | Current health and stamina for players and mobs alike, their maximums, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `healing.rs` | `eat` and `drink` for consumables, and `bandage`, a shortcut for `use first aid` |
 | `gathering.rs` | Active skills aimed at the room that `Find` (`roomwork`; `forage` and `gather` are shortcuts), from a room's finds, and how finds deplete and grow back |
 | `tracking.rs` | Tracks left in rooms by whoever walks through, and active skills that read them (`trackwork`; `track` is a shortcut to Tracking) |
-| `stealth.rs` | Hiding, sneaking and noticing: `hide`, `sneak`, `search`, who sees whom (the `hidden` condition and who has seen through it), and revealing |
+| `stealth.rs` | Hiding, sneaking and noticing: `hide` (a shortcut to Stealth, data whose hiding rules are in `combat/abilities.rs`), `sneak`, `search`, who sees whom (the `hidden` condition and who has seen through it), and revealing |
 | `money.rs` | The purse, coins and how amounts read and are written, giving coins, the admin `setcoins` |
 | `shops.rs` | Shopkeepers: `list`, `buy`, `sell`, `value`, prices and resale |
 | `trade.rs` | Haggling (deals with shopkeepers, and the prices they set), and active skills aimed at an item (`itemwork`; `appraise` is a shortcut to Appraisal) |
@@ -160,7 +160,7 @@ Built (`src/combat/`). The round loop, initiative, damage, death and respawn: in
 - **Mobs fight by the same rules,** with attributes, skills, an attack and optionally a base health from their templates, and recover between fights like players. `aggressive: true` mobs attack players in their room, typing `kill` as a player would (just before each round, only players they've noticed, within their spawn's `pack`); the rest only fight back. Mobs in a fight don't wander.
 - **Mobs use their combat skills** as players do: each turn, with their template's `tactics` chance (25% by default), a technique skill they know and can use right then, picked at random, takes the place of their auto-attack. They never pick openers.
 - **A mob's death** leaves a corpse that rots in 5 minutes, and counts for its spawn like any death, so `AfterDeath` timers and breeding reseeds now matter.
-- **Leaving a fight is fatal.** A player who quits or disconnects while fighting is cut down as they go ("tries to slip away from the fight, and is cut down!"), and dies like anyone else, so logging out is never an escape.
+- **Leaving a fight is fatal.** `quit` refuses while a player is in a fight that can hurt them; one who disconnects anyway is cut down as they go ("tries to slip away from the fight, and is cut down!"), and dies like anyone else, so logging out is never an escape. Hacking at a training dummy, or anything else inanimate, with nothing attacking them, isn't such a fight (`combat::in_danger`).
 - **A player's death** leaves a real corpse where they fell, holding everything they carried and wore; it survives restarts and rots in 30 minutes, spilling what's left on the ground. They wake at the Wayside Shrine with a quarter of their health and stamina.
 - **Not yet:** expert and master techniques (Disarm, Whirlwind and the rest), smarter mob tactics than a chance per turn, a death penalty beyond the walk back, PvP, and grouping. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
 

@@ -101,9 +101,10 @@ impl Maxima {
     ) -> Self {
         let boosts = boosts(skills, defs);
         let health = base.map_or_else(|| attributes.health(), |b| b.0);
+        // Whole points: a passive's fraction counts once it adds up to one.
         Self {
-            health: health + boosts.max_health,
-            stamina: attributes.stamina() + boosts.max_stamina,
+            health: health + boosts.max_health.floor() as i32,
+            stamina: attributes.stamina() + boosts.max_stamina.floor() as i32,
         }
     }
 

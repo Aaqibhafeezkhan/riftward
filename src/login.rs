@@ -6,6 +6,9 @@
 //! Creating a character goes: name, race, spending starting Karma, background, description. Each
 //! step after the name can go `back`. Nothing but the name is saved until the end, so a character
 //! left half-made (or made before races existed) goes through creation again at its next login.
+//!
+//! `quit` in the game leaves the character and comes back to the character menu, on a fresh
+//! entity so nothing of the character lingers; `quit` at the menu disconnects.
 
 use bevy::prelude::*;
 
@@ -18,7 +21,7 @@ use crate::commands::movement::{View, describe_room};
 use crate::db::{Account, CharacterRecord, Database, ItemPlace, Permission, Role};
 use crate::items::{HANDS, ItemTemplates, Quality};
 use crate::money::Purse;
-use crate::net::{Connection, JustConnected, PlayerInput};
+use crate::net::{self, Connection, JustConnected, PlayerInput};
 use crate::output::{Characters, Outbox, Outgoing, deliver};
 use crate::skills::{SkillDefs, Skills, UNIVERSAL_SKILLS, learn};
 use crate::spells::Spells;
@@ -38,7 +41,8 @@ impl Plugin for LoginPlugin {
             (greet_new_connections, handle_login)
                 .chain()
                 .after(command::dispatch),
-        );
+        )
+        .add_systems(PostUpdate, return_to_menu.after(net::cleanup_disconnected));
     }
 }
 
@@ -141,6 +145,51 @@ fn greet_new_connections(
             .entity(entity)
             .remove::<JustConnected>()
             .insert(LoginState::Username);
+    }
+}
+
+/// Players who quit their character, once everything that happens when someone leaves has:
+/// their connection moves to a fresh entity at the character menu, and the old one goes.
+fn return_to_menu(
+    mut commands: Commands,
+    leaving: Query<(Entity, &Connection, Option<&Player>)>,
+    db: Res<Database>,
+) {
+    for (entity, conn, player) in &leaving {
+        if !(conn.closing && conn.to_menu) {
+            continue;
+        }
+        let account = player.and_then(|p| match db.find_account(&p.account) {
+            Ok(account) => account,
+            Err(err) => {
+                error!("failed to find {}'s account: {err}", p.account);
+                None
+            }
+        });
+        let Some(account) = account else {
+            commands.entity(entity).despawn();
+            continue;
+        };
+        commands.queue(move |world: &mut World| {
+            let Some(mut conn) = world.entity_mut(entity).take::<Connection>() else {
+                return;
+            };
+            world.despawn(entity);
+            conn.back_to_login();
+            let fresh = world.spawn(conn).id();
+            let mut out = Vec::new();
+            match character_menu(fresh, account, world.resource::<Database>(), &mut out) {
+                Step::Next(state) => {
+                    world.entity_mut(fresh).insert(state);
+                }
+                _ => {
+                    if let Some(mut conn) = world.get_mut::<Connection>(fresh) {
+                        conn.closing = true;
+                    }
+                }
+            }
+            deliver(out, &mut world.resource_mut::<Outbox>());
+        });
     }
 }
 
@@ -378,7 +427,7 @@ fn character_menu(
     for (i, character) in characters.iter().enumerate() {
         text += &format!("  {}. {}\r\n", i + 1, character.name);
     }
-    text += "Enter a number or name to play, or 'new <name>' to create a character: ";
+    text += "Enter a number or name to play, 'new <name>' to create a character, or 'quit': ";
     out.push(Outgoing::To(entity, text));
     Step::Next(LoginState::ChooseCharacter {
         account,
@@ -395,6 +444,10 @@ fn choose_character(
     db: &Database,
     out: &mut Vec<Outgoing>,
 ) -> Step {
+    if line.eq_ignore_ascii_case("quit") {
+        out.push(Outgoing::line(entity, "Farewell!"));
+        return Step::Disconnect;
+    }
     if let Some(name) = line.strip_prefix("new ") {
         return name_character(entity, name.trim(), account, choices, db, out);
     }
@@ -466,7 +519,7 @@ fn choose_character(
         None => {
             out.push(Outgoing::To(
                 entity,
-                "No such character. Enter a number, a name, or 'new <name>': ".into(),
+                "No such character. Enter a number, a name, or 'new <name>', or 'quit': ".into(),
             ));
             Step::Next(LoginState::ChooseCharacter {
                 account,
@@ -792,7 +845,7 @@ fn enter_game(
     let back_to_menu = |out: &mut Vec<Outgoing>, reason: &str| {
         out.push(Outgoing::To(
             entity,
-            format!("{reason}\r\nEnter a number or name to play, or 'new <name>': "),
+            format!("{reason}\r\nEnter a number or name to play, or 'new <name>', or 'quit': "),
         ));
         let characters = db.characters(account.id).unwrap_or_default();
         Some(LoginState::ChooseCharacter {
@@ -870,7 +923,9 @@ fn enter_game(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or_default();
-    let conditions = Conditions::from_saved(saved, now, unix);
+    // And what their race is.
+    let conditions = Conditions::from_saved(saved, now, unix)
+        .with_traits(choices.races.get(&race).into_iter().flat_map(|r| &r.traits));
     let background = character.background.clone().unwrap_or_default();
     let starting = choices
         .races

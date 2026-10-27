@@ -12,21 +12,23 @@ use bevy::prelude::*;
 use super::states::{ConditionDefs, Conditions};
 use super::strike::{Blow, Round, Telling, defence_rating, gear, harm, shield_block, told};
 use crate::attributes::Attribute;
-use crate::effects::{self, Effect, Reaction, Resist, Taken, When, Who};
+use crate::effects::{self, Effect, Only, Reaction, Resist, Taken, When, Who};
 use crate::events::GameEvent;
 use crate::items::capitalized;
+use crate::mobs::MobTemplates;
 use crate::money;
 use crate::skills::{SkillDefs, SkillKind, SkillText, Skills, Trigger, boosts, fill};
 use crate::vitals::Maxima;
+use crate::world::{MobDef, MobKey};
 
 /// A blow's own damage, rolled when it lands: the weapon's or attack's, plus what the user adds.
 pub(super) struct BlowDamage {
     pub damage: (u32, u32),
     /// Strength, passive bonuses and the technique's own extra.
-    pub bonus: i32,
+    pub bonus: f64,
     pub damage_type: String,
     /// Armour the user's skill gets past with this attack.
-    pub pierce: i32,
+    pub pierce: f64,
 }
 
 /// Something done to someone, ready to resolve.
@@ -34,7 +36,7 @@ pub(super) struct Use<'a> {
     pub user: Entity,
     pub target: Entity,
     /// The user's side of the contest: an attack rating, or a caster's power.
-    pub rating: i32,
+    pub rating: f64,
     /// The target's side; without, it always lands, unless it's `against` a difficulty.
     pub resist: Option<Resist>,
     /// A fixed difficulty to beat instead of the target's resistance, rolled without Luck on its
@@ -142,30 +144,30 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let parts = defence_rating(d.attributes, d.skills, aura, &d_boosts, &d_gear);
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let caught = self.resting.contains(&target) || u.opener;
-        let halved = |n: i32| if caught { n / 2 } else { n };
-        // Skills made for it help resist what it is: an elf against sleep.
+        let halved = |n: f64| if caught { n / 2.0 } else { n };
+        // Skills and traits made for it help resist what it is: an elf against sleep.
         let rating = u.resist.map(|resist| {
             let base = match resist {
                 Resist::Evasion => halved(d.conditions.defence(parts.total(), self.conditions)),
                 Resist::Dodge => halved(d.conditions.defence(parts.evasion, self.conditions)),
-                Resist::Attribute(attribute) => d.attributes.get(attribute),
+                Resist::Attribute(attribute) => f64::from(d.attributes.get(attribute)),
             };
-            base + d_boosts.resisting(&u.tags)
+            base + d_boosts.resisting(&u.tags) + d.conditions.withstanding(self.conditions, &u.tags)
         });
 
         // The user's rating against the target's, by opposed roll; how decisively it wins is how
         // hard it lands. An opener from hiding can't be dodged: Backstab from the shadows lands.
         let theirs = match (rating, u.against) {
-            (Some(rating), _) => Some((f64::from(rating.max(1)), d_luck)),
+            (Some(rating), _) => Some((rating.max(1.0), d_luck)),
             (None, Some(difficulty)) => Some((difficulty.max(1.0), 0)),
             (None, None) => None,
         };
         let (hit, blow, margin) = match theirs {
             None => (true, Blow::Solid, 1.0),
             Some((theirs, their_luck)) => {
-                let contest =
-                    self.dice
-                        .opposed(f64::from(u.rating.max(1)), a_luck, theirs, their_luck);
+                let contest = self
+                    .dice
+                    .opposed(u.rating.max(1.0), a_luck, theirs, their_luck);
                 let ambush = u.opener && self.ambushers.contains(&user);
                 match (ambush, contest.won) {
                     (true, false) => (true, Blow::Solid, contest.margin),
@@ -195,7 +197,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             let mut forces = Vec::new();
             if let Some(b) = &u.blow {
                 let rolled = self.roll(a_luck, b.damage);
-                forces.push((rolled + b.bonus, b.damage_type.clone(), b.pierce + pierce));
+                let force = f64::from(rolled) + b.bonus;
+                forces.push((force, b.damage_type.clone(), b.pierce + f64::from(pierce)));
             }
             for effect in u.effects {
                 if let Effect::Damage {
@@ -204,12 +207,12 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 } = effect
                 {
                     let force = amount.amount(&inputs, self.dice, a_luck);
-                    forces.push((force, damage_type.clone(), pierce));
+                    forces.push((f64::from(force), damage_type.clone(), f64::from(pierce)));
                 }
             }
             let mut dealt: Option<i32> = None;
             for (force, kind, pierce) in forces {
-                let force = f64::from(force) * times;
+                let force = force * times;
                 let hurt = self.mitigate(target, force, &kind, pierce, ignores_armour);
                 dealt = Some(dealt.unwrap_or(0) + hurt);
             }
@@ -336,8 +339,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             // The miss is the shield's in proportion to its share of the defence, and otherwise
             // a dodge. Either is told in the words of the defender's skill for it, if they have
             // one: a shield untrained says so plainly, and a miss nobody dodged is just a miss.
-            let share = f64::from(parts.block) / f64::from(parts.total().max(1));
-            let blocked = parts.block > 0 && self.dice.chance(0, share);
+            let share = parts.block / parts.total().max(1.0);
+            let blocked = parts.block > 0.0 && self.dice.chance(0, share);
             let words = |trigger: Trigger| {
                 d_skills.0.keys().find_map(|key| {
                     let skill = self.defs.skills.get(key)?;
@@ -405,8 +408,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     }
                 }
             }
-            if out.died.contains(&target) && user != target {
-                reactions.push((user, target, When::Kills));
+            if out.died.contains(&target) {
+                if user != target {
+                    reactions.push((user, target, When::Kills));
+                }
+                reactions.push((target, user, When::Dies));
             }
             if out.dodged {
                 reactions.push((target, user, When::Dodges));
@@ -420,6 +426,32 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             }
         }
         out
+    }
+
+    /// Whether `who` counts `other` an ally: for a mob, its own kind and those its `allies` name;
+    /// for a player, other players.
+    fn allied(&self, who: Entity, other: Entity) -> bool {
+        // A player, or a mob's template key.
+        let kind = |e: Entity| {
+            self.fighters.get(e).ok().map(|f| match f.player {
+                Some(_) => None,
+                None => f.mob.map(|m| m.key.clone()),
+            })
+        };
+        let (Some(a), Some(b)) = (kind(who), kind(other)) else {
+            return false;
+        };
+        fn def<'k>(
+            mobs: &'k MobTemplates,
+            key: &'k Option<MobKey>,
+        ) -> Option<(&'k MobKey, &'k MobDef)> {
+            key.as_ref().and_then(|k| Some((k, mobs.0.get(k)?)))
+        }
+        match (&a, def(self.mobs, &a)) {
+            (None, _) => b.is_none(),
+            (Some(_), Some((key, own))) => own.allied(key, def(self.mobs, &b)),
+            (Some(_), None) => false,
+        }
     }
 
     /// The `Hurt` shares `who`'s reactions watch for.
@@ -477,14 +509,20 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             if reaction.on != when {
                 continue;
             }
-            // Not from beyond the grave, and not at the dead, but for a killing.
+            // Not from beyond the grave but for a dying, and not at the dead but for a killing or
+            // a dying.
             let standing = |e: Entity| {
                 self.fighters
                     .get(e)
                     .is_ok_and(|f| !f.dead && f.vitals.health > 0.0)
             };
-            if !standing(bearer) || (when != When::Kills && !standing(other)) {
+            let dying = when == When::Dies;
+            if (!dying && !standing(bearer)) || (!dying && when != When::Kills && !standing(other))
+            {
                 break;
+            }
+            if reaction.only == Some(Only::Foes) && self.allied(bearer, other) {
+                continue;
             }
             if let Some(chance) = &reaction.chance {
                 let inputs = self.inputs(bearer, other, power, 1.0);
@@ -508,7 +546,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             let outcome = self.resolve(Use {
                 user: bearer,
                 target: other,
-                rating: 0,
+                rating: 0.0,
                 resist: None,
                 against: None,
                 tags: Vec::new(),

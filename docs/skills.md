@@ -11,6 +11,7 @@ A tree is a themed set of skills, and a character has "opened" a tree once they 
 - **Levels.** Each skill has a level from 0, with no cap, each harder to reach than the last (see [Progression](progression.md#skill-levels-have-no-cap)). Reaching its `mastery` level (50 by default) is **mastery**, a milestone. Levels are permanent and never decay.
 - **Requirements.** A skill lists the conditions a learner must meet, usually `Skill(id, level)`. They can point into other trees, which is how hybrid skills work. Requirements use the same [condition language](#hidden-skills) as hidden skills, so a skill can also require an attribute, such as Magic 1 for a tradition's foundation casting skill.
 - **Requirements make a skill eligible, not learned.** Meeting them only means the character may acquire the skill, through teaching, loot or epiphany.
+- **Every skill is worth having for itself** (decided 2026-10-27). No skill is trained only to unlock others: an attack you fight with, a technique or active skill you use, a passive that improves something or reacts, a school that powers your spells. Opening the rest of a tree comes on top. A skill whose only use is leading on to others is a design bug.
 - **Skill ids** follow the zone convention: `basics` inside its own tree, `fire:basics` from another tree.
 - **Each skill links to an attribute.** A skill's effectiveness is its level plus that attribute (see [Attributes](attributes.md)). Trees set a default `attribute`, and a skill can override it.
 
@@ -120,7 +121,7 @@ Skills are either active, triggered by the player, or passive, applying automati
 - **What a skill does** (damage, bonuses, applied conditions) needs an effect system, designed together with combat.
 - **Combat is made of skills.** There is no attack outside the skill system: everyone starts with a basic attack skill, and weapon trees begin with their own. Mobs fight with skills from their templates, by the same rules as players.
 - **Racial abilities are skills too,** usually passive, requiring the race (see [Races](characters.md#races)).
-- **Some passives grow with other skills:** `UsedSkill(id)` counts one use whenever that skill is used, and `UsedTree` whenever any other skill in the passive's own tree is. The Adept's Inner Discipline has both (see [Magic](magic.md)).
+- **Some passives grow with other skills:** `UsedSkill(id)` counts one use whenever that skill is used, `UsedTree` whenever any other skill in the passive's own tree is, and `UsedAttack` whenever any attack skill is (a sword's swing, a punch). The Adept's Inner Discipline has `UsedTree` and `UsedAttack` (see [Magic](magic.md)).
 - **Triggers use the shared game events.** Passive triggers, hidden-skill triggers and easter-egg flags all draw on one event vocabulary (see [Architecture](architecture.md#game-events)).
 
 ### Invoking active skills

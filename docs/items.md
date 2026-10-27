@@ -71,7 +71,7 @@ Damage never drops below 0 to 1, armour never below nothing, and armour with no 
 
 - **Where quality comes from:** only items with a value have one. Loot rolls it with the killer's Luck, mobs' gear and spawned items with a plain roll (mostly standard: 10% crude, 20% poor, 50% standard, 15% fine, 5% masterwork). Gathering sets it by how surely the search won: a near thing finds a poor one, a decisive win a perfect one. What shops sell is standard, though they resell whatever quality they bought. Crafting will set it by skill.
 - **Worth:** an item's `value` is for a common, standard one; rarity and quality multiply it, and shops and Appraisal use the result.
-- **Testing:** `create <item> [crude|poor|fine|masterwork]`.
+- **Testing:** `create <item> [crude|poor|fine|masterwork]`, by template id or the words it answers to (`create short sword fine`), this zone first, then every zone.
 
 ## Bulk
 

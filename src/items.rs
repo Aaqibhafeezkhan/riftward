@@ -2470,7 +2470,14 @@ fn create(
             }
             _ => (inv.args.trim(), Quality::Standard),
         };
-        let key = ItemKey::parse(id, &here.zone);
+        let key = crate::world::find_template(
+            id,
+            &here.zone,
+            &templates.0,
+            (ItemKey::parse, |k: &ItemKey| k.zone.as_str()),
+            ItemDef::keywords,
+            "item",
+        )?;
         let (name, where_to) = make_for(
             &mut commands,
             &templates,

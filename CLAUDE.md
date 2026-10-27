@@ -26,12 +26,12 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 ### Testing live
 
 - Never test against the real `mud.db`; use a scratch `MUD_DB`. The first account created on a fresh database becomes an admin.
-- Script sessions with `nc` (end with `quit`, or `nc` waits forever):
-  `( printf 'acct\r\npass\r\n'; sleep 1; printf '1\r\nlook\r\nquit\r\n'; sleep 1 ) | nc 127.0.0.1 4001`
+- Script sessions with `nc` (end with `quit` twice, character then menu, or `nc` waits forever):
+  `( printf 'acct\r\npass\r\n'; sleep 1; printf '1\r\nlook\r\nquit\r\nquit\r\n'; sleep 1 ) | nc 127.0.0.1 4001`
   Use a small Python socket client for things `nc` can't do (e.g. dropping the connection mid-fight).
 - **Builder/admin commands rewrite zone files in `assets/zones/`.** Back the folder up before a test that uses them and restore it after.
 - Stop a test server by the process on its port (`lsof -t -iTCP:4001 -sTCP:LISTEN`), never by name, so a real server on 4000 is left alone.
-- Roles: player, builder, GM, admin; builders and GMs sit side by side, and each command names a `Permission` (`Role::can`, `docs/architecture.md#roles`). Admin testing commands: `grantskill`, `setattr`, `setvitals`, `condition` (`condition <who> <condition> [<strength>] [<minutes>|<turns>t]`, or `remove`), `worldflag`, `summon`, `purge`, `goto`, `create`. `create`/`summon` resolve templates in the current zone unless given `zone:id`.
+- Roles: player, builder, GM, admin; builders and GMs sit side by side, and each command names a `Permission` (`Role::can`, `docs/architecture.md#roles`). Admin testing commands: `grantskill`, `setattr`, `setvitals`, `condition` (`condition <who> <condition> [<strength>] [<minutes>|<turns>t]`, or `remove`), `worldflag`, `summon`, `purge`, `goto`, `create`. `create`/`summon` take a template id (`stray_dog`, or `zone:id` from anywhere) or the words it answers to (`summon dog`), this zone first, then every zone; several matches are listed by id.
 - Prefer deterministic tests over chasing dice live: combat tests build a tiny world and run one `combat_round` (see tests in `src/combat/mod.rs`).
 
 ## Architecture
@@ -52,7 +52,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run   # scratch server for 
 
 **Effects:** spells and techniques list what they do in one vocabulary (`effects.rs`: `Damage`, `Apply`, `Imbue`…), and `combat/resolve.rs` resolves every blow, technique and spell the same way: the contest (what the target `resist`s with, plus skills that resist its tags), then damage through armour and resistances, then conditions, then the bearers' `reactions` (conditions and passive skills reacting to hits, dodges, kills; a reaction never sets off another). Reactions outside a blow (entering a room, resting, a condition taking hold or running out, every so often) come from `GameEvent`s, through `combat/triggers.rs`. Amounts in effects are formulas (`formula.rs`), parsed at load: put new numbers and scaling in data, not code. Active skills that do something to someone are effects in their `.skill.ron` too (`combat/abilities.rs`; First Aid); only those like nothing else (`pick`, `track`) have their own command. Add an effect or modifier there rather than special-casing one spell or skill (`docs/effects.md`).
 
-**Data split:** designed content is RON in `assets/` (zones with rooms/doors/item & mob templates/spawns/world events in `assets/zones/*.zone.ron`, skill trees in `assets/skills/*.skill.ron`, spell books in `assets/spells/*.spells.ron`, conditions in `assets/conditions/*.conditions.ron`, `races.ron`, `damage_types.ron`, `progression.ron` (Karma and experience numbers, read at startup), `backgrounds.ron`), hot-reloaded; `world.rs::sync_world` applies zone changes live. Anything that changes during play is in SQLite (`db.rs`). Items become "real" (persisted) the moment a player touches them; untouched spawns and mobs reset.
+**Data split:** designed content is RON in `assets/` (zones with rooms/doors/item & mob templates/spawns/world events in `assets/zones/*.zone.ron`, skill trees in `assets/skills/*.skill.ron`, spell books in `assets/spells/*.spells.ron`, conditions in `assets/conditions/*.conditions.ron`, traits (what a creature or race *is*, the same shape as conditions but permanent) in `assets/traits/*.traits.ron`, `races.ron`, `damage_types.ron`, `progression.ron` (Karma and experience numbers, read at startup), `backgrounds.ron`), hot-reloaded; `world.rs::sync_world` applies zone changes live. Anything that changes during play is in SQLite (`db.rs`). Items become "real" (persisted) the moment a player touches them; untouched spawns and mobs reset.
 
 ## House rules
 

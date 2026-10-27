@@ -1,0 +1,44 @@
+// Traits: what a creature is, for good, rather than what's happening to it. The same shape as a
+// condition (modifiers, reactions, words), but nothing ends one: no cure, no removal, no death.
+// Mob templates list them (`traits: ["skittish"]`), and races grant them. See docs/effects.md#traits.
+{
+    // A thing, not a creature: a training dummy. The code knows this one by name: it never acts
+    // in a fight, never wanders or picks one, is worth no experience and leaves no corpse.
+    "inanimate": (
+        name: "inanimate",
+        description: "a thing, not a creature: it never fights back, and poison and the mind's arts find nothing in it",
+        modifiers: [Immune("poison"), Immune("mind")],
+    ),
+    // Prey: a window a quick hunter can strike into, then gone (docs/darkwood.md#prey).
+    "skittish": (
+        name: "skittish",
+        description: "startled by anyone it doesn't count a friend coming near, and gone a moment later; in a fight it tries to break away",
+        modifiers: [],
+        reactions: [
+            (
+                on: Arrives,
+                only: Foes,
+                effects: [Apply(condition: "startled", lasts: Rounds(2), on: User)],
+                text: (
+                    actor: "You start at {target}.",
+                    target: "{actor} starts at the sight of you.",
+                    room: "{actor} starts at the sight of {target}.",
+                ),
+            ),
+            (
+                on: TurnStarts,
+                chance: "0.5",
+                effects: [Flee],
+                text: (actor: "You look for a way out.", room: "{actor} looks wildly for a way out."),
+            ),
+            (
+                on: Hurt(0.5),
+                effects: [Flee],
+                text: (actor: "You panic.", room: "{actor} panics."),
+            ),
+        ],
+        text: (
+            looks: ["{bearer} watches you warily, ready to bolt."],
+        ),
+    ),
+}
