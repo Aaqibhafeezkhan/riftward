@@ -406,8 +406,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     }
                 }
             }
-            if out.died.contains(&target) && user != target {
-                reactions.push((user, target, When::Kills));
+            if out.died.contains(&target) {
+                if user != target {
+                    reactions.push((user, target, When::Kills));
+                }
+                reactions.push((target, user, When::Dies));
             }
             if out.dodged {
                 reactions.push((target, user, When::Dodges));
@@ -478,13 +481,16 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             if reaction.on != when {
                 continue;
             }
-            // Not from beyond the grave, and not at the dead, but for a killing.
+            // Not from beyond the grave but for a dying, and not at the dead but for a killing or
+            // a dying.
             let standing = |e: Entity| {
                 self.fighters
                     .get(e)
                     .is_ok_and(|f| !f.dead && f.vitals.health > 0.0)
             };
-            if !standing(bearer) || (when != When::Kills && !standing(other)) {
+            let dying = when == When::Dies;
+            if (!dying && !standing(bearer)) || (!dying && when != When::Kills && !standing(other))
+            {
                 break;
             }
             if let Some(chance) = &reaction.chance {

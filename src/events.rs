@@ -98,6 +98,15 @@ pub enum GameEvent {
         foe: Entity,
         rooms: u32,
     },
+    /// `count` mobs of `mob` are to come into being in `room`, by `who`'s doing, and fight `foe`
+    /// unless that's `who` (`combat/spawning.rs`).
+    Spawns {
+        who: Entity,
+        foe: Entity,
+        mob: MobKey,
+        count: u32,
+        room: Entity,
+    },
 }
 
 /// How someone moved.
@@ -154,7 +163,8 @@ fn text(event: &GameEvent) -> Option<String> {
         | GameEvent::ConditionFaded { .. }
         | GameEvent::Rested { .. }
         | GameEvent::Consumed { .. }
-        | GameEvent::CalledForHelp { .. } => return None,
+        | GameEvent::CalledForHelp { .. }
+        | GameEvent::Spawns { .. } => return None,
     };
     Some(line + "\r\n")
 }
@@ -206,7 +216,8 @@ fn announce(
             | GameEvent::ConditionFaded { .. }
             | GameEvent::Rested { .. }
             | GameEvent::Consumed { .. }
-            | GameEvent::CalledForHelp { .. } => {}
+            | GameEvent::CalledForHelp { .. }
+            | GameEvent::Spawns { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, _, in_room) in &players {
                     let outdoors = rooms.get(in_room.0).is_ok_and(|(room, _, _)| !room.indoors);

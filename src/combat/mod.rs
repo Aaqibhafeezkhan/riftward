@@ -19,6 +19,7 @@ mod casting;
 mod effects;
 mod help;
 mod resolve;
+mod spawning;
 mod states;
 mod strike;
 mod triggers;
@@ -90,6 +91,8 @@ impl Plugin for CombatPlugin {
                     (triggers::triggers, triggers::react).chain(),
                     // Those who heard a shout for help come running.
                     help::answer_calls,
+                    // Those an effect brought into being arrive.
+                    spawning::spawn_from_effects,
                     abandon_fights,
                     handle_deaths,
                 )
@@ -2191,6 +2194,56 @@ mod tests {
         world.entity_mut(victor).insert(Fighting(victim));
         world.run_system_once(combat_round).unwrap();
         assert!(world.get::<Conditions>(victor).unwrap().has("strengthened"));
+    }
+
+    #[test]
+    fn a_dying_sets_off_a_reaction_at_the_killer() {
+        // A dying curse: the killer is weakened.
+        let (mut world, room) = world();
+        let victor = fighter(&mut world, room, 1000, 1, &[BASIC_ATTACK]);
+        let victim = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let curse = Effect::Apply {
+            condition: "weakened".into(),
+            strength: Formula::number(1.0),
+            lasts: Lasting::Turns(3),
+            on: Who::Target,
+        };
+        reacting(&mut world, victim, "test:curse", When::Dies, vec![curse]);
+        world.entity_mut(victor).insert(Fighting(victim));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Dead>(victim).is_some());
+        assert!(world.get::<Conditions>(victor).unwrap().has("weakened"));
+    }
+
+    #[test]
+    fn a_dying_ooze_splits_and_the_halves_fight_its_killer() {
+        let (mut world, room) = world();
+        let half = MobKey::parse("test:half", "");
+        world.insert_resource(MobTemplates(HashMap::from([(
+            half.clone(),
+            crate::world::MobDef::named("half an ooze"),
+        )])));
+        world.insert_resource(crate::characters::Races::default());
+        let victor = fighter(&mut world, room, 1000, 1, &[BASIC_ATTACK]);
+        let ooze = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        // A bare id is in the ooze's own zone.
+        let split = Effect::Spawn {
+            mob: "half".into(),
+            count: Formula::number(2.0),
+        };
+        reacting(&mut world, ooze, "test:split", When::Dies, vec![split]);
+        world.entity_mut(victor).insert(Fighting(ooze));
+        world.run_system_once(combat_round).unwrap();
+        world.run_system_once(spawning::spawn_from_effects).unwrap();
+        world.flush();
+        let halves: Vec<(Entity, Option<Entity>)> = world
+            .query::<(Entity, &Mob, &InRoom, Option<&Fighting>)>()
+            .iter(&world)
+            .filter(|(_, mob, at, _)| mob.key == half && at.0 == room)
+            .map(|(e, _, _, fighting)| (e, fighting.map(|f| f.0)))
+            .collect();
+        assert_eq!(halves.len(), 2);
+        assert!(halves.iter().all(|(_, foe)| *foe == Some(victor)));
     }
 
     #[test]

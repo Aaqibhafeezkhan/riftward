@@ -90,7 +90,20 @@ pub enum Effect {
     /// against the target: a losing guard shouting for help. Who answers is whoever counts the
     /// user an ally (`allies` on their templates, and always their own kind).
     CallForHelp { rooms: u32 },
+    /// `count` (a formula, 1 unless it says) more mobs of a template come into being where the
+    /// user is, and join the fight against the target, unless that's the user: an ooze splitting
+    /// when struck hard, the Slime Lord shedding slimes. `mob` is a template id in the user's own
+    /// zone, or `zone:id`. They belong to no spawn, so they never come back once killed. At most
+    /// `SPAWN_MOST` at once.
+    Spawn {
+        mob: String,
+        #[serde(default = "one")]
+        count: Formula,
+    },
 }
+
+/// The most mobs one `Spawn` brings, whatever its count says.
+pub const SPAWN_MOST: u32 = 10;
 
 /// What `Reveal` tells the user. Each is read off what the skill is aimed at.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,6 +175,9 @@ pub enum When {
     Dodges,
     /// The bearer kills someone.
     Kills,
+    /// The bearer is killed, by whoever is the other one (themselves, for bleeding to death).
+    /// The only reaction that answers from beyond the grave.
+    Dies,
     /// A hit leaves the bearer below this share of their most health, having been above it:
     /// `Hurt(0.25)`.
     Hurt(f64),
@@ -278,6 +294,8 @@ impl Effect {
             | Effect::Remove { on, .. }
             | Effect::Cure { on, .. }
             | Effect::Imbue { on, .. } => *on,
+            // Wherever the user is, whether or not anything lands.
+            Effect::Spawn { .. } => Who::User,
             _ => Who::Target,
         }
     }

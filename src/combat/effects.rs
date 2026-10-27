@@ -7,14 +7,14 @@ use bevy::prelude::*;
 use super::states::ItemCondition;
 use super::strike::{Round, Telling};
 use crate::attributes::Attribute;
-use crate::effects::{Effect, Who};
+use crate::effects::{Effect, SPAWN_MOST, Who};
 use crate::events::GameEvent;
 use crate::formula::{Inputs, Side};
 use crate::items::ItemLocation;
 use crate::items::capitalized;
 use crate::skills::boosts;
 use crate::vitals::Maxima;
-use crate::world::armour_stops;
+use crate::world::{MobKey, armour_stops};
 
 use super::strike::armour_against;
 
@@ -206,6 +206,21 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                         who: user,
                         foe: target,
                         rooms: *rooms,
+                    });
+                }
+                // Brought into being once the round is done (`spawning.rs`).
+                Effect::Spawn { mob, count } => {
+                    let count = count
+                        .amount(&inputs, self.dice, luck)
+                        .clamp(0, SPAWN_MOST as i32);
+                    let mob = MobKey::parse(mob, f.mob.map_or("", |m| m.key.zone.as_str()));
+                    let room = f.in_room.0;
+                    self.events.write(GameEvent::Spawns {
+                        who: user,
+                        foe: target,
+                        mob,
+                        count: count as u32,
+                        room,
                     });
                 }
                 // The rest are how damage lands, carried out with it.
