@@ -301,7 +301,8 @@ pub fn wander(
     mut doors: Query<&mut Door>,
     mut dice: ResMut<Dice>,
     mut mobs: Query<(Entity, &SpawnedBy, &InRoom, &mut Wanderer), Idle>,
-    names: Query<&Mob>,
+    everyone: Query<(&Mob, &InRoom)>,
+    templates: Res<MobTemplates>,
     registry: Res<CommandRegistry>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -320,6 +321,11 @@ pub fn wander(
     let crowd = |crowds: &HashMap<(SpawnKey, Entity), u32>, key: &SpawnKey, room: Entity| {
         crowds.get(&(key.clone(), room)).copied().unwrap_or(0)
     };
+    // Which kinds of mob are in each room, for those who avoid some.
+    let mut kinds: HashMap<Entity, Vec<&MobKey>> = HashMap::new();
+    for (mob, in_room) in &everyone {
+        kinds.entry(in_room.0).or_default().push(&mob.key);
+    }
     for (entity, spawned_by, in_room, mut wanderer) in &mut mobs {
         if wanderer.next > elapsed {
             continue;
@@ -341,6 +347,22 @@ pub fn wander(
         let Ok((_, _, exits)) = rooms.get(in_room.0) else {
             continue;
         };
+        // Never into a room holding what it avoids.
+        let me = everyone.get(entity).ok().map(|(m, _)| &m.key);
+        let mine = me.and_then(|k| Some((k, templates.0.get(k)?)));
+        let shunned = |room: Entity| {
+            let Some((own, def)) = mine.filter(|(_, d)| !d.avoids.is_empty()) else {
+                return false;
+            };
+            kinds.get(&room).is_some_and(|here| {
+                here.iter().any(|key| {
+                    templates
+                        .0
+                        .get(*key)
+                        .is_some_and(|other| def.avoids_mob(own, key, other))
+                })
+            })
+        };
         // Packed in, they'll break through a closed door to somewhere emptier.
         let breach = def
             .breach
@@ -355,7 +377,7 @@ pub fn wander(
             .0
             .iter()
             // Mobs keep to where they can walk: no climbing or swimming.
-            .filter(|(_, exit)| exit.needs.is_none() && passable(exit.door))
+            .filter(|(_, exit)| exit.needs.is_none() && passable(exit.door) && !shunned(exit.to))
             .filter(|(_, exit)| {
                 rooms.get(exit.to).is_ok_and(|(room, key, _)| {
                     may_enter(&def.wander, &spawned_by.0, key, room.no_wander)
@@ -390,7 +412,9 @@ pub fn wander(
             && let Ok(mut door) = doors.get_mut(door)
         {
             door.state = DoorState::Open;
-            let name = names.get(entity).map_or("something", |m| m.name.as_str());
+            let name = everyone
+                .get(entity)
+                .map_or("something", |(m, _)| m.name.as_str());
             let fill =
                 |text: &str| text.replace("{actor}", name).replace("{door}", &door.the()) + "\r\n";
             outbox.0.push(Outgoing::Room {
@@ -758,6 +782,7 @@ mod tests {
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Dice::seeded(3));
         world.insert_resource(Outbox::default());
+        world.insert_resource(MobTemplates::default());
         let go = world.register_system(|In(_): In<Invocation>| {});
         world.insert_resource(CommandRegistry::of(vec![(
             CommandSpec::new("go", Category::Movement),
@@ -895,6 +920,119 @@ mod tests {
         );
         world.run_system_once(wander).unwrap();
         assert!(!world.get::<Door>(grate).unwrap().is_open());
+    }
+
+    /// Where wandering mobs went: the direction each `go` was given.
+    #[derive(Resource, Default)]
+    struct Went(Vec<String>);
+
+    #[test]
+    fn crowded_mobs_keep_out_of_rooms_holding_what_they_avoid() {
+        use crate::command::CommandSpec;
+        use crate::world::{Every, Exit, Exits, Refill, Room, SpawnDef, Terrain};
+
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(Dice::seeded(3));
+        world.insert_resource(Outbox::default());
+        world.insert_resource(Went::default());
+        let go = world.register_system(|In(inv): In<Invocation>, mut went: ResMut<Went>| {
+            went.0.push(inv.args);
+        });
+        world.insert_resource(CommandRegistry::of(vec![(
+            CommandSpec::new("go", Category::Movement),
+            go,
+        )]));
+        let rats = SpawnKey::parse("sewers:rats", "");
+        world.insert_resource(Spawns(HashMap::from([(
+            rats.clone(),
+            SpawnDef {
+                mob: Some("rat".into()),
+                item: None,
+                contents: Vec::new(),
+                room: "middle".into(),
+                every: Every::Minutes(20),
+                refill: Refill::Keep(1),
+                wander: Wander::Anywhere { secs: (30, 120) },
+                crowd: Some(2),
+                pack: None,
+                breach: None,
+                when: None,
+            },
+        )])));
+        let (rat_key, slime_key) = (
+            MobKey::parse("sewers:rat", ""),
+            MobKey::parse("sewers:slime", ""),
+        );
+        let mut rat = MobDef::named("a sewer rat");
+        rat.avoids = vec!["slime".into()];
+        let mut slime = MobDef::named("a grey slime");
+        slime.tags = vec!["slime".into()];
+        world.insert_resource(MobTemplates(HashMap::from([
+            (rat_key.clone(), rat),
+            (slime_key.clone(), slime),
+        ])));
+        let room = |world: &mut World, id: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: id.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(id, ""),
+                ))
+                .id()
+        };
+        let (middle, east, west) = (
+            room(&mut world, "sewers:middle"),
+            room(&mut world, "sewers:east"),
+            room(&mut world, "sewers:west"),
+        );
+        let exit = |to| Exit {
+            to,
+            door: None,
+            needs: None,
+        };
+        world.entity_mut(middle).insert(Exits(
+            [
+                ("east".to_string(), exit(east)),
+                ("west".to_string(), exit(west)),
+            ]
+            .into(),
+        ));
+        for here in [east, west] {
+            world.entity_mut(here).insert(Exits::default());
+        }
+        let mob = |world: &mut World, key: &MobKey, name: &str, at: Entity| {
+            world
+                .spawn((
+                    Mob {
+                        key: key.clone(),
+                        name: name.into(),
+                        here: String::new(),
+                        description: String::new(),
+                        race: None,
+                    },
+                    InRoom(at),
+                ))
+                .id()
+        };
+        // A slime sits in the east room; six rats crowd the middle, three over their limit.
+        mob(&mut world, &slime_key, "a grey slime", east);
+        for _ in 0..6 {
+            let rat = mob(&mut world, &rat_key, "a sewer rat", middle);
+            world
+                .entity_mut(rat)
+                .insert((SpawnedBy(rats.clone()), Wanderer { next: 0.0 }));
+        }
+        world.run_system_once(wander).unwrap();
+        world.flush();
+        let went = &world.resource::<Went>().0;
+        assert!(!went.is_empty(), "crowded, they move on");
+        assert!(went.iter().all(|dir| dir == "west"), "never east: {went:?}");
     }
 
     #[test]

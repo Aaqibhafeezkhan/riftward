@@ -751,6 +751,11 @@ pub struct MobDef {
     /// too: guards go for the rats. Without, it attacks players only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allies: Option<Vec<String>>,
+    /// What its mobs keep away from, by tag (`slime`) or template, as `allies` names them:
+    /// wandering and crowding never take them into a room holding one. Rats avoid slimes, so
+    /// they don't drain into the slimes' tunnels; deer avoid wolves.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub avoids: Vec<String>,
     /// A thing, not a creature: a training dummy. It never acts in a fight (no blow, no flight, no
     /// skill), never wanders or picks one, is worth no experience, and leaves no corpse.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -804,6 +809,13 @@ impl MobDef {
         other.is_some_and(|(key, _)| key == own) || self.allies.iter().flatten().any(named)
     }
 
+    /// Whether its mobs keep away from a mob of template `key`, `def`: one its `avoids` names.
+    pub fn avoids_mob(&self, own: &MobKey, key: &MobKey, def: &MobDef) -> bool {
+        self.avoids
+            .iter()
+            .any(|a| MobKey::parse(a, &own.zone) == *key || def.tags.contains(a))
+    }
+
     /// A plain mob with just a name, as builders create them.
     pub fn named(name: &str) -> Self {
         Self {
@@ -822,6 +834,7 @@ impl MobDef {
             aggressive: false,
             tags: Vec::new(),
             allies: None,
+            avoids: Vec::new(),
             inanimate: false,
             conditions: Vec::new(),
             coins: None,
@@ -1959,6 +1972,18 @@ mod tests {
                         problems.push(format!(
                             "mob {}:{mob_id}: no condition '{}'",
                             zone.id, born.condition
+                        ));
+                    }
+                }
+                // Each it avoids is a mob template or a tag some mob has.
+                for avoided in &mob.avoids {
+                    let tagged = zones
+                        .iter()
+                        .any(|z| z.mobs.values().any(|m| m.tags.contains(avoided)));
+                    if !tagged && !mob_exists(&MobKey::parse(avoided, &zone.id)) {
+                        problems.push(format!(
+                            "mob {}:{mob_id}: avoids '{avoided}', no mob or tag",
+                            zone.id
                         ));
                     }
                 }

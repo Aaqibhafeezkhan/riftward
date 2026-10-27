@@ -126,9 +126,12 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     aggressive: true,                 // attacks players in its room, with `kill`
     tags: ["vermin"],                 // what it is, for others' allies
     allies: ["vermin"],               // with allies, attacks anyone here who isn't one, mobs too
+    avoids: ["slime"],                // never wanders into a room holding one
     conditions: [(condition: "hidden", strength: 8)],   // born with, until something ends them
 ),
 ```
+
+**A mob can avoid others,** `avoids: [...]` (*built*, 2026-10-27): by tag or template, as `allies` are. Wandering and crowding never take it into a room holding one; nothing else changes, so a rat that avoids slimes still goes for guards and players. It keeps rats from draining into the slimes' tunnels ([the sewers](riftwatch.md#the-sewers-ecology)), and will keep deer out of the wolf den. The zone test checks each name.
 
 **A mob can be a thing,** `inanimate: true` (*built*, 2026-10-27): a training dummy. It takes blows and never acts in a fight (no blow back, no flight, no skill), never wanders or picks one, is worth no experience and gives no tough-fight boost to learning, and leaves no corpse, what it held falling where it stood. It reads as a thing: battered and coming apart rather than hurt, knocked to pieces rather than killed. Its spawn puts it back.
 
