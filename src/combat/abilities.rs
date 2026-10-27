@@ -173,7 +173,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let outcome = self.resolve(Use {
             user,
             target,
-            rating: power,
+            rating: f64::from(power),
             resist: *resist,
             against: difficulty,
             tags: effects::tags(tags, &effects, self.conditions),

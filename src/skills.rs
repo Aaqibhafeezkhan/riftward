@@ -468,9 +468,9 @@ fn ally() -> Aim {
     Aim::Ally
 }
 
-/// A number a passive skill raises as it levels: one point for every `per` levels, plus `base`.
-/// With `with`, it only counts for attacks made with that skill: Bladework's accuracy is for
-/// swords.
+/// A number a passive skill raises as it levels: a point for every `per` levels, growing a
+/// fraction with each one, plus `base`, so level 1 and level 2 differ. With `with`, it only counts
+/// for attacks made with that skill: Bladework's accuracy is for swords.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PassiveBonus {
     pub stat: Stat,
@@ -515,55 +515,53 @@ pub enum Stat {
 /// Everything a character's passive skills add up to.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Boosts {
-    pub max_health: i32,
-    pub max_stamina: i32,
-    pub attack: i32,
-    pub defence: i32,
-    pub damage: i32,
-    pub armour: i32,
-    pub initiative: i32,
-    pub pierce: i32,
-    pub armour_ease: i32,
-    pub block: i32,
+    pub max_health: f64,
+    pub max_stamina: f64,
+    pub attack: f64,
+    pub defence: f64,
+    pub damage: f64,
+    pub armour: f64,
+    pub initiative: f64,
+    pub pierce: f64,
+    pub armour_ease: f64,
+    pub block: f64,
     /// What only counts with one skill, by `tree:skill`.
     pub with: HashMap<String, WithSkill>,
     /// Added to resisting what carries a tag, by tag.
-    pub resist: HashMap<String, i32>,
+    pub resist: HashMap<String, f64>,
 }
 
 /// Bonuses for attacks made with one skill.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WithSkill {
-    pub attack: i32,
-    pub damage: i32,
-    pub pierce: i32,
+    pub attack: f64,
+    pub damage: f64,
+    pub pierce: f64,
 }
 
 impl Boosts {
     /// Attack bonus for an attack made with `skill`.
-    pub fn attack_with(&self, skill: &str) -> i32 {
-        self.attack + self.with.get(skill).map_or(0, |w| w.attack)
+    pub fn attack_with(&self, skill: &str) -> f64 {
+        self.attack + self.with.get(skill).map_or(0.0, |w| w.attack)
     }
 
     /// Damage bonus for an attack made with `skill`.
-    pub fn damage_with(&self, skill: &str) -> i32 {
-        self.damage + self.with.get(skill).map_or(0, |w| w.damage)
+    pub fn damage_with(&self, skill: &str) -> f64 {
+        self.damage + self.with.get(skill).map_or(0.0, |w| w.damage)
     }
 
     /// Added to resisting something carrying `tags`: the best of their bonuses that match, so a
     /// sleep spell that's also a mind spell doesn't count both.
-    pub fn resisting(&self, tags: &[String]) -> i32 {
+    pub fn resisting(&self, tags: &[String]) -> f64 {
         tags.iter()
             .filter_map(|tag| self.resist.get(tag))
             .copied()
-            .max()
-            .unwrap_or(0)
-            .max(0)
+            .fold(0.0, f64::max)
     }
 
     /// Armour ignored by an attack made with `skill`.
-    pub fn pierce_with(&self, skill: &str) -> i32 {
-        self.pierce + self.with.get(skill).map_or(0, |w| w.pierce)
+    pub fn pierce_with(&self, skill: &str) -> f64 {
+        self.pierce + self.with.get(skill).map_or(0.0, |w| w.pierce)
     }
 }
 
@@ -576,7 +574,9 @@ pub fn boosts(skills: &Skills, defs: &SkillDefs) -> Boosts {
             continue;
         };
         for bonus in bonuses {
-            let value = bonus.base + (state.level / bonus.per.max(1)) as i32;
+            // Every level counts: a point for every `per` levels, a fraction of one for each.
+            let value =
+                f64::from(bonus.base) + f64::from(state.level) / f64::from(bonus.per.max(1));
             match (&bonus.with, &bonus.stat) {
                 (Some(skill), Stat::Attack) => {
                     total.with.entry(skill.clone()).or_default().attack += value
@@ -1974,22 +1974,24 @@ mod tests {
         let mut state = SkillState::new("Admin");
         state.level = 23;
         skills.0.insert("athletics:toughness".into(), state);
+        // Every level counts: 23 levels at a point per 5 is 4.6, and at one per 10 on top of a
+        // point to start, 3.3.
         let boosts = boosts(&skills, &defs);
-        assert_eq!(boosts.max_health, 4);
-        assert_eq!(boosts.attack_with("swordplay:basics"), 3);
-        assert_eq!(boosts.attack_with("axes:basics"), 0);
+        assert!(close(boosts.max_health, 4.6));
+        assert!(close(boosts.attack_with("swordplay:basics"), 3.3));
+        assert_eq!(boosts.attack_with("axes:basics"), 0.0);
     }
 
     #[test]
     fn the_best_matching_resistance_counts() {
         let boosts = Boosts {
-            resist: HashMap::from([("sleep".into(), 5), ("mind".into(), 2)]),
+            resist: HashMap::from([("sleep".into(), 5.0), ("mind".into(), 2.0)]),
             ..Boosts::default()
         };
         let tags = |list: &[&str]| list.iter().map(|t| t.to_string()).collect::<Vec<_>>();
-        assert_eq!(boosts.resisting(&tags(&["mind", "sleep"])), 5, "not both");
-        assert_eq!(boosts.resisting(&tags(&["mind"])), 2);
-        assert_eq!(boosts.resisting(&tags(&["fire"])), 0);
+        assert_eq!(boosts.resisting(&tags(&["mind", "sleep"])), 5.0, "not both");
+        assert_eq!(boosts.resisting(&tags(&["mind"])), 2.0);
+        assert_eq!(boosts.resisting(&tags(&["fire"])), 0.0);
     }
 
     /// A skill in `tree` requiring `requires`.

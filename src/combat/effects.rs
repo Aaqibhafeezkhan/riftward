@@ -28,27 +28,28 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         target: Entity,
         force: f64,
         damage_type: &str,
-        pierce: i32,
+        pierce: f64,
         ignore_armour: bool,
     ) -> i32 {
         let Ok(d) = self.fighters.get(target) else {
             return 0;
         };
         let armour = if ignore_armour {
-            0
+            0.0
         } else {
             let natural = if armour_stops(damage_type) {
-                self.auras.get(&target).map_or(0, |a| a.armour) + boosts(d.skills, self.defs).armour
+                f64::from(self.auras.get(&target).map_or(0, |a| a.armour))
+                    + boosts(d.skills, self.defs).armour
             } else {
-                0
+                0.0
             };
             let worn = armour_against(target, self.items, self.templates, damage_type);
             let conditions = d.conditions.armour(self.conditions, damage_type);
-            (natural + worn + conditions - pierce).max(0)
+            (natural + f64::from(worn + conditions) - pierce).max(0.0)
         };
         let times = d.conditions.damage_taken(self.conditions)
             * d.conditions.resist(self.conditions, damage_type);
-        ((force * times).round() as i32 - armour).max(0)
+        (force * times - armour).round().max(0.0) as i32
     }
 
     /// What formulas see when `user` does something to `target`: their attributes and health,

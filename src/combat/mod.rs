@@ -311,7 +311,7 @@ fn combat_round(
         }
     }
 
-    // Initiative: Reaction + Intuition, plus a roll.
+    // Initiative: Reaction + Intuition, plus a roll; in hundredths, so a passive's fraction counts.
     let mut order: Vec<(i64, Entity)> = targets
         .keys()
         .filter_map(|entity| {
@@ -319,10 +319,8 @@ fn combat_round(
             let luck = fighter.attributes.get(Attribute::Luck);
             let roll = dice.range(luck, 1..=6);
             let quick = boosts(fighter.skills, &defs).initiative;
-            Some((
-                i64::from(fighter.attributes.initiative() + quick) + roll,
-                *entity,
-            ))
+            let rating = f64::from(fighter.attributes.initiative()) + quick + roll as f64;
+            Some(((rating * 100.0).round() as i64, *entity))
         })
         .collect();
     order.sort_by(|a, b| b.cmp(a));

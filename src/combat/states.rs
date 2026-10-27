@@ -591,17 +591,17 @@ impl Conditions {
     }
 
     /// Their defence from `base`, once conditions are counted: added to, then multiplied.
-    pub fn defence(&self, base: i32, defs: &ConditionDefs) -> i32 {
+    pub fn defence(&self, base: f64, defs: &ConditionDefs) -> f64 {
         let added = base
-            + self.total(defs, |m| match m {
+            + f64::from(self.total(defs, |m| match m {
                 Modifier::Defence(n) => Some(*n),
                 _ => None,
-            });
+            }));
         let times = self.product(defs, |m| match m {
             Modifier::DefenceTimes(x) => Some(*x),
             _ => None,
         });
-        (f64::from(added) * times).floor() as i32
+        added * times
     }
 
     /// How much more they take off a blow of type `kind`: only what armour stops.
@@ -1038,14 +1038,14 @@ mod tests {
     fn defence_follows_conditions() {
         let defs = defs_on_disk();
         let mut conditions = Conditions::default();
-        assert_eq!(conditions.defence(6, &defs), 6);
+        assert_eq!(conditions.defence(6.0, &defs), 6.0);
         conditions.apply(&defs, "guarding", 4, Lasts::Turns(2));
-        assert_eq!(conditions.defence(6, &defs), 10);
+        assert_eq!(conditions.defence(6.0, &defs), 10.0);
         conditions.apply(&defs, "down", 1, Lasts::Turns(1));
-        assert_eq!(conditions.defence(6, &defs), 5);
+        assert_eq!(conditions.defence(6.0, &defs), 5.0);
         // A new guard replaces the old one.
         conditions.apply(&defs, "guarding", 2, Lasts::Turns(2));
-        assert_eq!(conditions.defence(6, &defs), 4);
+        assert_eq!(conditions.defence(6.0, &defs), 4.0);
     }
 
     #[test]
@@ -1082,9 +1082,9 @@ mod tests {
         let defs = defs_on_disk();
         let mut conditions = Conditions::default();
         conditions.apply(&defs, "exposed", 1, Lasts::Turns(1));
-        assert_eq!(conditions.defence(8, &defs), 4);
+        assert_eq!(conditions.defence(8.0, &defs), 4.0);
         conditions.start_turn(&defs);
-        assert_eq!(conditions.defence(8, &defs), 8);
+        assert_eq!(conditions.defence(8.0, &defs), 8.0);
     }
 
     #[test]

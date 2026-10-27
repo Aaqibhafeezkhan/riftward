@@ -23,10 +23,10 @@ use crate::vitals::Maxima;
 pub(super) struct BlowDamage {
     pub damage: (u32, u32),
     /// Strength, passive bonuses and the technique's own extra.
-    pub bonus: i32,
+    pub bonus: f64,
     pub damage_type: String,
     /// Armour the user's skill gets past with this attack.
-    pub pierce: i32,
+    pub pierce: f64,
 }
 
 /// Something done to someone, ready to resolve.
@@ -34,7 +34,7 @@ pub(super) struct Use<'a> {
     pub user: Entity,
     pub target: Entity,
     /// The user's side of the contest: an attack rating, or a caster's power.
-    pub rating: i32,
+    pub rating: f64,
     /// The target's side; without, it always lands, unless it's `against` a difficulty.
     pub resist: Option<Resist>,
     /// A fixed difficulty to beat instead of the target's resistance, rolled without Luck on its
@@ -142,13 +142,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let parts = defence_rating(d.attributes, d.skills, aura, &d_boosts, &d_gear);
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let caught = self.resting.contains(&target) || u.opener;
-        let halved = |n: i32| if caught { n / 2 } else { n };
+        let halved = |n: f64| if caught { n / 2.0 } else { n };
         // Skills made for it help resist what it is: an elf against sleep.
         let rating = u.resist.map(|resist| {
             let base = match resist {
                 Resist::Evasion => halved(d.conditions.defence(parts.total(), self.conditions)),
                 Resist::Dodge => halved(d.conditions.defence(parts.evasion, self.conditions)),
-                Resist::Attribute(attribute) => d.attributes.get(attribute),
+                Resist::Attribute(attribute) => f64::from(d.attributes.get(attribute)),
             };
             base + d_boosts.resisting(&u.tags)
         });
@@ -156,16 +156,16 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         // The user's rating against the target's, by opposed roll; how decisively it wins is how
         // hard it lands. An opener from hiding can't be dodged: Backstab from the shadows lands.
         let theirs = match (rating, u.against) {
-            (Some(rating), _) => Some((f64::from(rating.max(1)), d_luck)),
+            (Some(rating), _) => Some((rating.max(1.0), d_luck)),
             (None, Some(difficulty)) => Some((difficulty.max(1.0), 0)),
             (None, None) => None,
         };
         let (hit, blow, margin) = match theirs {
             None => (true, Blow::Solid, 1.0),
             Some((theirs, their_luck)) => {
-                let contest =
-                    self.dice
-                        .opposed(f64::from(u.rating.max(1)), a_luck, theirs, their_luck);
+                let contest = self
+                    .dice
+                    .opposed(u.rating.max(1.0), a_luck, theirs, their_luck);
                 let ambush = u.opener && self.ambushers.contains(&user);
                 match (ambush, contest.won) {
                     (true, false) => (true, Blow::Solid, contest.margin),
@@ -195,7 +195,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             let mut forces = Vec::new();
             if let Some(b) = &u.blow {
                 let rolled = self.roll(a_luck, b.damage);
-                forces.push((rolled + b.bonus, b.damage_type.clone(), b.pierce + pierce));
+                let force = f64::from(rolled) + b.bonus;
+                forces.push((force, b.damage_type.clone(), b.pierce + f64::from(pierce)));
             }
             for effect in u.effects {
                 if let Effect::Damage {
@@ -204,12 +205,12 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 } = effect
                 {
                     let force = amount.amount(&inputs, self.dice, a_luck);
-                    forces.push((force, damage_type.clone(), pierce));
+                    forces.push((f64::from(force), damage_type.clone(), f64::from(pierce)));
                 }
             }
             let mut dealt: Option<i32> = None;
             for (force, kind, pierce) in forces {
-                let force = f64::from(force) * times;
+                let force = force * times;
                 let hurt = self.mitigate(target, force, &kind, pierce, ignores_armour);
                 dealt = Some(dealt.unwrap_or(0) + hurt);
             }
@@ -336,8 +337,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             // The miss is the shield's in proportion to its share of the defence, and otherwise
             // a dodge. Either is told in the words of the defender's skill for it, if they have
             // one: a shield untrained says so plainly, and a miss nobody dodged is just a miss.
-            let share = f64::from(parts.block) / f64::from(parts.total().max(1));
-            let blocked = parts.block > 0 && self.dice.chance(0, share);
+            let share = parts.block / parts.total().max(1.0);
+            let blocked = parts.block > 0.0 && self.dice.chance(0, share);
             let words = |trigger: Trigger| {
                 d_skills.0.keys().find_map(|key| {
                     let skill = self.defs.skills.get(key)?;
@@ -508,7 +509,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             let outcome = self.resolve(Use {
                 user: bearer,
                 target: other,
-                rating: 0,
+                rating: 0.0,
                 resist: None,
                 against: None,
                 tags: Vec::new(),
