@@ -24,6 +24,7 @@ use thiserror::Error;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Permission;
 use crate::effects::{Effect, Lasting, Reaction};
+use crate::events::GameEvent;
 use crate::items::capitalized;
 use crate::mobs::{self, MobQuery};
 use crate::output::{
@@ -93,6 +94,7 @@ fn condition_cmd(
     defs: Res<ConditionDefs>,
     time: Res<Time>,
     mut outbox: ResMut<Outbox>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -141,6 +143,14 @@ fn condition_cmd(
         if !conditions.apply(&defs, key, strength, lasting.lasts(time.elapsed_secs_f64())) {
             return Err(format!("{} is immune to {key}.", capitalized(&bearer.name)));
         }
+        // As if it came on by itself: its reactions to taking hold are at the bearer.
+        events.write(GameEvent::ConditionApplied {
+            who: bearer.entity,
+            by: bearer.entity,
+            condition: key.to_string(),
+            strength,
+            reacting: false,
+        });
         // Told in the condition's own words, as when anything puts it on.
         if let Some(applied) = &def.text.applied {
             let (theirs, seen) = applied.fill(&capitalized(&bearer.name), strength);
@@ -444,6 +454,8 @@ pub struct TurnStart {
     pub health: Vec<(String, i32)>,
     /// The condition that costs them this turn, if any.
     pub lost_to: Option<String>,
+    /// Conditions counted in turns that ran out.
+    pub ended: Vec<Active>,
 }
 
 impl Conditions {
@@ -683,7 +695,12 @@ impl Conditions {
                 *turns = turns.saturating_sub(1);
             }
         }
-        self.0.retain(|active| active.lasts != Lasts::Turns(0));
+        let (ended, left) = self
+            .0
+            .drain(..)
+            .partition(|active| active.lasts == Lasts::Turns(0));
+        self.0 = left;
+        start.ended = ended;
         start
     }
 

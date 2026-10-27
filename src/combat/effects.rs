@@ -8,6 +8,7 @@ use super::states::ItemCondition;
 use super::strike::{Round, Telling};
 use crate::attributes::Attribute;
 use crate::effects::{Effect, Who};
+use crate::events::GameEvent;
 use crate::formula::{Inputs, Side};
 use crate::items::ItemLocation;
 use crate::items::capitalized;
@@ -96,7 +97,8 @@ impl Round<'_, '_, '_, '_, '_, '_> {
 
     /// Carry out the `effects` that are on `who`: conditions put on or taken off `user` or
     /// `target`, told in the conditions' own words. `power` is a caster's, for `empowered`
-    /// conditions; nothing for a technique. Returns whether it calmed the target.
+    /// conditions; nothing for a technique. `reacting` for a reaction's, whose conditions set off
+    /// no more. Returns whether it calmed the target.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn affect(
         &mut self,
@@ -106,6 +108,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         who: Who,
         power: i32,
         margin: f64,
+        reacting: bool,
         tell: &mut Telling,
     ) -> bool {
         let inputs = self.inputs(user, target, power, margin);
@@ -139,6 +142,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     let strength = strength.amount(&inputs, self.dice, luck);
                     let lasts = lasts.lasts(self.now);
                     if f.conditions.apply(defs, condition, strength, lasts) {
+                        self.events.write(GameEvent::ConditionApplied {
+                            who: bearer,
+                            by: user,
+                            condition: condition.clone(),
+                            strength,
+                            reacting,
+                        });
                         let applied = defs.get(condition).and_then(|d| d.text.applied.as_ref());
                         told.extend(applied.map(|t| t.fill(&name, strength)));
                     }

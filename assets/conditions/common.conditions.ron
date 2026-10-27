@@ -96,6 +96,15 @@
         tags: ["poison", "physical"],
         stacking: Stack(5),
         modifiers: [HealthEachTurn(-1)],
+        // Run its course, it leaves the bearer weak a while; cured, it doesn't.
+        reactions: [(
+            on: Fades,
+            effects: [Apply(condition: "weakened", lasts: Minutes(30))],
+            text: (
+                actor: "The last of the poison leaves you shaking.",
+                room: "{actor} shudders as the poison passes.",
+            ),
+        )],
         text: (
             applied: (bearer: "Poison burns in your veins!", room: "{bearer} is poisoned!"),
             each_turn: (bearer: "The poison burns. ({amount})", room: "{bearer} shudders, sick with poison."),

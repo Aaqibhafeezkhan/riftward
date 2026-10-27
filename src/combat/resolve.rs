@@ -9,12 +9,13 @@
 
 use bevy::prelude::*;
 
+use super::states::{ConditionDefs, Conditions};
 use super::strike::{Blow, Round, Telling, defence_rating, gear, harm, shield_block, told};
 use crate::attributes::Attribute;
 use crate::effects::{self, Effect, Reaction, Resist, When, Who};
 use crate::events::GameEvent;
 use crate::items::capitalized;
-use crate::skills::{SkillKind, SkillText, Trigger, boosts, fill};
+use crate::skills::{SkillDefs, SkillKind, SkillText, Skills, Trigger, boosts, fill};
 use crate::vitals::Maxima;
 
 /// A blow's own damage, rolled when it lands: the weapon's or attack's, plus what the user adds.
@@ -52,6 +53,38 @@ pub(super) struct Use<'a> {
     pub reacting: bool,
 }
 
+/// A reaction found on someone, with the strength or skill it comes from: (reaction, strength,
+/// power, skill).
+pub type Found = (Reaction, i32, i32, Option<String>);
+
+/// Every reaction a character has, from their conditions (an item's among them) and their passive
+/// skills.
+pub fn reactions_of(
+    conditions: &Conditions,
+    skills: &Skills,
+    condition_defs: &ConditionDefs,
+    defs: &SkillDefs,
+) -> Vec<Found> {
+    let mut found = Vec::new();
+    for active in &conditions.0 {
+        if let Some(def) = condition_defs.get(&active.key) {
+            for r in &def.reactions {
+                found.push((r.clone(), active.strength, 0, None));
+            }
+        }
+    }
+    for (key, state) in &skills.0 {
+        if let Some(SkillKind::Passive { reactions, .. }) =
+            defs.skills.get(key).map(|s| &s.def.kind)
+        {
+            for r in reactions {
+                found.push((r.clone(), 1, state.level as i32, Some(key.clone())));
+            }
+        }
+    }
+    found
+}
+
 /// What came of it.
 #[derive(Debug, Default)]
 pub(super) struct Outcome {
@@ -80,7 +113,16 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let mut tell = Telling::default();
 
         // What it does to the user, it does whether or not it lands.
-        self.affect(user, target, u.effects, Who::User, u.power, 1.0, &mut tell);
+        self.affect(
+            user,
+            target,
+            u.effects,
+            Who::User,
+            u.power,
+            1.0,
+            u.reacting,
+            &mut tell,
+        );
 
         let Ok(d) = self.fighters.get(target) else {
             return out;
@@ -250,6 +292,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                     Who::Target,
                     u.power,
                     margin,
+                    u.reacting,
                     &mut tell,
                 );
             }
@@ -359,36 +402,47 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             .collect()
     }
 
-    /// Every reaction `who` has, from their conditions (an item's among them) and their passive
-    /// skills, with the strength or skill it comes from: (reaction, strength, power, skill).
-    fn reactions_of(&self, who: Entity) -> Vec<(Reaction, i32, i32, Option<String>)> {
-        let Ok(f) = self.fighters.get(who) else {
-            return Vec::new();
-        };
-        let mut found = Vec::new();
-        for active in &f.conditions.0 {
-            if let Some(def) = self.conditions.get(&active.key) {
-                for r in &def.reactions {
-                    found.push((r.clone(), active.strength, 0, None));
-                }
-            }
-        }
-        for (key, state) in &f.skills.0 {
-            if let Some(SkillKind::Passive { reactions, .. }) =
-                self.defs.skills.get(key).map(|s| &s.def.kind)
-            {
-                for r in reactions {
-                    found.push((r.clone(), 1, state.level as i32, Some(key.clone())));
-                }
-            }
-        }
-        found
+    /// Every reaction `who` has; see [`reactions_of`].
+    fn reactions_of(&self, who: Entity) -> Vec<Found> {
+        self.fighters.get(who).map_or_else(
+            |_| Vec::new(),
+            |f| reactions_of(f.conditions, f.skills, self.conditions, self.defs),
+        )
     }
 
     /// Set off `bearer`'s reactions to `when`, at `other`. Returns who they killed.
     pub(super) fn react(&mut self, bearer: Entity, other: Entity, when: When) -> Vec<Entity> {
+        let found = self.reactions_of(bearer);
+        self.set_off(bearer, other, when, found)
+    }
+
+    /// Set off one condition's own reactions to `when` (taking hold, running out) on `bearer`, at
+    /// `other`, whether or not they still have it. Returns who they killed.
+    pub(super) fn react_as(
+        &mut self,
+        bearer: Entity,
+        other: Entity,
+        (condition, strength): (&str, i32),
+        when: When,
+    ) -> Vec<Entity> {
+        let found = self.conditions.get(condition).map_or_else(Vec::new, |def| {
+            def.reactions
+                .iter()
+                .map(|r| (r.clone(), strength, 0, None))
+                .collect()
+        });
+        self.set_off(bearer, other, when, found)
+    }
+
+    fn set_off(
+        &mut self,
+        bearer: Entity,
+        other: Entity,
+        when: When,
+        found: Vec<Found>,
+    ) -> Vec<Entity> {
         let mut died = Vec::new();
-        for (reaction, strength, power, skill) in self.reactions_of(bearer) {
+        for (reaction, strength, power, skill) in found {
             if reaction.on != when {
                 continue;
             }

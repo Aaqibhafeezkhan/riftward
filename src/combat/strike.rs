@@ -634,6 +634,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         };
         let start = fighter.conditions.start_turn(conditions);
         let room = fighter.in_room.0;
+        for over in &start.ended {
+            self.events.write(GameEvent::ConditionFaded {
+                who,
+                condition: over.key.clone(),
+                strength: over.strength,
+            });
+        }
         let most = Maxima::of(
             &fighter.attributes,
             &fighter.skills,
@@ -770,7 +777,16 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         // The user's own effects happen whether or not the blow lands.
         if let Some(Move { technique: t, .. }) = &technique {
             let mut own = Telling::default();
-            self.affect(attacker, target, &t.effects, Who::User, 0, 1.0, &mut own);
+            self.affect(
+                attacker,
+                target,
+                &t.effects,
+                Who::User,
+                0,
+                1.0,
+                false,
+                &mut own,
+            );
             self.tell(own, room, attacker, target);
             if t.strike == StrikeKind::None {
                 let key = technique.as_ref().map_or("", |m| m.key);

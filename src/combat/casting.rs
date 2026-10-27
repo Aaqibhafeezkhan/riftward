@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use super::Round;
 use super::resolve::Use;
 use crate::attributes::Attribute;
-use crate::effects::{self, Effect, Who};
+use crate::effects::{self, Effect, When, Who};
 use crate::items::capitalized;
 use crate::skills::Skills;
 use crate::spells::{
@@ -112,6 +112,12 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         cast.died = outcome.died;
         if outcome.calmed {
             cast.calmed = Some(target);
+        }
+        // What the caster's conditions and skills do as they cast.
+        for died in self.react(caster, target, When::Casts) {
+            if !cast.died.contains(&died) {
+                cast.died.push(died);
+            }
         }
         self.practise(caster, &spell.school);
         cast

@@ -17,6 +17,7 @@ const BLEEDING: &str = "bleeding";
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::Database;
 use crate::dice::Dice;
+use crate::events::GameEvent;
 use crate::items::{self, Item, ItemLocation, ItemQuery, ItemTemplates, Snapshot, capitalized};
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Characters, Outbox, Outgoing, deliver, targets_in_room};
@@ -84,6 +85,7 @@ struct Pantry<'w, 's> {
     db: Res<'w, Database>,
     time: Res<'w, Time>,
     fed: Query<'w, 's, &'static Nourished>,
+    events: MessageWriter<'w, GameEvent>,
 }
 
 /// `eat <item>`.
@@ -159,6 +161,10 @@ fn consume(inv: Invocation, how: Consume, mut p: Pantry) {
         }
         let name = item.name.clone();
         used_up(&mut p.commands, &p.db, entity, item);
+        p.events.write(GameEvent::Consumed {
+            who: actor.entity,
+            drink: how == Consume::Drink,
+        });
         out.push(Outgoing::Room {
             room: actor.room,
             except: actor.entity,

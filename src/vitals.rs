@@ -13,6 +13,7 @@ use crate::attributes::Attributes;
 use crate::combat::{Conditions, Dead, Fighting, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
+use crate::events::GameEvent;
 use crate::mobs::Mob;
 use crate::net::{self, Connection};
 use crate::output::{
@@ -414,6 +415,7 @@ fn rest(
     players: Characters,
     mut outbox: ResMut<Outbox>,
     state: Query<(Has<Resting>, Has<Fighting>)>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -424,6 +426,7 @@ fn rest(
         Ok((true, _)) => out.push(Outgoing::line(inv.entity, "You're already resting.")),
         _ => {
             commands.entity(inv.entity).insert(Resting);
+            events.write(GameEvent::Rested { who: inv.entity });
             out.push(Outgoing::line(inv.entity, "You sit down and rest."));
             out.push(Outgoing::Room {
                 room: actor.room,

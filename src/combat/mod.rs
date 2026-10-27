@@ -19,6 +19,7 @@ mod effects;
 mod resolve;
 mod states;
 mod strike;
+mod triggers;
 
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -33,6 +34,7 @@ use crate::command::{
 use crate::commands::movement::{View, travel};
 use crate::db::{Database, ItemPlace};
 use crate::dice::Dice;
+use crate::effects::When;
 use crate::events::GameEvent;
 use crate::items::{
     self, ItemLocation, ItemMutQuery, ItemQuery, ItemTemplates, MOB_CORPSE_SECS,
@@ -73,6 +75,7 @@ pub struct CombatPlugin;
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(states::ConditionsPlugin)
+            .add_message::<triggers::Trigger>()
             .add_systems(Update, expire_conditions.run_if(heartbeat()))
             .add_systems(
                 Update,
@@ -81,6 +84,8 @@ impl Plugin for CombatPlugin {
                     (aggression, combat_round)
                         .chain()
                         .run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
+                    // Then what conditions and skills do about what happened, out of the round.
+                    (triggers::triggers, triggers::react).chain(),
                     abandon_fights,
                     handle_deaths,
                 )
@@ -372,7 +377,13 @@ fn combat_round(
             commands.entity(attacker).insert(Dead).remove::<Fighting>();
             continue;
         }
-        if !acts {
+        // What their conditions and skills do as their turn begins.
+        for died in round.react(attacker, target, When::TurnStarts) {
+            let slayer = if died == attacker { target } else { attacker };
+            fell(&mut commands, died, slayer, &targets);
+            fallen.insert(died);
+        }
+        if !acts || fallen.contains(&attacker) || fallen.contains(&target) {
             continue;
         }
         // A spell or opener readied for this turn, or a technique or spell next in the queue,
@@ -454,15 +465,7 @@ fn combat_round(
             fallen.insert(died);
             // A riposte can fell the attacker; then the target struck the blow.
             let slayer = if died == attacker { target } else { attacker };
-            commands
-                .entity(died)
-                .insert((Dead, Slayer(slayer)))
-                .remove::<Fighting>();
-            for (who, whom) in &targets {
-                if *whom == died {
-                    commands.entity(*who).remove::<Fighting>();
-                }
-            }
+            fell(&mut commands, died, slayer, &targets);
         }
     }
     imbued.write_back(&mut item_conditions);
@@ -491,6 +494,19 @@ fn combat_round(
             for line in fighter.attributes.earn(points, &deed, character_id, &db) {
                 log.0.push(Outgoing::line(who, line));
             }
+        }
+    }
+}
+
+/// `died` has fallen to `slayer`: they're dead, and whoever was fighting them stops.
+fn fell(commands: &mut Commands, died: Entity, slayer: Entity, targets: &HashMap<Entity, Entity>) {
+    commands
+        .entity(died)
+        .insert((Dead, Slayer(slayer)))
+        .remove::<Fighting>();
+    for (who, whom) in targets {
+        if *whom == died {
+            commands.entity(*who).remove::<Fighting>();
         }
     }
 }
@@ -529,10 +545,16 @@ fn expire_conditions(
     defs: Res<ConditionDefs>,
     time: Res<Time>,
     mut log: ResMut<Outbox>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let now = time.elapsed_secs_f64();
     for (who, mut conditions) in &mut conditions {
         for over in conditions.expire(now) {
+            events.write(GameEvent::ConditionFaded {
+                who,
+                condition: over.key.clone(),
+                strength: over.strength,
+            });
             let Some(fades) = defs.get(&over.key).and_then(|d| d.text.fades.as_ref()) else {
                 continue;
             };
@@ -2501,5 +2523,248 @@ mod tests {
         assert_eq!(the("an old wolf"), "the old wolf");
         assert_eq!(the("Grok"), "Grok");
         assert_eq!(the("the drill sergeant"), "the drill sergeant");
+    }
+    #[test]
+    fn a_turn_starting_sets_off_a_reaction() {
+        // A fighter on their guard at the start of every turn.
+        let (mut world, room) = world();
+        let wary = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        reacting(
+            &mut world,
+            wary,
+            "test:wary",
+            When::TurnStarts,
+            vec![on_self("guarding")],
+        );
+        world.entity_mut(wary).insert(Fighting(foe));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(wary).unwrap().has("guarding"));
+        assert!(!world.get::<Conditions>(foe).unwrap().has("guarding"));
+    }
+
+    #[test]
+    fn casting_sets_off_a_reaction() {
+        let (mut world, room) = world();
+        let mage = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let spark = spell(
+            "hermetic:spark",
+            Aim::Foe,
+            Some(Resist::Dodge),
+            vec![Effect::Damage {
+                amount: Formula::parse("roll(2, 2)").unwrap(),
+                damage_type: "force".into(),
+            }],
+        );
+        caster(&mut world, mage, vec![spark]);
+        reacting(
+            &mut world,
+            mage,
+            "test:focus",
+            When::Casts,
+            vec![on_self("strengthened")],
+        );
+        world.entity_mut(mage).insert((
+            Fighting(rat),
+            Casting {
+                spell: "hermetic:spark".into(),
+                target: rat,
+            },
+        ));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Conditions>(mage).unwrap().has("strengthened"));
+    }
+
+    /// Lines for a reaction in a test.
+    fn reaction_lines() -> Lines {
+        Lines {
+            actor: "Your omen stirs at {target}.".into(),
+            target: Some("{actor}'s omen stirs at you.".into()),
+            room: "{actor}'s omen stirs at {target}.".into(),
+            beyond: None,
+        }
+    }
+
+    /// A condition, "omen", made like blessed, with these reactions.
+    fn omen(world: &mut World, reactions: Vec<(When, Effect)>) {
+        let mut defs = world.resource_mut::<ConditionDefs>();
+        let mut def = defs.get("blessed").unwrap().clone();
+        def.reactions = reactions
+            .into_iter()
+            .map(|(on, effect)| Reaction {
+                on,
+                chance: None,
+                effects: vec![effect],
+                text: reaction_lines(),
+            })
+            .collect();
+        defs.0.insert("omen".into(), def);
+    }
+
+    /// What's happened since the last, through to the reactions it sets off.
+    fn react_to_events(world: &mut World) {
+        world.run_system_once(triggers::triggers).unwrap();
+        world.run_system_once(triggers::react).unwrap();
+        world.flush();
+    }
+
+    #[test]
+    fn a_condition_reacts_as_it_takes_hold_and_as_it_runs_out() {
+        let (mut world, room) = world();
+        world.init_resource::<Messages<triggers::Trigger>>();
+        let bearer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        omen(
+            &mut world,
+            vec![
+                (When::Applied, on_self("guarding")),
+                (When::Fades, on_self("strengthened")),
+            ],
+        );
+        world.resource_scope(|world, defs: Mut<ConditionDefs>| {
+            let mut conditions = world.get_mut::<Conditions>(bearer).unwrap();
+            conditions.apply(&defs, "omen", 1, Lasts::Until(0.0));
+        });
+        world.write_message(GameEvent::ConditionApplied {
+            who: bearer,
+            by: bearer,
+            condition: "omen".into(),
+            strength: 1,
+            reacting: false,
+        });
+        react_to_events(&mut world);
+        let conditions = world.get::<Conditions>(bearer).unwrap();
+        assert!(conditions.has("guarding"), "taking hold");
+        assert!(!conditions.has("strengthened"));
+
+        // Its time is up: it runs out, and leaves the bearer strengthened.
+        world.run_system_once(expire_conditions).unwrap();
+        react_to_events(&mut world);
+        let conditions = world.get::<Conditions>(bearer).unwrap();
+        assert!(!conditions.has("omen"));
+        assert!(conditions.has("strengthened"), "running out");
+    }
+
+    #[test]
+    fn a_condition_put_on_by_a_reaction_sets_off_nothing() {
+        let (mut world, room) = world();
+        world.init_resource::<Messages<triggers::Trigger>>();
+        let bearer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        omen(&mut world, vec![(When::Applied, on_self("guarding"))]);
+        world.write_message(GameEvent::ConditionApplied {
+            who: bearer,
+            by: bearer,
+            condition: "omen".into(),
+            strength: 1,
+            reacting: true,
+        });
+        react_to_events(&mut world);
+        assert!(!world.get::<Conditions>(bearer).unwrap().has("guarding"));
+    }
+
+    #[test]
+    fn arriving_sets_off_reactions_in_those_who_see_it() {
+        // A watchful one leaves whoever comes in exposed, but not someone they didn't see.
+        let (mut world, room) = world();
+        world.init_resource::<Messages<triggers::Trigger>>();
+        let watcher = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let walker = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let sneak = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let exposing = Effect::Apply {
+            condition: "exposed".into(),
+            strength: Formula::number(1.0),
+            lasts: Lasting::Turns(3),
+            on: Who::Target,
+        };
+        reacting(
+            &mut world,
+            watcher,
+            "test:watchful",
+            When::Arrives,
+            vec![exposing],
+        );
+        reacting(
+            &mut world,
+            walker,
+            "test:footsore",
+            When::Enters,
+            vec![on_self("guarding")],
+        );
+        for (who, witnesses) in [(walker, None), (sneak, Some(Vec::new()))] {
+            world.write_message(GameEvent::Entered {
+                who,
+                name: "a brawler".into(),
+                room,
+                way: crate::events::Way::Walked(None),
+                witnesses,
+            });
+        }
+        react_to_events(&mut world);
+        let has = |who, key| world.get::<Conditions>(who).unwrap().has(key);
+        assert!(has(walker, "exposed"), "seen coming in");
+        assert!(!has(sneak, "exposed"), "unseen");
+        assert!(!has(watcher, "exposed"));
+        assert!(has(walker, "guarding"), "their own coming in");
+    }
+
+    #[test]
+    fn some_reactions_come_round_every_so_often() {
+        let (mut world, room) = world();
+        world.init_resource::<Messages<triggers::Trigger>>();
+        let bearer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        reacting(
+            &mut world,
+            bearer,
+            "test:tides",
+            When::Every(Lasting::Minutes(10)),
+            vec![on_self("guarding")],
+        );
+        let react = world.register_system(triggers::react);
+        world.run_system(react).unwrap();
+        // Ten game minutes is 75 real seconds.
+        world
+            .resource_mut::<Time>()
+            .advance_by(Duration::from_secs(30));
+        world.run_system(react).unwrap();
+        assert!(!world.get::<Conditions>(bearer).unwrap().has("guarding"));
+        world
+            .resource_mut::<Time>()
+            .advance_by(Duration::from_secs(50));
+        world.run_system(react).unwrap();
+        assert!(world.get::<Conditions>(bearer).unwrap().has("guarding"));
+    }
+
+    #[test]
+    fn a_reaction_outside_a_fight_can_kill() {
+        // A curse that does its bearer in as it runs out.
+        let (mut world, room) = world();
+        world.init_resource::<Messages<triggers::Trigger>>();
+        let bearer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.get_mut::<Vitals>(bearer).unwrap().health = 3.0;
+        omen(
+            &mut world,
+            vec![(
+                When::Fades,
+                Effect::Damage {
+                    amount: Formula::number(10.0),
+                    damage_type: "physical".into(),
+                },
+            )],
+        );
+        let mut defs = world.resource_mut::<ConditionDefs>();
+        defs.0.get_mut("omen").unwrap().reactions[0].text = Lines {
+            actor: "Your doom {harm} {target}.".into(),
+            target: Some("{actor}'s doom {harm} you.".into()),
+            room: "{actor}'s doom {harm} {target}.".into(),
+            beyond: None,
+        };
+        world.write_message(GameEvent::ConditionFaded {
+            who: bearer,
+            condition: "omen".into(),
+            strength: 1,
+        });
+        react_to_events(&mut world);
+        assert!(world.get::<Dead>(bearer).is_some());
+        assert_eq!(world.get::<Slayer>(bearer).unwrap().0, bearer);
     }
 }

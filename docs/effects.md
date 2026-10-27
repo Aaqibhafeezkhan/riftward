@@ -1,6 +1,6 @@
 # Effects, conditions and scripting
 
-[Design summary](README.md) · Status: steps 1 to 3, and reactions in a fight from step 4, are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections). So are formulas (step 3) and reactions in a fight (step 4a). Triggers outside a fight (4b) are next; the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
+[Design summary](README.md) · Status: steps 1 to 4 are built: conditions as data, damage types, one effect vocabulary, one resolver, resisting by tag, and item conditions (see the "as built" sections), formulas (step 3), and reactions in a fight and out of one (step 4). Active skills through `use` (step 5) are next; the rest is agreed and to come. ✓ marks what's built, in data or still hard-coded
 
 **The goal: game designers add skills, spells, conditions and items without asking for code.** Today a designer can already make a new spell or technique from the effects that exist, with any numbers and wording. What still needs code is anything *new in kind*: a new effect ("poison", "drain life"), a new condition and what it does, a new active skill (each has its own command, like `pick` or `track`), a new trigger, or a formula other than the built-in ones.
 
@@ -431,10 +431,10 @@ Step 3 (2026-10-26). `src/formula.rs` parses formulas when a file loads, so a ty
 
 When reactions and passive skills fire. Passives already practise on some of these (✓ stamina spent, dodged, blocked, hit in armour, damaged, used a skill or tree).
 
-- **In a fight:** when hitting someone, being hit, missing, dodging, blocking, killing, dying; at the start and end of the bearer's turn.
-- **Health:** when hurt below a share of health.
-- **Magic:** when casting, when a spell lands on you, when a condition is applied or fades.
-- **Moving and living:** when entering or leaving a room, resting, eating or drinking, using a skill or tree; each heartbeat out of a fight.
+- **In a fight:** when hitting someone (✓), being hit (✓), missing, dodging (✓), blocking, killing (✓), dying; at the start (✓) and end of the bearer's turn.
+- **Health:** when hurt below a share of health (✓).
+- **Magic:** when casting (✓), when a spell lands on you, when a condition is applied (✓) or fades (✓).
+- **Moving and living:** when entering (✓) or leaving a room, someone arriving (✓), resting (✓), eating or drinking (✓), using a skill or tree; every so often (✓).
 
 A trigger can also check a condition from the condition language (✓): "only while wielding an axe", "only if health is under a quarter".
 
@@ -445,7 +445,7 @@ reactions: [(on: Hit, effects: [Damage(amount: "2", type: piercing, armour: fals
 
 ### Reactions, as built
 
-Step 4a (2026-10-26). Conditions and passive skills can have `reactions`: effects that happen by themselves when the bearer does or suffers something in a fight. Items react through the conditions they grant or are imbued with.
+Steps 4a and 4b (2026-10-26). Conditions and passive skills can have `reactions`: effects that happen by themselves when the bearer does or suffers something, in a fight or out of one. Items react through the conditions they grant or are imbued with.
 
 ```ron
 "thorns": (
@@ -458,13 +458,17 @@ Step 4a (2026-10-26). Conditions and passive skills can have `reactions`: effect
 ),
 ```
 
-- **Triggers (`on`):** `Hits` (the bearer lands something meant to harm), `Struck` (the bearer is hit by it), `Dodges` (a blow, not a shield block), `Kills`, and `Hurt(share)` (a hit leaves the bearer below that share of their most health, having been above it).
-- **Who's who:** a reaction is resolved like any spell or blow, by `combat/resolve.rs`, with the bearer as the user and the other fighter as the target. Effects are `on: Target` by default, so thorns land on the attacker; `on: User` is the bearer (a last stand raising their own guard). It always lands: nothing resists a reaction, though armour and resistances still take their share of its damage.
+- **Triggers (`on`) in a fight:** `Hits` (the bearer lands something meant to harm), `Struck` (the bearer is hit by it), `Dodges` (a blow, not a shield block), `Kills`, `Hurt(share)` (a hit leaves the bearer below that share of their most health, having been above it), `TurnStarts` (each of the bearer's turns, after bleeding and the like), and `Casts` (the bearer casts a spell, in a fight or out of one, at whoever it's cast at).
+- **Anywhere:** `Enters` (the bearer comes into a room), `Arrives` (someone the bearer sees comes into their room: a sneak they didn't notice sets nothing off), `Rests`, `Eats`, `Drinks`, and `Every(Minutes(n))` or `Every(Hours(n))` in game time, in a fight or out of one, at the same times for everyone.
+- **A condition's own:** `Applied` (it takes hold, at whoever put it on) and `Fades` (it runs out, in time or turns; not when it's cured, removed or broken). Only the condition itself answers these, and a passive skill can't have them. Poison uses `Fades`: run its course, it leaves its bearer weakened for half an hour.
+- **Who's who:** a reaction is resolved like any spell or blow, by `combat/resolve.rs`, with the bearer as the user and the other one involved as the target. Where nobody else is (entering a room, resting, eating, the heartbeat, a condition running out), the target is the bearer. Effects are `on: Target` by default, so thorns land on the attacker; `on: User` is the bearer (a last stand raising their own guard). It always lands: nothing resists a reaction, though armour and resistances still take their share of its damage.
 - **Numbers:** a condition's reactions see its `strength` in their formulas, a passive skill's see its level as `power`. An optional `chance: "0.25"` (a formula) makes it happen only sometimes.
 - **Text:** every reaction has its own `text`, with `{harm}` in every line if it does damage; checked at load.
-- **No chains:** a reaction never sets off another, so two thorny fighters don't bounce damage back and forth forever. A reaction from a skill practises it.
+- **No chains:** a reaction never sets off another, so two thorny fighters don't bounce damage back and forth forever, and a condition a reaction puts on doesn't react to taking hold. Its running out later does: that's time passing, not a chain. A reaction from a skill practises it.
+- **Out of a fight it starts none:** a reaction that hurts someone doesn't start a fight, but can kill; whoever it kills falls to the reaction's bearer.
+- **How it fits the code:** reactions in a fight are set off where they happen (`resolve.rs`, the start of a turn in `mod.rs`, casting in `casting.rs`). Everything else comes from game events (`ConditionApplied`, `ConditionFaded`, `Rested`, `Consumed`, `Entered`), which `combat/triggers.rs` turns into the reactions they set off and resolves as a round would, just after the combat round each tick.
 - **The first:** the `thorns` condition. Nothing in the world gives it yet (a spell, item or aura can); to try it, a GM or admin can `condition guard thorns 3 5t`.
-- **Still to come (4b):** triggers outside a fight (entering a room, resting, eating, the heartbeat, a condition taking hold or fading, casting) and at the start of the bearer's turn, which need more game events; and checks on a trigger from the condition language ("only while wielding an axe").
+- **Still to come:** leaving a room, missing, blocking, dying, the end of a turn, a spell landing on the bearer, and using a skill, as something needs them; and checks on a trigger from the condition language ("only while wielding an axe").
 
 ## Scripting
 
@@ -483,7 +487,7 @@ Each step leaves the game working and designers with more they can do alone.
 1. **Conditions as data** (*built*). The built conditions move to `assets/conditions/`, made of modifiers; combat, recovery and `affects` read modifiers instead of knowing each condition. Adds the new conditions, saving time-based ones with characters, and template `grants` on items.
 2. **Effects and abilities.** Damage types (2a), one effect vocabulary (2b) and one contest with skills that resist tags (2c-i) are built. So is one resolver for spells, techniques and blows, where either can use any effect and any contest (2c-ii). So are `Imbue` and saved item conditions (2d). Step 2 is done.
 3. **Formulas** (*built*). The expression evaluator, and every amount in an effect moved into data.
-4. **Triggers and reactions.** Reactions on conditions, skills and items in a fight are built (4a). Next (4b): more game events, for triggers outside a fight and at the start of a turn.
+4. **Triggers and reactions** (*built*). Reactions on conditions, skills and items in a fight (4a), and out of one: entering a room, someone arriving, resting, eating and drinking, a condition taking hold or running out, casting, the start of a turn and every so often (4b).
 5. **Active skills through `use`.** Most bespoke commands become abilities.
 6. **Scripting.** Rhai, exposing the verbs and triggers above.
 

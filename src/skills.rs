@@ -213,6 +213,9 @@ impl SkillDef {
         }
         if let SkillKind::Passive { reactions, .. } = &self.kind {
             reactions.iter().try_for_each(Reaction::check)?;
+            if reactions.iter().any(|r| r.on.own()) {
+                return Err("only a condition reacts to taking hold or running out".into());
+            }
         }
         let (target, miss) = match &self.kind {
             // Struck at someone, so their view and a miss are needed.

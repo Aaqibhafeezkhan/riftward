@@ -73,6 +73,25 @@ pub enum GameEvent {
         room: Entity,
         mob: Option<MobKey>,
     },
+    /// A condition took hold of `who`, put on by `by` (themselves, if nobody). `reacting` if a
+    /// reaction put it on, which sets off no more.
+    ConditionApplied {
+        who: Entity,
+        by: Entity,
+        condition: String,
+        strength: i32,
+        reacting: bool,
+    },
+    /// A condition on `who` ran out, in time or turns.
+    ConditionFaded {
+        who: Entity,
+        condition: String,
+        strength: i32,
+    },
+    /// Someone sat down to rest.
+    Rested { who: Entity },
+    /// Someone ate (or, with `drink`, drank) something.
+    Consumed { who: Entity, drink: bool },
 }
 
 /// How someone moved.
@@ -124,7 +143,11 @@ fn text(event: &GameEvent) -> Option<String> {
         | GameEvent::Blocked { .. }
         | GameEvent::HitInArmour { .. }
         | GameEvent::Damaged { .. }
-        | GameEvent::Died { .. } => return None,
+        | GameEvent::Died { .. }
+        | GameEvent::ConditionApplied { .. }
+        | GameEvent::ConditionFaded { .. }
+        | GameEvent::Rested { .. }
+        | GameEvent::Consumed { .. } => return None,
     };
     Some(line + "\r\n")
 }
@@ -171,7 +194,11 @@ fn announce(
             | GameEvent::Blocked { .. }
             | GameEvent::HitInArmour { .. }
             | GameEvent::Damaged { .. }
-            | GameEvent::Died { .. } => {}
+            | GameEvent::Died { .. }
+            | GameEvent::ConditionApplied { .. }
+            | GameEvent::ConditionFaded { .. }
+            | GameEvent::Rested { .. }
+            | GameEvent::Consumed { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, _, in_room) in &players {
                     let outdoors = rooms.get(in_room.0).is_ok_and(|(room, _, _)| !room.indoors);

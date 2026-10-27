@@ -102,8 +102,9 @@ pub fn evasion() -> Option<Resist> {
 
 /// Something a condition or passive skill does by itself when its bearer does or suffers
 /// something: thorns that tear at whoever strikes its bearer. It's resolved like any spell or
-/// blow, with the bearer as the user and the other one in the fight as the target, so its
-/// effects (`on: Target` by default) land on the other one. A reaction never sets off another.
+/// blow, with the bearer as the user and the other one involved as the target, so its effects
+/// (`on: Target` by default) land on the other one; where nobody else is involved (entering a
+/// room, resting, the heartbeat), the target is the bearer. A reaction never sets off another.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Reaction {
     pub on: When,
@@ -130,6 +131,34 @@ pub enum When {
     /// A hit leaves the bearer below this share of their most health, having been above it:
     /// `Hurt(0.25)`.
     Hurt(f64),
+    /// The start of each of the bearer's turns in a fight, at whoever they're fighting.
+    TurnStarts,
+    /// The bearer casts a spell, at whoever it's cast at.
+    Casts,
+    /// The bearer comes into a room.
+    Enters,
+    /// Someone the bearer sees comes into the bearer's room, who is the other one.
+    Arrives,
+    /// The bearer sits down to rest.
+    Rests,
+    /// The bearer eats something.
+    Eats,
+    /// The bearer drinks something.
+    Drinks,
+    /// This condition takes hold, at whoever put it on. Only a condition's own reactions.
+    Applied,
+    /// This condition runs out, in time or turns; not when it's cured, removed or broken. Only a
+    /// condition's own reactions.
+    Fades,
+    /// Every so often, in game time, in a fight or out of one: `Every(Minutes(10))`.
+    Every(Lasting),
+}
+
+impl When {
+    /// Whether only a condition's own reactions answer it: taking hold, running out.
+    pub fn own(self) -> bool {
+        matches!(self, When::Applied | When::Fades)
+    }
 }
 
 impl Reaction {
@@ -137,6 +166,11 @@ impl Reaction {
     pub fn check(&self) -> Result<(), String> {
         if self.effects.is_empty() {
             return Err("a reaction needs effects".into());
+        }
+        if let When::Every(every) = self.on
+            && every.real_secs() <= 0.0
+        {
+            return Err("a reaction every so often needs a time, in minutes or hours".into());
         }
         check(&self.effects)?;
         let harms = self
@@ -408,6 +442,14 @@ mod tests {
         assert!(thorns.check().unwrap_err().contains("{harm}"));
         thorns.effects.clear();
         assert!(thorns.check().is_err(), "a reaction does something");
+        thorns.text = lines("Thorns {harm} {target}.");
+        thorns.effects = vec![Effect::Heal {
+            amount: Formula::number(1.0),
+        }];
+        thorns.on = When::Every(Lasting::Minutes(10));
+        assert!(thorns.check().is_ok());
+        thorns.on = When::Every(Lasting::Turns(1));
+        assert!(thorns.check().is_err(), "every so often is in game time");
     }
 
     #[test]
