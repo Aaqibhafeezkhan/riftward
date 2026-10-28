@@ -1,8 +1,6 @@
 # The setting
 
-[Design summary](README.md) · Status: the world as it stands (2026-10-27), from *The Agryn's Legacy* and the decisions since. What content should be true to: descriptions, NPCs, items, quests.
-
-Riftward's world is the one first built for a tabletop campaign, *The Agryn's Legacy*, kept on [LegendKeeper](https://www.legendkeeper.com/p/cm5io469i0yh613se289jhajp). This page gathers what the wiki says and what's been decided for the game since; where the two differ, the game's decisions win, and the differences are listed at the end.
+[Design summary](README.md) · Status: the world as it stands (2026-10-27). What content should be true to: descriptions, NPCs, items, quests.
 
 ## The world in brief
 
@@ -23,7 +21,7 @@ The barrier has held ever since, because the Agryn has. But he is weakening, and
 
 ## The Middle Kingdoms and the inland sea
 
-- **Three kingdoms**, the ones the Agryn saved, surround **a large inland sea** that reaches the ocean through **a narrow channel**: think of the Mediterranean and its strait. Their heartlands, the sea and the Citadel lie to the south of Riftwatch: somewhere for characters to travel to as they grow. The wiki calls the world **the Realm of Tutoria**.
+- **Three kingdoms**, the ones the Agryn saved, surround **a large inland sea** that reaches the ocean through **a narrow channel**: think of the Mediterranean and its strait. Their heartlands, the sea and the Citadel lie to the south of Riftwatch: somewhere for characters to travel to as they grow.
 - **The barrier rings them**, so it must close or cross the channel somewhere: the strait is one of the world's most interesting places.
 - **Not yet named:** the three kingdoms, their rulers, their capitals, and which one Riftwatch belongs to.
 
@@ -39,7 +37,7 @@ The barrier has held ever since, because the Agryn has. But he is weakening, and
 
 ## Vitae
 
-**The life force in all living things,** in different measure. ([The wiki's page](https://www.legendkeeper.com/p/cm5io469i0yh613se289jhajp/fagskik1).)
+**The life force in all living things,** in different measure.
 
 - **Who has it:** sentient beings (people of every race) the most; plants and animals less, enough for small enchantments; the magical creatures of the Wastes it concentrated.
 - **Vitae crystals:** vitae drawn out and condensed into crystal, prized for being stable and useful. **The crystal trade is Riftwatch's reason to exist** (below). There's also talk of **cores**: the black market deals in "cores and crystals".
@@ -49,7 +47,7 @@ The barrier has held ever since, because the Agryn has. But he is weakening, and
   - **Healing and restoration,** possible but rarely done, for the cost.
 - **The cost:** vitae taken is gone for good. Willing donors may sell theirs, legally, and are often visibly the worse for it: tired, shorter-lived, easily ill. Taking it from the unwilling is among the worst crimes there are.
 - **How people see it:** common folk would rather leave it alone, as a thing of greed or desperation; adventurers see a resource and an edge; the Citadel sees misuse as a threat to the world's stability and the sanctity of life. Scholars and enchanters in Riftwatch study it and argue over its limits.
-- **As a game mechanic,** the tabletop version made vitae a personal reserve (tied to hit dice): spent to heal on a short rest, to reroll or gain advantage, or to use an ability once more than its limit, and recovered only on a long rest. For Riftward that suggests a slow-recovering pool for pushing past limits, discussed but not decided (see [Attributes](attributes.md#open-questions)).
+- **As a game mechanic,** vitae could be a personal reserve: spent to push past limits (a roll pushed, an ability used once more than it should be) and recovered only slowly. Discussed but not decided (see [Attributes](attributes.md#open-questions)).
 
 ## Magic
 
@@ -59,34 +57,34 @@ The barrier has held ever since, because the Agryn has. But he is weakening, and
 
 ## Riftwatch
 
-**A border town in the north,** near the barrier with the Wastes beyond it: inland, nowhere near the sea, about **a thousand people**, built of stone and timber in rugged country. North of it lies wilderness, the Darkwood, and beyond that the mountains. Its people are pragmatic and resourceful, used to living with danger. **It's the last bastion of the northern mountain lands:** the barrier has already drawn in far enough to take the other outposts and settlements that once stood further north, and their ruins now lie in the Wastes. ([The wiki's page](https://www.legendkeeper.com/p/cm5io469i0yh613se289jhajp/qkpya2bo).)
+**A border town in the north,** near the barrier with the Wastes beyond it: inland, nowhere near the sea, about **a thousand people**, built of stone and timber in rugged country. North of it lies wilderness, the Darkwood, and beyond that the mountains; forest lies to the south as well. Its people are pragmatic and resourceful, used to living with danger. **It's the last bastion of the northern mountain lands:** the barrier has already drawn in far enough to take the other outposts and settlements that once stood further north, and their ruins now lie in the Wastes.
 
 - **The lost outposts:** what the barrier left behind when it drew in, now on the far side of it: forts, villages and mines, emptied or worse, warped by the corruption that came in over them. Some of Riftwatch's families came from them, and remember. For the game they're the Wastes' first destinations, ruins to explore past the passes, with relics and records to bring back, and the twisted things that live in them now.
 - **Why it thrives:** it's the nearest town to the Wastes. **The Adventurers' Guild and the vitae crystal trade** are its lifeblood: adventurers cross the barrier, fight the twisted things beyond, and come back with crystals and relics, which they sell to the guild or to enchanters, dearly. A crystal-rush town at the edge of the world.
-- **The river:** **river barges carry the trade south** to the sea: crystals, pelts and relics down, grain, cloth and goods up. The barges are the town's lifeline. (Decided 2026-10-27; the wiki doesn't mention the river.)
+- **The river:** **river barges carry the trade south** to the sea: crystals, pelts and relics down, grain, cloth and goods up. The barges are the town's lifeline.
 - **The danger:** monsters and magical anomalies from the Wastes, and the barrier's contraction. If it keeps drawing in, Riftwatch is one of the towns it will reach some day, maybe centuries from now; it's a fear for the town's future, not this year's, but everyone from the guildmaster to the garrison captain carries it.
-- **The old city beneath** (decided for the game): Riftwatch is built on the ruins of a much older and larger city, whose oldest parts show in the sewers ([Riftwatch](riftwatch.md#the-old-city-beneath)). Whether it's from before the barrier, and what the Archivist knows of it, is open.
+- **The old city beneath:** Riftwatch is built on the ruins of a much older and larger city, whose oldest parts show in the sewers ([Riftwatch](riftwatch.md#the-old-city-beneath)). Whether it's from before the barrier, and what the Archivist knows of it, is open.
 
 ### Places
 
-| In the wiki | What it is | In the game today |
+| Place | What it is | In the game today |
 | --- | --- | --- |
-| **The Fort** ([wiki](https://www.legendkeeper.com/p/cm5io469i0yh613se289jhajp/ytj9k1wz)) | The military heart of the town, on its northern edge, overlooking the road to the barrier: dark grey stone, iron bands, ballistae on the battlements, statues of old defenders by the gate. Four corner watchtowers manned day and night; barracks and a training yard; a command hall of maps and reports; an armory; an infirmary. Its gatehouse admits only soldiers and adventurers on guild-sanctioned quests | The garrison yard, barracks, training yard and armory, and the keep with its watchtower. The game's keep has a lord (great hall, solar); the wiki has no lord, only the captain and the guildmaster |
-| **The Silver Hearth Guildhall** ([wiki](https://www.legendkeeper.com/p/cm5io469i0yh613se289jhajp/r9pfaacg)) | Timber and stone in the heart of town, under a sign of a shield crossed with a quill and a sword. A main hall with **the quest board divided by rank, Bone to Platinum**, a reception counter, a trophy wall, a small library on the Wastes, a basement training room, dormitories upstairs (shared bunks for Bone and Iron, private rooms above), a kitchen and a tavern. Quests are claimed at the counter for a token, and paid when the token comes back with proof; rank evaluations on request | The Adventurers' Guildhall, Contract Hall, Guild Archive (the library), Guild Quarters and Guild Cellar. The game's [guild ranks](quests.md#guild-ranks) are the wiki's, Bone to Platinum. Its name, the Silver Hearth, isn't used yet |
-| **The Market District** ([wiki](https://www.legendkeeper.com/p/cm5io469i0yh613se289jhajp/jgt1je3w)) | An open-air market along the fort's southern wall, across from the road to the barrier: stalls, carts and semi-permanent stands under strung lanterns. Fresh goods from nearby farms and hunters, armourers' kiosks, Brynn's forge, Jyrin's booth, general goods, and informal trading posts where adventurers barter | Market Square, Vendor Stalls, Herbalist's Stall, Tinkers' Corner |
+| **The Fort** | The military heart of the town, on its northern edge, overlooking the road to the barrier: dark grey stone, iron bands, ballistae on the battlements, statues of old defenders by the gate. Four corner watchtowers manned day and night; barracks and a training yard; a command hall of maps and reports; an armory; an infirmary. Its gatehouse admits only soldiers and guild members of Silver rank and up onto the road to the barrier | The garrison yard, barracks, training yard and armory, and the keep with its watchtower. The keep has a lord's great hall and solar, though who rules the town is [open](#open-questions) |
+| **The Silver Hearth Guildhall** | Timber and stone in the heart of town, under a sign of a shield crossed with a quill and a sword. A main hall with **the quest board divided by rank, Bone to Platinum**, a reception counter, a trophy wall, a small library on the Wastes, a basement training room, dormitories upstairs (shared bunks for Bone and Iron, private rooms above), a kitchen and a tavern. Quests are claimed at the counter for a token, and paid when the token comes back with proof; rank evaluations on request | The Adventurers' Guildhall, Contract Hall, Guild Archive (the library), Guild Quarters and Guild Cellar. The [guild ranks](quests.md#guild-ranks) are these, Bone to Platinum. Its name, the Silver Hearth, isn't used yet |
+| **The Market District** | An open-air market along the fort's southern wall, across from the road to the barrier: stalls, carts and semi-permanent stands under strung lanterns. Fresh goods from nearby farms and hunters, armourers' kiosks, Brynn's forge, Jyrin's booth, general goods, and informal trading posts where adventurers barter | Market Square, Vendor Stalls, Herbalist's Stall, Tinkers' Corner |
 | **Steel & Ember Forge** | Brynn Corlack's smithy | Not yet: the tinker is closest |
 | **Arcane Embers** | Master Jyrin's magic shop: scrolls, trinkets and relics from the Wastes | Not yet |
 
 ### People
 
-From [the wiki's NPCs](https://www.legendkeeper.com/p/cm5io469i0yh613se289jhajp/oxkd3ayi) and its place pages. The game's townsfolk were written before these were gathered, so several are the same role under no name, and could take these names and descriptions.
+The town's named people. The game's townsfolk were written before these, so several are the same role under no name, and could take these names and descriptions.
 
 **The guild:**
 
 | Name | Who | In the game |
 | --- | --- | --- |
 | **Kaelyn "Ironquill" Durne** | Guildmaster. A middle-aged human woman, short black hair streaked with silver, sharp hazel eyes; still in adventuring gear in semi-retirement, a steel pen behind her ear that she signs with and, at need, fights with. Charismatic, strategic, sharp-tongued with the arrogant, protective of her own; mentors novices in the afternoons. Fears for the guild's integrity, and for Riftwatch if the barrier keeps contracting. *"A sharp mind is as important as a sharp blade."* | Not yet |
-| **Marin Harrow** (the guildhall page spells it Marrin) | The guild's receptionist: assigns quests, keeps the ledgers, pays out. A half-elf woman, auburn hair in a neat bun, piercing green eyes, a silver brooch of rank. Meticulous, fair, blunt; a soft spot for rookies. Fears the barrier's collapse. *"Adventuring is dangerous, but it's also the only way to make a name for yourself in this world."* | The contract clerk, who keeps the contracts, ledgers and tags |
+| **Marin Harrow** | The guild's receptionist: assigns quests, keeps the ledgers, pays out. A half-elf woman, auburn hair in a neat bun, piercing green eyes, a silver brooch of rank. Meticulous, fair, blunt; a soft spot for rookies. Fears the barrier's collapse. *"Adventuring is dangerous, but it's also the only way to make a name for yourself in this world."* | The contract clerk, who keeps the contracts, ledgers and tags |
 | **Sage Ryllis** | The guild's librarian, human and eccentric, obsessed with mapping the Wastes | The Guild Archive has no keeper yet |
 | **Garrik Stonebrew** | Barkeep. A dwarf retired from adventuring: one eye under a leather patch, a limp, a braided black beard going grey. Jovial, a teller of stories that grow with each telling, protective of young adventurers. *"A good story is like a fine ale."* | Not yet: the guild has no tavern room |
 | **Nia Willow** | The guild's cook, a human woman in her forties: curly brown hair under a scarf, motherly and firm about her kitchen. *"You can't fight on an empty stomach."* | Not yet |
@@ -112,11 +110,9 @@ From [the wiki's NPCs](https://www.legendkeeper.com/p/cm5io469i0yh613se289jhajp/
 | **Harwin Colm** | A jovial farmer selling produce, and advice on which wild plants are safe to eat | The provisioner is the nearest |
 | **Talla Mirk** | A gruff trader in rare and dangerous goods, often come by questionably: the market's shady side | The hooded figure in the back alley is the nearest; the black-market vitae dealer |
 
-The wiki's player characters (Dourlisha, Hootera Sharpfeather, Shinjimi, Qualan Silverleaf) were the campaign's heroes, not townsfolk, and aren't carried over.
-
 ## The peoples
 
-Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): Earthdawn's eight, three renamed for this world (the t'skrang are **lizardmen**, the obsidimen **stoneborn**, the windlings **sprites**) beside dwarves, elves, humans, orks and trolls; and two from the wiki, **kitsune** (fox-folk tied to the fey, who can take fox form and call foxfire, growing tails as they grow in power; charm and sleep find little hold on them, so they share the elves' Fey Mind) and **halflings** (small, nimble and lucky). The wiki's **Owlin** (owl-folk: nocturnal, feathered and winged, sharp of sight and hearing, silent fliers) aren't among them for now, and its aasimar and half-elves appear as NPCs.
+Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): dwarves, elves, humans, **lizardmen**, orks, **stoneborn**, **sprites** and trolls, and **kitsune** (fox-folk tied to the fey, who can take fox form and call foxfire, growing tails as they grow in power; charm and sleep find little hold on them, so they share the elves' Fey Mind) and **halflings** (small, nimble and lucky). The **Owlin** (owl-folk: nocturnal, feathered and winged, sharp of sight and hearing, silent fliers) aren't among them for now, and aasimar and half-elves appear as NPCs.
 
 ## What it means for the game
 
@@ -126,19 +122,8 @@ Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): E
 - **Breaches are world events,** the [rats' breakout](world.md#world-events) turned around: a boss breaks *in*, and its underlings follow. A breach opens somewhere along the barrier (in the passes, mostly), a powerful creature arrives, lesser ones spawn from the wound for as long as it stays open, and corruption spreads around it (rift-touched mutations, tainted plants) while they live. The wound seals on a timer; the creatures that came through stay until they're killed. Killing the boss is the guild's urgent contract, and the Fort's.
 - **The barrier is a slow clock.** The town's fears (Kaelyn's, Marin's, Captain Thorne's) are all the same fear, but it's measured in generations: Riftwatch won't fall in a character's lifetime unless the world's story says so. What players feel is the weather of it, through world events: anomalies on patrol, breaches now and then. Whether it ever closes in, or the Agryn or some new power holds it, is the world's long story, for GMs to move on purpose, never a timer running down by itself.
 - **Corruption reaches inside:** the Rift-Scar in the Darkwood, Narina's corrupted plants, rift-touched beasts in the forest and the undercity: signs, perhaps, that the barrier is weakening.
-- **NPCs with names:** the townsfolk can take the wiki's names and descriptions (above), and new ones (the guildmaster, the captain, the barkeep, the cook, Jyrin's shop, Brynn's forge) fill the town out ([#12](https://github.com/Foxworks-Studios/riftward/issues/12)).
+- **NPCs with names:** the townsfolk can take the names and descriptions above, and new ones (the guildmaster, the captain, the barkeep, the cook, Jyrin's shop, Brynn's forge) fill the town out ([#12](https://github.com/Foxworks-Studios/riftward/issues/12)).
 - **Enchanting and rune magic** are crafts and magic for later: turning crystals into lasting item conditions (`Imbue` and item conditions are most of the machinery), and a forbidden tradition for villains, maybe for players.
-
-## Where the wiki and the game differ
-
-| | The wiki | Decided for the game |
-| --- | --- | --- |
-| **The barrier's age** | About a millennium | Three thousand years |
-| **The river** | Not mentioned | River barges carry the trade south to the sea |
-| **Around Riftwatch** | Mountains to the north, forests to the south; the Fort on the north edge, facing the barrier | The same, with wilderness between the town and the mountains: the Darkwood, beyond the North Gate (2026-10-27). Forest to the south as well can come with the rest of the region |
-| **Who rules Riftwatch** | No ruler named: the Fort's captain and the guildmaster | A keep with a lord's great hall and solar |
-| **The peoples** | Kitsune and Owlin; aasimar, half-elves, halflings among NPCs | Ten races: Earthdawn's eight (lizardmen, stoneborn and sprites renamed) plus kitsune and halflings. Owlin not for now; aasimar and half-elves as NPCs |
-| **The old city beneath** | Not in the wiki | Decided for the game |
 
 ## Open questions
 
@@ -148,8 +133,8 @@ Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): E
 - [ ] **Do people know the barrier is shrinking?** Common knowledge in Riftwatch, a rumour, or something the Citadel keeps quiet?
 - [ ] **The Archivist:** the Agryn's ally, or something older with purposes of its own?
 - [ ] **The three kingdoms:** names, rulers, which one Riftwatch belongs to, and where the Citadel stands.
-- [ ] **Riftwatch's ruler:** a lord in the keep, as the game has, or the captain and the guildmaster, as the wiki has?
+- [ ] **Riftwatch's ruler:** a lord in the keep, as the game has, or no lord at all, with the Fort's captain and the guildmaster running the town between them?
 - [ ] **The geography around Riftwatch:** north of town, wilderness (the Darkwood) and then mountains, with the barrier running through the mountains, crossed by their passes (decided 2026-10-27). Still to place: the river.
 - [x] **The peoples:** ten races, Earthdawn's eight with three renamed, plus kitsune and halflings (2026-10-27). Still open: Owlin, and whether aasimar and half-elves become playable.
 - [ ] **The old city beneath:** older than the barrier? Its script readable by the Archivist?
-- [ ] **Vitae as a pool:** a slow-recovering reserve for pushing past limits, as the tabletop game used it ([Attributes](attributes.md#open-questions)).
+- [ ] **Vitae as a pool:** a slow-recovering reserve for pushing past limits ([Attributes](attributes.md#open-questions)).

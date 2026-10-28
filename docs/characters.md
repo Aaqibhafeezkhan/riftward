@@ -25,7 +25,7 @@ Races and backgrounds are data, and a builder may remove one that characters alr
 
 ## Races
 
-Ten races, in `assets/races.ron`: Earthdawn's eight, three of them renamed for the setting (the t'skrang are **lizardmen**, the obsidimen **stoneborn**, the windlings **sprites**), and two from *The Agryn's Legacy* ([The setting](setting.md#the-peoples)), **kitsune** and **halflings** (2026-10-27). Each shifts the base attributes, Earthdawn-style, and grants racial skills and traits (what every one of the race simply is, like an elf's Fey Mind: see [Traits](effects.md#traits)). Every race's shifts net **+3** points; humans get no shifts and **12 Karma** to spend as they like instead, and **Versatility**, which makes their skills grow faster. A test checks every race keeps to this.
+Ten races, in `assets/races.ron`: Earthdawn's eight, three of them renamed for the setting (the t'skrang are **lizardmen**, the obsidimen **stoneborn**, the windlings **sprites**), and two of the setting's own ([The setting](setting.md#the-peoples)), **kitsune** and **halflings** (2026-10-27). Each shifts the base attributes, Earthdawn-style, and grants racial skills and traits (what every one of the race simply is, like an elf's Fey Mind: see [Traits](effects.md#traits)). Every race's shifts net **+3** points; humans get no shifts and **12 Karma** to spend as they like instead, and **Versatility**, which makes their skills grow faster. A test checks every race keeps to this.
 
 Since a point costs the rating it reaches, shifts aren't all worth the same: a third point of Agility (5 to 6) is worth 6 Karma, while a lost point low down (3 to 2) saves only 3. At real prices the races' shifts are worth:
 

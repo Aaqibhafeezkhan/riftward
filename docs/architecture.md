@@ -139,7 +139,7 @@ Started.
 - **One heartbeat, once a second,** for systems that don't need every frame: spawns, wandering and the clock today; regeneration and cooldowns later. Heartbeat systems work from elapsed time and timestamps, never by counting beats, so the rate is a performance setting rather than a game rule, and a stalled server doesn't change the game. There's no old-style global tick to wait for.
 - **Recovery** of health and stamina runs on the heartbeat (see [Vitals](attributes.md#vitals)).
 - **Still to come:** combat rounds (2-3 seconds, with combat), and actions that take time to finish (lessons, rituals, casting).
-- **Open:** a calendar (days, months, seasons) from *The Agryn's Legacy*, and whether night changes anything beyond the messages, such as needing light outdoors.
+- **Open:** a calendar (days, months, seasons) for [the setting](setting.md), and whether night changes anything beyond the messages, such as needing light outdoors.
 
 ### Combat
 
