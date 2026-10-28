@@ -1,6 +1,6 @@
-# Facts, conditions and rules
+# Facts, requirements and rules
 
-[Design summary](README.md) · Status: designed (2026-10-28), not built. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it, and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
+[Design summary](README.md) · Status: designed (2026-10-28), not built. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it (requirements), and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
 
 Content feels alive when it reacts to things nobody scripted together. A quest that sets "this character sold out the guild" shouldn't need to know which other quests, mobs and doors will care. So everything the game remembers about its story goes in one place, as **facts**, and everything that reacts tests facts, without knowing who set them.
 
@@ -20,9 +20,11 @@ A fact is a named value in a **scope**:
 - **A fact can lapse:** set with `for: Hours(2)`, it's gone after (a rumour, a guard who remembers you for a while).
 - **What already exists moves here:** world flags (`world_state`) become `world.` facts, and the character flags and titles hidden skills were designed with become `char.` facts. `WorldFlag("x")` and `Flag("x")` stay as short ways of writing them.
 
-## One condition language
+## One requirement language
 
-There are two today: `Condition` (attributes, race, skills, guild rank; backgrounds, skill requirements, trainers) and world events' `When` (world flags and events). They merge into one, used by every gate in the game:
+There are two today: `Condition` (attributes, race, skills, guild rank; backgrounds, skill requirements, trainers) and world events' `When` (world flags and events). They merge into one, used by every gate in the game, and it's renamed **`Requirement`**, after the `requires:` it fills: "condition" then means only a [status condition](effects.md#conditions) on a body, like poisoned or blessed (decided 2026-10-28).
+
+**Status conditions aren't facts.** Poisoned, hidden or formless are mechanics: a strength, a duration in rounds or minutes, modifiers, reactions and hints, on mobs as much as players, read by every round of combat. Facts are what the story remembers. The two meet only here: a requirement can test a condition with `Has`.
 
 | Condition | Met when |
 | --- | --- |
@@ -30,6 +32,7 @@ There are two today: `Condition` (attributes, race, skills, guild rank; backgrou
 | `Fact(key, op, value)` | A fact compares: `Fact("char.trust.marin", Gte, 3)`, `Fact("world.rats_broke_out", Eq, true)`; `Fact("key")` alone means it's set |
 | `Quest(id, state)` | A character's quest is held, done (with a given ending, or any), or failed: `Quest("riftwatch:crystals_gone_missing", Ended("sold"))` |
 | `HasItem(item or tag, n)` | They carry that many |
+| `Has(condition)` | A status condition or trait is on them: `Has("poisoned")`, `Not(Has("rift_taint"))` |
 | `InRoom(room)`, `InZone(zone)` | They're there |
 | `All`, `Any`, `Not` | As now |
 
@@ -69,7 +72,7 @@ Rules live in quests (active only while the quest is on that stage), and later i
 
 ## How it gets built
 
-First, before the quest engine, in five small pull requests: the store, world flags moved onto it, `Fact` in the condition language, one condition language, and `facts` for GMs. See [Quests: how it gets built](quests.md#how-it-gets-built).
+First, before the quest engine, in five small pull requests: the store, world flags moved onto it, `Fact` in the requirement language, one requirement language (renamed, with `Has`), and `facts` for GMs. See [Quests: how it gets built](quests.md#how-it-gets-built).
 
 ## Why did or didn't it happen
 
