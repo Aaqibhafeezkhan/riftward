@@ -145,9 +145,9 @@ None of the locks have keys yet; keys arrive with items.
 | Town guards | North Gate | 2 | Anywhere in town, every 1-3 minutes |
 | A stray dog | Market Square | 1 | Market, stalls, back alley, tinkers, Guild Row |
 | Straw training dummies (the `inanimate` trait: they never hit back, for safe practice) | Training Yard (2), Garrison Yard (1) | 3 | No |
-| The contract clerk | Contract Hall | 1 | No |
-| The herbalist | Herbalist's Stall | 1 | No |
-| The drill sergeant | Training Yard | 1 | No |
+| Marin Harrow, the contract clerk | Contract Hall | 1 | No |
+| Narina Greenthorn, the herbalist | Herbalist's Stall | 1 | No |
+| Sergeant Alina Greaves, the drill sergeant | Training Yard | 1 | No |
 | Sewer rats (aggressive: they attack anyone who comes near) | The Warren | Breed from 8, doubling every 4 hours up to 200; back a week after they're wiped out | Anywhere, through open grates too, but only when crowded: 6 to a room |
 
 The herbalist's stall, Contract Hall, Guild Archive, Guild Quarters, shrine and Lord's Solar turn wanderers away.
@@ -169,14 +169,14 @@ Each basic skill has a home in town. Trainers teach Common and Uncommon skills (
 
 | Room | Trainers (planned) |
 | --- | --- |
-| Training Yard | The drill sergeant: the basics of every weapon (Swordplay, Knife, Axe, Hammer and Staff Fighting), Toughness, Climbing, Swimming, Heavy Armour and Block. *Built* |
+| Training Yard | Sergeant Alina Greaves: the basics of every weapon (Swordplay, Knife, Axe, Hammer and Staff Fighting), Toughness, Climbing, Swimming, Heavy Armour and Block. *Built* |
 | Archery Butts | Archery |
 | Guild Archive | The magister, who Awakens Hermetic students (*built*); later Lore, and the self-taught **Study** path |
-| Herbalist's Stall | The herbalist: Herbalism, Foraging and First Aid (*built*) |
+| Herbalist's Stall | Narina Greenthorn: Herbalism, Foraging and First Aid (*built*) |
 | Wayside Shrine | The keeper of the shrine, who Awakens Divine students (*built*); later Healing, and the **Devotion** path |
-| Back Alley | A hooded figure: Stealth, Lockpicking and Pickpocketing (*built*) |
+| Back Alley | A hooded figure (Talla Mirk): Stealth, Lockpicking and Pickpocketing (*built*) |
 | Tinkers' Corner | Crafting and repair |
-| Market stalls | The provisioner: Haggling and Appraisal (*built*) |
+| Market stalls | Harwin Colm, the provisioner: Haggling and Appraisal (*built*) |
 | Watchtower | An old ascetic, who Awakens Adepts (*built*) |
 | Darkwood, Hermit's Clearing | Outside town: the hedge-shaman, who Awakens Shamanic students and teaches Tracking (*built*); see [The Darkwood](darkwood.md) |
 | Contract Hall | Not a trainer: the guild's contract board and clerk (see [Quests and the Adventurers' Guild](quests.md)) |

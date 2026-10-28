@@ -86,19 +86,19 @@ From the map of the Middle Kingdoms (kept privately, not in the repository). The
 | **The Fort** | The military heart of the town, on its northern edge, overlooking the road to the barrier: dark grey stone, iron bands, ballistae on the battlements, statues of old defenders by the gate. Four corner watchtowers manned day and night; barracks and a training yard; a command hall of maps and reports; an armory; an infirmary. Its gatehouse admits only soldiers and guild members of Silver rank and up onto the road to the barrier | The garrison yard, barracks, training yard and armory, and the keep with its watchtower. The keep has a lord's great hall and solar, though who rules the town is [open](#open-questions) |
 | **The Silver Hearth Guildhall** | Timber and stone in the heart of town, under a sign of a shield crossed with a quill and a sword. A main hall with **the quest board divided by rank, Bone to Platinum**, a reception counter, a trophy wall, a small library on the Wastes, a basement training room, dormitories upstairs (shared bunks for Bone and Iron, private rooms above), a kitchen and a tavern. Quests are claimed at the counter for a token, and paid when the token comes back with proof; rank evaluations on request | The Adventurers' Guildhall, Contract Hall, Guild Archive (the library), Guild Quarters and Guild Cellar. The [guild ranks](quests.md#guild-ranks) are these, Bone to Platinum. Its name, the Silver Hearth, isn't used yet |
 | **The Market District** | An open-air market along the fort's southern wall, across from the road to the barrier: stalls, carts and semi-permanent stands under strung lanterns. Fresh goods from nearby farms and hunters, armourers' kiosks, Brynn's forge, Jyrin's booth, general goods, and informal trading posts where adventurers barter | Market Square, Vendor Stalls, Herbalist's Stall, Tinkers' Corner |
-| **Steel & Ember Forge** | Brynn Corlack's smithy | Not yet: the tinker is closest |
+| **Steel & Ember Forge** | Brynn Corlack's smithy | Not yet: she works from Tinkers' Corner |
 | **Arcane Embers** | Master Jyrin's magic shop: scrolls, trinkets and relics from the Wastes | Not yet |
 
 ### People
 
-The town's named people. The game's townsfolk were written before these, so several are the same role under no name, and could take these names and descriptions.
+The town's named people. Six of the game's townsfolk have their names and descriptions (2026-10-27); the rest are still to come.
 
 **The guild:**
 
 | Name | Who | In the game |
 | --- | --- | --- |
 | **Kaelyn "Ironquill" Durne** | Guildmaster. A middle-aged human woman, short black hair streaked with silver, sharp hazel eyes; still in adventuring gear in semi-retirement, a steel pen behind her ear that she signs with and, at need, fights with. Charismatic, strategic, sharp-tongued with the arrogant, protective of her own; mentors novices in the afternoons. Fears for the guild's integrity, and for Riftwatch if the barrier keeps contracting. *"A sharp mind is as important as a sharp blade."* | Not yet |
-| **Marin Harrow** | The guild's receptionist: assigns quests, keeps the ledgers, pays out. A half-elf woman, auburn hair in a neat bun, piercing green eyes, a silver brooch of rank. Meticulous, fair, blunt; a soft spot for rookies. Fears the barrier's collapse. *"Adventuring is dangerous, but it's also the only way to make a name for yourself in this world."* | The contract clerk, who keeps the contracts, ledgers and tags |
+| **Marin Harrow** | The guild's receptionist: assigns quests, keeps the ledgers, pays out. A half-elf woman, auburn hair in a neat bun, piercing green eyes, a silver brooch of rank. Meticulous, fair, blunt; a soft spot for rookies. Fears the barrier's collapse. *"Adventuring is dangerous, but it's also the only way to make a name for yourself in this world."* | *Built:* the contract clerk in the Contract Hall |
 | **Sage Ryllis** | The guild's librarian, human and eccentric, obsessed with mapping the Wastes | The Guild Archive has no keeper yet |
 | **Garrik Stonebrew** | Barkeep. A dwarf retired from adventuring: one eye under a leather patch, a limp, a braided black beard going grey. Jovial, a teller of stories that grow with each telling, protective of young adventurers. *"A good story is like a fine ale."* | Not yet: the guild has no tavern room |
 | **Nia Willow** | The guild's cook, a human woman in her forties: curly brown hair under a scarf, motherly and firm about her kitchen. *"You can't fight on an empty stomach."* | Not yet |
@@ -111,18 +111,18 @@ The town's named people. The game's townsfolk were written before these, so seve
 | --- | --- | --- |
 | **Captain Loric Thorne** | Commander of the garrison: tall, grey-haired, plate armour polished and a deep blue cape with the fort's emblem. Stern, dutiful, slow to delegate. Reviews the patrols' reports on the barrier every day. *"Discipline and vigilance. That's how we hold the line."* | Not yet |
 | **Lieutenant Marek Halford** | Second in command, young and eager to prove himself | Not yet |
-| **Sergeant Alina Greaves** | Oversees training and morale | The drill sergeant (an ork in the game) |
+| **Sergeant Alina Greaves** | Oversees training and morale | *Built:* the drill sergeant in the training yard, an ork |
 | **Medic Elira Voss** | Chief healer of the infirmary, a no-nonsense elf with battlefield experience | Not yet: the fort has no infirmary room |
 
 **The market:**
 
 | Name | Who | In the game |
 | --- | --- | --- |
-| **Brynn Corlack** | The town's best smith, of the Steel & Ember Forge: a broad-shouldered dwarf woman, ash-grey braid, soot-smudged, a burn-scarred apron. Gruff, honest, a perfectionist; supplies the fort's armory. *"You want something that'll last a lifetime?"* | The tinker, a soot-covered dwarf woman, is nearly her |
+| **Brynn Corlack** | The town's best smith, of the Steel & Ember Forge: a broad-shouldered dwarf woman, ash-grey braid, soot-smudged, a burn-scarred apron. Gruff, honest, a perfectionist; supplies the fort's armory. *"You want something that'll last a lifetime?"* | *Built,* at her bench in Tinkers' Corner (the old tinker) until the forge exists |
 | **Master Jyrin** | Elf owner of Arcane Embers: tall, silver-haired, in dark robes with arcane symbols; speaks in riddles, scorns the ignorant. Catalogues relics from the Wastes and hires adventurers to recover more. *"Every trinket has a story. The question is whether it's one worth telling."* | The magister, an elf scholar in the guild, is the nearest; Jyrin is a shopkeeper and a source of contracts |
-| **Narina Greenthorn** | Herbalist and healer, half-elf: silver-streaked chestnut braid, herb-stained hands, a moss-green apron and an oak-leaf pendant. Sells potions, bandages, remedies, antivenoms and salves; lectures the reckless. *"Nature provides what we need; we just have to know where to look."* **Her secret:** she's studying how **vitae corruption** changes plants, which leads to corrupted flora and ways to cleanse it | The herbalist, who sells and teaches the same things |
-| **Harwin Colm** | A jovial farmer selling produce, and advice on which wild plants are safe to eat | The provisioner is the nearest |
-| **Talla Mirk** | A gruff trader in rare and dangerous goods, often come by questionably: the market's shady side | The hooded figure in the back alley is the nearest; the black-market vitae dealer |
+| **Narina Greenthorn** | Herbalist and healer, half-elf: silver-streaked chestnut braid, herb-stained hands, a moss-green apron and an oak-leaf pendant. Sells potions, bandages, remedies, antivenoms and salves; lectures the reckless. *"Nature provides what we need; we just have to know where to look."* **Her secret:** she's studying how **vitae corruption** changes plants, which leads to corrupted flora and ways to cleanse it | *Built:* the herbalist, who sells and teaches the same things; her secret is a hint in her description |
+| **Harwin Colm** | A jovial farmer selling produce, and advice on which wild plants are safe to eat | *Built:* the provisioner in the Vendor Stalls |
+| **Talla Mirk** | A gruff trader in rare and dangerous goods, often come by questionably: the market's shady side | *Built:* the hooded figure in the back alley, named in her description and answering to her name; the black-market vitae dealer to come |
 
 ## The peoples
 
@@ -136,7 +136,7 @@ Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): d
 - **Breaches are world events,** the [rats' breakout](world.md#world-events) turned around: a boss breaks *in*, and its underlings follow. A breach opens somewhere along the barrier (in the passes, mostly), a powerful creature arrives, lesser ones spawn from the wound for as long as it stays open, and corruption spreads around it (rift-touched mutations, tainted plants) while they live. The wound seals on a timer; the creatures that came through stay until they're killed. Killing the boss is the guild's urgent contract, and the Fort's.
 - **The barrier is a slow clock.** The town's fears (Kaelyn's, Marin's, Captain Thorne's) are all the same fear, but it's measured in generations: Riftwatch won't fall in a character's lifetime unless the world's story says so. What players feel is the weather of it, through world events: anomalies on patrol, breaches now and then. Whether it ever closes in, or the Agryn or some new power holds it, is the world's long story, for GMs to move on purpose, never a timer running down by itself.
 - **Corruption reaches inside:** the Rift-Scar in the Darkwood, Narina's corrupted plants, rift-touched beasts in the forest and the undercity: signs, perhaps, that the barrier is weakening.
-- **NPCs with names:** the townsfolk can take the names and descriptions above, and new ones (the guildmaster, the captain, the barkeep, the cook, Jyrin's shop, Brynn's forge) fill the town out ([#12](https://github.com/Foxworks-Studios/riftward/issues/12)).
+- **NPCs with names:** six townsfolk have the names above; new ones (the guildmaster, the captain, the barkeep, the cook, Jyrin's shop, Brynn's forge) fill the town out ([#12](https://github.com/Foxworks-Studios/riftward/issues/12)).
 - **Enchanting and rune magic** are crafts and magic for later: turning crystals into lasting item conditions (`Imbue` and item conditions are most of the machinery), and a forbidden tradition for villains, maybe for players.
 
 ## Open questions

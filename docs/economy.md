@@ -29,7 +29,7 @@ A shopkeeper is a mob whose template has a `shop`:
 
 ```ron
 "tinker": (
-    name: "the tinker",
+    name: "Brynn Corlack",
     ...
     shop: (
         sells: ["knife", "hatchet", "lockpicks"],   // item templates, `item` or `zone:item`
@@ -50,9 +50,9 @@ A shopkeeper is a mob whose template has a `shop`:
 
 | Shopkeeper | Where | Sells | Buys |
 | --- | --- | --- | --- |
-| The herbalist | Herbalist's Stall | Bandages, healing draughts | Herbs, potions, bandages |
-| The provisioner | Vendor Stalls | Bread, water, a waterskin, torches, packs and pouches, clothes, leather armour | Food, drink, containers, armour |
-| The tinker | Tinkers' Corner | Knives, a hatchet, a quarterstaff, a smith's hammer, lockpicks, sheaths, a buckler | Anything with a value |
+| Narina Greenthorn, the herbalist | Herbalist's Stall | Bandages, healing draughts | Herbs, potions, bandages |
+| Harwin Colm, the provisioner | Vendor Stalls | Bread, water, a waterskin, torches, packs and pouches, clothes, leather armour | Food, drink, containers, armour |
+| Brynn Corlack, the smith | Tinkers' Corner | Knives, a hatchet, a quarterstaff, a smith's hammer, lockpicks, sheaths, a buckler | Anything with a value |
 
 The herbalist's stall used to put bandages and a healing draught on the floor for free; now she sells them.
 
