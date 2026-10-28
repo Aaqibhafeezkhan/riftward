@@ -79,7 +79,7 @@ Beyond trainers, rank buys standing in town. Like everything else here, each per
 | **Guild rates** | Iron and up | A discount at guild-friendly shops, larger at higher ranks |
 | **Lodging and storage** | Bone | Rooms in the Guild Quarters at decent rates: a shared dormitory with a locking chest at Bone, private rooms higher up. See [Lodging](#lodging) |
 | **Credit** | Silver | Buy now from guild vendors, paid from the next contract's reward |
-| **Doors that open** | Rises with rank | Guards and gatekeepers wave tagged members through: the keep gatehouse for Gold, perhaps |
+| **Doors that open** | Rises with rank | Guards and gatekeepers wave tagged members through: the Fort's gate onto the road to the barrier for Silver ([The setting](setting.md#the-wastes)), the keep gatehouse for Gold, perhaps |
 
 A vendor's attitude is data on the mob, in the same condition language:
 
@@ -202,7 +202,7 @@ These pair with [puppeting](architecture.md#game-masters-and-puppeting): a GM ca
 
 ## Open questions
 
-- [ ] **Rank names and thresholds:** the metals are *The Agryn's Legacy*'s own (the Silver Hearth Guildhall's quest board is divided Bone to Platinum: [The setting](setting.md#places)); still open: are there ranks above Platinum (Mithril, Adamant) reserved for legendary deeds, and does rank decide how far into the Wastes the Fort lets you go?
+- [ ] **Rank names and thresholds:** the metals are *The Agryn's Legacy*'s own (the Silver Hearth Guildhall's quest board is divided Bone to Platinum: [The setting](setting.md#places)); the Fort lets Silver members and up onto the road to the barrier ([The setting](setting.md#the-wastes), 2026-10-27); still open: are there ranks above Platinum (Mithril, Adamant) reserved for legendary deeds, and do higher ranks open deeper parts of the Wastes?
 - [ ] **Is the Guild Archive members-only?** It holds the public Hermetic Study path to Awakening ([Magic](magic.md#which-paths-are-known)). Members-only would make the public path to magic "join the guild": free and fitting, but a choice to make deliberately.
 - [ ] **Do contracts pay coin at all,** or only merit and items, until there's an economy to balance against?
 - [ ] **Theft in the Guild Quarters:** what does the guild actually do to a member caught breaking into another's chest: fines, lost merit, demotion despite "rank never drops", expulsion?
