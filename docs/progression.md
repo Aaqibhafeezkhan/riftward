@@ -70,7 +70,7 @@ Character level is separate from skill levels: skills grow by use, and the chara
 - **Experience** comes from:
   - **Victories**, worth the risk you overcame: 100 × the chance you'd have lost, from how outmatched you were (see [Tough fights](#tough-fights)). An even fight gives about 50; a foe twice your match about 89. **A fight you'd have lost less than one time in ten gives nothing:** a foe under about half your strength teaches you nothing, so you outgrow easy prey, and a rat, to a veteran, is worth nothing. Everyone fighting the foe when it dies earns it.
   - **Discoveries:** 50 for discovering a skill through use, 100 for Awakening.
-  - **Quests,** once they exist: the main source for guild contracts.
+  - **Not quests.** Contracts and quests pay coin, items and guild merit, never experience (2026-10-27): the experience in a contract is already in the fighting it sends you to do, so a quest can't become the efficient way to level.
 - **Every level costs the same: 1,000 experience,** about 20 even fights. What slows a character down isn't the price of a level but the fights it takes: as they grow stronger, the same foes are worth less and then nothing, so levelling means seeking harder challenges, and how far a character can climb is set by the hardest the world offers (2026-10-26).
 - **The numbers are data,** in `assets/progression.ron`: starting Karma, Karma and experience per level, victory experience and the least risk worth any, and discovery and Awakening experience. It's read when the server starts, so a change needs a restart, not a code change; a file that doesn't parse stops the server.
 - **Each level grants 5 Karma** (see [Karma](attributes.md#karma)). It doesn't raise health or stamina; those come from attributes and skills.
@@ -83,7 +83,7 @@ A fight against the odds teaches more. Each combat round works out how far each 
 - **Chances multiply by the odds,** from no change at even odds or better up to **double** at 2 or more, for every gain roll and every [discovery](skills.md#discovery) made during the fight, passive skills like Dodge included. Luck applies on top, as on every roll.
 - **Cooldowns still hold,** so a hard fight speeds learning toward the cooldown, never past it.
 - **Mobs aren't counted;** they don't learn.
-- **Groups, once they exist,** should compare sides rather than pairs: five players against one ogre isn't a tough fight even if the ogre outclasses each of them. Likely the combined strength of each side, by the same ratio rule. To design with grouping.
+- **Groups compare sides rather than pairs:** five players against one ogre isn't a tough fight even if the ogre outclasses each of them. The combined strength of each side, by the same ratio rule, decides both the odds for skill gains and each member's victory experience ([Groups](groups.md#what-a-group-shares), designed).
 
 ## Implementation notes
 

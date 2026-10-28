@@ -13,7 +13,7 @@ Quests are data, written by builders and GMs, and tracked per character. Most of
 | Required | Always | Never: joining is optional |
 | Unlocks | Abilities | Trainers, harder contracts, guild rooms, vendors and other [perks](#guild-perks), a title |
 
-- **Quests never grant skill levels or Karma.** Power comes from use and Karma comes from play, so a quest can't become the efficient way to level, and the player who never takes one isn't behind. Quests pay in coin, items, flags, titles and guild merit.
+- **Quests never grant experience, skill levels or Karma** (2026-10-27). Power comes from use, and experience from the fights a contract sends you into, which pay the same whether or not you took the contract; so a quest can't become the efficient way to level, and the player who never takes one isn't behind. Quests pay in coin, items, flags, titles and guild merit.
 - **Killing monsters on your own earns no merit,** even the very monster a contract asks for. The guild rewards work it handed out.
 
 ## Guild ranks
@@ -36,6 +36,7 @@ The names and numbers are data in the guild's file, to tune. Letter grades (F to
 - **Promotion needs a trial from Silver up.** Reaching the merit threshold makes a character *eligible*; the clerk then offers a promotion contract (a trial, or a test set by a senior member). Bone to Iron are automatic. That keeps the higher ranks meaningful and gives GMs a natural place to run an event.
 - **Rank never drops.** Merit can fall (abandoning or failing a contract costs some), but rank stays at the highest reached. A setback stings without undoing a character's history.
 - **Contracts are offered up to one rank above your own,** the genre's usual rule: a Copper member can take Iron work, at Iron risk.
+- **Expulsion, with paid reinstatement** (decided 2026-10-27). The guild can throw a member out: for theft in the Guild Quarters, for being caught smuggling on the trails past the Fort ([The setting](setting.md#the-wastes)), or by a GM's hand. An expelled character loses everything membership gives (contracts, perks, lodging, the Fort's gate) and their tag is taken. But **rank never drops:** the guild remembers what they were, and they can buy their way back in at the clerk, for a fee scaled to their rank (and to what they did), returning at the rank they had. `who` and `score` show them as expelled until then.
 
 ### The rank tag
 
@@ -172,11 +173,26 @@ Every goal listens to the shared [game events](architecture.md#game-events), the
 
 ```
 contracts              -> the board here, at your rank and one above
-accept 2               -> take the second contract
+accept 2               -> take the second contract, for its token
+report                 -> turn in a finished contract at the clerk, with its token
 quests                 -> your quests and their current stage
 abandon rats           -> give one up (contracts cost some merit)
 join guild             -> become a Bone member, in the Guildhall
+reinstate              -> buy your way back in after expulsion, at the clerk
 ```
+
+### Tokens and reporting
+
+The guild's way, from [the setting](setting.md#places): a contract is **claimed at the counter for a token**, and **paid when the token comes back with proof**.
+
+- **`accept`** hands over a contract token, an item naming the contract, bound to whoever took it. Losing it means asking the clerk for another, for a fee.
+- **`report`** at the clerk, with the token, turns the contract in: if every stage is done, the clerk takes the token (and any proof the contract asks to be handed over) and pays out.
+- **Proof is what the work leaves:** kills are counted as they happen (`Count(Killed(...))`), and things to bring back are items handed over on reporting (`GaveItem`), such as rat tails or a slime's heart, which is where [harvesting](darkwood.md#harvest-whats-cut-loot-whats-left) comes in.
+- **This replaces `TalkTo`** for guild contracts until there's dialogue: reporting is the conversation.
+
+### Group contracts
+
+Accepting a contract while in a [group](groups.md) offers it to every member in the room whose rank allows it, each of whom can take it or not. For those who hold it, progress is shared: a rat any of them kills counts for all, and a find any of them brings back fills the order. When it's reported, each earns the contract's full merit, and its coin is split evenly among them. Nothing is shared with a member who didn't take the contract.
 
 ### Rewards
 
@@ -197,6 +213,7 @@ GMs and admins make and run quests from inside the game, like builders do rooms:
 | `quest advance <player> <id>` | Push a player past a stage, for `Manual` goals or a broken one |
 | `quest reward <player> <id>` | Pay out the rewards by hand |
 | `guild promote <player>` / `guild merit <player> <n>` | Run a promotion trial live, or correct merit |
+| `guild expel <player>` / `guild reinstate <player>` | Throw a member out, or take them back without the fee |
 
 These pair with [puppeting](architecture.md#game-masters-and-puppeting): a GM can play the contract clerk, hand out a one-off contract with `quest grant`, then puppet the monster at the end of it.
 
@@ -205,5 +222,5 @@ These pair with [puppeting](architecture.md#game-masters-and-puppeting): a GM ca
 - [ ] **Rank names and thresholds:** the metals are the setting's own (the Silver Hearth Guildhall's quest board is divided Bone to Platinum: [The setting](setting.md#places)); the Fort lets Silver members and up onto the road to the barrier ([The setting](setting.md#the-wastes), 2026-10-27); still open: are there ranks above Platinum (Mithril, Adamant) reserved for legendary deeds, and do higher ranks open deeper parts of the Wastes?
 - [ ] **Is the Guild Archive members-only?** It holds the public Hermetic Study path to Awakening ([Magic](magic.md#which-paths-are-known)). Members-only would make the public path to magic "join the guild": free and fitting, but a choice to make deliberately.
 - [ ] **Do contracts pay coin at all,** or only merit and items, until there's an economy to balance against?
-- [ ] **Theft in the Guild Quarters:** what does the guild actually do to a member caught breaking into another's chest: fines, lost merit, demotion despite "rank never drops", expulsion?
-- [ ] **Group contracts:** does every member of a group get the merit, or is it shared?
+- [ ] **Theft in the Guild Quarters:** expulsion with paid reinstatement is the guild's answer (2026-10-27); still open: whether a first offence is only a fine or lost merit, and how much reinstatement costs.
+- [x] **Group contracts:** every member who holds the contract earns its full merit, and the coin is split (2026-10-27): see [Group contracts](#group-contracts).

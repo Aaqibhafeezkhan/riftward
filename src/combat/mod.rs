@@ -3733,6 +3733,44 @@ mod tests {
     }
 
     #[test]
+    fn a_pack_spreads_across_everyone_it_can_attack() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, None);
+        let key = crate::world::SpawnKey::parse("test:rats", "");
+        let def = crate::world::ron_options()
+            .from_str("(mob: \"mob\", room: \"r\", every: Minutes(1), refill: Keep(8), pack: 2)")
+            .unwrap();
+        world.insert_resource(Spawns(HashMap::from([(key.clone(), def)])));
+        let rats: Vec<Entity> = (0..8)
+            .map(|_| {
+                let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+                world
+                    .entity_mut(rat)
+                    .insert((Aggressive, SpawnedBy(key.clone())));
+                rat
+            })
+            .collect();
+        let players: Vec<Entity> = ["Ada", "Bob", "Wren", "Tam"]
+            .iter()
+            .map(|name| {
+                let player = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+                as_player(&mut world, player);
+                world.entity_mut(player).insert(Keywords::from_name(name));
+                player
+            })
+            .collect();
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        for player in players {
+            let on = rats
+                .iter()
+                .filter(|rat| world.get::<Fighting>(**rat).map(|f| f.0) == Some(player))
+                .count();
+            assert_eq!(on, 2, "two rats on each of the four");
+        }
+    }
+
+    #[test]
     fn aggressive_mobs_without_allies_still_go_only_for_players() {
         let (mut world, room) = world();
         aggressive_template(&mut world, None);

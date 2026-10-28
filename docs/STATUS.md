@@ -36,6 +36,8 @@ The [README](README.md) has the fuller list, and each design doc says what of it
 
 **Open to contributors: [bots](architecture.md#bots)** ([#14](https://github.com/Foxworks-Studios/riftward/issues/14)): GMCP, a bot role that can only puppet, and a bot that gives the herbalist a voice, in four issues. Several mobs per bot, leashed movement and shops within bounds come after.
 
+**Playing together and the guild** (planned 2026-10-27), in this order: [groups](groups.md) (following, ROM-style groups, shared experience and coin, assist, taunting); guild membership (`join guild`, rank tags, `GuildRank` conditions, the Fort's Silver gate, expulsion with paid reinstatement); [harvesting](darkwood.md#harvest-whats-cut-loot-whats-left), which makes the proof contracts ask for; then the [quest engine and the board](quests.md) (contracts as data, goals from game events, claimed for a token at the counter and reported with proof, shared within a group). Contracts pay coin and merit, never experience.
+
 Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order). Money, shops, Haggling and Appraisal are built: see [Money and shops](economy.md).
 
 ## Small things noticed and not yet done

@@ -27,13 +27,14 @@ Each document below covers one area and can be read on its own. This page is the
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Awakening and the first spells built |
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
+| [Groups](groups.md) | Following, groups formed the ROM way, shared experience and coin, assisting, taunting a pack | Designed |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Designed |
 | [Effects, conditions and scripting](effects.md) | How designers add skills, spells, conditions and items without code: conditions as data, one effect vocabulary, abilities, formulas, triggers, and Rhai scripting | Conditions, effects, damage types, resisting, item conditions, formulas and reactions in a fight and out of one built (steps 1 to 4); active skills through `use` next |
 | [Money and shops](economy.md) | Copper, silver and gold in a purse, coins from kills, shops that sell, buy and resell, what lessons cost, Haggling and Appraisal | Built |
 | [The setting](setting.md) | The world: the Agryn and the barrier, the Middle Kingdoms, the Wastes, vitae and rune magic, the Citadel, and Riftwatch's people and places | The world as it stands |
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
 | [The Darkwood](darkwood.md) | The forest beyond the North Gate: its reaches, creatures and food chain, flora, hazards, and what it needs in code | Design; the road and the Hermit's Clearing built |
-| [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds as past lives, conditions | Built |
+| [Races, backgrounds and creation](characters.md) | Character creation, the ten races and their skills, backgrounds as past lives, conditions | Built |
 | [Hosting](hosting.md) | Running Riftward for others to play: from your own machine through playit.gg, or on a small server with systemd; backups and updates | Guide |
 
 ## What exists today

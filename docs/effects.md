@@ -104,7 +104,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 
 | Modifier | Does |
 | --- | --- |
-| `Taunted(by)` | Must attack whoever taunted it |
+| `Taunted(by)` | Must attack whoever taunted it, whatever its pack's limit ([Groups](groups.md#taunting)) |
 | `Feared` | Tries to flee |
 | `Charmed(by)` | Won't attack the charmer, and fights for them |
 | `Confused` | Picks targets at random |

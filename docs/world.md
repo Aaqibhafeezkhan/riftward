@@ -363,7 +363,7 @@ flowchart LR
 
 ## Packs
 
-A spawn can set `pack: n`: the most of its mobs that will fight one player at once. The rest wait their turn, and the next steps in when one dies. Sewer rats have `pack: 3`, so a crowded Warren is a stream of fights rather than a swarm; wolves might hunt with `pack: 3`.
+A spawn can set `pack: n`: the most of its mobs that will fight **any one target** at once. The limit is per target, not in total: each mob goes for the next one it has noticed who has fewer than `n` of its spawn on them, so eight rats with `pack: 2` attack four people two apiece. Only when every target has its share do the rest wait their turn, and the next steps in when one dies. Sewer rats have `pack: 3`, so a crowded Warren is a stream of fights for one adventurer rather than a swarm, and a group walking in meets three rats each; wolves might hunt with `pack: 3`.
 
 ## Gated spawns
 
