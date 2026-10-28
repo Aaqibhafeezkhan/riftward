@@ -25,14 +25,14 @@ Races and backgrounds are data, and a builder may remove one that characters alr
 
 ## Races
 
-Ten races, in `assets/races.ron`: Earthdawn's eight, three of them renamed for the setting (the t'skrang are **lizardmen**, the obsidimen **stoneborn**, the windlings **sprites**), and two of the setting's own ([The setting](setting.md#the-peoples)), **kitsune** and **halflings** (2026-10-27). Each shifts the base attributes, Earthdawn-style, and grants racial skills and traits (what every one of the race simply is, like an elf's Fey Mind: see [Traits](effects.md#traits)). Every race's shifts net **+3** points; humans get no shifts and **12 Karma** to spend as they like instead, and **Versatility**, which makes their skills grow faster. A test checks every race keeps to this.
+Ten races, in `assets/races.ron` ([The setting](setting.md#the-peoples)). Each shifts the base attributes and grants racial skills and traits (what every one of the race simply is, like an elf's Fey Mind: see [Traits](effects.md#traits)). Every race's shifts net **+3** points; humans get no shifts and **12 Karma** to spend as they like instead, and **Versatility**, which makes their skills grow faster. A test checks every race keeps to this.
 
 Since a point costs the rating it reaches, shifts aren't all worth the same: a third point of Agility (5 to 6) is worth 6 Karma, while a lost point low down (3 to 2) saves only 3. At real prices the races' shifts are worth:
 
 | Race | Shifts worth |
 | --- | --- |
 | Halfling | 12 Karma (a point of Luck is cheap: 1 to 2 costs 2) |
-| Dwarf, Elf, Kitsune, Lizardman, Ork | 14 Karma |
+| Dwarf, Elf, Kitsune, Lizardfolk, Ork | 14 Karma |
 | Troll, Sprite | 18 Karma |
 | Stoneborn | 22 Karma |
 | Human | none: 12 Karma instead, and Versatility |
@@ -48,7 +48,7 @@ Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to b
 | Halfling | Small, nimble and famously lucky | +2 Agility, +1 Charisma, +1 Luck, −1 Strength | Agility 5, Luck 2, Strength 2 | **Small and Quick** (passive): hard to pin down |
 | Human | Adaptable, found everywhere | +12 Karma | All 3, 32 Karma | **Versatility** (passive): practice builds faster |
 | Kitsune | Fox-folk of fey blood, clever and hard to fool | +2 Charisma, +1 Agility, +1 Intuition, −1 Strength | Charisma 5, Strength 2 | **Fox Form** (active): become a fox for a while, quick and stealthy but unable to speak or cast; **Foxfire** (active): wisps of flame, more as they grow; **Fey Mind** (the elves' trait, built: resists sleep and charm) |
-| Lizardman | Flamboyant lizard-folk of the rivers | +2 Charisma, +1 Agility, +1 Reaction, −1 Willpower | Charisma 5 | **Tail Combat** (active); **Swimming** (passive) |
+| Lizardfolk | Flamboyant reptilian folk of the rivers | +2 Charisma, +1 Agility, +1 Reaction, −1 Willpower | Charisma 5 | **Tail Combat** (active); **Swimming** (passive) |
 | Ork | Fierce, hardy, quick to anger | +2 Strength, +1 Body, +1 Reaction, −1 Charisma | Strength 5, Charisma 2 | **Low-Light Vision** (passive); **Gahad** (active): a burst of rage |
 | Sprite | Tiny, winged, curious | +3 Agility, +1 Reaction, +1 Intuition, −2 Strength | Agility 6, Strength 1 | **Flight** (passive); **Astral Sight** (active) |
 | Stoneborn | Living stone, huge, patient and slow | +3 Body, +3 Strength, −1 Agility, −2 Reaction | Body 6, Strength 6, Reaction 1 | **Stone Skin** (passive): natural armour |
@@ -86,7 +86,7 @@ They're in `assets/backgrounds.ron`, in menu order. Any background can be gated 
 | Herbalist's Apprentice | Intuition 4 | Herbalism, First Aid | A knife, two bandages |
 | Minstrel | Charisma 4 | Performance, Lore | A knife |
 | Scholar | Logic 4 | Lore, Scribing | A quarterstaff |
-| River Pilot | Lizardman | Sailing, Swimming | A knife |
+| River Pilot | Lizardfolk | Sailing, Swimming | A knife |
 
 ```ron
 (
@@ -102,7 +102,7 @@ They're in `assets/backgrounds.ron`, in menu order. Any background can be gated 
 - **The kit is the tools of that life,** on top of everyone's plain clothes and belt pouch. A weapon in the kit is usable untrained, with Brawling's aim and the weapon's damage (see [Combat](architecture.md#combat)), until its owner takes a lesson. The kit is given once, when a character is first made: worn if it's worn, in hand while hands are free, otherwise in the belt pouch.
 - **Gates follow what a background implies,** and must be affordable from starting Karma. A test checks every background is open to at least one race spending its starting Karma on the gate.
 - **Two backgrounds have no gate,** Street Urchin and Farmhand, so every build has somewhere to start.
-- **Race gates allow cultural backgrounds,** such as the lizardman River Pilot.
+- **Race gates allow cultural backgrounds,** such as the lizardfolk River Pilot.
 - **No background is magical.** Everyone starts mundane; Magic bought at creation is latent talent, and a character is Awakened in play by finding a tradition's teacher (see [Magic](magic.md#how-to-awaken)).
 
 ## Conditions
@@ -115,7 +115,7 @@ The shared language for "who qualifies" (`src/conditions.rs`). Backgrounds use i
 | `Race(id)` | The character is of that race |
 | `All([...])`, `Any([...])`, `Not(...)` | Combinations |
 
-Players read them as "Magic 1 and Willpower 4", or "Lizardman".
+Players read them as "Magic 1 and Willpower 4", or "Lizardfolk".
 
 ## Open questions
 

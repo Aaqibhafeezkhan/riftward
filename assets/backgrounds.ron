@@ -90,7 +90,7 @@
         id: "river_pilot",
         name: "River Pilot",
         summary: "You steered boats down the great rivers, as your clan always has.",
-        requires: Race("lizardman"),
+        requires: Race("lizardfolk"),
         skills: ["sailing:basics", "athletics:swimming"],
         items: ["riftwatch:knife"],
     ),

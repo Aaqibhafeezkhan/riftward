@@ -41,9 +41,9 @@
         traits: ["fey_mind"],
     ),
     (
-        id: "lizardman",
-        name: "Lizardman",
-        summary: "Flamboyant lizard-folk of the rivers.",
+        id: "lizardfolk",
+        name: "Lizardfolk",
+        summary: "Flamboyant reptilian folk of the rivers.",
         attributes: {Charisma: 2, Agility: 1, Reaction: 1, Willpower: -1},
         skills: ["racial:tail_combat", "racial:swimming"],
     ),

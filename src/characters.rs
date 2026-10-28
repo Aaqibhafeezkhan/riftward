@@ -1,7 +1,7 @@
 //! Races and backgrounds: the choices that decide where a new character starts.
 //!
 //! Both are data, in `assets/races.ron` and `assets/backgrounds.ron`, read at startup. A race shifts
-//! the base attributes, Earthdawn-style, and grants racial skills; humans get extra Karma instead
+//! the base attributes and grants racial skills; humans get extra Karma instead
 //! of attribute shifts. A background is what a character did before they were an adventurer: a
 //! little practice in everyday skills, and the tools of that life, but never fighting or magic.
 //! It can be gated by a [`Condition`]. Skills not yet written as data are granted once they are.
@@ -469,12 +469,12 @@ mod tests {
             Some(races.0[0].id.as_str())
         );
         assert_eq!(
-            races.choose("lizardman").map(|r| r.id.as_str()),
-            Some("lizardman")
+            races.choose("lizardfolk").map(|r| r.id.as_str()),
+            Some("lizardfolk")
         );
         assert_eq!(
             races.choose("Liz").map(|r| r.id.as_str()),
-            Some("lizardman")
+            Some("lizardfolk")
         );
         assert_eq!(races.choose("tro").map(|r| r.id.as_str()), Some("troll"));
         assert_eq!(races.choose("99"), None);

@@ -126,7 +126,7 @@ The town's named people. The game's townsfolk were written before these, so seve
 
 ## The peoples
 
-Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): dwarves, elves, humans, **lizardmen**, orks, **stoneborn**, **sprites** and trolls, and **kitsune** (fox-folk tied to the fey, who can take fox form and call foxfire, growing tails as they grow in power; charm and sleep find little hold on them, so they share the elves' Fey Mind) and **halflings** (small, nimble and lucky). The **Owlin** (owl-folk: nocturnal, feathered and winged, sharp of sight and hearing, silent fliers) aren't among them for now, and aasimar and half-elves appear as NPCs.
+Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): dwarves, elves, humans, **lizardfolk**, orks, **stoneborn**, **sprites** and trolls, and **kitsune** (fox-folk tied to the fey, who can take fox form and call foxfire, growing tails as they grow in power; charm and sleep find little hold on them, so they share the elves' Fey Mind) and **halflings** (small, nimble and lucky). The **Owlin** (owl-folk: nocturnal, feathered and winged, sharp of sight and hearing, silent fliers) aren't among them for now, and aasimar and half-elves appear as NPCs.
 
 ## What it means for the game
 
@@ -150,6 +150,6 @@ Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): d
 - [ ] **Riftwatch's ruler:** a lord in the keep, as the game has, or no lord at all, with the Fort's captain and the guildmaster running the town between them?
 - [ ] **The geography around Riftwatch:** north of town, wilderness (the Darkwood) and then mountains, with the barrier running through the mountains, crossed by their passes (decided 2026-10-27). The map places it on the inland sea's north-eastern shore. Still to place: the river's course to the shore.
 - [ ] **Reading the map:** which kingdom holds which lands (the west and its ridge, the island with Blackhaven, the east shore?), and where the Citadel stands; what *Blight wanes* names (the Wastes' fringe, where the corruption thins?); where the channel to the ocean runs, off the map's northern edge, and so how near the barrier comes to it; and what the Temple of Raiana, the Tower of the Vampire One and the Forgotten Dungeon were.
-- [x] **The peoples:** ten races, Earthdawn's eight with three renamed, plus kitsune and halflings (2026-10-27). Still open: Owlin, and whether aasimar and half-elves become playable.
+- [x] **The peoples:** ten races, among them kitsune and halflings (2026-10-27). Still open: Owlin, and whether aasimar and half-elves become playable.
 - [ ] **The old city beneath:** older than the barrier? Its script readable by the Archivist?
 - [ ] **Vitae as a pool:** a slow-recovering reserve for pushing past limits ([Attributes](attributes.md#open-questions)).

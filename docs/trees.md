@@ -109,7 +109,7 @@ Each tradition is a full tree in the same shape as the others, entered through i
 
 ### Racial
 
-A `racial` tree holding each race's abilities, each requiring its race (the tree exists, empty since the elves' **Fey Mind** became a [trait](effects.md#traits) on 2026-10-27; what a race simply *is*, rather than does and improves at, is a trait): Heat Sight, Low-Light Vision, Versatility, Stone Skin, Gahad, Tail Combat, Swimming (lizardmen), Flight, Astral Sight, Fox Form and Foxfire (kitsune), Small and Quick (halflings). Most need light and darkness first.
+A `racial` tree holding each race's abilities, each requiring its race (the tree exists, empty since the elves' **Fey Mind** became a [trait](effects.md#traits) on 2026-10-27; what a race simply *is*, rather than does and improves at, is a trait): Heat Sight, Low-Light Vision, Versatility, Stone Skin, Gahad, Tail Combat, Swimming (lizardfolk), Flight, Astral Sight, Fox Form and Foxfire (kitsune), Small and Quick (halflings). Most need light and darkness first.
 
 ## What the engine needs
 

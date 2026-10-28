@@ -42,7 +42,7 @@ impl Condition {
         }
     }
 
-    /// For players: "Body 4 and Logic 4", "Lizardman". `race_name` turns a race id into its name.
+    /// For players: "Body 4 and Logic 4", "Lizardfolk". `race_name` turns a race id into its name.
     pub fn describe(&self, race_name: &dyn Fn(&str) -> String) -> String {
         let join = |list: &[Condition], word: &str| {
             let parts: Vec<String> = list.iter().map(|c| c.describe(race_name)).collect();
@@ -88,16 +88,16 @@ mod tests {
             skills: None,
         };
         assert!(acolyte.met(&facts));
-        assert!(!Condition::Race("lizardman".into()).met(&facts));
+        assert!(!Condition::Race("lizardfolk".into()).met(&facts));
 
         let name = |id: &str| match id {
-            "lizardman" => "Lizardman".to_string(),
+            "lizardfolk" => "Lizardfolk".to_string(),
             other => other.to_string(),
         };
         assert_eq!(acolyte.describe(&name), "Magic 1 and Willpower 4");
         assert_eq!(
-            Condition::Race("lizardman".into()).describe(&name),
-            "Lizardman"
+            Condition::Race("lizardfolk".into()).describe(&name),
+            "Lizardfolk"
         );
     }
 }
