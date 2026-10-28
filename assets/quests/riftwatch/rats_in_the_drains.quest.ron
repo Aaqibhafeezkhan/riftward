@@ -1,0 +1,17 @@
+// Rats in the Drains: the guild's first contract for new members.
+(
+    name: "Rats in the Drains",
+    summary: "The guild wants the sewer rats thinned before they reach the streets.",
+    description: "The sewers under the market are crawling with rats, and the stallholders want them gone. Kill twenty of them and bring ten of their tails back to Marin Harrow as proof.",
+    posted: Board("contract_hall"),
+    contract: Some((rank: "bone", merit: 10)),
+    availability: Claimed(for: Days(1)),
+    repeat: Every(Days(1)),
+    stages: [
+        (
+            text: "Kill twenty sewer rats and bring back ten of their tails.",
+            objectives: [Kill(Mob("sewers:sewer_rat"), 20), Bring(Item("sewers:rat_tail"), 10)],
+        ),
+    ],
+    rewards: [Coin(200)],
+)

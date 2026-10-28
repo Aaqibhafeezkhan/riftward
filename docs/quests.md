@@ -1,6 +1,6 @@
 # Quests and the Adventurers' Guild
 
-[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quests, contracts and the board, perks and lodging are designed, not built.
+[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked (2026-10-28: `src/quests.rs`, `assets/quests/`); taking quests, the board, perks and lodging are designed, not built.
 
 Quests are data, written by builders and GMs, and tracked per character. Most of them come from the **Adventurers' Guild**, whose contracts raise a **guild rank** that is entirely separate from a character's power. A character can ignore quests completely, hunt monsters from the first day and grow just as strong; what they give up is the guild's trust, and the doors it opens.
 
@@ -133,7 +133,7 @@ One engine runs every quest: a guild contract is a quest the guild posts, with a
 
 ### Quest files
 
-**Each quest is its own RON file,** in a folder named for the zone it belongs to: `assets/quests/riftwatch/rats_in_the_drains.quest.ron` is the quest `riftwatch:rats_in_the_drains`, named the way rooms and mobs are. Bare ids inside it (`sewer_rat`, `contract_hall`) are the zone's own; anything else is `zone:id`. Files are hot-reloaded, and each is checked when it loads, as skills and spells are: every mob, item, room and condition it names must exist, and its text must be there.
+**Each quest is its own RON file,** in a folder named for the zone it belongs to: `assets/quests/riftwatch/rats_in_the_drains.quest.ron` is the quest `riftwatch:rats_in_the_drains`, named the way rooms and mobs are. Bare ids inside it (`contract_hall`) are the zone's own; anything else is `zone:id` (`sewers:sewer_rat`). Files are hot-reloaded, and each is checked when it loads, as skills and spells are: its text must be there, and a contract's rank must be a real one; a file that fails keeps the version before it. That every mob, item and room it names exists is checked by the tests, against the zone files (*built*: at load, the zones may not be in yet).
 
 ```ron
 // assets/quests/riftwatch/rats_in_the_drains.quest.ron
@@ -158,7 +158,7 @@ One engine runs every quest: a guild contract is a quest the guild posts, with a
     stages: [
         (
             text: "Kill twenty sewer rats and bring back ten of their tails.",
-            objectives: [Kill("sewer_rat", 20), Bring(Item("sewers:rat_tail"), 10)],
+            objectives: [Kill(Mob("sewers:sewer_rat"), 20), Bring(Item("sewers:rat_tail"), 10)],
         ),
     ],
     // Who it's reported to: the clerk, for the guild's contracts, unless it says otherwise.
@@ -202,7 +202,7 @@ This replaces the earlier plan of a physical token (2026-10-28): the record is t
 
 | Objective | Done when | Counted |
 | --- | --- | --- |
-| `Kill(mob, n)` | `n` of that mob template, or of mobs with that tag (`Kill(Tag("vermin"), 20)`), are killed by you or your group | As they die |
+| `Kill(mob, n)` | `n` of that mob template, or of mobs with that tag (`Kill(Mob("sewers:sewer_rat"), 20)`, `Kill(Tag("vermin"), 20)`), are killed by you or your group | As they die |
 | `Bring(item, n)` | You have `n` of that item, or of items with that tag (`Bring(Item("sewers:rat_tail"), 10)`, `Bring(Tag("herb"), 5)`, matched as `HasItem` matches), when you report: they're handed over | When reported |
 | `Obtain(item, n)` | You pick up, or are given, `n` of that item or tag; unlike `Bring`, nothing is handed over (the letter you're to carry; a clue) | As it happens |
 | `Reach(room)` | You enter the room | As it happens |
@@ -210,7 +210,7 @@ This replaces the earlier plan of a physical token (2026-10-28): the record is t
 | `Meet(condition)` | A condition holds: a flag, a skill level, a world flag | When reported |
 | `Manual` | A GM says so (`quest advance`) | By hand |
 
-- **Objectives are shorthand for [rules](facts.md#rules).** `Kill("sewer_rat", 20)` is a rule (on `Killed("sewer_rat")`, `Add("quest.kill.sewer_rat", 1)`) and a condition (that fact at 20 or more); the stage ends when all its objectives' conditions hold. Designers write objectives for the common cases, and a rule of their own for anything odd, with no engine change.
+- **Objectives are shorthand for [rules](facts.md#rules).** `Kill(Mob("sewer_rat"), 20)` is a rule (on `Killed("sewer_rat")`, `Add("quest.kill.sewer_rat", 1)`) and a condition (that fact at 20 or more); the stage ends when all its objectives' conditions hold. Designers write objectives for the common cases, and a rule of their own for anything odd, with no engine change.
 - **What counts for whom in a group** is set out in [Progress in a group](#progress-in-a-group). A stranger's deeds never count.
 - **`Bring` is the proof,** and needs nothing new: rat tails and the Rat King's tooth drop as loot today; harvested parts will count the same way once harvesting exists.
 - **Talking to someone** waits on dialogue; until then, `report` is the conversation.
@@ -429,7 +429,7 @@ In the smallest pull requests that each leave the game working, every one with i
 
 **The engine, with the first contracts**
 
-9. **Quest files:** loading `assets/quests/<zone>/*.quest.ron`, checking them, and hot reload. One file, *Rats in the Drains*. No commands yet.
+9. *Built.* **Quest files:** loading `assets/quests/<zone>/*.quest.ron`, checking them, and hot reload. One file, *Rats in the Drains*. No commands yet. The first objectives are `Kill` and `Bring`, the first reward `Coin`; claims and repeats are times in `Minutes`, `Hours` or `Days`, real time, as spawns are.
 10. **The board:** `board` and `board <n>` in the Contract Hall, read-only: what's posted, at your rank and one above.
 11. **Taking a quest:** `accept <n>` with Marin, the `character_quests` table, Marin's record (`guild record`: accepted, completed, failed), and `journal`. Open quests only; nothing counts yet.
 12. **Rules and `Kill`:** objectives as rules over `quest.` facts, `Kill` by template and tag, progress in the journal, and moving from stage to stage.

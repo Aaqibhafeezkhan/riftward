@@ -26,6 +26,7 @@ mod money;
 mod net;
 mod output;
 mod puppet;
+mod quests;
 mod requirements;
 mod shops;
 mod skills;
@@ -111,13 +112,14 @@ fn add_game(app: &mut App, path: String, address: String) {
         stealth::StealthPlugin,
         groups::GroupsPlugin,
     ))
-    // Magic, trade and the guild.
+    // Magic, trade, the guild and its quests.
     .add_plugins((
         spells::SpellsPlugin,
         shops::ShopsPlugin,
         trade::TradePlugin,
         puppet::PuppetPlugin,
         guild::GuildPlugin,
+        quests::QuestsPlugin,
     ));
 }
 
