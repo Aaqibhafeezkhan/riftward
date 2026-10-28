@@ -399,7 +399,7 @@ GMs and admins make and run quests from inside the game, like builders do rooms:
 | `quest reward <player> <id>` | Pay out the rewards by hand |
 | `quest release <id>` | Put a claimed notice back on the board, its holder's claim written off |
 | `why <player> <quest>` | Show the quest's stage, each objective and rule, each condition and whether it held, and the facts it read ([Facts](facts.md#why-did-or-didnt-it-happen)) |
-| `facts <player>` / `facts world` | List the facts set |
+| `facts <player>` / `facts world` | List the facts set: a player's own and their quests', online or not, or the world's (*built*) |
 | `guild promote <player>` / `guild merit <player> <n>` | Run a promotion trial live, or correct merit (*built*: merit raises rank through Iron by itself, and says when a trial rank is earned) |
 | `guild expel <player>` / `guild reinstate <player>` | Throw a member out, taking their tag, or take them back without the fee (*built*) |
 
@@ -419,7 +419,7 @@ In the smallest pull requests that each leave the game working, every one with i
     - *Built.* **4a. The rename:** `Condition` becomes `Requirement` (`requirements.rs`), what every `requires:` holds, so "condition" means only what's on a body, like poisoned.
     - *Built.* **4b. World events' conditions merge into it:** their `When` becomes requirements plus their events as triggers; who's tested becomes optional, since a world event has no one.
     - *Built.* **4c. New terms:** `HasItem`, `InRoom`, `InZone`, and `Has(condition)`: a status condition or trait on the character.
-5. **`facts <player>` and `facts world`,** for GMs.
+5. *Built.* **`facts <player>` and `facts world`,** for GMs: a player's facts (online or not) and each of their quests', or the world's.
 
 **Events quests listen to**
 

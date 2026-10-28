@@ -1,6 +1,6 @@
 # Facts, requirements and rules
 
-[Design summary](README.md) · Status: designed (2026-10-28); the store is built (`src/facts.rs`, the `facts` table), and world flags are kept in it. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it (requirements), and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
+[Design summary](README.md) · Status: designed (2026-10-28); the store is built (`src/facts.rs`, the `facts` table), world flags are kept in it, and GMs list facts with `facts world|<player>`. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it (requirements), and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
 
 Content feels alive when it reacts to things nobody scripted together. A quest that sets "this character sold out the guild" shouldn't need to know which other quests, mobs and doors will care. So everything the game remembers about its story goes in one place, as **facts**, and everything that reacts tests facts, without knowing who set them.
 
@@ -79,7 +79,7 @@ First, before the quest engine, in five small pull requests: the store, world fl
 
 ## Why did or didn't it happen
 
-Rule-driven content lives or dies on answering that. GMs and admins get **`why`**: `why <player> <quest>` shows the quest's stage, each objective and rule, each condition in it, and whether it held, with the facts it read; `facts <player>` and `facts world` list what's set.
+Rule-driven content lives or dies on answering that. GMs and admins get **`why`**: `why <player> <quest>` shows the quest's stage, each objective and rule, each condition in it, and whether it held, with the facts it read; `facts <player>` and `facts world` list what's set (*built*: a player's own facts and their quests', online or not).
 
 ## Open questions
 

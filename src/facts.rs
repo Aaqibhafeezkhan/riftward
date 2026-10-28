@@ -11,7 +11,9 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::db::Database;
+use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::db::{Database, Permission};
+use crate::output::{Outbox, Outgoing, deliver};
 use crate::time::{heartbeat, unix_now};
 
 pub struct FactsPlugin;
@@ -20,7 +22,14 @@ impl Plugin for FactsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Facts>()
             .add_systems(Startup, load_facts)
-            .add_systems(Update, lapse_facts.run_if(heartbeat()));
+            .add_systems(Update, lapse_facts.run_if(heartbeat()))
+            .add_command(
+                CommandSpec::new("facts", Category::Admin)
+                    .usage("facts world|<player>")
+                    .summary("list the facts the world, or a player and their quests, have set")
+                    .permission(Permission::Events),
+                facts_cmd,
+            );
     }
 }
 
@@ -84,6 +93,16 @@ pub enum Value {
 }
 
 impl Value {
+    /// How a GM sees it, with its key: a yes is just its key.
+    pub fn shown(&self, key: &str) -> String {
+        match self {
+            Value::Bool(true) => key.to_string(),
+            Value::Bool(false) => format!("{key} = false"),
+            Value::Int(n) => format!("{key} = {n}"),
+            Value::Word(w) => format!("{key} = \"{w}\""),
+        }
+    }
+
     /// False, zero or empty: what a fact never set is.
     pub fn is_unset(&self) -> bool {
         match self {
@@ -223,6 +242,78 @@ impl Facts {
     }
 }
 
+impl Facts {
+    /// A character's own facts, then each of their quests' (by quest id), sorted.
+    pub fn of_character(&self, id: i64, now: i64) -> Vec<(Owner, Vec<(&str, &Value)>)> {
+        let mut quests: Vec<&String> = self
+            .facts
+            .keys()
+            .filter_map(|(owner, _)| match owner {
+                Owner::Quest(whose, quest) if *whose == id => Some(quest),
+                _ => None,
+            })
+            .collect();
+        quests.sort();
+        quests.dedup();
+        std::iter::once(Owner::Character(id))
+            .chain(quests.into_iter().map(|q| Owner::Quest(id, q.clone())))
+            .map(|owner| {
+                let set = self.of(&owner, now);
+                (owner, set)
+            })
+            .filter(|(_, set)| !set.is_empty())
+            .collect()
+    }
+}
+
+/// One line per owner: `Char: heard_rumour, trust.marin = 2`.
+fn listed(title: &str, set: &[(&str, &Value)]) -> String {
+    let shown: Vec<String> = set.iter().map(|(key, value)| value.shown(key)).collect();
+    format!("{title}: {}", shown.join(", "))
+}
+
+/// `facts world|<player>`: a GM lists what the world remembers, or what a player (online or not)
+/// and their quests do.
+fn facts_cmd(
+    In(inv): In<Invocation>,
+    mut outbox: ResMut<Outbox>,
+    facts: Res<Facts>,
+    db: Res<Database>,
+) {
+    let now = unix_now();
+    let lines = match inv.args.split_whitespace().collect::<Vec<_>>().as_slice() {
+        ["world"] => match facts.of(&Owner::World, now) {
+            set if set.is_empty() => vec!["The world has no facts set.".to_string()],
+            set => vec![listed("world", &set)],
+        },
+        [name] => match db.character_named(name) {
+            Err(err) => {
+                error!("failed to look up the character {name}: {err}");
+                vec![format!("No one is called {name}.")]
+            }
+            Ok(None) => vec![format!("No one is called {name}.")],
+            Ok(Some((id, name))) => match facts.of_character(id, now) {
+                owners if owners.is_empty() => vec![format!("{name} has no facts set.")],
+                owners => owners
+                    .iter()
+                    .map(|(owner, set)| match owner {
+                        Owner::Quest(_, quest) => listed(&format!("quest {quest}"), set),
+                        _ => listed(&format!("char ({name})"), set),
+                    })
+                    .collect(),
+            },
+        },
+        _ => vec![inv.usage_error()],
+    };
+    deliver(
+        lines
+            .into_iter()
+            .map(|line| Outgoing::line(inv.entity, line))
+            .collect(),
+        &mut outbox,
+    );
+}
+
 /// Every fact, as saved.
 pub fn load_facts(db: Res<Database>, mut facts: ResMut<Facts>) {
     let rows = match db.facts() {
@@ -315,6 +406,56 @@ mod tests {
             Some(&Value::Word("sold".into()))
         );
         assert!(loaded.is_set(&ada, "heard_rumour", 99));
+    }
+
+    #[test]
+    fn a_characters_facts_come_with_their_quests() {
+        let db = db();
+        let account = db.create_account("ada", "password123").unwrap();
+        let ada = db.create_character(account.id, "Ada").unwrap().id;
+        let bob = db.create_character(account.id, "Bob").unwrap().id;
+        assert_eq!(
+            db.character_named("ADA").unwrap(),
+            Some((ada, "Ada".into()))
+        );
+        let mut facts = Facts::default();
+        let rats = Owner::Quest(ada, "riftwatch:rat_bounty".into());
+        facts.set(
+            &Owner::Character(ada),
+            "heard_rumour",
+            Value::Bool(true),
+            None,
+            &db,
+        );
+        facts.set(&rats, "tails", Value::Int(3), None, &db);
+        facts.set(
+            &Owner::Character(bob),
+            "heard_rumour",
+            Value::Bool(true),
+            None,
+            &db,
+        );
+        facts.set(
+            &Owner::World,
+            "rats_broke_out",
+            Value::Bool(true),
+            None,
+            &db,
+        );
+        let owners = facts.of_character(ada, 0);
+        assert_eq!(
+            owners.len(),
+            2,
+            "theirs and their quest's, not Bob's or the world's"
+        );
+        assert_eq!(owners[0].0, Owner::Character(ada));
+        assert_eq!(owners[1], (rats, vec![("tails", &Value::Int(3))]));
+        assert_eq!(listed("quest", &owners[1].1), "quest: tails = 3");
+        assert_eq!(
+            Value::Bool(true).shown("heard_rumour"),
+            "heard_rumour",
+            "a yes is its key"
+        );
     }
 
     #[test]

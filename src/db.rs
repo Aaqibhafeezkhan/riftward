@@ -552,6 +552,18 @@ impl Database {
         )?)
     }
 
+    /// A character's id and name as written, by name in any case, online or not.
+    pub fn character_named(&self, name: &str) -> DbResult<Option<(i64, String)>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT id, name FROM characters WHERE name = ?1",
+                [name],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?)
+    }
+
     pub fn create_character(&self, account_id: i64, name: &str) -> DbResult<CharacterRecord> {
         let conn = self.conn();
         conn.execute(

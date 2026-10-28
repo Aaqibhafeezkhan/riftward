@@ -156,15 +156,7 @@ fn worldflag(
             if set.is_empty() {
                 "No world flags are set.".to_string()
             } else {
-                let shown: Vec<String> = set
-                    .iter()
-                    .map(|(key, value)| match value {
-                        Value::Bool(true) => key.to_string(),
-                        Value::Bool(false) => format!("{key} = false"),
-                        Value::Int(n) => format!("{key} = {n}"),
-                        Value::Word(w) => format!("{key} = \"{w}\""),
-                    })
-                    .collect();
+                let shown: Vec<String> = set.iter().map(|(key, value)| value.shown(key)).collect();
                 format!("World flags set: {}", shown.join(", "))
             }
         }

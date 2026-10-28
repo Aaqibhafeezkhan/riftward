@@ -45,7 +45,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `gathering.rs` | Active skills aimed at the room that `Find` (`roomwork`; `forage` and `gather` are shortcuts), from a room's finds, and how finds deplete and grow back |
 | `tracking.rs` | Tracks left in rooms by whoever walks through, and active skills that read them (`trackwork`; `track` is a shortcut to Tracking) |
 | `groups.rs` | Following and groups: `follow`, `nofollow`, `group`, `gtell`, `disband`, `autoassist`; followers walking after whoever they follow (a tick later, so they see them go), and groups tidying up when someone logs off. What a group shares in a fight is in `combat` |
-| `facts.rs` | The fact store: what the game remembers about its story, by owner (the world, a character, a character's quest, a mob template) and key, with values, lapsing, and saving as they change ([Facts](facts.md)) |
+| `facts.rs` | The fact store: what the game remembers about its story, by owner (the world, a character, a character's quest, a mob template) and key, with values, lapsing, and saving as they change, and the GMs' `facts world\|<player>` ([Facts](facts.md)) |
 | `guild.rs` | The Adventurers' Guild: membership (`character_guild`), metal ranks and merit from `assets/guild.ron`, rank tags and `ShownRank` (what `GuildRank` conditions and `who` see), `join guild`, `guild`, `reinstate`, and the GMs' `guild promote|merit|expel|reinstate` |
 | `stealth.rs` | Hiding, sneaking and noticing: `hide` (a shortcut to Stealth, data whose hiding rules are in `combat/abilities.rs`), `sneak`, `search`, who sees whom (the `hidden` condition and who has seen through it), and revealing |
 | `money.rs` | The purse, coins and how amounts read and are written, giving coins, the admin `setcoins` |
@@ -58,7 +58,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |
-| `requirements.rs` | The shared requirement language, what every `requires:` holds (`Stat`, `Race`, `Skill`, `GuildRank`, `Has`, `HasItem`, `InRoom`, `InZone`, `Fact`, `Flag`, `WorldFlag`, `Event`, `All`, `Any`, `Not`), and world events' and gated spawns' `when:`, tested against a `Subject`: someone if anyone, the facts, the zone, and what just happened. `Surroundings` gathers what a command knows of someone (room, what they carry, conditions, rank shown) Not status conditions, which are `combat`'s |
+| `requirements.rs` | The shared requirement language, what every `requires:` holds (`Stat`, `Race`, `Skill`, `GuildRank`, `Has`, `HasItem`, `InRoom`, `InZone`, `Fact`, `Flag`, `WorldFlag`, `Event`, `All`, `Any`, `Not`), and world events' and gated spawns' `when:`, tested against a `Subject`: someone if anyone, the facts, the zone, and what just happened. `Surroundings` gathers what a command knows of someone (room, what they carry, conditions, rank shown). Not status conditions, which are `combat`'s |
 | `dice.rs` | The `Dice` resource, the only source of randomness |
 
 ### One tick
