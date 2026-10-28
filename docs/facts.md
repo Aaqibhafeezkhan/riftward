@@ -1,6 +1,6 @@
 # Facts, requirements and rules
 
-[Design summary](README.md) · Status: designed (2026-10-28), not built. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it (requirements), and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
+[Design summary](README.md) · Status: designed (2026-10-28); the store is built (`src/facts.rs`, the `facts` table), and nothing uses it yet. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it (requirements), and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
 
 Content feels alive when it reacts to things nobody scripted together. A quest that sets "this character sold out the guild" shouldn't need to know which other quests, mobs and doors will care. So everything the game remembers about its story goes in one place, as **facts**, and everything that reacts tests facts, without knowing who set them.
 

@@ -164,6 +164,20 @@ const SCHEMA: &str = "
         PRIMARY KEY (character_id, guild)
     );
 
+    -- Facts: what the game remembers about its story (`facts.rs`). `owner` says whose within the
+    -- scope: '' for the world, a character's id, `id:zone:quest` for a character's quest, or
+    -- `zone:mob`; `character_id` ties a character's facts to them. `until` is when it lapses.
+    CREATE TABLE IF NOT EXISTS facts (
+        scope        TEXT NOT NULL,
+        owner        TEXT NOT NULL DEFAULT '',
+        key          TEXT NOT NULL,
+        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+        kind         TEXT NOT NULL,
+        value        TEXT NOT NULL,
+        until        INTEGER,
+        PRIMARY KEY (scope, owner, key)
+    );
+
     -- How many mobs each breeding spawn has, so a restart brings back the same number.
     CREATE TABLE IF NOT EXISTS spawn_counts (
         spawn TEXT PRIMARY KEY,            -- zone:spawn
@@ -194,6 +208,17 @@ pub enum DbError {
 }
 
 pub type DbResult<T> = Result<T, DbError>;
+
+/// A fact as saved: see `facts.rs`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FactRow {
+    pub scope: String,
+    pub owner: String,
+    pub key: String,
+    pub kind: String,
+    pub value: String,
+    pub until: Option<i64>,
+}
 
 /// A character's standing in a guild, as saved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -550,6 +575,59 @@ impl Database {
             "UPDATE characters SET hide_numbers = ?1 WHERE id = ?2",
             params![i64::from(hide), character_id],
         )?;
+        Ok(())
+    }
+
+    /// Every saved fact.
+    pub fn facts(&self) -> DbResult<Vec<FactRow>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT scope, owner, key, kind, value, until FROM facts")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(FactRow {
+                scope: row.get(0)?,
+                owner: row.get(1)?,
+                key: row.get(2)?,
+                kind: row.get(3)?,
+                value: row.get(4)?,
+                until: row.get(5)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn save_fact(
+        &self,
+        scope: &str,
+        owner: &str,
+        character_id: Option<i64>,
+        key: &str,
+        kind: &str,
+        value: &str,
+        until: Option<i64>,
+    ) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT INTO facts (scope, owner, key, character_id, kind, value, until)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT (scope, owner, key) DO UPDATE SET
+                 kind = excluded.kind, value = excluded.value, until = excluded.until",
+            params![scope, owner, key, character_id, kind, value, until],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_fact(&self, scope: &str, owner: &str, key: &str) -> DbResult<()> {
+        self.conn().execute(
+            "DELETE FROM facts WHERE scope = ?1 AND owner = ?2 AND key = ?3",
+            params![scope, owner, key],
+        )?;
+        Ok(())
+    }
+
+    /// Forget every fact that lapsed by `now`.
+    pub fn delete_lapsed_facts(&self, now: i64) -> DbResult<()> {
+        self.conn()
+            .execute("DELETE FROM facts WHERE until <= ?1", [now])?;
         Ok(())
     }
 

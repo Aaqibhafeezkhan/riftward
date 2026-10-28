@@ -14,6 +14,7 @@ mod db;
 mod dice;
 mod effects;
 mod events;
+mod facts;
 mod formula;
 mod gathering;
 mod groups;
@@ -89,6 +90,7 @@ fn add_game(app: &mut App, path: String, address: String) {
         commands::CommandsPlugin,
         build::BuildPlugin,
         events::EventsPlugin,
+        facts::FactsPlugin,
         time::TimePlugin,
     ))
     // The game: the world and what's in it, and characters.
