@@ -1,7 +1,8 @@
 //! Quests: written as data, one RON file each, in a folder named for the zone they belong to
 //! (`assets/quests/riftwatch/rats_in_the_drains.quest.ron` is `riftwatch:rats_in_the_drains`).
-//! They're loaded, checked and hot-reloaded here, and read from the board where they're posted;
-//! taking them, progress and rewards come later (see `docs/quests.md`).
+//! They're loaded, checked and hot-reloaded here, read from the board where they're posted, taken
+//! with the guild's clerk (`accept`), and kept in each character's `QuestLog` and `journal`.
+//! Progress and rewards come later (see `docs/quests.md`).
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -12,13 +13,17 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::attributes::Attributes;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::db::{Database, QuestRecord};
 use crate::facts::Facts;
 use crate::guild::{Membership, guild};
 use crate::items::ItemTemplates;
 use crate::money;
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
-use crate::requirements::{ItemMatch, Requirement, Subject};
+use crate::requirements::{ItemMatch, Requirement, Subject, Surroundings, Who};
+use crate::skills::Skills;
+use crate::time::unix_now;
 use crate::world::{Every, ItemKey, RoomKey, ron_options};
 
 /// Asset folder holding one folder of quests per zone.
@@ -41,9 +46,50 @@ impl Plugin for QuestsPlugin {
                     .usage("board [<n>]")
                     .summary("read the notices posted on a quest board here, or one in full"),
                 board,
+            )
+            .add_command(
+                CommandSpec::new("accept", Category::Interaction)
+                    .usage("accept <n>")
+                    .summary("take a notice from the board, with the guild's clerk here"),
+                accept,
+            )
+            .add_command(
+                CommandSpec::new("journal", Category::Character)
+                    .shortcuts(&["quests"])
+                    .summary("the quests you're on, where you are in each, and those you've done"),
+                journal,
             );
     }
 }
+
+/// The quests a character has taken, and how each stands: loaded when they enter the game and
+/// saved as it changes.
+#[derive(Component, Default, Debug)]
+pub struct QuestLog(pub Vec<QuestRecord>);
+
+impl QuestLog {
+    fn get(&self, quest: &str) -> Option<&QuestRecord> {
+        self.0.iter().find(|record| record.quest == quest)
+    }
+
+    /// Set down how `record` stands now, in place of how it stood, and save it.
+    fn put(&mut self, record: QuestRecord, character_id: i64, db: &Database) {
+        if let Err(err) = db.save_character_quest(character_id, &record) {
+            error!(
+                "failed to save quest {} for {character_id}: {err}",
+                record.quest
+            );
+        }
+        match self.0.iter_mut().find(|r| r.quest == record.quest) {
+            Some(old) => *old = record,
+            None => self.0.push(record),
+        }
+    }
+}
+
+/// Where a quest stands for someone.
+pub const HELD: &str = "held";
+pub const DONE: &str = "done";
 
 /// One quest, as written. Ids in it are its zone's own unless written `zone:id`.
 // Read by the board, journal and rules, once they're built.
@@ -400,6 +446,208 @@ fn posted<'a>(
     notices
 }
 
+/// Why `quest` can't be taken by someone with this log, at `now`, if it can't: already held,
+/// done for good, or done too lately to take again.
+fn refusal(quest: &QuestDef, log: &QuestLog, now: i64) -> Option<String> {
+    let record = log.get(&quest.id)?;
+    match (record.state.as_str(), &quest.repeat, record.finished_at) {
+        (HELD, ..) => Some(format!("You've already taken {}.", quest.name)),
+        (DONE, Repeat::Once, _) => {
+            Some(format!("You've done {}; it's not done twice.", quest.name))
+        }
+        (DONE, Repeat::Every(every), Some(finished)) if finished + every.secs() > now => {
+            Some(format!(
+                "You did {} too lately: it can be taken again {} after it's done.",
+                quest.name,
+                every.period()
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// `accept <n>`: take notice `n` from the board here, in front of the guild's clerk, who writes
+/// a contract into the guild's record. Only open quests for now: one held by one member at a
+/// time waits on claims.
+#[allow(clippy::too_many_arguments)]
+fn accept(
+    In(inv): In<Invocation>,
+    players: Characters,
+    rooms: RoomQuery,
+    mobs: crate::mobs::MobQuery,
+    (memberships, mut logs): (Query<&Membership>, Query<&mut QuestLog>),
+    sheets: Query<(&Attributes, &Skills)>,
+    quests: Res<Quests>,
+    around: Surroundings,
+    db: Res<Database>,
+    mut outbox: ResMut<Outbox>,
+) {
+    let Some(actor) = Actor::get(&players, inv.entity) else {
+        return;
+    };
+    let (Some(character_id), Ok((_, here, _))) = (actor.character_id, rooms.get(actor.room)) else {
+        return;
+    };
+    let member = memberships.get(actor.entity).ok().filter(|m| !m.expelled);
+    let notices = posted(here, member.map(|m| m.rank), &quests, &around.story);
+    let now = unix_now();
+    let reply = (|| {
+        if !quests.0.values().any(|q| q.board().as_ref() == Some(here)) {
+            return Err("There's no board here.".to_string());
+        }
+        let quest = inv
+            .args
+            .trim()
+            .parse::<usize>()
+            .ok()
+            .and_then(|n| notices.get(n.checked_sub(1)?))
+            .ok_or_else(|| match inv.args.trim() {
+                "" => inv.usage_error(),
+                n => format!("There's no notice {n} on the board."),
+            })?;
+        let clerk = crate::guild::clerk_in(actor.room, &mobs)
+            .map(|(_, name)| crate::combat::the(&name))
+            .ok_or("There's no one here to take it to.")?;
+        if quest.contract.is_some() && member.is_none() {
+            return Err("Only guild members can take contracts ('join guild').".into());
+        }
+        if matches!(quest.availability, Availability::Claimed { .. }) {
+            return Err(format!(
+                "{} is held by one member at a time, and {clerk} isn't handing those out yet.",
+                quest.name
+            ));
+        }
+        let log = logs.get(actor.entity).ok();
+        if let Some(refused) = log.and_then(|log| refusal(quest, log, now)) {
+            return Err(refused);
+        }
+        if let Some(requires) = &quest.requires {
+            let (attributes, skills) = sheets.get(actor.entity).map_err(|_| String::new())?;
+            let known = around.of(actor.entity);
+            let facts = Subject::of(
+                Who {
+                    attributes,
+                    race: &actor.race,
+                    skills: Some(skills),
+                    guild_rank: known.guild_rank,
+                    character: Some(character_id),
+                    conditions: around.conditions.get(actor.entity).ok(),
+                    room: known.room.as_ref(),
+                    carrying: Some(&known.carrying),
+                },
+                Some(&around.story),
+            );
+            if !requires.met(&facts) {
+                return Err(format!(
+                    "{} can't be yours yet: it needs {}.",
+                    quest.name,
+                    requires.describe(&|id| id.to_string())
+                ));
+            }
+        }
+        Ok((quest, clerk))
+    })();
+    let text = match reply {
+        Err(text) => text,
+        Ok((quest, clerk)) => {
+            let record = QuestRecord {
+                quest: quest.id.clone(),
+                state: HELD.into(),
+                stage: "1".into(),
+                taken_at: now,
+                due_at: None,
+                finished_at: log_finished(logs.get(actor.entity).ok(), &quest.id),
+            };
+            match logs.get_mut(actor.entity) {
+                Ok(mut log) => log.put(record, character_id, &db),
+                Err(_) => error!("{} has no quest log", actor.name),
+            }
+            if quest.contract.is_some() {
+                if let Err(err) = db.add_guild_record(character_id, &quest.id, "accepted", now) {
+                    error!(
+                        "failed to write {} into the guild's record: {err}",
+                        quest.id
+                    );
+                }
+                format!(
+                    "{} writes {} into the guild's record against your name. Type 'journal' to \
+                     see what you've taken on.",
+                    crate::items::capitalized(&clerk),
+                    quest.name
+                )
+            } else {
+                format!(
+                    "You take on {}. Type 'journal' to see what you've taken on.",
+                    quest.name
+                )
+            }
+        }
+    };
+    deliver(vec![Outgoing::line(actor.entity, text)], &mut outbox);
+}
+
+/// When `quest` was last finished, kept over its being taken again, for `repeat`.
+fn log_finished(log: Option<&QuestLog>, quest: &str) -> Option<i64> {
+    log?.get(quest)?.finished_at
+}
+
+/// `journal`: each quest you're on and where you are in it, in its own words; then what you've
+/// done.
+fn journal(
+    In(inv): In<Invocation>,
+    logs: Query<&QuestLog>,
+    quests: Res<Quests>,
+    mut outbox: ResMut<Outbox>,
+) {
+    let Ok(log) = logs.get(inv.entity) else {
+        return;
+    };
+    deliver(
+        vec![Outgoing::line(inv.entity, journal_text(log, &quests))],
+        &mut outbox,
+    );
+}
+
+fn journal_text(log: &QuestLog, quests: &Quests) -> String {
+    let name = |id: &str| {
+        quests
+            .0
+            .get(id)
+            .map_or_else(|| format!("{id} (no longer known)"), |q| q.name.clone())
+    };
+    let held: Vec<String> = log
+        .0
+        .iter()
+        .filter(|r| r.state == HELD)
+        .map(|r| {
+            let stage = quests.0.get(&r.quest).and_then(|q| {
+                let n: usize = r.stage.parse().ok()?;
+                q.stages.get(n.checked_sub(1)?)
+            });
+            match stage {
+                Some(stage) => format!("  {}\r\n    {}", name(&r.quest), stage.text),
+                None => format!("  {}", name(&r.quest)),
+            }
+        })
+        .collect();
+    let done: Vec<String> = log
+        .0
+        .iter()
+        .filter(|r| r.state == DONE)
+        .map(|r| name(&r.quest))
+        .collect();
+    let mut lines = vec![if held.is_empty() {
+        "You aren't on any quests. The board in the Contract Hall has work.".to_string()
+    } else {
+        "You're on:".to_string()
+    }];
+    lines.extend(held);
+    if !done.is_empty() {
+        lines.push(format!("Done: {}.", done.join(", ")));
+    }
+    lines.join("\r\n")
+}
+
 impl QuestDef {
     /// The room whose board it's posted on.
     fn board(&self) -> Option<RoomKey> {
@@ -695,6 +943,98 @@ mod tests {
             quest
                 .notice(&templates)
                 .contains("It pays 2 silver, a healing draught and 10 merit.")
+        );
+    }
+
+    #[test]
+    fn a_quest_is_taken_again_only_as_it_allows() {
+        let record = |state: &str, finished_at| QuestRecord {
+            quest: "riftwatch:rats".into(),
+            state: state.into(),
+            stage: "1".into(),
+            taken_at: 0,
+            due_at: None,
+            finished_at,
+        };
+        let day = 86_400;
+        let rats = rats();
+        let log = |r| QuestLog(vec![r]);
+        assert!(
+            refusal(&rats, &QuestLog::default(), 0).is_none(),
+            "never taken"
+        );
+        assert!(
+            refusal(&rats, &log(record(HELD, None)), 0).is_some(),
+            "held"
+        );
+        let done = log(record(DONE, Some(100)));
+        assert!(refusal(&rats, &done, 100 + day - 1).is_some(), "too soon");
+        assert!(refusal(&rats, &done, 100 + day).is_none(), "a day on");
+        let once = QuestDef {
+            repeat: Repeat::Once,
+            ..rats.clone()
+        };
+        assert!(refusal(&once, &done, 100 * day).is_some());
+        let always = QuestDef {
+            repeat: Repeat::Always,
+            ..rats.clone()
+        };
+        assert!(refusal(&always, &done, 101).is_none());
+        // Failing or giving one up doesn't stop it being taken again.
+        assert!(refusal(&rats, &log(record("abandoned", None)), 0).is_none());
+    }
+
+    #[test]
+    fn the_journal_tells_where_you_are_in_each_quest() {
+        let mut quests = Quests::default();
+        quests.0.insert("riftwatch:rats".into(), rats());
+        let record = |quest: &str, state: &str| QuestRecord {
+            quest: quest.into(),
+            state: state.into(),
+            stage: "1".into(),
+            taken_at: 0,
+            due_at: None,
+            finished_at: None,
+        };
+        assert_eq!(
+            journal_text(&QuestLog::default(), &quests),
+            "You aren't on any quests. The board in the Contract Hall has work."
+        );
+        let log = QuestLog(vec![
+            record("riftwatch:rats", HELD),
+            record("riftwatch:gone", DONE),
+        ]);
+        assert_eq!(
+            journal_text(&log, &quests),
+            "You're on:\r\n  Rats\r\n    Kill rats.\r\nDone: riftwatch:gone (no longer known)."
+        );
+    }
+
+    #[test]
+    fn quests_taken_are_saved() {
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let ada = db.create_character(account.id, "Ada").unwrap().id;
+        let mut log = QuestLog::default();
+        let mut record = QuestRecord {
+            quest: "riftwatch:rats".into(),
+            state: HELD.into(),
+            stage: "1".into(),
+            taken_at: 5,
+            due_at: None,
+            finished_at: None,
+        };
+        log.put(record.clone(), ada, &db);
+        record.state = DONE.into();
+        record.finished_at = Some(9);
+        log.put(record.clone(), ada, &db);
+        assert_eq!(log.0, vec![record.clone()], "one row a quest");
+        assert_eq!(db.character_quests(ada).unwrap(), vec![record]);
+        db.add_guild_record(ada, "riftwatch:rats", "accepted", 5)
+            .unwrap();
+        assert_eq!(
+            db.guild_record(ada).unwrap(),
+            vec![("riftwatch:rats".into(), "accepted".into(), 5)]
         );
     }
 

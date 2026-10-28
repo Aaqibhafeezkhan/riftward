@@ -1017,6 +1017,19 @@ fn enter_game(
         Ok(None) => {}
         Err(err) => error!("failed to load {name}'s guild membership: {err}"),
     }
+    match db.character_quests(character.id) {
+        Ok(quests) => {
+            commands
+                .entity(entity)
+                .insert(crate::quests::QuestLog(quests));
+        }
+        Err(err) => {
+            error!("failed to load {name}'s quests: {err}");
+            commands
+                .entity(entity)
+                .insert(crate::quests::QuestLog::default());
+        }
+    }
     info!("{name} entered the game (account '{}')", account.username);
 
     out.push(Outgoing::line(

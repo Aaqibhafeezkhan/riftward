@@ -46,16 +46,16 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `tracking.rs` | Tracks left in rooms by whoever walks through, and active skills that read them (`trackwork`; `track` is a shortcut to Tracking) |
 | `groups.rs` | Following and groups: `follow`, `nofollow`, `group`, `gtell`, `disband`, `autoassist`; followers walking after whoever they follow (a tick later, so they see them go), and groups tidying up when someone logs off. What a group shares in a fight is in `combat` |
 | `facts.rs` | The fact store: what the game remembers about its story, by owner (the world, a character, a character's quest, a mob template) and key, with values, lapsing, and saving as they change, and the GMs' `facts world\|<player>` ([Facts](facts.md)) |
-| `guild.rs` | The Adventurers' Guild: membership (`character_guild`), metal ranks and merit from `assets/guild.ron`, rank tags and `ShownRank` (what `GuildRank` conditions and `who` see), `join guild`, `guild`, `reinstate`, and the GMs' `guild promote|merit|expel|reinstate` |
+| `guild.rs` | The Adventurers' Guild: membership (`character_guild`), metal ranks and merit from `assets/guild.ron`, rank tags and `ShownRank` (what `GuildRank` conditions and `who` see), `join guild`, `guild`, `guild record` (Marin's record, `guild_record`), `reinstate`, and the GMs' `guild promote|merit|expel|reinstate` |
 | `stealth.rs` | Hiding, sneaking and noticing: `hide` (a shortcut to Stealth, data whose hiding rules are in `combat/abilities.rs`), `sneak`, `search`, who sees whom (the `hidden` condition and who has seen through it), and revealing |
 | `money.rs` | The purse, coins and how amounts read and are written, giving coins, the admin `setcoins` |
 | `shops.rs` | Shopkeepers: `list`, `buy`, `sell`, `value`, prices and resale |
 | `trade.rs` | Haggling (deals with shopkeepers, and the prices they set), and active skills aimed at an item (`itemwork`; `appraise` is a shortcut to Appraisal) |
 | `formula.rs` | Formulas: amounts in data (`"roll(2, 5) + floor(power / 3)"`), parsed at load and worked out through `Dice` with their inputs |
 | `effects.rs` | The one effect vocabulary spells and techniques share (`Damage`, `Heal`, `Apply`, `Remove`, `Cure`, …), whom each is on, how long conditions last, and what fits where |
-| `quests.rs` | Quest files (`assets/quests/<zone>/*.quest.ron`, one quest each, `zone:quest`), checked as they load and hot-reloaded into `Quests`, and the `board` that lists them where they're posted ([Quests](quests.md)) |
+| `quests.rs` | Quest files (`assets/quests/<zone>/*.quest.ron`, one quest each, `zone:quest`), checked as they load and hot-reloaded into `Quests`; the `board` that lists them where they're posted, `accept`, each character's `QuestLog` (`character_quests`) and `journal` ([Quests](quests.md)) |
 | `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |
-| `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, character and item conditions, real items, spawn timers |
+| `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, character and item conditions, real items, spawn timers, guild membership and record, quests taken, facts |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |

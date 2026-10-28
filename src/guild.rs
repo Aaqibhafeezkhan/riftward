@@ -183,8 +183,11 @@ impl Plugin for GuildPlugin {
             )
             .add_command(
                 CommandSpec::new("guild", Category::Character)
-                    .usage("guild [tag]")
-                    .summary("your standing in the guild; 'guild tag' for a new tag, at the clerk"),
+                    .usage("guild [tag|record]")
+                    .summary(
+                        "your standing in the guild; 'guild tag' for a new tag, at the clerk; \
+                         'guild record' for the contracts you've taken",
+                    ),
                 guild_cmd,
             )
             .add_command(
@@ -265,7 +268,7 @@ fn tags_on<'a>(
 }
 
 /// The guild's clerk, if one is in `room`: their entity and name.
-fn clerk_in(room: Entity, mobs: &MobQuery) -> Option<(Entity, String)> {
+pub fn clerk_in(room: Entity, mobs: &MobQuery) -> Option<(Entity, String)> {
     let key = guild().clerk_key();
     mobs.iter()
         .find(|(_, mob, in_room)| in_room.0 == room && mob.key == key)
@@ -432,10 +435,12 @@ struct Ledger<'w, 's> {
     rooms: RoomQuery<'w, 's>,
     db: Res<'w, Database>,
     outbox: ResMut<'w, Outbox>,
+    quests: Res<'w, crate::quests::Quests>,
 }
 
 /// `guild`: your standing in the guild. `guild tag`, at the clerk: a tag for your rank, free in
-/// place of an old one, for a fee if you've lost yours. GMs and admins also have `guild promote
+/// place of an old one, for a fee if you've lost yours. `guild record`: what the clerk's record
+/// has against you (GMs: `guild record <player>`). GMs and admins also have `guild promote
 /// <player>`, `guild merit <player> <n>`, `guild expel <player>` and `guild reinstate <player>`.
 fn guild_cmd(In(inv): In<Invocation>, mut l: Ledger) {
     let Some(actor) = Actor::get(&l.characters, inv.entity) else {
@@ -447,6 +452,22 @@ fn guild_cmd(In(inv): In<Invocation>, mut l: Ledger) {
     let reply = match first.as_deref() {
         None => standing(&actor, &l),
         Some("tag") => new_tag(&actor, &mut l),
+        Some("record") => {
+            let whose = words.next();
+            match whose {
+                Some(name) if actor.role.can(Permission::Events) => {
+                    match l.db.character_named(name) {
+                        Ok(Some((id, name))) => record(id, &name, &l),
+                        _ => format!("No one is called {name}."),
+                    }
+                }
+                Some(_) => inv.usage_error(),
+                None => match actor.character_id {
+                    Some(id) => record(id, "you", &l),
+                    None => String::new(),
+                },
+            }
+        }
         Some(gm @ ("promote" | "merit" | "expel" | "reinstate"))
             if actor.role.can(Permission::Events) =>
         {
@@ -457,6 +478,46 @@ fn guild_cmd(In(inv): In<Invocation>, mut l: Ledger) {
     };
     out.insert(0, Outgoing::line(actor.entity, reply));
     deliver(out, &mut l.outbox);
+}
+
+/// `guild record`: the lines in Marin's record against a member: each contract accepted,
+/// completed, failed or given up, and when. Never how far along they are.
+fn record(character_id: i64, whom: &str, l: &Ledger) -> String {
+    let lines = match l.db.guild_record(character_id) {
+        Ok(lines) => lines,
+        Err(err) => {
+            error!("failed to read the guild's record for {character_id}: {err}");
+            return "The record can't be read just now.".into();
+        }
+    };
+    let clerk = crate::items::capitalized(&clerk_name(&l.mob_templates));
+    if lines.is_empty() {
+        return format!("{clerk}'s record has nothing against {whom}.");
+    }
+    let now = crate::time::unix_now();
+    let mut text = format!("{clerk}'s record against {whom}:");
+    for (quest, what, at) in lines {
+        let name = l
+            .quests
+            .0
+            .get(&quest)
+            .map_or(quest.as_str(), |q| q.name.as_str());
+        text += &format!(
+            "\r\n  {} {name}, {}.",
+            crate::items::capitalized(&what),
+            ago(now - at)
+        );
+    }
+    text
+}
+
+/// How long ago, by the day: "today", "yesterday", "3 days ago".
+fn ago(secs: i64) -> String {
+    match secs / 86_400 {
+        ..=0 => "today".into(),
+        1 => "yesterday".into(),
+        days => format!("{days} days ago"),
+    }
 }
 
 /// What `guild` says of someone's standing.

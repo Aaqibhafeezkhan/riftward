@@ -165,6 +165,30 @@ const SCHEMA: &str = "
         PRIMARY KEY (character_id, guild)
     );
 
+    -- The quests each character has taken (`quests.rs`): one row a quest, reused when it's
+    -- taken again. `state` is held, done, failed or abandoned; `stage` the stage they're on, by
+    -- its number until stages have ids. Times are unix seconds.
+    CREATE TABLE IF NOT EXISTS character_quests (
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        quest        TEXT NOT NULL,          -- zone:quest
+        state        TEXT NOT NULL,
+        stage        TEXT NOT NULL,
+        taken_at     INTEGER NOT NULL,
+        due_at       INTEGER,
+        finished_at  INTEGER,
+        PRIMARY KEY (character_id, quest)
+    );
+
+    -- Marin's record: the guild's ledger of contracts each member accepted, completed, failed
+    -- or gave up, and when. Only ever added to.
+    CREATE TABLE IF NOT EXISTS guild_record (
+        id           INTEGER PRIMARY KEY,
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        quest        TEXT NOT NULL,
+        what         TEXT NOT NULL,
+        at           INTEGER NOT NULL
+    );
+
     -- Facts: what the game remembers about its story (`facts.rs`). `owner` says whose within the
     -- scope: '' for the world, a character's id, `id:zone:quest` for a character's quest, or
     -- `zone:mob`; `character_id` ties a character's facts to them. `until` is when it lapses.
@@ -219,6 +243,19 @@ pub struct FactRow {
     pub kind: String,
     pub value: String,
     pub until: Option<i64>,
+}
+
+/// A quest a character has taken, as saved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuestRecord {
+    /// `zone:quest`.
+    pub quest: String,
+    /// `held`, `done`, `failed` or `abandoned`.
+    pub state: String,
+    pub stage: String,
+    pub taken_at: i64,
+    pub due_at: Option<i64>,
+    pub finished_at: Option<i64>,
 }
 
 /// A character's standing in a guild, as saved.
@@ -648,6 +685,73 @@ impl Database {
         self.conn()
             .execute("DELETE FROM facts WHERE until <= ?1", [now])?;
         Ok(())
+    }
+
+    /// Every quest a character has taken, and how each stands.
+    pub fn character_quests(&self, character_id: i64) -> DbResult<Vec<QuestRecord>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT quest, state, stage, taken_at, due_at, finished_at FROM character_quests
+             WHERE character_id = ?1 ORDER BY taken_at, quest",
+        )?;
+        let rows = stmt.query_map([character_id], |row| {
+            Ok(QuestRecord {
+                quest: row.get(0)?,
+                state: row.get(1)?,
+                stage: row.get(2)?,
+                taken_at: row.get(3)?,
+                due_at: row.get(4)?,
+                finished_at: row.get(5)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn save_character_quest(&self, character_id: i64, record: &QuestRecord) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT INTO character_quests
+                 (character_id, quest, state, stage, taken_at, due_at, finished_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT (character_id, quest) DO UPDATE SET
+                 state = ?3, stage = ?4, taken_at = ?5, due_at = ?6, finished_at = ?7",
+            params![
+                character_id,
+                record.quest,
+                record.state,
+                record.stage,
+                record.taken_at,
+                record.due_at,
+                record.finished_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Write a line in Marin's record: `what` happened to a member's `quest` at `at`.
+    pub fn add_guild_record(
+        &self,
+        character_id: i64,
+        quest: &str,
+        what: &str,
+        at: i64,
+    ) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT INTO guild_record (character_id, quest, what, at) VALUES (?1, ?2, ?3, ?4)",
+            params![character_id, quest, what, at],
+        )?;
+        Ok(())
+    }
+
+    /// A member's lines in Marin's record, oldest first: (quest, what, when).
+    pub fn guild_record(&self, character_id: i64) -> DbResult<Vec<(String, String, i64)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT quest, what, at FROM guild_record WHERE character_id = ?1 ORDER BY id",
+        )?;
+        let rows = stmt.query_map([character_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// A character's standing in `guild`, if they've ever joined it.
