@@ -21,9 +21,23 @@ The barrier has held ever since, because the Agryn has. But he is weakening, and
 
 ## The Middle Kingdoms and the inland sea
 
-- **Three kingdoms**, the ones the Agryn saved, surround **a large inland sea** that reaches the ocean through **a narrow channel**: think of the Mediterranean and its strait. Their heartlands, the sea and the Citadel lie to the south of Riftwatch: somewhere for characters to travel to as they grow.
+- **Three kingdoms**, the ones the Agryn saved, surround **a large inland sea** that reaches the ocean through **a narrow channel**: think of the Mediterranean and its strait. Their heartlands and the Citadel lie south and west of Riftwatch, across the sea: somewhere for characters to travel to as they grow.
 - **The barrier rings them**, so it must close or cross the channel somewhere: the strait is one of the world's most interesting places.
 - **Not yet named:** the three kingdoms, their rulers, their capitals, and which one Riftwatch belongs to.
+
+### The map
+
+From the map of the Middle Kingdoms (kept privately, not in the repository). The sea runs north to south through the middle of the map, off its northern edge (towards the channel and the ocean, beyond it). Riftwatch stands in the **north-east**, a short way in from the sea's north-eastern shore, with mountains and then **the Wastes** beyond it to the north and east; the land around the Wastes' edge is marked **Blight wanes**.
+
+| Where | Places |
+| --- | --- |
+| **The north-east,** around Riftwatch | **Riftwatch**; the **Temple of Raiana** (a ruin, marked with a skull) south of it; hills and mountains east of it, down the coast |
+| **The east shore** | **Summerbloomwood** (a town with a church) and **Deep Corner**, its harbour on the sea |
+| **The south** | **Southern Landing** at the sea's southern shore; **Twilight Mill** and **Wyrmfire** down a long inlet to the south-east; the **Forgotten Dungeon** (a ruin) in the far south-west hills |
+| **The island** | A large island in the sea, the **Palewoods**: the castle-city of **Blackhaven** at its north end, and the **Tower of the Vampire One** (a ruin) on a spit at its south |
+| **The west shore** | **Mirkforge** on the coast, with **New Rest** behind it |
+| **The western mountains** | The **Ridge of the Ancients** running south from the north-west, with **Dawnby**, **Daggerford**, **Slidayton** (a tower), **Marblehall** and **Redfall** along it; the **Suncrest Forest** north of it |
+| **The south-west** | The **Northern Woodland**, a great forest between the ridge and the sea; **Wintercourt** (a tower) on its western side; **Hen Fjord** in the far south-west corner |
 
 ## The Wastes
 
@@ -57,11 +71,11 @@ The barrier has held ever since, because the Agryn has. But he is weakening, and
 
 ## Riftwatch
 
-**A border town in the north,** near the barrier with the Wastes beyond it: inland, nowhere near the sea, about **a thousand people**, built of stone and timber in rugged country. North of it lies wilderness, the Darkwood, and beyond that the mountains; forest lies to the south as well. Its people are pragmatic and resourceful, used to living with danger. **It's the last bastion of the northern mountain lands:** the barrier has already drawn in far enough to take the other outposts and settlements that once stood further north, and their ruins now lie in the Wastes.
+**A border town in the north,** near the barrier with the Wastes beyond it: a short way in from the inland sea's north-eastern shore, far from the ocean, about **a thousand people**, built of stone and timber in rugged country. North of it lies wilderness, the Darkwood, and beyond that the mountains; forest lies to the south as well. Its people are pragmatic and resourceful, used to living with danger. **It's the last bastion of the northern mountain lands:** the barrier has already drawn in far enough to take the other outposts and settlements that once stood further north, and their ruins now lie in the Wastes.
 
 - **The lost outposts:** what the barrier left behind when it drew in, now on the far side of it: forts, villages and mines, emptied or worse, warped by the corruption that came in over them. Some of Riftwatch's families came from them, and remember. For the game they're the Wastes' first destinations, ruins to explore past the passes, with relics and records to bring back, and the twisted things that live in them now.
 - **Why it thrives:** it's the nearest town to the Wastes. **The Adventurers' Guild and the vitae crystal trade** are its lifeblood: adventurers cross the barrier, fight the twisted things beyond, and come back with crystals and relics, which they sell to the guild or to enchanters, dearly. A crystal-rush town at the edge of the world.
-- **The river:** **river barges carry the trade south** to the sea: crystals, pelts and relics down, grain, cloth and goods up. The barges are the town's lifeline.
+- **The river:** **river barges carry the trade down** to the sea: crystals, pelts and relics down, grain, cloth and goods up, and from the shore across the sea to the kingdoms. The barges are the town's lifeline.
 - **The danger:** monsters and magical anomalies from the Wastes, and the barrier's contraction. If it keeps drawing in, Riftwatch is one of the towns it will reach some day, maybe centuries from now; it's a fear for the town's future, not this year's, but everyone from the guildmaster to the garrison captain carries it.
 - **The old city beneath:** Riftwatch is built on the ruins of a much older and larger city, whose oldest parts show in the sewers ([Riftwatch](riftwatch.md#the-old-city-beneath)). Whether it's from before the barrier, and what the Archivist knows of it, is open.
 
@@ -134,7 +148,8 @@ Riftward has **ten races** ([Races](characters.md#races), decided 2026-10-27): d
 - [ ] **The Archivist:** the Agryn's ally, or something older with purposes of its own?
 - [ ] **The three kingdoms:** names, rulers, which one Riftwatch belongs to, and where the Citadel stands.
 - [ ] **Riftwatch's ruler:** a lord in the keep, as the game has, or no lord at all, with the Fort's captain and the guildmaster running the town between them?
-- [ ] **The geography around Riftwatch:** north of town, wilderness (the Darkwood) and then mountains, with the barrier running through the mountains, crossed by their passes (decided 2026-10-27). Still to place: the river.
+- [ ] **The geography around Riftwatch:** north of town, wilderness (the Darkwood) and then mountains, with the barrier running through the mountains, crossed by their passes (decided 2026-10-27). The map places it on the inland sea's north-eastern shore. Still to place: the river's course to the shore.
+- [ ] **Reading the map:** which kingdom holds which lands (the west and its ridge, the island with Blackhaven, the east shore?), and where the Citadel stands; what *Blight wanes* names (the Wastes' fringe, where the corruption thins?); where the channel to the ocean runs, off the map's northern edge, and so how near the barrier comes to it; and what the Temple of Raiana, the Tower of the Vampire One and the Forgotten Dungeon were.
 - [x] **The peoples:** ten races, Earthdawn's eight with three renamed, plus kitsune and halflings (2026-10-27). Still open: Owlin, and whether aasimar and half-elves become playable.
 - [ ] **The old city beneath:** older than the barrier? Its script readable by the Archivist?
 - [ ] **Vitae as a pool:** a slow-recovering reserve for pushing past limits ([Attributes](attributes.md#open-questions)).
