@@ -202,7 +202,7 @@ These pair with [puppeting](architecture.md#game-masters-and-puppeting): a GM ca
 
 ## Open questions
 
-- [ ] **Rank names and thresholds:** do the metals suit *The Agryn's Legacy*, and are there ranks above Platinum (Mithril, Adamant) reserved for legendary deeds?
+- [ ] **Rank names and thresholds:** the metals are *The Agryn's Legacy*'s own (the Silver Hearth Guildhall's quest board is divided Bone to Platinum: [The setting](setting.md#places)); still open: are there ranks above Platinum (Mithril, Adamant) reserved for legendary deeds, and does rank decide how far into the Wastes the Fort lets you go?
 - [ ] **Is the Guild Archive members-only?** It holds the public Hermetic Study path to Awakening ([Magic](magic.md#which-paths-are-known)). Members-only would make the public path to magic "join the guild": free and fitting, but a choice to make deliberately.
 - [ ] **Do contracts pay coin at all,** or only merit and items, until there's an economy to balance against?
 - [ ] **Theft in the Guild Quarters:** what does the guild actually do to a member caught breaking into another's chest: fines, lost merit, demotion despite "rank never drops", expulsion?

@@ -111,4 +111,7 @@ An `Attributes` component on each player entity, loaded at login, holds the rati
 
 - [x] **Attribute cost curve:** a point costs the rating it reaches (2026-10-26).
 - [x] **Karma per level:** 5, with every level costing the same 1,000 experience (2026-10-26).
+- [ ] **Vitae, a pool for going past your limits** (discussed 2026-10-27, not decided): stamina reworked into Vitae, from Body and Willpower together, spent on techniques as now and also to push past limits: push a roll, use a skill again before its cooldown, stand a turn past 0 health, throw off a hold. Recovered slowly, as in *The Agryn's Legacy*, where vitae came back only on a long rest. Health stays separate. See [The setting](setting.md#vitae).
+- [ ] **Below average as a penalty** (discussed 2026-10-27): show each attribute's distance from the average of 3 in `score` ("Strength 2 (-1)"); and Luck measured from 3 too, so low Luck makes rolls worse, perhaps more steeply below the average than above.
+- [ ] **Three derived defences** (from a contributor's proposal, 2026-10-27): Fortitude, Reflex and Will worked out from the attributes, for spells and techniques to resist instead of naming an attribute each.
 - [ ] **Karma rate:** 1 Karma per 5 total skill levels is a guess, to be checked by the progression simulation.

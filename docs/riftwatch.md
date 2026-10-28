@@ -234,11 +234,11 @@ Decided 2026-10-27. **Riftwatch was built on the ruins of a much older and large
 More of Riftwatch is welcome too ([#12](https://github.com/Foxworks-Studios/riftward/issues/12)), and it helps the ladder from the other side: more to do between fights, more people to sell to and learn from. Ideas that fit the town:
 
 - **A poor quarter or slums** by the Outflow Arch: cutpurses (people for Pickpocketing to work on, and to be robbed by), stray cats and dogs, the smugglers' contacts. Rung 1 to 2 trouble in the streets.
-- **The docks or a river landing,** if Riftwatch has water: fishing, trade, the Sailing tree later.
+- **The river landing:** the barges that carry Riftwatch's trade south to the sea ([The setting](setting.md#riftwatch)) tie up here: wharves, warehouses, dockhands, and those who skim the trade. Barge-guarding contracts, and the Sailing tree as river work, later.
 - **Workshops,** where the crafts will be taught: a smithy, a tannery (where pelts go), an apothecary.
 
 ## Open questions
 
 - [ ] **The lord:** name, title and household, for the Great Hall and the Lord's Solar.
-- [ ] **How Riftwatch fits the setting:** its place relative to the barrier and the rifts, and what the watchtower actually watches. Decided so far: it stands on the ruins of a much older, larger city ([The old city beneath](#the-old-city-beneath)); who built that city and why it fell are still open.
+- [x] **How Riftwatch fits the setting:** see [The setting](setting.md#riftwatch) (2026-10-27): a border town in the north near the barrier, living on the Adventurers' Guild and the vitae crystal trade from the Wastes beyond it, with the river barges carrying it south. The old city beneath stays as decided here.
 - [x] **Shops:** the herbalist, the provisioner in the Vendor Stalls and the tinker in Tinkers' Corner; see [Money and shops](economy.md#riftwatchs-shops).
