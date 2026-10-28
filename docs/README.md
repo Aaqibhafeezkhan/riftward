@@ -33,6 +33,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Riftwatch](riftwatch.md) | The starting town: map, districts, doors, where trainers go, the sewers | Rooms and doors built |
 | [The Darkwood](darkwood.md) | The forest beyond the North Gate: its reaches, creatures and food chain, flora, hazards, and what it needs in code | Design; the road and the Hermit's Clearing built |
 | [Races, backgrounds and creation](characters.md) | Character creation, the eight races and their skills, backgrounds as past lives, conditions | Built |
+| [Hosting](hosting.md) | Running Riftward for others to play: from your own machine through playit.gg, or on a small server with systemd; backups and updates | Guide |
 
 ## What exists today
 
