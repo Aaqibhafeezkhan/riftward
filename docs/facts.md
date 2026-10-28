@@ -22,7 +22,7 @@ A fact is a named value in a **scope**:
 
 ## One requirement language
 
-There are two today: `Condition` (attributes, race, skills, guild rank; backgrounds, skill requirements, trainers) and world events' `When` (world flags and events). They merge into one, used by every gate in the game, and it's renamed **`Requirement`**, after the `requires:` it fills: "condition" then means only a [status condition](effects.md#conditions) on a body, like poisoned or blessed (decided 2026-10-28).
+There are two today: `Condition` (attributes, race, skills, guild rank; backgrounds, skill requirements, trainers) and world events' `When` (world flags and events). They merge into one, used by every gate in the game (*done* 2026-10-28; a world event's `when` is tested with no one, so whatever asks about a character is false there), and it's renamed **`Requirement`**, after the `requires:` it fills: "condition" then means only a [status condition](effects.md#conditions) on a body, like poisoned or blessed (decided 2026-10-28).
 
 **Status conditions aren't facts.** Poisoned, hidden or formless are mechanics: a strength, a duration in rounds or minutes, modifiers, reactions and hints, on mobs as much as players, read by every round of combat. Facts are what the story remembers. The two meet only here: a requirement can test a condition with `Has`.
 
@@ -31,6 +31,8 @@ There are two today: `Condition` (attributes, race, skills, guild rank; backgrou
 | `Stat(attribute, min)`, `Race(id)`, `Skill(id, level)`, `GuildRank(id)` | As now |
 | `Fact(key, op, value)` | A fact compares (`Eq`, `Ne`, `Gt`, `Gte`, `Lt`, `Lte`): `Fact("char.trust.marin", Gte, 3)`, `Fact("npc.riftwatch:contract_clerk.mood", Eq, "cold")`. Numbers compare as numbers; yes and words only for being equal or not (*built*) |
 | `Flag(key)` | A fact is set at all: `Flag("world.rats_broke_out")`, `Not(Flag("char.sold_out_the_guild"))` (*built*) |
+| `WorldFlag(id)` | A world flag is set: `Flag("world.id")` by its old name, as zone files write it (*built*) |
+| `Event(happening)` | Something is happening right now: `Entered(mob, zone)`, `Died(mob)`; only true while a world event is handling it (*built*) |
 | `Quest(id, state)` | A character's quest is held, done (with a given ending, or any), or failed: `Quest("riftwatch:crystals_gone_missing", Ended("sold"))` |
 | `HasItem(item or tag, n)` | They carry that many |
 | `Has(condition)` | A status condition or trait is on them: `Has("poisoned")`, `Not(Has("rift_taint"))` |

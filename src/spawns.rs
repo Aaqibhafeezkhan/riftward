@@ -21,6 +21,7 @@ use crate::facts::Facts;
 use crate::items::{self, Item, ItemLocation, ItemTemplates, Quality};
 use crate::mobs::{self, MobTemplates, Wanderer};
 use crate::output::RoomQuery;
+use crate::requirements::Subject;
 use crate::skills::SkillDefs;
 use crate::time::heartbeat;
 use crate::world::{
@@ -378,7 +379,7 @@ fn run_spawns(
         if def
             .when
             .as_ref()
-            .is_some_and(|when| !when.met(&key.zone, &facts, None))
+            .is_some_and(|when| !when.met(&Subject::world(&facts, &key.zone, None)))
         {
             continue;
         }

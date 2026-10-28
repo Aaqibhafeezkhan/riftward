@@ -16,7 +16,7 @@ use crate::items::capitalized;
 use crate::mobs::{MobQuery, MobTemplates};
 use crate::money::{self, Purse};
 use crate::output::{Characters, Outbox, Outgoing, deliver};
-use crate::requirements::Subject;
+use crate::requirements::{Subject, Who};
 use crate::skills::{Skill, SkillDefs, Skills, learn};
 use crate::spells::{self, Spell, SpellDefs, Spells};
 
@@ -102,14 +102,16 @@ fn learn_cmd(
         .collect();
     trainers.sort_by_key(|(entity, _, _)| *entity);
 
-    let facts = Subject {
-        attributes: &attributes,
-        race: &race,
-        skills: Some(&skills),
-        guild_rank: crate::guild::shown_rank(inv.entity, &shown),
-        story: Some(&story),
-        character: Some(character_id),
-    };
+    let facts = Subject::of(
+        Who {
+            attributes: &attributes,
+            race: &race,
+            skills: Some(&skills),
+            guild_rank: crate::guild::shown_rank(inv.entity, &shown),
+            character: Some(character_id),
+        },
+        Some(&story),
+    );
     let needs = |lesson: &Lesson| match lesson {
         Lesson::Skill(skill) => skill
             .def

@@ -17,8 +17,9 @@ use crate::events::GameEvent;
 use crate::facts::{Facts, Owner, Value};
 use crate::mobs::Mob;
 use crate::output::{Characters, Outbox, Outgoing, RoomQuery, deliver};
+use crate::requirements::{Occurred, Requirement, Subject};
 use crate::time::unix_now;
-use crate::world::{MobKey, RoomIndex, RoomKey, ZoneDef};
+use crate::world::{RoomIndex, RoomKey, ZoneDef};
 
 pub struct WorldEventsPlugin;
 
@@ -39,28 +40,9 @@ impl Plugin for WorldEventsPlugin {
 /// A world event: when its trigger is met, its actions happen.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct WorldEventDef {
-    pub when: When,
+    /// When it fires: a requirement, usually an `Event` and a flag or two (`requirements.rs`).
+    pub when: Requirement,
     pub then: Vec<Action>,
-}
-
-/// A trigger, in the shared condition language's shape.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum When {
-    /// Something just happened. Only true while that happening is being handled.
-    Event(Happening),
-    WorldFlag(String),
-    All(Vec<When>),
-    Any(Vec<When>),
-    Not(Box<When>),
-}
-
-/// Something that happens in the world, for `When::Event`. Mob ids are `mob` or `zone:mob`.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum Happening {
-    /// A mob made from this template walked into a room in `zone`.
-    Entered { mob: String, zone: String },
-    /// A mob made from this template died.
-    Died(String),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -77,36 +59,6 @@ pub enum Scope {
     Room(String),
     Zone(String),
     Everyone,
-}
-
-/// What actually happened, resolved to full ids.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Occurred {
-    Entered { mob: MobKey, zone: String },
-    Died { mob: MobKey },
-}
-
-impl When {
-    /// Whether the trigger is met, written in zone `zone`, given the world's facts and what (if
-    /// anything) just happened.
-    pub fn met(&self, zone: &str, facts: &Facts, now: Option<&Occurred>) -> bool {
-        match self {
-            When::Event(happening) => match (happening, now) {
-                (
-                    Happening::Entered { mob, zone: z },
-                    Some(Occurred::Entered { mob: m, zone: at }),
-                ) => MobKey::parse(mob, zone) == *m && z == at,
-                (Happening::Died(mob), Some(Occurred::Died { mob: m })) => {
-                    MobKey::parse(mob, zone) == *m
-                }
-                _ => false,
-            },
-            When::WorldFlag(flag) => facts.is_set(&Owner::World, flag, unix_now()),
-            When::All(all) => all.iter().all(|w| w.met(zone, facts, now)),
-            When::Any(any) => any.iter().any(|w| w.met(zone, facts, now)),
-            When::Not(not) => !not.met(zone, facts, now),
-        }
-    }
 }
 
 /// World flags saved before they were facts become `world.` facts, once.
@@ -150,7 +102,10 @@ fn run_world_events(
     for occurred in &happened {
         for (_, zone) in zones.iter() {
             for (id, event) in &zone.events {
-                if !event.when.met(&zone.id, &facts, Some(occurred)) {
+                if !event
+                    .when
+                    .met(&Subject::world(&facts, &zone.id, Some(occurred)))
+                {
                     continue;
                 }
                 info!("world event {}:{id} fired", zone.id);
@@ -258,15 +213,15 @@ mod tests {
 
     #[test]
     fn triggers_match_what_happened_and_the_flags() {
+        use crate::requirements::Happening;
+        use crate::world::MobKey;
         let db = Database::open(":memory:").unwrap();
         let mut facts = Facts::default();
-        let breakout = When::All(vec![
-            When::Event(Happening::Entered {
-                mob: "sewer_rat".into(),
-                zone: "riftwatch".into(),
-            }),
-            When::Not(Box::new(When::WorldFlag("rats_broke_out".into()))),
-        ]);
+        let breakout: Requirement = crate::world::ron_options()
+            .from_str(
+                r#"All([Event(Entered(mob: "sewer_rat", zone: "riftwatch")), Not(WorldFlag("rats_broke_out"))])"#,
+            )
+            .unwrap();
         let rat = MobKey::parse("sewers:sewer_rat", "");
         let into_town = Occurred::Entered {
             mob: rat.clone(),
@@ -276,10 +231,13 @@ mod tests {
             mob: rat.clone(),
             zone: "sewers".into(),
         };
-        assert!(breakout.met("sewers", &facts, Some(&into_town)));
-        assert!(!breakout.met("sewers", &facts, Some(&in_sewers)));
+        let met = |when: &Requirement, facts: &Facts, zone: &str, now: Option<&Occurred>| {
+            when.met(&Subject::world(facts, zone, now))
+        };
+        assert!(met(&breakout, &facts, "sewers", Some(&into_town)));
+        assert!(!met(&breakout, &facts, "sewers", Some(&in_sewers)));
         assert!(
-            !breakout.met("sewers", &facts, None),
+            !met(&breakout, &facts, "sewers", None),
             "events only fire as they happen"
         );
         facts.set(
@@ -290,18 +248,21 @@ mod tests {
             &db,
         );
         assert!(
-            !breakout.met("sewers", &facts, Some(&into_town)),
+            !met(&breakout, &facts, "sewers", Some(&into_town)),
             "only the first time"
         );
 
-        let king_dies = When::Event(Happening::Died("rat_king".into()));
+        let king_dies = Requirement::Event(Happening::Died("rat_king".into()));
         let died = Occurred::Died {
             mob: MobKey::parse("sewers:rat_king", ""),
         };
-        assert!(king_dies.met("sewers", &facts, Some(&died)));
+        assert!(met(&king_dies, &facts, "sewers", Some(&died)));
         assert!(
-            !king_dies.met("riftwatch", &facts, Some(&died)),
+            !met(&king_dies, &facts, "riftwatch", Some(&died)),
             "ids are zone-relative"
         );
+        // A world event has no one, so asking about a character is false.
+        let strong = Requirement::Stat(crate::attributes::Attribute::Strength, 1);
+        assert!(!met(&strong, &facts, "sewers", None));
     }
 }

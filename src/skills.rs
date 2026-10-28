@@ -37,7 +37,7 @@ use crate::formula::{Formula, Inputs};
 use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
 };
-use crate::requirements::{Requirement, Subject};
+use crate::requirements::{Requirement, Subject, Who};
 use crate::spells::{Aim, SpellDefs, Spells};
 use crate::stealth::reveal;
 use crate::targeting::{Keywords, Target};
@@ -1103,14 +1103,16 @@ pub fn count_use(
         }
     }
     // Discovery doesn't look at guild rank: a skill that needs one is taught, not stumbled on.
-    let facts = Subject {
-        attributes,
-        race: learner.race,
-        skills: Some(skills),
-        guild_rank: None,
+    let facts = Subject::of(
+        Who {
+            attributes,
+            race: learner.race,
+            skills: Some(skills),
+            guild_rank: None,
+            character: Some(character_id),
+        },
         story,
-        character: Some(character_id),
-    };
+    );
     let chance = DISCOVERY_CHANCE * learner.boost;
     if let Some(found) = discover(defs, &practised, &facts, dice, chance) {
         let (found, name) = (found.key.clone(), found.def.name.clone());
@@ -1174,7 +1176,9 @@ fn discoverable<'a>(defs: &'a SkillDefs, used: &[String], facts: &Subject) -> Ve
         .filter(|skill| trees.contains(&&skill.tree))
         .filter(|skill| {
             facts
-                .skills
+                .who
+                .as_ref()
+                .and_then(|who| who.skills)
                 .is_none_or(|known| !known.0.contains_key(&skill.key))
         })
         .filter(|skill| skill.def.requires.as_ref().is_some_and(|c| c.met(facts)))
@@ -1192,7 +1196,11 @@ fn discover<'a>(
     chance: f64,
 ) -> Option<&'a Skill> {
     let found = discoverable(defs, used, facts);
-    if found.is_empty() || !dice.chance(facts.attributes.get(Attribute::Luck), chance) {
+    let luck = facts
+        .who
+        .as_ref()
+        .map_or(0, |who| who.attributes.get(Attribute::Luck));
+    if found.is_empty() || !dice.chance(luck, chance) {
         return None;
     }
     let pick = dice.range(0, 0..=found.len() as i64 - 1) as usize;
@@ -1341,14 +1349,16 @@ fn karma_cmd(
     let Ok((mut skills, mut attributes)) = sheets.get_mut(inv.entity) else {
         return;
     };
-    let facts = Subject {
-        attributes: &attributes,
-        race: &actor.race,
-        skills: Some(&skills),
-        guild_rank: crate::guild::shown_rank(inv.entity, &shown),
-        story: Some(&story),
-        character: actor.character_id,
-    };
+    let facts = Subject::of(
+        Who {
+            attributes: &attributes,
+            race: &actor.race,
+            skills: Some(&skills),
+            guild_rank: crate::guild::shown_rank(inv.entity, &shown),
+            character: actor.character_id,
+        },
+        Some(&story),
+    );
     let unmet = |skill: &Skill| {
         skill
             .def
@@ -2076,14 +2086,17 @@ mod tests {
         assert_eq!(keys(&known), ["axes:hew", "axes:cleave"]);
         known.0.insert("axes:hew".into(), SkillState::new("Karma"));
         assert_eq!(keys(&known), ["axes:cleave"]);
-        let facts = Subject {
-            attributes: &Attributes::default(),
-            race: "human",
-            skills: Some(&known),
-            guild_rank: None,
-            story: None,
-            character: None,
-        };
+        let nobody = Attributes::default();
+        let facts = Subject::of(
+            Who {
+                attributes: &nobody,
+                race: "human",
+                skills: Some(&known),
+                guild_rank: None,
+                character: None,
+            },
+            None,
+        );
         let cleave = &defs.skills["axes:cleave"];
         assert!(
             !cleave.def.requires.as_ref().unwrap().met(&facts),
@@ -2122,14 +2135,16 @@ mod tests {
         skills
             .0
             .insert("axes:hew".into(), SkillState::new("Taught"));
-        let facts = Subject {
-            attributes: &attributes,
-            race: "human",
-            skills: Some(&skills),
-            guild_rank: None,
-            story: None,
-            character: None,
-        };
+        let facts = Subject::of(
+            Who {
+                attributes: &attributes,
+                race: "human",
+                skills: Some(&skills),
+                guild_rank: None,
+                character: None,
+            },
+            None,
+        );
         // Not what they know, nor the entry, nor what they don't qualify for, nor other trees.
         let used = |key: &str| vec![key.to_string()];
         let found: Vec<&str> = discoverable(&defs, &used("axes:basics"), &facts)
@@ -2168,14 +2183,16 @@ mod tests {
             .insert("axes:basics".into(), SkillState::new("Taught"));
         let used = vec!["axes:basics".to_string()];
         let found = |story: &Facts| {
-            let facts = Subject {
-                attributes: &attributes,
-                race: "human",
-                skills: Some(&skills),
-                guild_rank: None,
-                story: Some(story),
-                character: Some(ada),
-            };
+            let facts = Subject::of(
+                Who {
+                    attributes: &attributes,
+                    race: "human",
+                    skills: Some(&skills),
+                    guild_rank: None,
+                    character: Some(ada),
+                },
+                Some(story),
+            );
             discoverable(&defs, &used, &facts).len()
         };
         assert_eq!(found(&story), 0, "not until she's seen it");

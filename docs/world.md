@@ -367,7 +367,7 @@ A spawn can set `pack: n`: the most of its mobs that will fight **any one target
 
 ## Gated spawns
 
-A spawn with `when` only fills while its condition is true, in the world-event condition language below: `when: WorldFlag("rats_broke_out")`. While it's false the spawn is left alone entirely. This is how the Rat King appears only after a breakout.
+A spawn with `when` only fills while its requirement holds, in the shared [requirement language](facts.md#one-requirement-language): `when: WorldFlag("rats_broke_out")`. While it's false the spawn is left alone entirely. This is how the Rat King appears only after a breakout.
 
 ## World state
 
@@ -379,14 +379,14 @@ World flags join the shared [requirement language](skills.md#hidden-skills), so 
 
 Status: a first slice is built (`src/world_events.rs`): triggers `Event(Entered(mob, zone))`, `Event(Died(mob))`, `WorldFlag`, `All`, `Any` and `Not`; actions `SetWorldFlag`, `ClearWorldFlag` and `Announce`. Flags are `world.` [facts](facts.md) (since 2026-10-28; flags saved before then were moved over once, at startup), and admins can list, set and clear them with `worldflag`. Events are checked as game events happen; the rest of the design below waits.
 
-An event has a trigger and a list of actions. Triggers use the condition language, with new terms for the world:
+An event has a trigger and a list of actions. Triggers are [requirements](facts.md#one-requirement-language), the same language as every `requires:` (merged 2026-10-28), tested with no one in particular: anything asking about a character is false. Terms for the world:
 
 | Condition | Met when |
 | --- | --- |
 | `Count(spawn, op, n)` | A spawn's living mobs compare to `n` |
-| `WorldFlag(id)` | A world flag is set |
+| `WorldFlag(id)` | A world flag is set: the same as `Flag("world.id")` (*built*) |
 | `WorldCounter(id, op, n)` | A world counter compares to `n` |
-| `Event(game_event)` | A [game event](architecture.md#game-events) happens, such as `Died("goblin_king")` |
+| `Event(game_event)` | A [game event](architecture.md#game-events) happens, such as `Died("goblin_king")`: true only while it's being handled (*built*: `Entered(mob, zone)` and `Died(mob)`) |
 | `TimeOfDay(...)` | The game clock is in a range (with the time system) |
 | `All`, `Any`, `Not` | Combinations, as everywhere |
 

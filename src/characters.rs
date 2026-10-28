@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::attributes::{Attribute, Attributes, progression};
-use crate::requirements::{Requirement, Subject};
+use crate::requirements::{Requirement, Subject, Who};
 use crate::world::ron_options;
 
 pub struct CharactersPlugin;
@@ -237,14 +237,16 @@ pub fn background_menu(
     race: &str,
     attributes: &Attributes,
 ) -> String {
-    let facts = Subject {
-        attributes,
-        race,
-        skills: None,
-        guild_rank: None,
-        story: None,
-        character: None,
-    };
+    let facts = Subject::of(
+        Who {
+            attributes,
+            race,
+            skills: None,
+            guild_rank: None,
+            character: None,
+        },
+        None,
+    );
     let mut text = String::from("\r\nChoose your background, the life you led before:\r\n");
     for (i, background) in backgrounds.0.iter().enumerate() {
         let open = background.requires.as_ref().is_none_or(|c| c.met(&facts));
@@ -277,14 +279,16 @@ pub fn background_refusal(
     race: &str,
     attributes: &Attributes,
 ) -> Option<String> {
-    let facts = Subject {
-        attributes,
-        race,
-        skills: None,
-        guild_rank: None,
-        story: None,
-        character: None,
-    };
+    let facts = Subject::of(
+        Who {
+            attributes,
+            race,
+            skills: None,
+            guild_rank: None,
+            character: None,
+        },
+        None,
+    );
     let requires = background.requires.as_ref()?;
     (!requires.met(&facts)).then(|| {
         format!(
@@ -373,14 +377,16 @@ mod tests {
                         }
                     }
                 }
-                let facts = Subject {
-                    attributes: &attributes,
-                    race: &race.id,
-                    skills: None,
-                    guild_rank: None,
-                    story: None,
-                    character: None,
-                };
+                let facts = Subject::of(
+                    Who {
+                        attributes: &attributes,
+                        race: &race.id,
+                        skills: None,
+                        guild_rank: None,
+                        character: None,
+                    },
+                    None,
+                );
                 needs.is_none_or(|c| c.met(&facts))
             });
             if !reachable {

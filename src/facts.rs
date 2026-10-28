@@ -141,6 +141,8 @@ impl Facts {
             .map(|entry| &entry.value)
     }
 
+    // Read by quests, once there are any; requirements read facts through `get`.
+    #[allow(dead_code)]
     /// Whether it's set: true, a number but zero, a word.
     pub fn is_set(&self, owner: &Owner, key: &str, now: i64) -> bool {
         self.get(owner, key, now).is_some()

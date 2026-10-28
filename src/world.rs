@@ -20,9 +20,10 @@ use thiserror::Error;
 
 use crate::attributes::Attribute;
 use crate::net::Connection;
+use crate::requirements::Requirement;
 use crate::skills::Rarity;
 use crate::targeting::Keywords;
-use crate::world_events::{When, WorldEventDef};
+use crate::world_events::WorldEventDef;
 
 /// Asset folder holding one `.zone.ron` file per zone.
 pub const ZONES_PATH: &str = "zones";
@@ -906,7 +907,7 @@ pub struct SpawnDef {
     pub breach: Option<Breach>,
     /// Only fills while this is true, like `WorldFlag("rats_broke_out")`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub when: Option<When>,
+    pub when: Option<Requirement>,
 }
 
 /// Mobs breaking out of a room packed with their kind, through a closed door on the way they're

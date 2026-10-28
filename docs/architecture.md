@@ -38,7 +38,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `events.rs` | `GameEvent`, the shared vocabulary of things that happen, and the room announcements made from them |
 | `time.rs` | The game clock, parts of the day, `time`, and the one-second heartbeat |
 | `combat/` | Combat: the round, death and respawn and the commands (`mod.rs`), attacks, techniques and ripostes (`strike.rs`), casting spells and mobs' choice of them (`casting.rs`), active skills made of effects, and `steal`, a shortcut to Pickpocketing (`abilities.rs`), resolving any blow, technique or spell, from the contest to what it does (`resolve.rs`), carrying out effects and the armour and resistances damage goes through (`effects.rs`), conditions and traits as data and what they do (`states.rs`, from `assets/conditions/` and `assets/traits/`), reactions set off by game events, out of the round (`triggers.rs`), allies answering a call for help (`help.rs`), mobs an effect brings into being (`spawning.rs`), and those an effect makes run (`fleeing.rs`) |
-| `world_events.rs` | World flags, world events from zone files, and the admin `worldflag` |
+| `world_events.rs` | World events from zone files (a `when` requirement, and actions), moving old world flags into facts, and the admin `worldflag` |
 | `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
 | `vitals.rs` | Current health and stamina for players and mobs alike, their maximums, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `healing.rs` | `eat` and `drink` for consumables, and `bandage`, a shortcut for `use first aid` |
@@ -58,7 +58,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |
-| `requirements.rs` | The shared requirement language, what every `requires:` holds (`Stat`, `Race`, `Skill`, `GuildRank`, `Fact`, `Flag`, `All`, `Any`, `Not`), tested against a `Subject`: who, and what's known of them. Not status conditions, which are `combat`'s |
+| `requirements.rs` | The shared requirement language, what every `requires:` holds (`Stat`, `Race`, `Skill`, `GuildRank`, `Fact`, `Flag`, `WorldFlag`, `Event`, `All`, `Any`, `Not`), and world events' and gated spawns' `when:`, tested against a `Subject`: someone if anyone, the facts, the zone, and what just happened. Not status conditions, which are `combat`'s |
 | `dice.rs` | The `Dice` resource, the only source of randomness |
 
 ### One tick

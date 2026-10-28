@@ -417,7 +417,7 @@ In the smallest pull requests that each leave the game working, every one with i
     - *Built.* **3b. Discovery reads facts too:** stumbling on a hidden skill tests its requirement with the character's facts, which means the fact store reaching skill practice in commands and in combat.
 4. **One requirement language**, in three small steps:
     - *Built.* **4a. The rename:** `Condition` becomes `Requirement` (`requirements.rs`), what every `requires:` holds, so "condition" means only what's on a body, like poisoned.
-    - **4b. World events' conditions merge into it:** their `When` becomes requirements plus their events as triggers; who's tested becomes optional, since a world event has no one.
+    - *Built.* **4b. World events' conditions merge into it:** their `When` becomes requirements plus their events as triggers; who's tested becomes optional, since a world event has no one.
     - **4c. New terms:** `HasItem`, `InRoom`, `InZone`, and `Has(condition)`: a status condition or trait on the character.
 5. **`facts <player>` and `facts world`,** for GMs.
 
