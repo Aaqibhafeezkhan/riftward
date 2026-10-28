@@ -18,6 +18,7 @@ use crate::combat::{ConditionDefs, Conditions, ItemConditions, name_of};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, ItemPlace, Permission, RoomItemRow};
 use crate::dice::Dice;
+use crate::events::{GameEvent, Got};
 use crate::money::{self, Purse};
 use crate::net::{self, Connection};
 use crate::output::{
@@ -1419,6 +1420,28 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         self.actor.entity
     }
 
+    /// `who` has come to have `item`, and everything inside it: an `Obtained` for each. Nothing
+    /// if it didn't reach them (a mob's things aren't saved, so don't move).
+    fn obtained(&self, who: Entity, item: Entity, how: Got) -> Vec<GameEvent> {
+        if self.snapshot.root(item).and_then(ItemLocation::holder) != Some(who) {
+            return Vec::new();
+        }
+        self.snapshot
+            .items
+            .iter()
+            .filter(|info| self.snapshot.is_within(info.entity, item))
+            .filter_map(|info| {
+                let (_, found, _) = self.items.get(info.entity).ok()?;
+                Some(GameEvent::Obtained {
+                    who,
+                    item: info.entity,
+                    key: found.key.clone(),
+                    how,
+                })
+            })
+            .collect()
+    }
+
     /// How an item location is saved. A container becomes real first if it isn't already.
     fn place(&mut self, location: ItemLocation) -> Option<ItemPlace> {
         Some(match location {
@@ -1873,20 +1896,25 @@ fn get(
     templates: Res<ItemTemplates>,
     sheets: Query<&Attributes>,
     db: Res<Database>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
     let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
-    let out = get_items(&inv, &mut mover, &keywords, &sheets);
+    let mut got = Vec::new();
+    let out = get_items(&inv, &mut mover, &keywords, &sheets, &mut got);
+    events.write_batch(got);
     deliver(out, &mut outbox);
 }
 
+/// `get`: what it says, with an `Obtained` in `got` for each thing that's newly theirs.
 fn get_items(
     inv: &Invocation,
     mover: &mut Mover,
     keywords: &Query<&Keywords>,
     sheets: &Query<&Attributes>,
+    got: &mut Vec<GameEvent>,
 ) -> Vec<Outgoing> {
     let me = mover.me();
     let line = |text: String| vec![Outgoing::line(me, text)];
@@ -1975,6 +2003,7 @@ fn get_items(
         };
         out.push(Outgoing::line(me, text));
         if !already_carried {
+            got.extend(mover.obtained(me, entity, Got::PickedUp));
             out.push(Outgoing::Room {
                 room: mover.actor.room,
                 except: me,
@@ -2146,6 +2175,7 @@ fn give(
     hidden: Query<&Conditions>,
     db: Res<Database>,
     mut purses: Query<&mut Purse>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -2168,8 +2198,12 @@ fn give(
     }
     let mut mover = Mover::new(actor, &mut items, &players, &rooms, &templates, &db);
     let me = mover.me();
-    let out = give_item(&inv, &mut mover, &players, &keywords, &sheets, &hidden)
-        .unwrap_or_else(|err| vec![Outgoing::line(me, err)]);
+    let mut got = Vec::new();
+    let out = give_item(
+        &inv, &mut mover, &players, &keywords, &sheets, &hidden, &mut got,
+    )
+    .unwrap_or_else(|err| vec![Outgoing::line(me, err)]);
+    events.write_batch(got);
     deliver(out, &mut outbox);
 }
 
@@ -2180,6 +2214,7 @@ fn give_item(
     keywords: &Query<&Keywords>,
     sheets: &Query<&Attributes>,
     hidden: &Query<&Conditions>,
+    got: &mut Vec<GameEvent>,
 ) -> Result<Vec<Outgoing>, String> {
     let me = mover.me();
     let (what, who) = inv
@@ -2221,6 +2256,7 @@ fn give_item(
         .place_for(receiver.entity, entity, None)
         .ok_or_else(|| format!("{} has nowhere to put {name}.", receiver.name))?;
     mover.move_to(entity, target);
+    got.extend(mover.obtained(receiver.entity, entity, Got::Given(me)));
 
     let mut out = vec![
         Outgoing::line(me, format!("You give {name} to {}.", receiver.name)),
@@ -2661,6 +2697,135 @@ mod tests {
         assert!(
             !conditions.has("blessed"),
             "the template's grant is only while worn"
+        );
+    }
+
+    #[test]
+    fn picking_up_and_being_given_obtain_things() {
+        use crate::world::{ContainerDef, Exits, InRoom, Player, Room, Terrain};
+        use bevy::ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        world.insert_resource(Database::open(":memory:").unwrap());
+        world.insert_resource(Outbox::default());
+        world.init_resource::<Messages<GameEvent>>();
+        let (sack, tail, knife) = (
+            ItemKey::parse("test:sack", ""),
+            ItemKey::parse("test:rat_tail", ""),
+            ItemKey::parse("test:knife", ""),
+        );
+        let mut sack_def = ItemDef::named("a sack");
+        sack_def.container = Some(ContainerDef {
+            capacity: crate::world::Capacity::Count(10),
+            accepts: Vec::new(),
+            max_item: None,
+            state: DoorState::Open,
+            lock: None,
+        });
+        world.insert_resource(ItemTemplates(HashMap::from([
+            (sack.clone(), sack_def),
+            (tail.clone(), ItemDef::named("a rat tail")),
+            (knife.clone(), ItemDef::named("a knife")),
+        ])));
+        let room = world
+            .spawn((
+                Room {
+                    name: "A cellar".into(),
+                    description: String::new(),
+                    no_wander: false,
+                    indoors: true,
+                    terrain: Terrain::default(),
+                },
+                RoomKey::parse("test:cellar", ""),
+                Exits::default(),
+            ))
+            .id();
+        // Players: what a mob carries isn't saved, and only what's saved moves.
+        let account = world
+            .resource::<Database>()
+            .create_account("ada", "password123")
+            .unwrap();
+        let player = |world: &mut World, name: &str| {
+            let id = world
+                .resource::<Database>()
+                .create_character(account.id, name)
+                .unwrap()
+                .id;
+            world
+                .spawn((
+                    Player {
+                        name: name.into(),
+                        character_id: id,
+                        account: "ada".into(),
+                        role: crate::db::Role::Player,
+                        race: "human".into(),
+                        background: String::new(),
+                        description: String::new(),
+                    },
+                    InRoom(room),
+                    Keywords::from_name(name),
+                    Attributes::starting(|_| 5, 0),
+                ))
+                .id()
+        };
+        let (ada, bob) = (player(&mut world, "Ada"), player(&mut world, "Bob"));
+        let item = |world: &mut World, key: &ItemKey, location: ItemLocation| {
+            let name = world.resource::<ItemTemplates>().0[key].name.clone();
+            world
+                .spawn((
+                    Item {
+                        key: key.clone(),
+                        name: name.clone(),
+                        id: None,
+                        state: DoorState::Open,
+                        quality: Quality::Standard,
+                    },
+                    location,
+                    Keywords::from_name(&name),
+                ))
+                .id()
+        };
+        let the_sack = item(&mut world, &sack, ItemLocation::Room(room));
+        let the_tail = item(&mut world, &tail, ItemLocation::Inside(the_sack));
+        let the_knife = item(&mut world, &knife, ItemLocation::Inside(the_sack));
+        let run = |world: &mut World, who: Entity, command: &'static str, args: &str| {
+            let inv = Invocation {
+                entity: who,
+                command,
+                usage: "",
+                args: args.into(),
+            };
+            match command {
+                "get" => world.run_system_once_with(get, inv).unwrap(),
+                _ => world.run_system_once_with(give, inv).unwrap(),
+            }
+            let events = world.resource::<Messages<GameEvent>>();
+            let got: Vec<_> = events
+                .get_cursor()
+                .read(events)
+                .filter_map(|e| match e {
+                    GameEvent::Obtained { who, item, how, .. } => Some((*who, *item, *how)),
+                    _ => None,
+                })
+                .collect();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+            got
+        };
+
+        // The sack, and all that's in it.
+        let mut got = run(&mut world, ada, "get", "sack");
+        got.sort_by_key(|(_, item, _)| *item);
+        let mut sack_and_all = vec![
+            (ada, the_sack, Got::PickedUp),
+            (ada, the_tail, Got::PickedUp),
+            (ada, the_knife, Got::PickedUp),
+        ];
+        sack_and_all.sort_by_key(|(_, item, _)| *item);
+        assert_eq!(got, sack_and_all);
+        // Out of her own sack, it was hers already.
+        assert_eq!(run(&mut world, ada, "get", "knife sack"), vec![]);
+        assert_eq!(
+            run(&mut world, ada, "give", "knife bob"),
+            vec![(bob, the_knife, Got::Given(ada))]
         );
     }
 

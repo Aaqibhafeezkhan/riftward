@@ -12,6 +12,7 @@ use bevy::prelude::*;
 
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, ItemPlace};
+use crate::events::{GameEvent, Got};
 use crate::items::{
     self, HANDS, ItemLocation, ItemQuery, ItemTemplates, Quality, Snapshot, capitalized, worth,
 };
@@ -343,14 +344,21 @@ fn buy(In(inv): In<Invocation>, mut counter: Counter) {
                 .map_err(|err| error!("failed to save a bought item [{}]: {err}", ware.key))
                 .ok()
         });
-        items::spawn_item(
+        if let Some(item) = items::spawn_item(
             &mut counter.commands,
             &counter.templates,
             ware.key.clone(),
             id,
             location,
             ware.quality,
-        );
+        ) {
+            counter.practice.events.write(GameEvent::Obtained {
+                who: actor.entity,
+                item,
+                key: ware.key.clone(),
+                how: Got::Bought(keeper.entity),
+            });
+        }
         out.push(Outgoing::Room {
             room: actor.room,
             except: actor.entity,

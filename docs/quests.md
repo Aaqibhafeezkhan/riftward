@@ -424,7 +424,7 @@ In the smallest pull requests that each leave the game working, every one with i
 **Events quests listen to**
 
 6. *Built.* **`Died` names who killed it** (and so their side, `groups::side(killer)`): whoever struck the blow, or put on the bleeding or poison that did it, which is their kill for experience and loot too.
-7. **`Obtained`:** picking up, being given and buying write it.
+7. *Built.* **`Obtained`:** picking up, being given and buying write it, for the item and everything in it. Taking something out of your own bag isn't obtaining it.
 8. **`Gave`, `Examined` and `Searched`:** `give`, `examine` and `search` write them.
 
 **The engine, with the first contracts**

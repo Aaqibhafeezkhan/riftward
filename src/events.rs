@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use crate::net;
 use crate::output::{Characters, Outbox, Outgoing, RoomQuery, deliver};
 use crate::time::Phase;
-use crate::world::MobKey;
+use crate::world::{ItemKey, MobKey};
 
 pub struct EventsPlugin;
 
@@ -111,6 +111,26 @@ pub enum GameEvent {
         count: u32,
         room: Entity,
     },
+    /// `who` came to have an item of template `key`: picked it up, was given it, or bought it.
+    /// What's inside it comes too, each its own event. Quests' `Obtain` will listen.
+    #[allow(dead_code)]
+    Obtained {
+        who: Entity,
+        item: Entity,
+        key: ItemKey,
+        how: Got,
+    },
+}
+
+/// How someone came to have an item.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Got {
+    /// From the ground, or out of something not theirs, like a corpse.
+    PickedUp,
+    /// Handed over by this player or mob.
+    Given(Entity),
+    /// From this shopkeeper.
+    Bought(Entity),
 }
 
 /// How someone moved.
@@ -169,6 +189,7 @@ fn text(event: &GameEvent) -> Option<String> {
         | GameEvent::Consumed { .. }
         | GameEvent::CalledForHelp { .. }
         | GameEvent::Spawns { .. }
+        | GameEvent::Obtained { .. }
         | GameEvent::Flees { .. } => return None,
     };
     Some(line + "\r\n")
@@ -223,6 +244,7 @@ fn announce(
             | GameEvent::Consumed { .. }
             | GameEvent::CalledForHelp { .. }
             | GameEvent::Spawns { .. }
+            | GameEvent::Obtained { .. }
             | GameEvent::Flees { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, _, in_room) in &players {

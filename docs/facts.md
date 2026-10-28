@@ -61,7 +61,7 @@ A **rule** is: when an event happens, if a condition holds, do these actions.
 | Event | When |
 | --- | --- |
 | `Killed(mob or tag)` | A mob of that template (or tag) dies; credited to the side that killed it |
-| `Obtained(item or tag)` | Someone picks one up or is given one |
+| `Obtained(item or tag)` | Someone picks one up, is given one or buys one (the game event is *built*) |
 | `Gave(item, to: mob)` | Someone gives a mob an item |
 | `Entered(room)` | Someone walks in |
 | `Asked(mob, topic)` | `ask <mob> about <topic>` |
