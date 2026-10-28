@@ -1007,6 +1007,16 @@ fn enter_game(
     if !character.autoassist {
         commands.entity(entity).insert(crate::groups::NoAssist);
     }
+    match db.membership(character.id, crate::guild::GUILD) {
+        Ok(Some(record)) => match crate::guild::Membership::from_record(&record) {
+            Some(membership) => {
+                commands.entity(entity).insert(membership);
+            }
+            None => warn!("{name}'s guild rank '{}' isn't in guild.ron", record.rank),
+        },
+        Ok(None) => {}
+        Err(err) => error!("failed to load {name}'s guild membership: {err}"),
+    }
     info!("{name} entered the game (account '{}')", account.username);
 
     out.push(Outgoing::line(

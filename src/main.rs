@@ -17,6 +17,7 @@ mod events;
 mod formula;
 mod gathering;
 mod groups;
+mod guild;
 mod healing;
 mod items;
 mod login;
@@ -108,12 +109,13 @@ fn add_game(app: &mut App, path: String, address: String) {
         stealth::StealthPlugin,
         groups::GroupsPlugin,
     ))
-    // Magic and trade.
+    // Magic, trade and the guild.
     .add_plugins((
         spells::SpellsPlugin,
         shops::ShopsPlugin,
         trade::TradePlugin,
         puppet::PuppetPlugin,
+        guild::GuildPlugin,
     ));
 }
 

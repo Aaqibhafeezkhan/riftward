@@ -1,0 +1,21 @@
+// The Adventurers' Guild: its ranks, what each takes, and what the clerk charges. Read when the
+// server starts, so restart it after a change. See docs/quests.md#guild-ranks.
+(
+    name: "the Adventurers' Guild",
+    // Who keeps the guild's ledgers and tags: `join guild`, a new tag and reinstatement are
+    // done in front of them.
+    clerk: "riftwatch:contract_clerk",
+    // Copper for a new tag, when one is lost.
+    tag_fee: 50,
+    // In order, lowest first. `merit` makes a member eligible; ranks with `trial` need a
+    // promotion (a trial, or a GM's `guild promote`) as well. `reinstatement` is the copper an
+    // expelled member of that rank pays to come back.
+    ranks: [
+        (id: "bone", name: "Bone", merit: 0, tag: "riftwatch:bone_tag", reinstatement: 100),
+        (id: "copper", name: "Copper", merit: 50, tag: "riftwatch:copper_tag", reinstatement: 200),
+        (id: "iron", name: "Iron", merit: 200, tag: "riftwatch:iron_tag", reinstatement: 500),
+        (id: "silver", name: "Silver", merit: 600, trial: true, tag: "riftwatch:silver_tag", reinstatement: 1000),
+        (id: "gold", name: "Gold", merit: 1500, trial: true, tag: "riftwatch:gold_tag", reinstatement: 2500),
+        (id: "platinum", name: "Platinum", merit: 4000, trial: true, tag: "riftwatch:platinum_tag", reinstatement: 5000),
+    ],
+)

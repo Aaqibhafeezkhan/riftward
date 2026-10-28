@@ -67,6 +67,7 @@ fn learn_cmd(
     (defs, spell_defs): (Res<SkillDefs>, Res<SpellDefs>),
     mut sheets: Query<(&mut Skills, &mut Attributes, &mut Spells, &mut Purse)>,
     db: Res<Database>,
+    shown: Query<&crate::guild::ShownRank>,
 ) {
     // Lessons are for players: a mob has no purse to pay with, and nothing to save.
     let Ok((_, Some(player), _, in_room)) = players.get(inv.entity) else {
@@ -105,6 +106,7 @@ fn learn_cmd(
         attributes: &attributes,
         race: &race,
         skills: Some(&skills),
+        guild_rank: crate::guild::shown_rank(inv.entity, &shown),
     };
     let needs = |lesson: &Lesson| match lesson {
         Lesson::Skill(skill) => skill

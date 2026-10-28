@@ -34,6 +34,7 @@ type Sheet = (
     Option<&'static BaseHealth>,
 );
 
+#[allow(clippy::too_many_arguments)]
 pub fn score(
     In(inv): In<Invocation>,
     players: Characters,
@@ -42,6 +43,7 @@ pub fn score(
     races: Res<Races>,
     backgrounds: Res<Backgrounds>,
     (defs, condition_defs): (Res<SkillDefs>, Res<ConditionDefs>),
+    memberships: Query<&crate::guild::Membership>,
 ) {
     let (Ok((_, player, mob, _)), Ok((attributes, vitals, skills, conditions, purse, base))) =
         (players.get(inv.entity), sheets.get(inv.entity))
@@ -77,6 +79,17 @@ pub fn score(
     );
     if let Some(purse) = purse {
         text += &format!("    Purse: {}", money::coins(purse.0));
+    }
+    if let Ok(m) = memberships.get(inv.entity) {
+        let rank = crate::guild::guild()
+            .ranks
+            .get(m.rank)
+            .map_or("", |r| r.name.as_str());
+        text += &if m.expelled {
+            format!("\r\n  Guild: expelled, at {rank}")
+        } else {
+            format!("\r\n  Guild: {rank}, {} merit", m.merit)
+        };
     }
     let traits = conditions.map_or_else(Vec::new, |c| c.names(&condition_defs, true));
     if !traits.is_empty() {

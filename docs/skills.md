@@ -213,6 +213,7 @@ Unlock conditions are data, built from a small set of terms that other systems s
 | `Title(id)` | The character holds the title |
 | `Flag(id)` | A named flag is set on the character |
 | `Race(id)` | The character is of that race |
+| `GuildRank(id)` | The character shows that guild rank or higher: a member in good standing, wearing their tag ([Quests](quests.md#what-rank-unlocks); *built*, and tested by trainers and Karma, not by discovery) |
 | `All([...])`, `Any([...])`, `Not(...)` | Combinations of the above |
 
 ```ron

@@ -1,6 +1,6 @@
 # Quests and the Adventurers' Guild
 
-[Design summary](README.md) · Status: designed, not built. Quests wait on mobs and game events; guild contracts also need combat for most goals.
+[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quests, contracts and the board, perks and lodging are designed, not built.
 
 Quests are data, written by builders and GMs, and tracked per character. Most of them come from the **Adventurers' Guild**, whose contracts raise a **guild rank** that is entirely separate from a character's power. A character can ignore quests completely, hunt monsters from the first day and grow just as strong; what they give up is the guild's trust, and the doors it opens.
 
@@ -31,7 +31,8 @@ The guild ranks its members by metal, and every member wears a **rank tag** stam
 
 The names and numbers are data in the guild's file, to tune. Letter grades (F to S) would be the same system with different names.
 
-- **Joining is free:** `join guild` in the Guildhall makes a character a Bone member and hands them a Bone tag.
+- **Joining is free:** `join guild` in front of the clerk (Marin Harrow, in the Contract Hall) makes a character a Bone member and hands them a Bone tag. `guild` shows a member's rank, merit, contracts done and what the next rank takes.
+- **The ranks are data,** in `assets/guild.ron`: each rank's merit, whether it needs a trial, its tag, and what reinstatement costs at it; and the clerk, and the fee for a lost tag.
 - **Merit comes from contracts:** each guild contract's rewards include merit, scaled to its rank.
 - **Promotion needs a trial from Silver up.** Reaching the merit threshold makes a character *eligible*; the clerk then offers a promotion contract (a trial, or a test set by a senior member). Bone to Iron are automatic. That keeps the higher ranks meaningful and gives GMs a natural place to run an event.
 - **Rank never drops.** Merit can fall (abandoning or failing a contract costs some), but rank stays at the highest reached. A setback stings without undoing a character's history.
@@ -43,8 +44,8 @@ The names and numbers are data in the guild's file, to tune. Letter grades (F to
 The tag is an item, worn at the neck: `bone_tag`, `copper_tag` and so on, each a template with the tag `guild_tag`.
 
 - **Showing it matters.** Guild mobs (the clerk, guild trainers, guards at the guild's inner doors) check the tag a character is *wearing*, not their record, so taking it off makes you an anonymous traveller. Most of the time that's a nuisance; occasionally it's the point.
-- **It's bound to its owner.** A stolen tag doesn't let the thief pass as a member: the check is the wearer's own rank, shown by their own tag. Wearing someone else's tag does nothing, or gets you arrested.
-- **Lost tags are reissued** by the clerk for a fee. Promotion swaps the old tag for the new one.
+- **It's bound to its owner.** A stolen tag doesn't let the thief pass as a member: the check is the wearer's own rank, shown by their own tag. Wearing someone else's tag does nothing, or gets you arrested. (*Built* as: a rank shows only for a member in good standing wearing a guild tag, any guild tag; a non-member wearing one shows nothing.)
+- **Lost tags are reissued** by the clerk for a fee (`guild tag`, 5 silver to start). Promotion makes a new tag due: `guild tag` swaps the old one for it free.
 - **`who` and `score` show the rank,** `who` only while the tag is worn.
 
 ### What rank unlocks
@@ -212,8 +213,8 @@ GMs and admins make and run quests from inside the game, like builders do rooms:
 | `quest grant <player> <id>` | Give a quest to a player directly |
 | `quest advance <player> <id>` | Push a player past a stage, for `Manual` goals or a broken one |
 | `quest reward <player> <id>` | Pay out the rewards by hand |
-| `guild promote <player>` / `guild merit <player> <n>` | Run a promotion trial live, or correct merit |
-| `guild expel <player>` / `guild reinstate <player>` | Throw a member out, or take them back without the fee |
+| `guild promote <player>` / `guild merit <player> <n>` | Run a promotion trial live, or correct merit (*built*: merit raises rank through Iron by itself, and says when a trial rank is earned) |
+| `guild expel <player>` / `guild reinstate <player>` | Throw a member out, taking their tag, or take them back without the fee (*built*) |
 
 These pair with [puppeting](architecture.md#game-masters-and-puppeting): a GM can play the contract clerk, hand out a one-off contract with `quest grant`, then puppet the monster at the end of it.
 

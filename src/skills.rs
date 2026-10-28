@@ -1095,10 +1095,12 @@ pub fn count_use(
             ));
         }
     }
+    // Discovery doesn't look at guild rank: a skill that needs one is taught, not stumbled on.
     let facts = Facts {
         attributes,
         race: learner.race,
         skills: Some(skills),
+        guild_rank: None,
     };
     let chance = DISCOVERY_CHANCE * learner.boost;
     if let Some(found) = discover(defs, &practised, &facts, dice, chance) {
@@ -1321,6 +1323,7 @@ fn karma_cmd(
     defs: Res<SkillDefs>,
     mut sheets: Query<(&mut Skills, &mut Attributes)>,
     db: Res<Database>,
+    shown: Query<&crate::guild::ShownRank>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -1332,6 +1335,7 @@ fn karma_cmd(
         attributes: &attributes,
         race: &actor.race,
         skills: Some(&skills),
+        guild_rank: crate::guild::shown_rank(inv.entity, &shown),
     };
     let unmet = |skill: &Skill| {
         skill
@@ -2064,6 +2068,7 @@ mod tests {
             attributes: &Attributes::default(),
             race: "human",
             skills: Some(&known),
+            guild_rank: None,
         };
         let cleave = &defs.skills["axes:cleave"];
         assert!(
@@ -2107,6 +2112,7 @@ mod tests {
             attributes: &attributes,
             race: "human",
             skills: Some(&skills),
+            guild_rank: None,
         };
         // Not what they know, nor the entry, nor what they don't qualify for, nor other trees.
         let used = |key: &str| vec![key.to_string()];

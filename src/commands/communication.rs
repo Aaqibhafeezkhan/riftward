@@ -190,10 +190,17 @@ pub fn who(
     players: Characters,
     mut outbox: ResMut<Outbox>,
     races: Res<Races>,
+    shown: Query<&crate::guild::ShownRank>,
 ) {
+    // A guild member's rank shows while they wear their tag.
     let mut names: Vec<_> = players
         .iter()
-        .filter_map(|(_, p, _, _)| p.map(|p| format!("{} ({})", p.name, races.name(&p.race))))
+        .filter_map(|(e, p, _, _)| {
+            let p = p?;
+            let rank = crate::guild::shown_rank_name(e, &shown)
+                .map_or(String::new(), |rank| format!(" [{rank}]"));
+            Some(format!("{} ({}){rank}", p.name, races.name(&p.race)))
+        })
         .collect();
     names.sort();
     let text = format!(

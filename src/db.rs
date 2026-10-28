@@ -152,6 +152,18 @@ const SCHEMA: &str = "
         set_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    -- Membership of an organisation: the Adventurers' Guild ('adventurers') to start with.
+    -- Rank never drops; an expelled member keeps it, to buy their way back in at.
+    CREATE TABLE IF NOT EXISTS character_guild (
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        guild        TEXT NOT NULL,
+        rank         TEXT NOT NULL,
+        merit        INTEGER NOT NULL DEFAULT 0,
+        contracts    INTEGER NOT NULL DEFAULT 0,
+        expelled     INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (character_id, guild)
+    );
+
     -- How many mobs each breeding spawn has, so a restart brings back the same number.
     CREATE TABLE IF NOT EXISTS spawn_counts (
         spawn TEXT PRIMARY KEY,            -- zone:spawn
@@ -182,6 +194,17 @@ pub enum DbError {
 }
 
 pub type DbResult<T> = Result<T, DbError>;
+
+/// A character's standing in a guild, as saved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MembershipRecord {
+    /// The rank's id: `bone`, `copper`...
+    pub rank: String,
+    pub merit: i64,
+    /// Contracts completed.
+    pub contracts: u32,
+    pub expelled: bool,
+}
 
 /// Where a real item is, as stored in the `items` table.
 pub enum ItemPlace {
@@ -526,6 +549,49 @@ impl Database {
         self.conn().execute(
             "UPDATE characters SET hide_numbers = ?1 WHERE id = ?2",
             params![i64::from(hide), character_id],
+        )?;
+        Ok(())
+    }
+
+    /// A character's standing in `guild`, if they've ever joined it.
+    pub fn membership(&self, character_id: i64, guild: &str) -> DbResult<Option<MembershipRecord>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT rank, merit, contracts, expelled FROM character_guild
+                 WHERE character_id = ?1 AND guild = ?2",
+                params![character_id, guild],
+                |row| {
+                    Ok(MembershipRecord {
+                        rank: row.get(0)?,
+                        merit: row.get(1)?,
+                        contracts: row.get::<_, i64>(2)?.max(0) as u32,
+                        expelled: row.get::<_, i64>(3)? != 0,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    pub fn save_membership(
+        &self,
+        character_id: i64,
+        guild: &str,
+        record: &MembershipRecord,
+    ) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT INTO character_guild (character_id, guild, rank, merit, contracts, expelled)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT (character_id, guild) DO UPDATE SET
+                 rank = ?3, merit = ?4, contracts = ?5, expelled = ?6",
+            params![
+                character_id,
+                guild,
+                record.rank,
+                record.merit,
+                i64::from(record.contracts),
+                i64::from(record.expelled)
+            ],
         )?;
         Ok(())
     }

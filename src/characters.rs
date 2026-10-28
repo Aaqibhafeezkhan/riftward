@@ -241,6 +241,7 @@ pub fn background_menu(
         attributes,
         race,
         skills: None,
+        guild_rank: None,
     };
     let mut text = String::from("\r\nChoose your background, the life you led before:\r\n");
     for (i, background) in backgrounds.0.iter().enumerate() {
@@ -278,6 +279,7 @@ pub fn background_refusal(
         attributes,
         race,
         skills: None,
+        guild_rank: None,
     };
     let requires = background.requires.as_ref()?;
     (!requires.met(&facts)).then(|| {
@@ -371,6 +373,7 @@ mod tests {
                     attributes: &attributes,
                     race: &race.id,
                     skills: None,
+                    guild_rank: None,
                 };
                 needs.is_none_or(|c| c.met(&facts))
             });
