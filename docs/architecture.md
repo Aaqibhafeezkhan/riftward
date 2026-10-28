@@ -132,6 +132,9 @@ Started. One vocabulary of game events, the `GameEvent` message in `events.rs`, 
 | `PhaseChanged(phase)` | The game clock | Announcements to everyone outdoors |
 | `Died` (who, their template if a mob, and the `killer`: whoever struck the blow, or put on the bleeding or poison that did it, `None` if no one else did; their side is `groups::side(killer)`) | The combat round, reactions | World events (`Event(Died(mob))`); quests' `Kill` will |
 | `Obtained` (who, the item and its template, and how: `PickedUp`, `Given(from)`, `Bought(from)`; a bag brings an event for each thing in it) | `get` (not out of your own bag), `give`, `buy` | Quests' `Obtain` will |
+| `Gave` (who, the item and its template, and to whom; one for each thing in a bag) | `give` | Quests' `Give` will |
+| `Examined` (who, the item and its template) | `examine`, and `look` at an item | Quests' `Examine` will |
+| `Searched` (who, the room) | `search` | Quests' `Search` will |
 
 More arrive as their systems do: `ItemPickedUp`, `DoorOpened`, `Attacked`, `DodgeSucceeded`, `ManaSpent`, `DamageTaken`.
 

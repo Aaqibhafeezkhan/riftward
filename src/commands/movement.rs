@@ -58,6 +58,7 @@ impl View<'_, '_> {
 
 /// `look` describes the room; `look <target>` looks along an exit, at a door, at someone here, or
 /// at an item here or in your pack.
+#[allow(clippy::too_many_arguments)]
 pub fn look(
     In(inv): In<Invocation>,
     players: Characters,
@@ -66,6 +67,7 @@ pub fn look(
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
     races: Res<Races>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -135,7 +137,10 @@ pub fn look(
                         + &gear_lines(e, &view.items, &the(&mob.name))
                 }
                 _ => match find_item(&inv.args, &actor, &view.items, &keywords, &templates) {
-                    Ok(item) => describe_item(item, &view.items, &templates) + "\r\n",
+                    Ok(item) => {
+                        events.write_batch(crate::items::examined(actor.entity, item, &view.items));
+                        describe_item(item, &view.items, &templates) + "\r\n"
+                    }
                     Err(err) => err + "\r\n",
                 },
             }

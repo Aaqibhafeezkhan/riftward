@@ -425,7 +425,7 @@ In the smallest pull requests that each leave the game working, every one with i
 
 6. *Built.* **`Died` names who killed it** (and so their side, `groups::side(killer)`): whoever struck the blow, or put on the bleeding or poison that did it, which is their kill for experience and loot too.
 7. *Built.* **`Obtained`:** picking up, being given and buying write it, for the item and everything in it. Taking something out of your own bag isn't obtaining it.
-8. **`Gave`, `Examined` and `Searched`:** `give`, `examine` and `search` write them.
+8. *Built.* **`Gave`, `Examined` and `Searched`:** `give`, `examine` (and `look` at an item) and `search` write them. Rooms have no features to examine yet, so `Examined` is for items; giving to a mob waits on mobs holding items ([#55](https://github.com/Foxworks-Studios/riftward/issues/55)).
 
 **The engine, with the first contracts**
 

@@ -215,10 +215,15 @@ fn search(
     sheets: Query<&Attributes>,
     mobs: Query<&Mob>,
     mut dice: ResMut<Dice>,
+    mut events: MessageWriter<GameEvent>,
 ) {
     let Some(actor) = Actor::get(&both.p0(), inv.entity) else {
         return;
     };
+    events.write(GameEvent::Searched {
+        who: actor.entity,
+        room: actor.room,
+    });
     let (intuition, luck) = sheets.get(actor.entity).map_or((1.0, 0), |a| {
         (
             f64::from(a.get(Attribute::Intuition)) * SEARCH_BONUS,

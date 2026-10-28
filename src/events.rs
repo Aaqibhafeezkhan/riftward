@@ -120,6 +120,26 @@ pub enum GameEvent {
         key: ItemKey,
         how: Got,
     },
+    /// `who` handed an item of template `key` to `to`, with what's inside it, each its own
+    /// event. Quests' `Give` will listen.
+    #[allow(dead_code)]
+    Gave {
+        who: Entity,
+        item: Entity,
+        key: ItemKey,
+        to: Entity,
+    },
+    /// `who` looked closely at an item (`examine`, or `look` at it). Quests' `Examine` will
+    /// listen.
+    #[allow(dead_code)]
+    Examined {
+        who: Entity,
+        item: Entity,
+        key: ItemKey,
+    },
+    /// `who` searched `room`. Quests' `Search` will listen.
+    #[allow(dead_code)]
+    Searched { who: Entity, room: Entity },
 }
 
 /// How someone came to have an item.
@@ -190,6 +210,9 @@ fn text(event: &GameEvent) -> Option<String> {
         | GameEvent::CalledForHelp { .. }
         | GameEvent::Spawns { .. }
         | GameEvent::Obtained { .. }
+        | GameEvent::Gave { .. }
+        | GameEvent::Examined { .. }
+        | GameEvent::Searched { .. }
         | GameEvent::Flees { .. } => return None,
     };
     Some(line + "\r\n")
@@ -245,6 +268,9 @@ fn announce(
             | GameEvent::CalledForHelp { .. }
             | GameEvent::Spawns { .. }
             | GameEvent::Obtained { .. }
+            | GameEvent::Gave { .. }
+            | GameEvent::Examined { .. }
+            | GameEvent::Searched { .. }
             | GameEvent::Flees { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, _, in_room) in &players {

@@ -1420,9 +1420,9 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         self.actor.entity
     }
 
-    /// `who` has come to have `item`, and everything inside it: an `Obtained` for each. Nothing
-    /// if it didn't reach them (a mob's things aren't saved, so don't move).
-    fn obtained(&self, who: Entity, item: Entity, how: Got) -> Vec<GameEvent> {
+    /// `item` and everything inside it, with their templates, if it's now `who`'s; nothing if
+    /// it didn't reach them (a mob's things aren't saved, so don't move).
+    fn reached(&self, who: Entity, item: Entity) -> Vec<(Entity, ItemKey)> {
         if self.snapshot.root(item).and_then(ItemLocation::holder) != Some(who) {
             return Vec::new();
         }
@@ -1432,12 +1432,20 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
             .filter(|info| self.snapshot.is_within(info.entity, item))
             .filter_map(|info| {
                 let (_, found, _) = self.items.get(info.entity).ok()?;
-                Some(GameEvent::Obtained {
-                    who,
-                    item: info.entity,
-                    key: found.key.clone(),
-                    how,
-                })
+                Some((info.entity, found.key.clone()))
+            })
+            .collect()
+    }
+
+    /// `who` has come to have `item`, and everything inside it: an `Obtained` for each.
+    fn obtained(&self, who: Entity, item: Entity, how: Got) -> Vec<GameEvent> {
+        self.reached(who, item)
+            .into_iter()
+            .map(|(item, key)| GameEvent::Obtained {
+                who,
+                item,
+                key,
+                how,
             })
             .collect()
     }
@@ -1734,6 +1742,7 @@ fn contents_lines(snapshot: &Snapshot, container: Entity, indent: usize) -> Vec<
     lines
 }
 
+#[allow(clippy::too_many_arguments)]
 fn examine(
     In(inv): In<Invocation>,
     players: Characters,
@@ -1742,12 +1751,14 @@ fn examine(
     keywords: Query<&Keywords>,
     templates: Res<ItemTemplates>,
     (imbued, defs): (Query<&ItemConditions>, Res<ConditionDefs>),
+    mut events: MessageWriter<GameEvent>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
     let text = match find_item(&inv.args, &actor, &items, &keywords, &templates) {
         Ok(entity) => {
+            events.write_batch(examined(actor.entity, entity, &items));
             let mut text = describe_item(entity, &items, &templates);
             if let Ok(conditions) = imbued.get(entity) {
                 text += &imbued_lines(conditions, &defs, crate::time::unix_now());
@@ -1772,6 +1783,16 @@ fn examine(
         Err(err) => err,
     };
     deliver(vec![Outgoing::line(inv.entity, text)], &mut outbox);
+}
+
+/// `who` looked closely at `item`: an `Examined`, for quests to hear.
+pub fn examined(who: Entity, item: Entity, items: &ItemQuery) -> Option<GameEvent> {
+    let (_, found, _) = items.get(item).ok()?;
+    Some(GameEvent::Examined {
+        who,
+        item,
+        key: found.key.clone(),
+    })
 }
 
 /// One item the player names, on them (at any depth) or lying here, theirs first.
@@ -2257,6 +2278,17 @@ fn give_item(
         .ok_or_else(|| format!("{} has nowhere to put {name}.", receiver.name))?;
     mover.move_to(entity, target);
     got.extend(mover.obtained(receiver.entity, entity, Got::Given(me)));
+    got.extend(
+        mover
+            .reached(receiver.entity, entity)
+            .into_iter()
+            .map(|(item, key)| GameEvent::Gave {
+                who: me,
+                item,
+                key,
+                to: receiver.entity,
+            }),
+    );
 
     let mut out = vec![
         Outgoing::line(me, format!("You give {name} to {}.", receiver.name)),
@@ -2708,6 +2740,7 @@ mod tests {
         world.insert_resource(Database::open(":memory:").unwrap());
         world.insert_resource(Outbox::default());
         world.init_resource::<Messages<GameEvent>>();
+        world.init_resource::<ConditionDefs>();
         let (sack, tail, knife) = (
             ItemKey::parse("test:sack", ""),
             ItemKey::parse("test:rat_tail", ""),
@@ -2796,23 +2829,26 @@ mod tests {
             };
             match command {
                 "get" => world.run_system_once_with(get, inv).unwrap(),
-                _ => world.run_system_once_with(give, inv).unwrap(),
+                "give" => world.run_system_once_with(give, inv).unwrap(),
+                _ => world.run_system_once_with(examine, inv).unwrap(),
             }
             let events = world.resource::<Messages<GameEvent>>();
-            let got: Vec<_> = events
-                .get_cursor()
-                .read(events)
+            let written: Vec<GameEvent> = events.get_cursor().read(events).cloned().collect();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+            written
+        };
+        let obtained = |events: Vec<GameEvent>| -> Vec<_> {
+            events
+                .into_iter()
                 .filter_map(|e| match e {
-                    GameEvent::Obtained { who, item, how, .. } => Some((*who, *item, *how)),
+                    GameEvent::Obtained { who, item, how, .. } => Some((who, item, how)),
                     _ => None,
                 })
-                .collect();
-            world.resource_mut::<Messages<GameEvent>>().clear();
-            got
+                .collect()
         };
 
         // The sack, and all that's in it.
-        let mut got = run(&mut world, ada, "get", "sack");
+        let mut got = obtained(run(&mut world, ada, "get", "sack"));
         got.sort_by_key(|(_, item, _)| *item);
         let mut sack_and_all = vec![
             (ada, the_sack, Got::PickedUp),
@@ -2822,11 +2858,23 @@ mod tests {
         sack_and_all.sort_by_key(|(_, item, _)| *item);
         assert_eq!(got, sack_and_all);
         // Out of her own sack, it was hers already.
-        assert_eq!(run(&mut world, ada, "get", "knife sack"), vec![]);
-        assert_eq!(
-            run(&mut world, ada, "give", "knife bob"),
-            vec![(bob, the_knife, Got::Given(ada))]
-        );
+        assert_eq!(obtained(run(&mut world, ada, "get", "knife sack")), vec![]);
+        let given = run(&mut world, ada, "give", "knife bob");
+        let gave: Vec<_> = given
+            .iter()
+            .filter_map(|e| match e {
+                GameEvent::Gave { who, item, to, .. } => Some((*who, *item, *to)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(gave, vec![(ada, the_knife, bob)]);
+        assert_eq!(obtained(given), vec![(bob, the_knife, Got::Given(ada))]);
+        // Looking closely.
+        let looked = run(&mut world, ada, "examine", "sack");
+        assert!(matches!(
+            looked.as_slice(),
+            [GameEvent::Examined { who, item, .. }] if (*who, *item) == (ada, the_sack)
+        ));
     }
 
     #[test]
