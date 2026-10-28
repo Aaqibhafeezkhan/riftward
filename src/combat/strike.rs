@@ -660,12 +660,12 @@ impl Round<'_, '_, '_, '_, '_, '_> {
     }
 
     /// Bleeding and the like at the start of a fighter's turn. Returns whether they keep their
-    /// turn, and whether they died.
-    pub fn start_turn(&mut self, who: Entity) -> (bool, bool) {
+    /// turn, whether they died, and if so, who killed them: whoever put on what did it.
+    pub fn start_turn(&mut self, who: Entity) -> (bool, bool, Option<Entity>) {
         let name = capitalized(&self.name(who));
         let conditions = self.conditions;
         let Ok(mut fighter) = self.fighters.get_mut(who) else {
-            return (false, false);
+            return (false, false, None);
         };
         let start = fighter.conditions.start_turn(conditions);
         let room = fighter.in_room.0;
@@ -710,6 +710,17 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             }
         }
         let mob = fighter.mob.map(|m| m.key.clone());
+        // Whoever put it on, even if this was its last turn.
+        let killer = killed_by.as_ref().and_then(|key| {
+            fighter
+                .conditions
+                .0
+                .iter()
+                .chain(&start.ended)
+                .find(|active| active.key == *key)
+                .and_then(|active| active.by)
+                .filter(|by| *by != who)
+        });
         for (mine, theirs) in told {
             self.say(who, mine);
             if let Some(theirs) = theirs {
@@ -722,6 +733,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 name: name.clone(),
                 room,
                 mob,
+                killer,
             });
             let kills = conditions.get(&key).and_then(|d| d.text.kills.as_ref());
             let (mine, theirs) = kills.map_or_else(
@@ -732,11 +744,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             if let Some(theirs) = theirs {
                 self.tell_room(room, who, who, &theirs);
             }
-            return (false, true);
+            return (false, true, killer);
         }
         // A condition that costs the turn says so, in its own words.
         let Some(key) = start.lost_to else {
-            return (true, false);
+            return (true, false, None);
         };
         let lost = conditions.get(&key).and_then(|d| d.text.lost_turn.as_ref());
         if let Some(lost) = lost {
@@ -746,7 +758,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 self.tell_room(room, who, who, &theirs);
             }
         }
-        (false, false)
+        (false, false, None)
     }
 
     /// Make an attack: a plain one, or `technique`. `counter` marks a riposte, which can't itself
@@ -1049,6 +1061,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 name: name.to_string(),
                 room,
                 mob,
+                killer: (attacker != who).then_some(attacker),
             });
             true
         } else {

@@ -130,8 +130,9 @@ Started. One vocabulary of game events, the `GameEvent` message in `events.rs`, 
 | --- | --- | --- |
 | `Left`, `Entered` (with `Way::Walked(direction)` or `Way::Teleported`) | Walking, `goto`, wandering mobs | The room announcements: "A stray dog leaves east.", "Gandalf arrives from the west." |
 | `PhaseChanged(phase)` | The game clock | Announcements to everyone outdoors |
+| `Died` (who, their template if a mob, and the `killer`: whoever struck the blow, or put on the bleeding or poison that did it, `None` if no one else did; their side is `groups::side(killer)`) | The combat round, reactions | World events (`Event(Died(mob))`); quests' `Kill` will |
 
-More arrive as their systems do: `ItemPickedUp`, `DoorOpened`, `Attacked`, `DodgeSucceeded`, `ManaSpent`, `DamageTaken`, `Died`.
+More arrive as their systems do: `ItemPickedUp`, `DoorOpened`, `Attacked`, `DodgeSucceeded`, `ManaSpent`, `DamageTaken`.
 
 ### Time
 

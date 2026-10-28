@@ -376,7 +376,7 @@ What the engine itself is (quest files, the board, Marin's record, `accept`, `jo
 
 | Needed | For | Exists? |
 | --- | --- | --- |
-| **Who killed it, on a death:** the `Died` event names only the dead | Every `Kill` | No: add the slayer (and so their side) to `Died` |
+| **Who killed it, on a death:** the `Died` event names its `killer` (and so their side) | Every `Kill` | Yes (2026-10-28): whoever struck the blow, or put on the bleeding or poison that did it |
 | **Kills by tag** | `Kill(Tag("vermin"))` | Mobs have tags; matching them is new |
 | **Bring by template or tag, and taking the items** | Rat tails, herbs, the King's tooth | Items have tags; handing over is new |
 | **Report to any mob,** in any zone | Narina, the hunter | No |
@@ -423,7 +423,7 @@ In the smallest pull requests that each leave the game working, every one with i
 
 **Events quests listen to**
 
-6. **`Died` names who killed it** (and so their side).
+6. *Built.* **`Died` names who killed it** (and so their side, `groups::side(killer)`): whoever struck the blow, or put on the bleeding or poison that did it, which is their kill for experience and loot too.
 7. **`Obtained`:** picking up, being given and buying write it.
 8. **`Gave`, `Examined` and `Searched`:** `give`, `examine` and `search` write them.
 

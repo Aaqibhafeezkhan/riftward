@@ -145,7 +145,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 } => {
                     let strength = strength.amount(&inputs, self.dice, luck);
                     let lasts = lasts.lasts(self.now);
-                    if f.conditions.apply(defs, condition, strength, lasts) {
+                    if f.conditions
+                        .apply_by(defs, condition, strength, lasts, Some(user))
+                    {
                         self.events.write(GameEvent::ConditionApplied {
                             who: bearer,
                             by: user,

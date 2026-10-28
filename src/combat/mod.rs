@@ -662,10 +662,19 @@ fn combat_round(
             continue;
         }
         // Bleeding, staggers and falls come first.
-        let (acts, bled_out) = round.start_turn(attacker);
+        let (acts, bled_out, killer) = round.start_turn(attacker);
         if bled_out {
             fallen.insert(attacker);
-            commands.entity(attacker).insert(Dead).remove::<Fighting>();
+            // Bled to death by someone's blow: their kill, as if they'd struck it.
+            match killer {
+                Some(slayer) => {
+                    fell(&mut commands, attacker, slayer, &targets);
+                    felled.push((attacker, slayer));
+                }
+                None => {
+                    commands.entity(attacker).insert(Dead).remove::<Fighting>();
+                }
+            }
             continue;
         }
         // What their conditions and skills do as their turn begins.
@@ -2613,6 +2622,42 @@ mod tests {
         world.entity_mut(victor).insert(Fighting(victim));
         world.run_system_once(combat_round).unwrap();
         assert!(world.get::<Conditions>(victor).unwrap().has("strengthened"));
+        assert_eq!(
+            deaths(&world),
+            vec![(victim, Some(victor))],
+            "named the killer"
+        );
+    }
+
+    #[test]
+    fn whoever_made_them_bleed_killed_them() {
+        let (mut world, room) = world();
+        let cutter = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let victim = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.get_mut::<Vitals>(victim).unwrap().health = 1.0;
+        world.resource_scope(|world, defs: Mut<ConditionDefs>| {
+            let mut conditions = world.get_mut::<Conditions>(victim).unwrap();
+            conditions.apply_by(&defs, "bleeding", 5, Lasts::Turns(1), Some(cutter));
+        });
+        // Only the victim takes a turn, and bleeds out before striking.
+        world.entity_mut(victim).insert(Fighting(cutter));
+        world.run_system_once(combat_round).unwrap();
+        assert!(world.get::<Dead>(victim).is_some());
+        assert_eq!(world.get::<Slayer>(victim).unwrap().0, cutter, "their kill");
+        assert_eq!(deaths(&world), vec![(victim, Some(cutter))]);
+    }
+
+    /// Who died this round, and who killed them.
+    fn deaths(world: &World) -> Vec<(Entity, Option<Entity>)> {
+        let events = world.resource::<Messages<GameEvent>>();
+        events
+            .get_cursor()
+            .read(events)
+            .filter_map(|e| match e {
+                GameEvent::Died { who, killer, .. } => Some((*who, *killer)),
+                _ => None,
+            })
+            .collect()
     }
 
     #[test]
@@ -3422,6 +3467,11 @@ mod tests {
         react_to_events(&mut world);
         assert!(world.get::<Dead>(bearer).is_some());
         assert_eq!(world.get::<Slayer>(bearer).unwrap().0, bearer);
+        assert_eq!(
+            deaths(&world),
+            vec![(bearer, None)],
+            "killed by no one else"
+        );
     }
 
     /// Teach `who` an active skill made of these effects, at a level that can't fail an easy

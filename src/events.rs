@@ -64,14 +64,16 @@ pub enum GameEvent {
     HitInArmour { who: Entity },
     /// A player or mob took damage.
     Damaged { who: Entity, amount: f32 },
-    /// A player or mob was killed; `mob` is the template of a mob. World events listen; quests
-    /// and loot will.
+    /// A player or mob was killed; `mob` is the template of a mob. `killer` struck the blow, or
+    /// put on the bleeding or poison that did it; `None` when it was no one else (their own
+    /// curse). The killer's side is `groups::side(killer)`. World events listen; quests will.
     #[allow(dead_code)]
     Died {
         who: Entity,
         name: String,
         room: Entity,
         mob: Option<MobKey>,
+        killer: Option<Entity>,
     },
     /// A condition took hold of `who`, put on by `by` (themselves, if nobody). `reacting` if a
     /// reaction put it on, which sets off no more.

@@ -473,6 +473,8 @@ pub struct Active {
     pub lasts: Lasts,
     /// Those who've seen through it: for `hidden`, everyone who noticed the hider anyway.
     pub seen_by: HashSet<Entity>,
+    /// Who put it on, last, if anyone did: whoever bleeds someone to death killed them.
+    pub by: Option<Entity>,
 }
 
 /// The trait of being a thing, not a creature: a training dummy. It never acts in a fight, never
@@ -516,6 +518,18 @@ impl Conditions {
     /// Put a condition on them, by its stacking rule. Returns whether it took hold: one with a tag
     /// they're immune to doesn't.
     pub fn apply(&mut self, defs: &ConditionDefs, key: &str, strength: i32, lasts: Lasts) -> bool {
+        self.apply_by(defs, key, strength, lasts, None)
+    }
+
+    /// `apply`, remembering who put it on: the last to strengthen or renew it.
+    pub fn apply_by(
+        &mut self,
+        defs: &ConditionDefs,
+        key: &str,
+        strength: i32,
+        lasts: Lasts,
+        by: Option<Entity>,
+    ) -> bool {
         // A trait isn't put on like a condition.
         if defs.trait_def(key).is_some() {
             return false;
@@ -535,18 +549,21 @@ impl Conditions {
             most: strength,
             lasts,
             seen_by: HashSet::new(),
+            by,
         };
         match (stacking, self.0.iter_mut().find(|a| mine(a))) {
             (Stacking::Strongest, Some(old)) => {
                 old.strength = old.strength.max(strength);
                 old.most = old.most.max(strength);
                 old.lasts = longer(old.lasts, lasts);
+                old.by = by.or(old.by);
             }
             (Stacking::Stack(most), Some(old)) => {
                 let cap = strength.saturating_mul(most as i32);
                 old.strength = (old.strength + strength).min(cap);
                 old.most = old.most.max(old.strength);
                 old.lasts = longer(old.lasts, lasts);
+                old.by = by.or(old.by);
             }
             _ => {
                 self.0.retain(|a| !mine(a));
@@ -571,6 +588,7 @@ impl Conditions {
                     most: strength,
                     lasts: Lasts::Indefinitely,
                     seen_by: HashSet::new(),
+                    by: None,
                 })
                 .collect(),
         )
@@ -591,6 +609,7 @@ impl Conditions {
                     most: 1,
                     lasts: Lasts::Trait,
                     seen_by: HashSet::new(),
+                    by: None,
                 });
             }
         }
@@ -925,6 +944,7 @@ impl Conditions {
                     most,
                     lasts: Lasts::Until(now + (ends_at - unix_now) as f64),
                     seen_by: HashSet::new(),
+                    by: None,
                 })
                 .collect(),
         )
@@ -941,6 +961,7 @@ impl Conditions {
                 most: strength,
                 lasts: Lasts::Granted(item),
                 seen_by: HashSet::new(),
+                by: None,
             }));
     }
 
@@ -1210,6 +1231,24 @@ mod tests {
         assert!(conditions.expire(599.0).is_empty());
         assert_eq!(conditions.expire(600.0)[0].key, "blessed");
         assert_eq!(conditions.attack(&defs), 0);
+    }
+
+    #[test]
+    fn a_condition_remembers_who_put_it_on_last() {
+        let defs = defs_on_disk();
+        let (ada, bob) = (
+            Entity::from_raw_u32(1).unwrap(),
+            Entity::from_raw_u32(2).unwrap(),
+        );
+        let mut conditions = Conditions::default();
+        let by = |c: &Conditions| c.0.iter().find(|a| a.key == "poisoned").unwrap().by;
+        conditions.apply_by(&defs, "poisoned", 1, Lasts::Turns(3), Some(ada));
+        assert_eq!(by(&conditions), Some(ada));
+        // A second dose is Bob's doing; a dose from nowhere leaves it Bob's.
+        conditions.apply_by(&defs, "poisoned", 1, Lasts::Turns(3), Some(bob));
+        assert_eq!(by(&conditions), Some(bob));
+        conditions.apply(&defs, "poisoned", 1, Lasts::Turns(3));
+        assert_eq!(by(&conditions), Some(bob));
     }
 
     #[test]
