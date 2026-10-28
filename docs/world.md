@@ -371,13 +371,13 @@ A spawn with `when` only fills while its condition is true, in the world-event c
 
 ## World state
 
-The world keeps its own **flags** (`goblin_king_alive`, `city_quarantined`) and **counters** (`goblins_slain_this_week`), saved in a `world_state` table. Flags and counters are set by events, and read by triggers and by other systems' conditions.
+The world keeps its own **flags** (`goblin_king_alive`, `city_quarantined`) and **counters** (`goblins_slain_this_week`), kept as `world.` [facts](facts.md). Flags and counters are set by events, and read by triggers and by other systems' conditions.
 
 World flags join the shared [condition language](skills.md#hidden-skills), so the world and the rest of the design build on each other: a hidden skill can require `WorldFlag("goblin_king_slain")`, and a trainer can appear only once `WorldFlag("city_cleared")` is set.
 
 ## World events
 
-Status: a first slice is built (`src/world_events.rs`): triggers `Event(Entered(mob, zone))`, `Event(Died(mob))`, `WorldFlag`, `All`, `Any` and `Not`; actions `SetWorldFlag`, `ClearWorldFlag` and `Announce`. Flags are saved in `world_state`, and admins can list, set and clear them with `worldflag`. Events are checked as game events happen; the rest of the design below waits.
+Status: a first slice is built (`src/world_events.rs`): triggers `Event(Entered(mob, zone))`, `Event(Died(mob))`, `WorldFlag`, `All`, `Any` and `Not`; actions `SetWorldFlag`, `ClearWorldFlag` and `Announce`. Flags are `world.` [facts](facts.md) (since 2026-10-28; flags saved before then were moved over once, at startup), and admins can list, set and clear them with `worldflag`. Events are checked as game events happen; the rest of the design below waits.
 
 An event has a trigger and a list of actions. Triggers use the condition language, with new terms for the world:
 
@@ -461,7 +461,7 @@ The first rat to reach the city (through a grate someone left open, or one the r
 | --- | --- |
 | Mobs | Respawned fresh at their spawns, except breeding spawns, which return to their saved count |
 | Spawn timers | Saved (`spawn_state`), so the dragon doesn't return early and the week-long reseed keeps counting |
-| World flags and counters | Saved (`world_state`) |
+| World flags and counters | Saved, as `world.` [facts](facts.md) |
 | Items | [Real items](items.md#what-survives-a-restart) are restored; untouched spawned items are not |
 | Doors and locks | Back to their default state, like a reset |
 | Hidden doors a character has found | Saved per character |

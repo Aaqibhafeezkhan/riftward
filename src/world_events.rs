@@ -1,6 +1,6 @@
 //! World events: the world reacting to what happens in it, from data in zone files.
 //!
-//! The world keeps named **flags** (`rats_broke_out`), saved in the `world_state` table. A zone's
+//! The world keeps named **flags** (`rats_broke_out`): `world.` facts (`facts.rs`). A zone's
 //! `events` each have a `when` trigger and a list of `then` actions: when a sewer rat reaches the
 //! city for the first time, set a flag and tell the town. Spawns can be gated on the same triggers
 //! (`when: WorldFlag("rats_broke_out")`), which is how the Rat King appears only after a breakout.
@@ -8,24 +8,23 @@
 //! This is the first slice of the design in `docs/world.md`: triggers on mobs entering a zone or
 //! dying, and on flags; actions that set and clear flags and make announcements.
 
-use std::collections::HashSet;
-
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
 use crate::events::GameEvent;
+use crate::facts::{Facts, Owner, Value};
 use crate::mobs::Mob;
 use crate::output::{Characters, Outbox, Outgoing, RoomQuery, deliver};
+use crate::time::unix_now;
 use crate::world::{MobKey, RoomIndex, RoomKey, ZoneDef};
 
 pub struct WorldEventsPlugin;
 
 impl Plugin for WorldEventsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<WorldFlags>()
-            .add_systems(Startup, load_world_flags)
+        app.add_systems(Startup, move_old_flags.after(crate::facts::load_facts))
             .add_systems(Update, run_world_events.after(crate::combat::handle_deaths))
             .add_command(
                 CommandSpec::new("worldflag", Category::Admin)
@@ -87,14 +86,10 @@ pub enum Occurred {
     Died { mob: MobKey },
 }
 
-/// The world's flags. Saved.
-#[derive(Resource, Default)]
-pub struct WorldFlags(pub HashSet<String>);
-
 impl When {
-    /// Whether the trigger is met, written in zone `zone`, given the flags and what (if anything)
-    /// just happened.
-    pub fn met(&self, zone: &str, flags: &WorldFlags, now: Option<&Occurred>) -> bool {
+    /// Whether the trigger is met, written in zone `zone`, given the world's facts and what (if
+    /// anything) just happened.
+    pub fn met(&self, zone: &str, facts: &Facts, now: Option<&Occurred>) -> bool {
         match self {
             When::Event(happening) => match (happening, now) {
                 (
@@ -106,18 +101,24 @@ impl When {
                 }
                 _ => false,
             },
-            When::WorldFlag(flag) => flags.0.contains(flag),
-            When::All(all) => all.iter().all(|w| w.met(zone, flags, now)),
-            When::Any(any) => any.iter().any(|w| w.met(zone, flags, now)),
-            When::Not(not) => !not.met(zone, flags, now),
+            When::WorldFlag(flag) => facts.is_set(&Owner::World, flag, unix_now()),
+            When::All(all) => all.iter().all(|w| w.met(zone, facts, now)),
+            When::Any(any) => any.iter().any(|w| w.met(zone, facts, now)),
+            When::Not(not) => !not.met(zone, facts, now),
         }
     }
 }
 
-fn load_world_flags(db: Res<Database>, mut flags: ResMut<WorldFlags>) {
-    match db.world_flags() {
-        Ok(saved) => flags.0.extend(saved),
-        Err(err) => error!("failed to load world flags: {err}"),
+/// World flags saved before they were facts become `world.` facts, once.
+fn move_old_flags(db: Res<Database>, mut facts: ResMut<Facts>) {
+    match db.take_old_world_flags() {
+        Ok(flags) => {
+            for flag in flags {
+                info!("world flag {flag} is a fact now");
+                facts.set(&Owner::World, &flag, Value::Bool(true), None, &db);
+            }
+        }
+        Err(err) => error!("failed to move the old world flags: {err}"),
     }
 }
 
@@ -126,7 +127,7 @@ fn load_world_flags(db: Res<Database>, mut flags: ResMut<WorldFlags>) {
 fn run_world_events(
     mut events: MessageReader<GameEvent>,
     zones: Res<Assets<ZoneDef>>,
-    mut flags: ResMut<WorldFlags>,
+    mut facts: ResMut<Facts>,
     mobs: Query<&Mob>,
     rooms: RoomQuery,
     index: Res<RoomIndex>,
@@ -149,24 +150,16 @@ fn run_world_events(
     for occurred in &happened {
         for (_, zone) in zones.iter() {
             for (id, event) in &zone.events {
-                if !event.when.met(&zone.id, &flags, Some(occurred)) {
+                if !event.when.met(&zone.id, &facts, Some(occurred)) {
                     continue;
                 }
                 info!("world event {}:{id} fired", zone.id);
                 for action in &event.then {
                     match action {
                         Action::SetWorldFlag(flag) => {
-                            flags.0.insert(flag.clone());
-                            if let Err(err) = db.set_world_flag(flag, true) {
-                                error!("failed to save world flag {flag}: {err}");
-                            }
+                            facts.set(&Owner::World, flag, Value::Bool(true), None, &db);
                         }
-                        Action::ClearWorldFlag(flag) => {
-                            flags.0.remove(flag);
-                            if let Err(err) = db.set_world_flag(flag, false) {
-                                error!("failed to clear world flag {flag}: {err}");
-                            }
-                        }
+                        Action::ClearWorldFlag(flag) => facts.clear(&Owner::World, flag, &db),
                         Action::Announce(scope, text) => {
                             let line = format!("\x1b[1;35m{text}\x1b[0m\r\n");
                             for (entity, _, _, room) in &players {
@@ -193,48 +186,41 @@ fn run_world_events(
     deliver(out, &mut outbox);
 }
 
-/// `worldflag [<flag> on|off]`: an admin lists, sets or clears world flags. Setting one by hand
-/// fires nothing itself, but gated spawns see it at once.
+/// `worldflag [<flag> on|off]`: an admin lists the world's facts, or sets or clears a flag.
+/// Setting one by hand fires nothing itself, but gated spawns see it at once.
 fn worldflag(
     In(inv): In<Invocation>,
     mut outbox: ResMut<Outbox>,
-    mut flags: ResMut<WorldFlags>,
+    mut facts: ResMut<Facts>,
     db: Res<Database>,
 ) {
     let words: Vec<&str> = inv.args.split_whitespace().collect();
     let text = match words.as_slice() {
         [] => {
-            let mut set: Vec<&String> = flags.0.iter().collect();
-            set.sort();
+            let set = facts.of(&Owner::World, unix_now());
             if set.is_empty() {
                 "No world flags are set.".to_string()
             } else {
-                format!(
-                    "World flags set: {}",
-                    set.iter()
-                        .map(|f| f.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+                let shown: Vec<String> = set
+                    .iter()
+                    .map(|(key, value)| match value {
+                        Value::Bool(true) => key.to_string(),
+                        Value::Bool(false) => format!("{key} = false"),
+                        Value::Int(n) => format!("{key} = {n}"),
+                        Value::Word(w) => format!("{key} = \"{w}\""),
+                    })
+                    .collect();
+                format!("World flags set: {}", shown.join(", "))
             }
         }
         [flag, on @ ("on" | "off")] => {
-            let set = *on == "on";
             let flag = flag.to_lowercase();
-            if set {
-                flags.0.insert(flag.clone());
+            if *on == "on" {
+                facts.set(&Owner::World, &flag, Value::Bool(true), None, &db);
             } else {
-                flags.0.remove(&flag);
+                facts.clear(&Owner::World, &flag, &db);
             }
-            match db.set_world_flag(&flag, set) {
-                Ok(()) => format!("World flag {flag} is now {on}."),
-                Err(err) => {
-                    error!("failed to save world flag {flag}: {err}");
-                    format!(
-                        "World flag {flag} is {on} until the next restart; it couldn't be saved."
-                    )
-                }
-            }
+            format!("World flag {flag} is now {on}.")
         }
         _ => inv.usage_error(),
     };
@@ -246,8 +232,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn flags_saved_before_facts_become_facts() {
+        use bevy::ecs::system::RunSystemOnce;
+        let db = Database::open(":memory:").unwrap();
+        db.conn_for_tests()
+            .execute(
+                "INSERT INTO world_state (flag) VALUES ('rats_broke_out')",
+                [],
+            )
+            .unwrap();
+        let mut world = World::new();
+        world.insert_resource(db);
+        world.init_resource::<Facts>();
+        world.run_system_once(move_old_flags).unwrap();
+        assert!(
+            world
+                .resource::<Facts>()
+                .is_set(&Owner::World, "rats_broke_out", 0)
+        );
+        let db = world.resource::<Database>();
+        assert!(db.take_old_world_flags().unwrap().is_empty(), "moved, once");
+        // And saved as a fact, for the next start.
+        assert_eq!(db.facts().unwrap().len(), 1);
+    }
+
+    #[test]
     fn triggers_match_what_happened_and_the_flags() {
-        let mut flags = WorldFlags::default();
+        let db = Database::open(":memory:").unwrap();
+        let mut facts = Facts::default();
         let breakout = When::All(vec![
             When::Event(Happening::Entered {
                 mob: "sewer_rat".into(),
@@ -264,15 +276,21 @@ mod tests {
             mob: rat.clone(),
             zone: "sewers".into(),
         };
-        assert!(breakout.met("sewers", &flags, Some(&into_town)));
-        assert!(!breakout.met("sewers", &flags, Some(&in_sewers)));
+        assert!(breakout.met("sewers", &facts, Some(&into_town)));
+        assert!(!breakout.met("sewers", &facts, Some(&in_sewers)));
         assert!(
-            !breakout.met("sewers", &flags, None),
+            !breakout.met("sewers", &facts, None),
             "events only fire as they happen"
         );
-        flags.0.insert("rats_broke_out".into());
+        facts.set(
+            &Owner::World,
+            "rats_broke_out",
+            Value::Bool(true),
+            None,
+            &db,
+        );
         assert!(
-            !breakout.met("sewers", &flags, Some(&into_town)),
+            !breakout.met("sewers", &facts, Some(&into_town)),
             "only the first time"
         );
 
@@ -280,9 +298,9 @@ mod tests {
         let died = Occurred::Died {
             mob: MobKey::parse("sewers:rat_king", ""),
         };
-        assert!(king_dies.met("sewers", &flags, Some(&died)));
+        assert!(king_dies.met("sewers", &facts, Some(&died)));
         assert!(
-            !king_dies.met("riftwatch", &flags, Some(&died)),
+            !king_dies.met("riftwatch", &facts, Some(&died)),
             "ids are zone-relative"
         );
     }

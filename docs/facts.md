@@ -1,6 +1,6 @@
 # Facts, requirements and rules
 
-[Design summary](README.md) · Status: designed (2026-10-28); the store is built (`src/facts.rs`, the `facts` table), and nothing uses it yet. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it (requirements), and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
+[Design summary](README.md) · Status: designed (2026-10-28); the store is built (`src/facts.rs`, the `facts` table), and world flags are kept in it. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it (requirements), and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
 
 Content feels alive when it reacts to things nobody scripted together. A quest that sets "this character sold out the guild" shouldn't need to know which other quests, mobs and doors will care. So everything the game remembers about its story goes in one place, as **facts**, and everything that reacts tests facts, without knowing who set them.
 
@@ -18,7 +18,7 @@ A fact is a named value in a **scope**:
 - **Values** are a yes (`true`), a whole number, or a word (`quest.ending = "sold"`). A fact never set is false, zero, or empty, so nothing needs declaring.
 - **Saved,** in one `facts` table: scope, owner (a character, a character's quest, a mob template, or none for the world), key and value. Facts survive restarts; that's their point.
 - **A fact can lapse:** set with `for: Hours(2)`, it's gone after (a rumour, a guard who remembers you for a while).
-- **What already exists moves here:** world flags (`world_state`) become `world.` facts, and the character flags and titles hidden skills were designed with become `char.` facts. `WorldFlag("x")` and `Flag("x")` stay as short ways of writing them.
+- **What already exists moves here:** world flags (`world_state`) become `world.` facts (*done*, 2026-10-28: flags saved before then are moved over once, at startup), and the character flags and titles hidden skills were designed with become `char.` facts. `WorldFlag("x")` and `Flag("x")` stay as short ways of writing them.
 
 ## One requirement language
 

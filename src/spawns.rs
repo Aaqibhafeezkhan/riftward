@@ -17,6 +17,7 @@ use bevy::prelude::*;
 use crate::characters::Races;
 use crate::db::Database;
 use crate::dice::Dice;
+use crate::facts::Facts;
 use crate::items::{self, Item, ItemLocation, ItemTemplates, Quality};
 use crate::mobs::{self, MobTemplates, Wanderer};
 use crate::output::RoomQuery;
@@ -26,7 +27,6 @@ use crate::world::{
     Every, InRoom, ItemKey, MobKey, Refill, RoomIndex, RoomKey, SpawnDef, SpawnKey, Spawned,
     ZoneDef,
 };
-use crate::world_events::WorldFlags;
 
 pub struct SpawnsPlugin;
 
@@ -315,7 +315,7 @@ fn run_spawns(
     mobs: Query<(Entity, &InRoom, Option<&SpawnedBy>), mobs::OnlyMobs>,
     items: Query<(Entity, &Item, &ItemLocation, Option<&SpawnedBy>)>,
     restored: Res<items::Restored>,
-    flags: Res<WorldFlags>,
+    facts: Res<Facts>,
 ) {
     let elapsed = time.elapsed_secs_f64();
     // Wait for real items to be back in their rooms, so a real chest isn't spawned twice.
@@ -378,7 +378,7 @@ fn run_spawns(
         if def
             .when
             .as_ref()
-            .is_some_and(|when| !when.met(&key.zone, &flags, None))
+            .is_some_and(|when| !when.met(&key.zone, &facts, None))
         {
             continue;
         }

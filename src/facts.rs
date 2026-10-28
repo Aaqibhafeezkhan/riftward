@@ -132,9 +132,6 @@ pub struct Facts {
     facts: HashMap<(Owner, String), Entry>,
 }
 
-// Read and written by world flags, conditions and quests as they come (docs/quests.md, "How it
-// gets built"); until then, by the tests.
-#[allow(dead_code)]
 impl Facts {
     /// A fact's value, if it's set and hasn't lapsed.
     pub fn get(&self, owner: &Owner, key: &str, now: i64) -> Option<&Value> {
@@ -149,6 +146,8 @@ impl Facts {
         self.get(owner, key, now).is_some()
     }
 
+    // Counted by quests' objectives, once there are any.
+    #[allow(dead_code)]
     /// Its number: zero if it isn't set or isn't a number.
     pub fn number(&self, owner: &Owner, key: &str, now: i64) -> i64 {
         match self.get(owner, key, now) {
@@ -180,6 +179,8 @@ impl Facts {
             .insert((owner.clone(), key.to_string()), Entry { value, until });
     }
 
+    // Counted by quests' objectives, once there are any.
+    #[allow(dead_code)]
     /// Add `n` to a number (a fact not set, or not a number, counts as zero), keeping when it
     /// lapses. Returns the new number.
     pub fn add(&mut self, owner: &Owner, key: &str, n: i64, now: i64, db: &Database) -> i64 {
@@ -221,7 +222,7 @@ impl Facts {
 }
 
 /// Every fact, as saved.
-fn load_facts(db: Res<Database>, mut facts: ResMut<Facts>) {
+pub fn load_facts(db: Res<Database>, mut facts: ResMut<Facts>) {
     let rows = match db.facts() {
         Ok(rows) => rows,
         Err(err) => {

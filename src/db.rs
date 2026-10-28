@@ -146,7 +146,8 @@ const SCHEMA: &str = "
         next_reset INTEGER NOT NULL        -- unix seconds
     );
 
-    -- The world's flags, like 'rats_broke_out', set and cleared by world events.
+    -- The world's flags from before they were facts: read once at startup, moved into `facts`
+    -- as `world.` facts, and emptied.
     CREATE TABLE IF NOT EXISTS world_state (
         flag   TEXT PRIMARY KEY,
         set_at INTEGER NOT NULL DEFAULT (unixepoch())
@@ -449,6 +450,12 @@ impl Database {
 
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.0.lock().unwrap()
+    }
+
+    /// The connection itself, for tests that set up old data by hand.
+    #[cfg(test)]
+    pub fn conn_for_tests(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.conn()
     }
 
     pub fn find_account(&self, username: &str) -> DbResult<Option<Account>> {
@@ -948,24 +955,16 @@ impl Database {
         )?)
     }
 
-    pub fn world_flags(&self) -> DbResult<Vec<String>> {
+    /// World flags saved before they were facts, taken out of `world_state` to become facts.
+    pub fn take_old_world_flags(&self) -> DbResult<Vec<String>> {
         let conn = self.conn();
-        let mut stmt = conn.prepare("SELECT flag FROM world_state")?;
-        let rows = stmt.query_map([], |row| row.get(0))?;
-        Ok(rows.collect::<Result<_, _>>()?)
-    }
-
-    pub fn set_world_flag(&self, flag: &str, set: bool) -> DbResult<()> {
-        let conn = self.conn();
-        if set {
-            conn.execute(
-                "INSERT INTO world_state (flag) VALUES (?1) ON CONFLICT (flag) DO NOTHING",
-                [flag],
-            )?;
-        } else {
-            conn.execute("DELETE FROM world_state WHERE flag = ?1", [flag])?;
-        }
-        Ok(())
+        let flags = {
+            let mut stmt = conn.prepare("SELECT flag FROM world_state")?;
+            let rows = stmt.query_map([], |row| row.get(0))?;
+            rows.collect::<Result<Vec<String>, _>>()?
+        };
+        conn.execute("DELETE FROM world_state", [])?;
+        Ok(flags)
     }
 
     pub fn spawn_counts(&self) -> DbResult<Vec<(String, u32)>> {
