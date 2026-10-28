@@ -28,7 +28,6 @@ use thiserror::Error;
 use crate::attributes::{Attribute, Attributes};
 use crate::combat::{Conditions, Fighting, Outmatched};
 use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
-use crate::conditions::{Condition, Subject};
 use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
 use crate::effects::{self, Effect, Reaction, Resist};
@@ -38,6 +37,7 @@ use crate::formula::{Formula, Inputs};
 use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
 };
+use crate::requirements::{Requirement, Subject};
 use crate::spells::{Aim, SpellDefs, Spells};
 use crate::stealth::reveal;
 use crate::targeting::{Keywords, Target};
@@ -190,7 +190,7 @@ pub struct SkillDef {
     pub difficulty: f64,
     /// Who may learn it. Checked by teaching later; starting skills are granted regardless.
     #[serde(default)]
-    pub requires: Option<Condition>,
+    pub requires: Option<Requirement>,
     /// Karma to unlock it without a teacher (`karma <skill>`), for a character who already has a
     /// skill in its tree and meets its requirements. Without one, Karma can't unlock it: entry
     /// skills, which trainers teach, and the world's hidden skills.
@@ -1311,9 +1311,9 @@ pub fn unlockable<'a>(defs: &'a SkillDefs, known: &Skills) -> Vec<&'a Skill> {
 }
 
 /// A skill's requirements as players read them: "Swordplay 15".
-fn requirement_text(defs: &SkillDefs, condition: &Condition) -> String {
+fn requirement_text(defs: &SkillDefs, condition: &Requirement) -> String {
     match condition {
-        Condition::Skill(key, level) => {
+        Requirement::Skill(key, level) => {
             let name = defs
                 .skills
                 .get(key)
@@ -2012,7 +2012,7 @@ mod tests {
     }
 
     /// A skill in `tree` requiring `requires`.
-    fn tree_skill(key: &str, requires: Option<Condition>) -> (String, Skill) {
+    fn tree_skill(key: &str, requires: Option<Requirement>) -> (String, Skill) {
         let skill = Skill {
             key: key.into(),
             tree: key.split_once(':').unwrap().0.into(),
@@ -2040,7 +2040,7 @@ mod tests {
 
     #[test]
     fn karma_unlocks_priced_skills_in_trees_you_have() {
-        let at = |level| Some(Condition::Skill("axes:basics".into(), level));
+        let at = |level| Some(Requirement::Skill("axes:basics".into(), level));
         let priced = |key: &str, karma: u32| {
             let (key, mut skill) = tree_skill(key, at(15));
             skill.def.karma = Some(karma);
@@ -2102,14 +2102,14 @@ mod tests {
 
     #[test]
     fn using_a_skill_can_reveal_others_in_its_tree_whose_requirements_are_met() {
-        let at = |level| Some(Condition::Skill("axes:basics".into(), level));
+        let at = |level| Some(Requirement::Skill("axes:basics".into(), level));
         let defs = SkillDefs {
             skills: HashMap::from([
                 tree_skill("axes:basics", None),
                 tree_skill("axes:cleave", at(15)),
                 tree_skill("axes:hew", at(15)),
                 tree_skill("axes:whirlwind", at(45)),
-                tree_skill("axes:dwarf_axe", Some(Condition::Race("dwarf".into()))),
+                tree_skill("axes:dwarf_axe", Some(Requirement::Race("dwarf".into()))),
                 tree_skill("swordplay:lunge", None),
             ]),
             trees: HashMap::new(),
@@ -2152,7 +2152,7 @@ mod tests {
                 tree_skill("axes:basics", None),
                 tree_skill(
                     "axes:rift_cleaver",
-                    Some(Condition::Flag("char.saw_the_rift_scar".into())),
+                    Some(Requirement::Flag("char.saw_the_rift_scar".into())),
                 ),
             ]),
             trees: HashMap::new(),

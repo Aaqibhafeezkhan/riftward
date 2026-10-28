@@ -465,7 +465,7 @@ Each ability has:
 - **Cost:** stamina, health, items used up, coins, Drain (✓ spells).
 - **Cooldown,** and **how long it takes:** instant, one round (✓ actions), or a cast over several rounds that can be interrupted.
 - **Contest:** the user's formula against the target's, or against a fixed difficulty (✓ every contest, by the ratio rule), or none.
-- **Requirements** in the condition language (✓).
+- **Requirements** in the requirement language (✓).
 - **Effects** and **text** (✓).
 
 `use <ability> [<target>]` runs any of them, and `cast` stays the verb for spells (`use` on a spell casts it). **Every skill is data** (decided 2026-10-27): commands like `pick` and `forage` become shortcuts to `use`, built in as `bandage` is, and what made them special becomes target kinds (a door, an item, a room) and effects (`Find`, `Take`, `Reveal`). See [Every skill as data](#every-skill-as-data).
@@ -513,7 +513,7 @@ When reactions and passive skills fire. Passives already practise on some of the
 - **Magic:** when casting (✓), when a spell lands on you, when a condition is applied (✓) or fades (✓).
 - **Moving and living:** when entering (✓) or leaving a room, someone arriving (✓), resting (✓), eating or drinking (✓), using a skill or tree; every so often (✓).
 
-A trigger can also check a condition from the condition language (✓): "only while wielding an axe", "only if health is under a quarter".
+A trigger can also check a condition from the requirement language (✓): "only while wielding an axe", "only if health is under a quarter".
 
 ```ron
 // Thorns: a condition that hurts whoever hits its bearer.
@@ -545,7 +545,7 @@ Steps 4a and 4b (2026-10-26). Conditions and passive skills can have `reactions`
 - **Out of a fight it starts none:** a reaction that hurts someone doesn't start a fight, but can kill; whoever it kills falls to the reaction's bearer.
 - **How it fits the code:** reactions in a fight are set off where they happen (`resolve.rs`, the start of a turn in `mod.rs`, casting in `casting.rs`). Everything else comes from game events (`ConditionApplied`, `ConditionFaded`, `Rested`, `Consumed`, `Entered`), which `combat/triggers.rs` turns into the reactions they set off and resolves as a round would, just after the combat round each tick.
 - **The first:** the `thorns` condition. Nothing in the world gives it yet (a spell, item or aura can); to try it, a GM or admin can `condition guard thorns 3 5t`.
-- **Still to come:** leaving a room, missing, blocking, dying, the end of a turn, a spell landing on the bearer, and using a skill, as something needs them; and more checks on a trigger from the condition language ("only while wielding an axe"; `only: Foes` is the first).
+- **Still to come:** leaving a room, missing, blocking, dying, the end of a turn, a spell landing on the bearer, and using a skill, as something needs them; and more checks on a trigger from the requirement language ("only while wielding an axe"; `only: Foes` is the first).
 
 ## Scripting
 

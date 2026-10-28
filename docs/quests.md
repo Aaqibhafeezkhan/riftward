@@ -50,7 +50,7 @@ The tag is an item, worn at the neck: `bone_tag`, `copper_tag` and so on, each a
 
 ### What rank unlocks
 
-Rank is one more term in the shared [condition language](skills.md#hidden-skills): `GuildRank("iron")` is met at Iron or above. So it works anywhere conditions already do:
+Rank is one more term in the shared [requirement language](skills.md#hidden-skills): `GuildRank("iron")` is met at Iron or above. So it works anywhere conditions already do:
 
 ```ron
 // A trainer who only teaches proven members.
@@ -83,7 +83,7 @@ Beyond trainers, rank buys standing in town. Like everything else here, each per
 | **Credit** | Silver | Buy now from guild vendors, paid from the next contract's reward |
 | **Doors that open** | Rises with rank | Guards and gatekeepers wave tagged members through: the Fort's gate onto the road to the barrier for Silver ([The setting](setting.md#the-wastes)), the keep gatehouse for Gold, perhaps |
 
-A vendor's attitude is data on the mob, in the same condition language:
+A vendor's attitude is data on the mob, in the same requirement language:
 
 ```ron
 "guild_row_armourer": (
@@ -328,7 +328,7 @@ The `sold` ending pays no merit and sets a flag the guild can learn of later (a 
 | Events for asking, giving, examining and searching | `give`, `examine` and `search` exist; none writes a game event yet |
 | Quest mobs: spawned for a quest, tagged to it, cleared when it ends | Spawning exists; tying a mob to a quest is new |
 | Escort: a mob following the holder | Following is built; mobs following a player on a quest's say-so is new |
-| `Quest(id)` and character flags in the condition language | Conditions exist; neither term does yet |
+| `Quest(id)` and character flags in the requirement language | Conditions exist; neither term does yet |
 | Failing on a death or a lost item | No |
 
 ### Progress in a group
@@ -381,7 +381,7 @@ What the engine itself is (quest files, the board, Marin's record, `accept`, `jo
 | **Bring by template or tag, and taking the items** | Rat tails, herbs, the King's tooth | Items have tags; handing over is new |
 | **Report to any mob,** in any zone | Narina, the hunter | No |
 | **Items handed over on taking a quest,** taken back if it's abandoned | The letter to the hunter | No: and the letter itself, an item template |
-| **Posting only while a world condition holds** | The Rat King, posted only while the rats are out | The condition language exists (world events); boards using it is new |
+| **Posting only while a world condition holds** | The Rat King, posted only while the rats are out | The requirement language exists (world events); boards using it is new |
 | **A deadline that runs out on its own,** across restarts | Every claimed quest | A heartbeat system and `quest_claims` |
 | **A skill-use event** | `Use(skill, n)` | No: none of the first contracts needs it yet |
 | **Meat** | Meat for the Kitchen | No: [harvesting](darkwood.md#harvest-whats-cut-loot-whats-left) (Butchering). The contract can be written now and come into its own then |
@@ -415,7 +415,10 @@ In the smallest pull requests that each leave the game working, every one with i
 2. *Built.* **World flags become facts:** `world_state` moves into the store, and world events, gated spawns and `worldflag` read and write it. Nothing a player sees changes.
 3. *Built.* **`Fact` in the requirement language:** `Fact(key, op, value)` and `Flag(key)`, with `world.`, `char.` and `npc.` facts, tested by trainers, Karma and (3b) discovery. (Backgrounds are chosen before a character has facts of their own, and test none.)
     - *Built.* **3b. Discovery reads facts too:** stumbling on a hidden skill tests its requirement with the character's facts, which means the fact store reaching skill practice in commands and in combat.
-4. **One requirement language:** world events' `When` conditions merge into it, keeping their events as triggers, and it's renamed `Requirement` (it's what every `requires:` holds), so "condition" means only what's on a body, like poisoned. Plus `HasItem`, `InRoom`, `InZone`, and `Has(condition)`: a status condition or trait on the character.
+4. **One requirement language**, in three small steps:
+    - *Built.* **4a. The rename:** `Condition` becomes `Requirement` (`requirements.rs`), what every `requires:` holds, so "condition" means only what's on a body, like poisoned.
+    - **4b. World events' conditions merge into it:** their `When` becomes requirements plus their events as triggers; who's tested becomes optional, since a world event has no one.
+    - **4c. New terms:** `HasItem`, `InRoom`, `InZone`, and `Has(condition)`: a status condition or trait on the character.
 5. **`facts <player>` and `facts world`,** for GMs.
 
 **Events quests listen to**

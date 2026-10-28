@@ -373,7 +373,7 @@ A spawn with `when` only fills while its condition is true, in the world-event c
 
 The world keeps its own **flags** (`goblin_king_alive`, `city_quarantined`) and **counters** (`goblins_slain_this_week`), kept as `world.` [facts](facts.md). Flags and counters are set by events, and read by triggers and by other systems' conditions.
 
-World flags join the shared [condition language](skills.md#hidden-skills), so the world and the rest of the design build on each other: a hidden skill can require `WorldFlag("goblin_king_slain")`, and a trainer can appear only once `WorldFlag("city_cleared")` is set.
+World flags join the shared [requirement language](skills.md#hidden-skills), so the world and the rest of the design build on each other: a hidden skill can require `WorldFlag("goblin_king_slain")`, and a trainer can appear only once `WorldFlag("city_cleared")` is set.
 
 ## World events
 

@@ -11,12 +11,12 @@ use bevy::prelude::*;
 
 use crate::attributes::Attributes;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
-use crate::conditions::Subject;
 use crate::db::Database;
 use crate::items::capitalized;
 use crate::mobs::{MobQuery, MobTemplates};
 use crate::money::{self, Purse};
 use crate::output::{Characters, Outbox, Outgoing, deliver};
+use crate::requirements::Subject;
 use crate::skills::{Skill, SkillDefs, Skills, learn};
 use crate::spells::{self, Spell, SpellDefs, Spells};
 

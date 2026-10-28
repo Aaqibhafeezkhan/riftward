@@ -4,7 +4,7 @@
 //! Joining is free, at the clerk: a character becomes a Bone member and is handed a Bone tag.
 //! Rank rises with merit (from contracts, once there are any, or a GM's `guild merit`): on its
 //! own up to Iron, and by promotion from Silver up. Rank never drops. What a member's rank opens
-//! is tested with `GuildRank` in the shared condition language, and only counts while they wear
+//! is tested with `GuildRank` in the shared requirement language, and only counts while they wear
 //! a guild tag: taking it off makes them an anonymous traveller. The guild can expel a member,
 //! who keeps their rank on record and can buy their way back in. The ranks, and what the clerk
 //! charges, are data in `assets/guild.ron`.

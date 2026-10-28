@@ -72,7 +72,7 @@ Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to b
 
 A background is **what a character did before they were an adventurer**: a little practice in the everyday skills of that life, and its tools. It never teaches fighting or magic. Every adventurer learns those the same way, from [trainers](skills.md#acquiring-skills) in the world, so a farmhand can become a swordsman and a soldier a shaman; the past colours a character without deciding what they become. That keeps backgrounds from turning into classes.
 
-They're in `assets/backgrounds.ron`, in menu order. Any background can be gated by a `requires` condition, in the shared [condition language](#conditions). With attributes starting at 3, a gate of 4 is one point bought with Karma, unless the character's race already gives it.
+They're in `assets/backgrounds.ron`, in menu order. Any background can be gated by a `requires` condition, in the shared [requirement language](#conditions). With attributes starting at 3, a gate of 4 is one point bought with Karma, unless the character's race already gives it.
 
 | Background | Requires | Everyday skills | Kit |
 | --- | --- | --- | --- |

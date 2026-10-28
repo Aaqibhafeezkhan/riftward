@@ -1,5 +1,6 @@
-//! Conditions: the small shared language for "who qualifies", used by background gates now, and by
-//! skill requirements, hidden-skill unlocks, quests and trainers later (see `docs/skills.md`).
+//! Requirements: the small shared language for "who qualifies", wherever data says `requires:`
+//! (backgrounds, skills, trainers, discovery) and, as it grows, quests (see `docs/facts.md`).
+//! Not to be confused with conditions, which are what's on a body, like poisoned (`combat`).
 
 use serde::{Deserialize, Serialize};
 
@@ -9,7 +10,7 @@ use crate::skills::Skills;
 use crate::time::unix_now;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum Condition {
+pub enum Requirement {
     /// An attribute is at least this.
     Stat(Attribute, i32),
     /// The character is of this race.
@@ -25,9 +26,9 @@ pub enum Condition {
     Fact(String, Cmp, Value),
     /// A fact is set at all (true, a number but zero, a word): `Flag("world.rats_broke_out")`.
     Flag(String),
-    All(Vec<Condition>),
-    Any(Vec<Condition>),
-    Not(Box<Condition>),
+    All(Vec<Requirement>),
+    Any(Vec<Requirement>),
+    Not(Box<Requirement>),
 }
 
 /// How a fact is compared.
@@ -41,7 +42,7 @@ pub enum Cmp {
     Lte,
 }
 
-/// Who conditions are tested against, and what's known of them.
+/// Who a requirement is tested against, and what's known of them.
 pub struct Subject<'a> {
     pub attributes: &'a Attributes,
     pub race: &'a str,
@@ -100,30 +101,30 @@ fn compare(have: Option<&Value>, op: Cmp, want: &Value) -> bool {
     }
 }
 
-impl Condition {
+impl Requirement {
     pub fn met(&self, facts: &Subject) -> bool {
         match self {
-            Condition::Stat(attribute, min) => facts.attributes.get(*attribute) >= *min,
-            Condition::Race(race) => facts.race == race,
-            Condition::Skill(skill, level) => facts
+            Requirement::Stat(attribute, min) => facts.attributes.get(*attribute) >= *min,
+            Requirement::Race(race) => facts.race == race,
+            Requirement::Skill(skill, level) => facts
                 .skills
                 .and_then(|skills| skills.0.get(skill))
                 .is_some_and(|state| state.level >= *level),
-            Condition::GuildRank(rank) => facts
+            Requirement::GuildRank(rank) => facts
                 .guild_rank
                 .zip(crate::guild::guild().rank(rank))
                 .is_some_and(|(shown, needed)| shown >= needed),
-            Condition::Fact(key, op, value) => compare(facts.fact(key), *op, value),
-            Condition::Flag(key) => facts.fact(key).is_some(),
-            Condition::All(all) => all.iter().all(|c| c.met(facts)),
-            Condition::Any(any) => any.iter().any(|c| c.met(facts)),
-            Condition::Not(not) => !not.met(facts),
+            Requirement::Fact(key, op, value) => compare(facts.fact(key), *op, value),
+            Requirement::Flag(key) => facts.fact(key).is_some(),
+            Requirement::All(all) => all.iter().all(|c| c.met(facts)),
+            Requirement::Any(any) => any.iter().any(|c| c.met(facts)),
+            Requirement::Not(not) => !not.met(facts),
         }
     }
 
     /// For players: "Body 4 and Logic 4", "Lizardfolk". `race_name` turns a race id into its name.
     pub fn describe(&self, race_name: &dyn Fn(&str) -> String) -> String {
-        let join = |list: &[Condition], word: &str| {
+        let join = |list: &[Requirement], word: &str| {
             let parts: Vec<String> = list.iter().map(|c| c.describe(race_name)).collect();
             match parts.as_slice() {
                 [] => String::new(),
@@ -132,10 +133,10 @@ impl Condition {
             }
         };
         match self {
-            Condition::Stat(attribute, min) => format!("{} {min}", attribute.name()),
-            Condition::Race(race) => race_name(race),
-            Condition::Skill(skill, level) => format!("{skill} {level}"),
-            Condition::GuildRank(rank) => {
+            Requirement::Stat(attribute, min) => format!("{} {min}", attribute.name()),
+            Requirement::Race(race) => race_name(race),
+            Requirement::Skill(skill, level) => format!("{skill} {level}"),
+            Requirement::GuildRank(rank) => {
                 let guild = crate::guild::guild();
                 let name = guild
                     .rank(rank)
@@ -143,13 +144,13 @@ impl Condition {
                 format!("a {name} guild tag")
             }
             // What a fact is about, without its scope: "sold out the guild".
-            Condition::Fact(key, ..) | Condition::Flag(key) => key
+            Requirement::Fact(key, ..) | Requirement::Flag(key) => key
                 .split_once('.')
                 .map_or(key.as_str(), |(_, rest)| rest)
                 .replace(['_', '.'], " "),
-            Condition::All(all) => join(all, "and"),
-            Condition::Any(any) => join(any, "or"),
-            Condition::Not(not) => format!("not {}", not.describe(race_name)),
+            Requirement::All(all) => join(all, "and"),
+            Requirement::Any(any) => join(any, "or"),
+            Requirement::Not(not) => format!("not {}", not.describe(race_name)),
         }
     }
 }
@@ -159,7 +160,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn conditions_test_and_read_naturally() {
+    fn requirements_test_and_read_naturally() {
         let mut attributes = Attributes::default();
         attributes.set(Attribute::Magic, 1);
         let facts = Subject {
@@ -170,9 +171,9 @@ mod tests {
             story: None,
             character: None,
         };
-        let acolyte = Condition::All(vec![
-            Condition::Stat(Attribute::Magic, 1),
-            Condition::Stat(Attribute::Willpower, 4),
+        let acolyte = Requirement::All(vec![
+            Requirement::Stat(Attribute::Magic, 1),
+            Requirement::Stat(Attribute::Willpower, 4),
         ]);
         assert!(!acolyte.met(&facts));
         attributes.set(Attribute::Willpower, 4);
@@ -185,7 +186,7 @@ mod tests {
             character: None,
         };
         assert!(acolyte.met(&facts));
-        assert!(!Condition::Race("lizardfolk".into()).met(&facts));
+        assert!(!Requirement::Race("lizardfolk".into()).met(&facts));
 
         let name = |id: &str| match id {
             "lizardfolk" => "Lizardfolk".to_string(),
@@ -193,7 +194,7 @@ mod tests {
         };
         assert_eq!(acolyte.describe(&name), "Magic 1 and Willpower 4");
         assert_eq!(
-            Condition::Race("lizardfolk".into()).describe(&name),
+            Requirement::Race("lizardfolk".into()).describe(&name),
             "Lizardfolk"
         );
     }
@@ -236,7 +237,7 @@ mod tests {
         };
         let met = |text: &str, character: Option<i64>| {
             crate::world::ron_options()
-                .from_str::<Condition>(text)
+                .from_str::<Requirement>(text)
                 .unwrap()
                 .met(&who(character))
         };
@@ -258,7 +259,7 @@ mod tests {
         ));
         assert!(!met(r#"Flag("nowhere.at_all")"#, None), "no such scope");
         assert_eq!(
-            Condition::Flag("char.sold_out_the_guild".into()).describe(&|id| id.into()),
+            Requirement::Flag("char.sold_out_the_guild".into()).describe(&|id| id.into()),
             "sold out the guild"
         );
     }
@@ -274,7 +275,7 @@ mod tests {
             story: None,
             character: None,
         };
-        let silver = Condition::GuildRank("silver".into());
+        let silver = Requirement::GuildRank("silver".into());
         assert!(!silver.met(&shows(None)), "no tag, no rank");
         assert!(!silver.met(&shows(Some(2))), "Iron");
         assert!(silver.met(&shows(Some(3))));

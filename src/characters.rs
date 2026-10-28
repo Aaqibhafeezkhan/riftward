@@ -4,7 +4,7 @@
 //! the base attributes and grants racial skills; humans get extra Karma instead
 //! of attribute shifts. A background is what a character did before they were an adventurer: a
 //! little practice in everyday skills, and the tools of that life, but never fighting or magic.
-//! It can be gated by a [`Condition`]. Skills not yet written as data are granted once they are.
+//! It can be gated by a [`Requirement`]. Skills not yet written as data are granted once they are.
 
 use std::collections::BTreeMap;
 
@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::attributes::{Attribute, Attributes, progression};
-use crate::conditions::{Condition, Subject};
+use crate::requirements::{Requirement, Subject};
 use crate::world::ron_options;
 
 pub struct CharactersPlugin;
@@ -99,7 +99,7 @@ pub struct BackgroundDef {
     pub summary: String,
     /// Who can choose it.
     #[serde(default)]
-    pub requires: Option<Condition>,
+    pub requires: Option<Requirement>,
     /// Starting skills.
     #[serde(default)]
     pub skills: Vec<String>,
@@ -441,10 +441,10 @@ mod tests {
         assert!(problems.is_empty(), "problems:\n{}", problems.join("\n"));
     }
 
-    fn collect_stats(condition: Option<&Condition>, out: &mut Vec<(Attribute, i32)>) {
+    fn collect_stats(condition: Option<&Requirement>, out: &mut Vec<(Attribute, i32)>) {
         match condition {
-            Some(Condition::Stat(attribute, min)) => out.push((*attribute, *min)),
-            Some(Condition::All(list) | Condition::Any(list)) => {
+            Some(Requirement::Stat(attribute, min)) => out.push((*attribute, *min)),
+            Some(Requirement::All(list) | Requirement::Any(list)) => {
                 list.iter().for_each(|c| collect_stats(Some(c), out))
             }
             _ => {}
