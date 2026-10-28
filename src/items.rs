@@ -494,6 +494,37 @@ pub fn carries<'a>(
     })
 }
 
+/// What `who` has on them, at any depth (held, worn, in their bags): each item's template, and
+/// the template's tags. For requirements that ask what someone carries.
+pub fn carried(
+    who: Entity,
+    items: &ItemQuery,
+    templates: &ItemTemplates,
+) -> Vec<(ItemKey, Vec<String>)> {
+    let on_them = |mut entity: Entity| {
+        for _ in 0..32 {
+            match items.get(entity).map(|(_, _, location)| *location) {
+                Ok(ItemLocation::Inside(container)) => entity = container,
+                Ok(location) => return location.holder() == Some(who),
+                Err(_) => return false,
+            }
+        }
+        false
+    };
+    items
+        .iter()
+        .filter(|(entity, ..)| on_them(*entity))
+        .map(|(_, item, _)| {
+            let tags = templates
+                .0
+                .get(&item.key)
+                .map(|def| def.tags.clone())
+                .unwrap_or_default();
+            (item.key.clone(), tags)
+        })
+        .collect()
+}
+
 /// One item, as the rules see it.
 #[derive(Clone, Debug)]
 pub struct ItemInfo {

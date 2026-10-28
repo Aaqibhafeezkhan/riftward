@@ -34,12 +34,12 @@ There are two today: `Condition` (attributes, race, skills, guild rank; backgrou
 | `WorldFlag(id)` | A world flag is set: `Flag("world.id")` by its old name, as zone files write it (*built*) |
 | `Event(happening)` | Something is happening right now: `Entered(mob, zone)`, `Died(mob)`; only true while a world event is handling it (*built*) |
 | `Quest(id, state)` | A character's quest is held, done (with a given ending, or any), or failed: `Quest("riftwatch:crystals_gone_missing", Ended("sold"))` |
-| `HasItem(item or tag, n)` | They carry that many |
-| `Has(condition)` | A status condition or trait is on them: `Has("poisoned")`, `Not(Has("rift_taint"))` |
-| `InRoom(room)`, `InZone(zone)` | They're there |
+| `HasItem(Item(id) or Tag(tag), n)` | They carry at least that many, anywhere on them: `HasItem(Item("sewers:rat_tail"), 3)`, `HasItem(Tag("herb"), 5)` (*built*) |
+| `Has(condition)` | A status condition or trait is on them: `Has("poisoned")`, `Not(Has("rift_taint"))` (*built*) |
+| `InRoom(room)`, `InZone(zone)` | They're there (*built*) |
 | `All`, `Any`, `Not` | As now |
 
-Trainers, Karma and discovering a hidden skill test facts today (*built*); backgrounds, chosen before a character has any, don't. Where a condition is tested decides whose facts `char.` and `quest.` mean: the character at the trainer, the player reading the board, the one a rule fired for.
+Trainers, Karma and discovering a hidden skill test facts today (*built*); backgrounds, chosen before a character has any, don't. Trainers and Karma also know what's on someone, where they are and what they carry; discovery doesn't yet, so `Has`, `HasItem`, `InRoom` and `InZone` are false there. Where a condition is tested decides whose facts `char.` and `quest.` mean: the character at the trainer, the player reading the board, the one a rule fired for.
 
 ## Rules
 

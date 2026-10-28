@@ -6,10 +6,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::attributes::{Attribute, Attributes};
+use crate::combat::Conditions;
 use crate::facts::{Facts, Owner, Value};
 use crate::skills::Skills;
 use crate::time::unix_now;
-use crate::world::MobKey;
+use crate::world::{ItemKey, MobKey, RoomKey};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Requirement {
@@ -28,6 +29,15 @@ pub enum Requirement {
     Fact(String, Cmp, Value),
     /// A fact is set at all (true, a number but zero, a word): `Flag("world.rats_broke_out")`.
     Flag(String),
+    /// A status condition or trait is on the character: `Has("poisoned")`, `Has("fey_mind")`.
+    Has(String),
+    /// The character carries at least this many of an item, or of items with a tag:
+    /// `HasItem(Item("sewers:rat_tail"), 3)`, `HasItem(Tag("herb"), 5)`.
+    HasItem(ItemMatch, u32),
+    /// The character is in this room (`zone:room`, or `room` in the zone it's written in).
+    InRoom(String),
+    /// The character is in this zone.
+    InZone(String),
     /// A world flag is set: `WorldFlag("rats_broke_out")` is `Flag("world.rats_broke_out")`.
     WorldFlag(String),
     /// Something just happened: only true while that happening is being handled, as world
@@ -36,6 +46,13 @@ pub enum Requirement {
     All(Vec<Requirement>),
     Any(Vec<Requirement>),
     Not(Box<Requirement>),
+}
+
+/// Which items `HasItem` counts: one template (`zone:item`), or anything with a tag.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum ItemMatch {
+    Item(String),
+    Tag(String),
 }
 
 /// Something that happens in the world, for `Requirement::Event`. Mob ids are `mob` or
@@ -76,6 +93,47 @@ pub struct Who<'a> {
     pub guild_rank: Option<usize>,
     /// Their saved character, whose `char.` facts are theirs.
     pub character: Option<i64>,
+    /// What's on them, for `Has`.
+    pub conditions: Option<&'a Conditions>,
+    /// Where they are, for `InRoom` and `InZone`.
+    pub room: Option<&'a RoomKey>,
+    /// What they carry (each item's template and tags, from `items::carried`), for `HasItem`.
+    pub carrying: Option<&'a [(ItemKey, Vec<String>)]>,
+}
+
+/// What requirements need to know about someone besides their sheet: where they are, what
+/// they carry, what's on them, the rank they show, and the fact store.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct Surroundings<'w, 's> {
+    rooms: crate::output::RoomQuery<'w, 's>,
+    places: bevy::prelude::Query<'w, 's, &'static crate::world::InRoom>,
+    items: crate::items::ItemQuery<'w, 's>,
+    templates: bevy::prelude::Res<'w, crate::items::ItemTemplates>,
+    pub conditions: bevy::prelude::Query<'w, 's, &'static Conditions>,
+    shown: bevy::prelude::Query<'w, 's, &'static crate::guild::ShownRank>,
+    pub story: bevy::prelude::Res<'w, Facts>,
+}
+
+/// What `Surroundings` found out about someone, for a `Who` to borrow.
+pub struct Known {
+    pub room: Option<RoomKey>,
+    pub carrying: Vec<(ItemKey, Vec<String>)>,
+    pub guild_rank: Option<usize>,
+}
+
+impl Surroundings<'_, '_> {
+    pub fn of(&self, who: bevy::prelude::Entity) -> Known {
+        Known {
+            room: self
+                .places
+                .get(who)
+                .ok()
+                .and_then(|r| self.rooms.get(r.0).ok())
+                .map(|(_, key, _)| key.clone()),
+            carrying: crate::items::carried(who, &self.items, &self.templates),
+            guild_rank: crate::guild::shown_rank(who, &self.shown),
+        }
+    }
 }
 
 /// What a requirement is tested against: someone, if anyone (a world event has no one, and
@@ -171,6 +229,27 @@ impl Requirement {
                 .is_some_and(|(shown, needed)| shown >= needed),
             Requirement::Fact(key, op, value) => compare(facts.fact(key), *op, value),
             Requirement::Flag(key) => facts.fact(key).is_some(),
+            Requirement::Has(condition) => who
+                .and_then(|w| w.conditions)
+                .is_some_and(|c| c.has(condition)),
+            Requirement::HasItem(which, n) => {
+                let count = who.and_then(|w| w.carrying).map_or(0, |carrying| {
+                    carrying
+                        .iter()
+                        .filter(|(key, tags)| match which {
+                            ItemMatch::Item(id) => ItemKey::parse(id, facts.zone) == *key,
+                            ItemMatch::Tag(tag) => tags.contains(tag),
+                        })
+                        .count()
+                });
+                count >= *n as usize
+            }
+            Requirement::InRoom(room) => who
+                .and_then(|w| w.room)
+                .is_some_and(|at| RoomKey::parse(room, facts.zone) == *at),
+            Requirement::InZone(zone) => {
+                who.and_then(|w| w.room).is_some_and(|at| at.zone == *zone)
+            }
             Requirement::WorldFlag(flag) => facts.fact(&format!("world.{flag}")).is_some(),
             Requirement::Event(happening) => match (happening, facts.happened) {
                 (
@@ -214,7 +293,18 @@ impl Requirement {
                 .split_once('.')
                 .map_or(key.as_str(), |(_, rest)| rest)
                 .replace(['_', '.'], " "),
-            Requirement::WorldFlag(flag) => flag.replace('_', " "),
+            Requirement::WorldFlag(flag) | Requirement::Has(flag) => flag.replace('_', " "),
+            Requirement::HasItem(which, n) => {
+                let (ItemMatch::Item(name) | ItemMatch::Tag(name)) = which;
+                let name = name.rsplit(':').next().unwrap_or(name).replace('_', " ");
+                format!("{n} {name}")
+            }
+            Requirement::InRoom(place) | Requirement::InZone(place) => {
+                format!(
+                    "being in {}",
+                    place.rsplit(':').next().unwrap_or(place).replace('_', " ")
+                )
+            }
             Requirement::Event(Happening::Entered { mob, zone }) => {
                 format!("{mob} coming into {zone}")
             }
@@ -241,6 +331,9 @@ mod tests {
                 skills: None,
                 guild_rank: None,
                 character: None,
+                conditions: None,
+                room: None,
+                carrying: None,
             },
             None,
         );
@@ -257,6 +350,9 @@ mod tests {
                 skills: None,
                 guild_rank: None,
                 character: None,
+                conditions: None,
+                room: None,
+                carrying: None,
             },
             None,
         );
@@ -310,6 +406,9 @@ mod tests {
                     skills: None,
                     guild_rank: None,
                     character,
+                    conditions: None,
+                    room: None,
+                    carrying: None,
                 },
                 Some(&story),
             )
@@ -344,6 +443,62 @@ mod tests {
     }
 
     #[test]
+    fn what_they_carry_where_they_are_and_whats_on_them() {
+        let attributes = Attributes::default();
+        let conditions = Conditions::default().with_traits(&["fey_mind".to_string()]);
+        let room = RoomKey::parse("sewers:nest", "");
+        let carrying = vec![
+            (
+                ItemKey::parse("sewers:rat_tail", ""),
+                vec!["trophy".to_string()],
+            ),
+            (
+                ItemKey::parse("sewers:rat_tail", ""),
+                vec!["trophy".to_string()],
+            ),
+            (
+                ItemKey::parse("forest:yarrow", ""),
+                vec!["herb".to_string()],
+            ),
+        ];
+        let subject = Subject::of(
+            Who {
+                attributes: &attributes,
+                race: "elf",
+                skills: None,
+                guild_rank: None,
+                character: None,
+                conditions: Some(&conditions),
+                room: Some(&room),
+                carrying: Some(&carrying),
+            },
+            None,
+        );
+        let met = |text: &str| {
+            crate::world::ron_options()
+                .from_str::<Requirement>(text)
+                .unwrap()
+                .met(&subject)
+        };
+        assert!(met(r#"Has("fey_mind")"#));
+        assert!(!met(r#"Has("poisoned")"#));
+        assert!(met(r#"HasItem(Item("sewers:rat_tail"), 2)"#));
+        assert!(!met(r#"HasItem(Item("sewers:rat_tail"), 3)"#));
+        assert!(met(r#"HasItem(Tag("herb"), 1)"#));
+        assert!(met(r#"InRoom("sewers:nest")"#));
+        assert!(!met(r#"InRoom("riftwatch:market")"#));
+        assert!(met(r#"InZone("sewers")"#));
+        assert_eq!(
+            Requirement::HasItem(ItemMatch::Item("sewers:rat_tail".into()), 3)
+                .describe(&|id| id.into()),
+            "3 rat tail"
+        );
+        // A world event has no one carrying anything, or anywhere.
+        let story = Facts::default();
+        assert!(!Requirement::InZone("sewers".into()).met(&Subject::world(&story, "", None)));
+    }
+
+    #[test]
     fn a_guild_rank_is_met_by_that_rank_or_higher_shown() {
         let attributes = Attributes::default();
         let shows = |rank: Option<usize>| {
@@ -354,6 +509,9 @@ mod tests {
                     skills: None,
                     guild_rank: rank,
                     character: None,
+                    conditions: None,
+                    room: None,
+                    carrying: None,
                 },
                 None,
             )

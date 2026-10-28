@@ -158,7 +158,7 @@ One engine runs every quest: a guild contract is a quest the guild posts, with a
     stages: [
         (
             text: "Kill twenty sewer rats and bring back ten of their tails.",
-            objectives: [Kill("sewer_rat", 20), Bring("sewers:rat_tail", 10)],
+            objectives: [Kill("sewer_rat", 20), Bring(Item("sewers:rat_tail"), 10)],
         ),
     ],
     // Who it's reported to: the clerk, for the guild's contracts, unless it says otherwise.
@@ -203,7 +203,7 @@ This replaces the earlier plan of a physical token (2026-10-28): the record is t
 | Objective | Done when | Counted |
 | --- | --- | --- |
 | `Kill(mob, n)` | `n` of that mob template, or of mobs with that tag (`Kill(Tag("vermin"), 20)`), are killed by you or your group | As they die |
-| `Bring(item, n)` | You have `n` of that item, or of items with that tag (`Bring(Tag("herb"), 5)`), when you report: they're handed over | When reported |
+| `Bring(item, n)` | You have `n` of that item, or of items with that tag (`Bring(Item("sewers:rat_tail"), 10)`, `Bring(Tag("herb"), 5)`, matched as `HasItem` matches), when you report: they're handed over | When reported |
 | `Obtain(item, n)` | You pick up, or are given, `n` of that item or tag; unlike `Bring`, nothing is handed over (the letter you're to carry; a clue) | As it happens |
 | `Reach(room)` | You enter the room | As it happens |
 | `Use(skill, n)` | You use the skill `n` times | As it happens |
@@ -418,7 +418,7 @@ In the smallest pull requests that each leave the game working, every one with i
 4. **One requirement language**, in three small steps:
     - *Built.* **4a. The rename:** `Condition` becomes `Requirement` (`requirements.rs`), what every `requires:` holds, so "condition" means only what's on a body, like poisoned.
     - *Built.* **4b. World events' conditions merge into it:** their `When` becomes requirements plus their events as triggers; who's tested becomes optional, since a world event has no one.
-    - **4c. New terms:** `HasItem`, `InRoom`, `InZone`, and `Has(condition)`: a status condition or trait on the character.
+    - *Built.* **4c. New terms:** `HasItem`, `InRoom`, `InZone`, and `Has(condition)`: a status condition or trait on the character.
 5. **`facts <player>` and `facts world`,** for GMs.
 
 **Events quests listen to**

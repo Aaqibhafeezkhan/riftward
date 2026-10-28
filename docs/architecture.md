@@ -58,7 +58,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |
-| `requirements.rs` | The shared requirement language, what every `requires:` holds (`Stat`, `Race`, `Skill`, `GuildRank`, `Fact`, `Flag`, `WorldFlag`, `Event`, `All`, `Any`, `Not`), and world events' and gated spawns' `when:`, tested against a `Subject`: someone if anyone, the facts, the zone, and what just happened. Not status conditions, which are `combat`'s |
+| `requirements.rs` | The shared requirement language, what every `requires:` holds (`Stat`, `Race`, `Skill`, `GuildRank`, `Has`, `HasItem`, `InRoom`, `InZone`, `Fact`, `Flag`, `WorldFlag`, `Event`, `All`, `Any`, `Not`), and world events' and gated spawns' `when:`, tested against a `Subject`: someone if anyone, the facts, the zone, and what just happened. `Surroundings` gathers what a command knows of someone (room, what they carry, conditions, rank shown) Not status conditions, which are `combat`'s |
 | `dice.rs` | The `Dice` resource, the only source of randomness |
 
 ### One tick

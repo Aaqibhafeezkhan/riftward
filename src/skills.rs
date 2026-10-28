@@ -1110,6 +1110,9 @@ pub fn count_use(
             skills: Some(skills),
             guild_rank: None,
             character: Some(character_id),
+            conditions: None,
+            room: None,
+            carrying: None,
         },
         story,
     );
@@ -1341,7 +1344,7 @@ fn karma_cmd(
     defs: Res<SkillDefs>,
     mut sheets: Query<(&mut Skills, &mut Attributes)>,
     db: Res<Database>,
-    (shown, story): (Query<&crate::guild::ShownRank>, Res<crate::facts::Facts>),
+    around: crate::requirements::Surroundings,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -1349,15 +1352,19 @@ fn karma_cmd(
     let Ok((mut skills, mut attributes)) = sheets.get_mut(inv.entity) else {
         return;
     };
+    let known = around.of(inv.entity);
     let facts = Subject::of(
         Who {
             attributes: &attributes,
             race: &actor.race,
             skills: Some(&skills),
-            guild_rank: crate::guild::shown_rank(inv.entity, &shown),
+            guild_rank: known.guild_rank,
             character: actor.character_id,
+            conditions: around.conditions.get(inv.entity).ok(),
+            room: known.room.as_ref(),
+            carrying: Some(&known.carrying),
         },
-        Some(&story),
+        Some(&around.story),
     );
     let unmet = |skill: &Skill| {
         skill
@@ -2094,6 +2101,9 @@ mod tests {
                 skills: Some(&known),
                 guild_rank: None,
                 character: None,
+                conditions: None,
+                room: None,
+                carrying: None,
             },
             None,
         );
@@ -2142,6 +2152,9 @@ mod tests {
                 skills: Some(&skills),
                 guild_rank: None,
                 character: None,
+                conditions: None,
+                room: None,
+                carrying: None,
             },
             None,
         );
@@ -2190,6 +2203,9 @@ mod tests {
                     skills: Some(&skills),
                     guild_rank: None,
                     character: Some(ada),
+                    conditions: None,
+                    room: None,
+                    carrying: None,
                 },
                 Some(story),
             );

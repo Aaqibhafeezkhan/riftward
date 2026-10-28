@@ -244,6 +244,9 @@ pub fn background_menu(
             skills: None,
             guild_rank: None,
             character: None,
+            conditions: None,
+            room: None,
+            carrying: None,
         },
         None,
     );
@@ -286,6 +289,9 @@ pub fn background_refusal(
             skills: None,
             guild_rank: None,
             character: None,
+            conditions: None,
+            room: None,
+            carrying: None,
         },
         None,
     );
@@ -384,6 +390,9 @@ mod tests {
                         skills: None,
                         guild_rank: None,
                         character: None,
+                        conditions: None,
+                        room: None,
+                        carrying: None,
                     },
                     None,
                 );
