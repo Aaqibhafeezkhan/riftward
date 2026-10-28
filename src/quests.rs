@@ -2,7 +2,9 @@
 //! (`assets/quests/riftwatch/rats_in_the_drains.quest.ron` is `riftwatch:rats_in_the_drains`).
 //! They're loaded, checked and hot-reloaded here, read from the board where they're posted, taken
 //! with the guild's clerk (`accept`), and kept in each character's `QuestLog` and `journal`.
-//! Progress and rewards come later (see `docs/quests.md`).
+//! Objectives are counted as the quest's own facts (`quest.` facts, by stage: `1.kill.sewers:
+//! sewer_rat`) from game events, and a stage whose objectives are all counted and done moves on
+//! to the next. Reporting and rewards come later (see `docs/quests.md`).
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -16,15 +18,17 @@ use thiserror::Error;
 use crate::attributes::Attributes;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, QuestRecord};
-use crate::facts::Facts;
+use crate::events::GameEvent;
+use crate::facts::{Facts, Owner};
 use crate::guild::{Membership, guild};
 use crate::items::ItemTemplates;
+use crate::mobs::MobTemplates;
 use crate::money;
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
 use crate::requirements::{ItemMatch, Requirement, Subject, Surroundings, Who};
 use crate::skills::Skills;
 use crate::time::unix_now;
-use crate::world::{Every, ItemKey, RoomKey, ron_options};
+use crate::world::{Every, ItemKey, MobDef, MobKey, Player, RoomKey, ron_options, without_article};
 
 /// Asset folder holding one folder of quests per zone.
 pub const QUESTS_PATH: &str = "quests";
@@ -39,7 +43,7 @@ impl Plugin for QuestsPlugin {
             .register_asset_loader(QuestLoader)
             .init_resource::<Quests>()
             .add_systems(Startup, load_quests)
-            .add_systems(Update, sync_quests)
+            .add_systems(Update, (sync_quests, count_kills))
             .add_command(
                 CommandSpec::new("board", Category::Interaction)
                     .shortcuts(&["contracts"])
@@ -478,7 +482,8 @@ fn accept(
     (memberships, mut logs): (Query<&Membership>, Query<&mut QuestLog>),
     sheets: Query<(&Attributes, &Skills)>,
     quests: Res<Quests>,
-    around: Surroundings,
+    // What they are and carry for `requires`, and the facts to clear a quest taken afresh.
+    mut both: ParamSet<(Surroundings, ResMut<Facts>)>,
     db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -489,6 +494,7 @@ fn accept(
         return;
     };
     let member = memberships.get(actor.entity).ok().filter(|m| !m.expelled);
+    let around = both.p0();
     let notices = posted(here, member.map(|m| m.rank), &quests, &around.story);
     let now = unix_now();
     let reply = (|| {
@@ -562,6 +568,9 @@ fn accept(
                 Ok(mut log) => log.put(record, character_id, &db),
                 Err(_) => error!("{} has no quest log", actor.name),
             }
+            // Taken again, it starts from nothing.
+            both.p1()
+                .forget(&Owner::Quest(character_id, quest.id.clone()), &db);
             if quest.contract.is_some() {
                 if let Err(err) = db.add_guild_record(character_id, &quest.id, "accepted", now) {
                     error!(
@@ -591,24 +600,46 @@ fn log_finished(log: Option<&QuestLog>, quest: &str) -> Option<i64> {
     log?.get(quest)?.finished_at
 }
 
-/// `journal`: each quest you're on and where you are in it, in its own words; then what you've
-/// done.
+/// `journal`: each quest you're on, where you are in it and how far along each objective is;
+/// then what you've done.
 fn journal(
     In(inv): In<Invocation>,
-    logs: Query<&QuestLog>,
+    logs: Query<(&QuestLog, &Player)>,
     quests: Res<Quests>,
+    story: Res<Facts>,
+    (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
     mut outbox: ResMut<Outbox>,
 ) {
-    let Ok(log) = logs.get(inv.entity) else {
+    let Ok((log, player)) = logs.get(inv.entity) else {
         return;
     };
+    let lookup = Lookup {
+        quests: &quests,
+        story: &story,
+        mobs: &mobs,
+        items: &items,
+        now: unix_now(),
+    };
     deliver(
-        vec![Outgoing::line(inv.entity, journal_text(log, &quests))],
+        vec![Outgoing::line(
+            inv.entity,
+            journal_text(log, player.character_id, &lookup),
+        )],
         &mut outbox,
     );
 }
 
-fn journal_text(log: &QuestLog, quests: &Quests) -> String {
+/// What a journal or a count needs to look things up by.
+struct Lookup<'a> {
+    quests: &'a Quests,
+    story: &'a Facts,
+    mobs: &'a MobTemplates,
+    items: &'a ItemTemplates,
+    now: i64,
+}
+
+fn journal_text(log: &QuestLog, character_id: i64, lookup: &Lookup) -> String {
+    let quests = lookup.quests;
     let name = |id: &str| {
         quests
             .0
@@ -620,14 +651,24 @@ fn journal_text(log: &QuestLog, quests: &Quests) -> String {
         .iter()
         .filter(|r| r.state == HELD)
         .map(|r| {
-            let stage = quests.0.get(&r.quest).and_then(|q| {
-                let n: usize = r.stage.parse().ok()?;
-                q.stages.get(n.checked_sub(1)?)
-            });
-            match stage {
-                Some(stage) => format!("  {}\r\n    {}", name(&r.quest), stage.text),
-                None => format!("  {}", name(&r.quest)),
+            let Some((quest, n, stage)) = quests.0.get(&r.quest).and_then(|q| {
+                let n = stage_number(r)?;
+                Some((q, n, q.stages.get(n - 1)?))
+            }) else {
+                return format!("  {}", name(&r.quest));
+            };
+            let owner = Owner::Quest(character_id, quest.id.clone());
+            let mut text = format!("  {}\r\n    {}", quest.name, stage.text);
+            for objective in &stage.objectives {
+                let have = objective
+                    .key(n, quest.zone())
+                    .map(|key| lookup.story.number(&owner, &key, lookup.now));
+                text += &format!(
+                    "\r\n      {}",
+                    objective.progress(quest.zone(), have, lookup)
+                );
             }
+            text
         })
         .collect();
     let done: Vec<String> = log
@@ -648,6 +689,132 @@ fn journal_text(log: &QuestLog, quests: &Quests) -> String {
     lines.join("\r\n")
 }
 
+/// The stage someone is on, counted from 1.
+fn stage_number(record: &QuestRecord) -> Option<usize> {
+    record.stage.parse().ok().filter(|n| *n > 0)
+}
+
+/// Kills count for the quests their killer holds: each objective the dead mob answers on the
+/// stage they're on goes up by one, to what it asks; a stage whose objectives are all counted
+/// and done moves on to the next, and the last says it's time to report.
+#[allow(clippy::too_many_arguments)]
+fn count_kills(
+    mut events: MessageReader<GameEvent>,
+    mut logs: Query<(&mut QuestLog, &Player)>,
+    quests: Res<Quests>,
+    mut story: ResMut<Facts>,
+    (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
+    db: Res<Database>,
+    mut outbox: ResMut<Outbox>,
+) {
+    let now = unix_now();
+    let mut out = Vec::new();
+    for event in events.read() {
+        let GameEvent::Died {
+            mob: Some(mob),
+            killer: Some(killer),
+            name,
+            ..
+        } = event
+        else {
+            continue;
+        };
+        let Ok((mut log, player)) = logs.get_mut(*killer) else {
+            continue;
+        };
+        let character_id = player.character_id;
+        let def = mobs.0.get(mob);
+        let held: Vec<QuestRecord> = log.0.iter().filter(|r| r.state == HELD).cloned().collect();
+        for mut record in held {
+            let Some(quest) = quests.0.get(&record.quest) else {
+                continue;
+            };
+            let Some(n) = stage_number(&record) else {
+                continue;
+            };
+            let Some(stage) = quest.stages.get(n - 1) else {
+                continue;
+            };
+            let owner = Owner::Quest(character_id, quest.id.clone());
+            let mut counted = false;
+            for objective in &stage.objectives {
+                let (Objective::Kill(which, need), Some(key)) =
+                    (objective, objective.key(n, quest.zone()))
+                else {
+                    continue;
+                };
+                if !which.matches(mob, def, quest.zone()) {
+                    continue;
+                }
+                let have = story.number(&owner, &key, now);
+                if have >= i64::from(*need) {
+                    continue;
+                }
+                let have = story.add(&owner, &key, 1, now, &db);
+                counted = true;
+                let done = if have >= i64::from(*need) {
+                    " Done."
+                } else {
+                    ""
+                };
+                out.push(Outgoing::line(
+                    *killer,
+                    format!(
+                        "\x1b[1;33m{}:\x1b[0m {} killed, {have} of {need}.{done}",
+                        quest.name,
+                        without_article(name)
+                    ),
+                ));
+            }
+            if !counted || !stage_done(stage, n, quest, &owner, &story, now) {
+                continue;
+            }
+            // All counted and done: on to the next stage, or back to report.
+            if let Some(next) = quest.stages.get(n) {
+                record.stage = (n + 1).to_string();
+                log.put(record, character_id, &db);
+                out.push(Outgoing::line(
+                    *killer,
+                    format!("\x1b[1;33m{}:\x1b[0m {}", quest.name, next.text),
+                ));
+            } else {
+                let lookup = Lookup {
+                    quests: &quests,
+                    story: &story,
+                    mobs: &mobs,
+                    items: &items,
+                    now,
+                };
+                out.push(Outgoing::line(
+                    *killer,
+                    format!(
+                        "\x1b[1;33m{}:\x1b[0m that's all it asks. Report to {}.",
+                        quest.name,
+                        quest.reported_to(&lookup)
+                    ),
+                ));
+            }
+        }
+    }
+    deliver(out, &mut outbox);
+}
+
+/// Whether every objective on stage `n` is counted as it happens, and done.
+fn stage_done(
+    stage: &Stage,
+    n: usize,
+    quest: &QuestDef,
+    owner: &Owner,
+    story: &Facts,
+    now: i64,
+) -> bool {
+    stage.objectives.iter().all(|objective| {
+        objective
+            .key(n, quest.zone())
+            .is_some_and(|key| story.number(owner, &key, now) >= i64::from(objective.count()))
+    })
+}
+
 impl QuestDef {
     /// The room whose board it's posted on.
     fn board(&self) -> Option<RoomKey> {
@@ -657,7 +824,85 @@ impl QuestDef {
     }
 }
 
+impl QuestDef {
+    /// Who it's reported to, by name: its `report_to`, or the guild's clerk.
+    fn reported_to(&self, lookup: &Lookup) -> String {
+        let key = match &self.report_to {
+            Some(mob) => MobKey::parse(mob, self.zone()),
+            None => MobKey::parse(&guild().clerk, ""),
+        };
+        lookup
+            .mobs
+            .0
+            .get(&key)
+            .map_or_else(|| key.to_string(), |def| crate::combat::the(&def.name))
+    }
+}
+
+impl MobMatch {
+    /// Whether a mob of template `key` (`def`) is one of these, for a quest in `zone`.
+    fn matches(&self, key: &MobKey, def: Option<&MobDef>, zone: &str) -> bool {
+        match self {
+            MobMatch::Mob(id) => MobKey::parse(id, zone) == *key,
+            MobMatch::Tag(tag) => def.is_some_and(|def| def.tags.contains(tag)),
+        }
+    }
+
+    /// As a fact's key: `sewers:sewer_rat`, or `tag.vermin`.
+    fn label(&self, zone: &str) -> String {
+        match self {
+            MobMatch::Mob(id) => MobKey::parse(id, zone).to_string(),
+            MobMatch::Tag(tag) => format!("tag.{tag}"),
+        }
+    }
+}
+
 impl Objective {
+    /// The quest fact that counts it on stage `stage`, if it's counted as it happens:
+    /// `1.kill.sewers:sewer_rat`. `Bring` is checked when reporting.
+    fn key(&self, stage: usize, zone: &str) -> Option<String> {
+        match self {
+            Objective::Kill(which, _) => Some(format!("{stage}.kill.{}", which.label(zone))),
+            Objective::Bring(..) => None,
+        }
+    }
+
+    /// How the journal shows it: what, and how far along (`have`, if it's counted).
+    fn progress(&self, zone: &str, have: Option<i64>, lookup: &Lookup) -> String {
+        match self {
+            Objective::Kill(which, need) => {
+                let what = match which {
+                    MobMatch::Mob(id) => lookup
+                        .mobs
+                        .0
+                        .get(&MobKey::parse(id, zone))
+                        .map_or(id.as_str(), |def| without_article(&def.name))
+                        .to_string(),
+                    MobMatch::Tag(tag) => format!("anything {tag}"),
+                };
+                let have = have.unwrap_or(0).min(i64::from(*need));
+                let done = if have >= i64::from(*need) {
+                    " (done)"
+                } else {
+                    ""
+                };
+                format!("Kill {what}: {have} of {need}{done}")
+            }
+            Objective::Bring(which, need) => {
+                let what = match which {
+                    ItemMatch::Item(id) => lookup
+                        .items
+                        .0
+                        .get(&ItemKey::parse(id, zone))
+                        .map_or(id.as_str(), |def| without_article(&def.name))
+                        .to_string(),
+                    ItemMatch::Tag(tag) => format!("anything {tag}"),
+                };
+                format!("Bring {what}: {need}, counted when you report")
+            }
+        }
+    }
+
     fn count(&self) -> u32 {
         match self {
             Objective::Kill(_, n) | Objective::Bring(_, n) => *n,
@@ -996,8 +1241,20 @@ mod tests {
             due_at: None,
             finished_at: None,
         };
+        let (story, mobs, items) = (
+            Facts::default(),
+            MobTemplates::default(),
+            ItemTemplates::default(),
+        );
+        let lookup = Lookup {
+            quests: &quests,
+            story: &story,
+            mobs: &mobs,
+            items: &items,
+            now: 0,
+        };
         assert_eq!(
-            journal_text(&QuestLog::default(), &quests),
+            journal_text(&QuestLog::default(), 1, &lookup),
             "You aren't on any quests. The board in the Contract Hall has work."
         );
         let log = QuestLog(vec![
@@ -1005,8 +1262,116 @@ mod tests {
             record("riftwatch:gone", DONE),
         ]);
         assert_eq!(
-            journal_text(&log, &quests),
-            "You're on:\r\n  Rats\r\n    Kill rats.\r\nDone: riftwatch:gone (no longer known)."
+            journal_text(&log, 1, &lookup),
+            "You're on:\r\n  Rats\r\n    Kill rats.\r\n      Kill rat: 0 of 3\r\n\
+             Done: riftwatch:gone (no longer known)."
+        );
+    }
+
+    #[test]
+    fn kills_count_stage_by_stage() {
+        use bevy::ecs::system::RunSystemOnce;
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let id = db.create_character(account.id, "Ada").unwrap().id;
+        let mut world = World::new();
+        world.insert_resource(db);
+        world.init_resource::<Facts>();
+        world.init_resource::<Outbox>();
+        world.init_resource::<Messages<GameEvent>>();
+        world.init_resource::<ItemTemplates>();
+        let (rat, roach) = (
+            MobKey::parse("riftwatch:rat", ""),
+            MobKey::parse("riftwatch:roach", ""),
+        );
+        let mut roach_def = MobDef::named("a giant cockroach");
+        roach_def.tags = vec!["vermin".into()];
+        world.insert_resource(MobTemplates(HashMap::from([
+            (rat.clone(), MobDef::named("a rat")),
+            (roach.clone(), roach_def),
+        ])));
+        let quest = QuestDef {
+            stages: vec![
+                Stage {
+                    text: "Kill two rats.".into(),
+                    objectives: vec![Objective::Kill(MobMatch::Mob("rat".into()), 2)],
+                },
+                Stage {
+                    text: "Kill a vermin.".into(),
+                    objectives: vec![Objective::Kill(MobMatch::Tag("vermin".into()), 1)],
+                },
+            ],
+            ..rats()
+        };
+        world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
+        let ada = world
+            .spawn((
+                Player {
+                    name: "Ada".into(),
+                    character_id: id,
+                    account: "ada".into(),
+                    role: crate::db::Role::Player,
+                    race: "human".into(),
+                    background: String::new(),
+                    description: String::new(),
+                },
+                QuestLog(vec![QuestRecord {
+                    quest: "riftwatch:rats".into(),
+                    state: HELD.into(),
+                    stage: "1".into(),
+                    taken_at: 0,
+                    due_at: None,
+                    finished_at: None,
+                }]),
+            ))
+            .id();
+        let stranger = world.spawn_empty().id();
+        let kill = |world: &mut World, mob: &MobKey, killer: Entity| {
+            let room = world.spawn_empty().id();
+            world.write_message(GameEvent::Died {
+                who: room,
+                name: "a rat".into(),
+                room,
+                mob: Some(mob.clone()),
+                killer: Some(killer),
+            });
+            world.run_system_once(count_kills).unwrap();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+        };
+        let stage = |world: &World| world.get::<QuestLog>(ada).unwrap().0[0].stage.clone();
+        let owner = Owner::Quest(id, "riftwatch:rats".into());
+        let count = |world: &World, key: &str| world.resource::<Facts>().number(&owner, key, 0);
+
+        kill(&mut world, &rat, stranger);
+        assert_eq!(
+            count(&world, "1.kill.riftwatch:rat"),
+            0,
+            "a stranger's kill"
+        );
+        kill(&mut world, &roach, ada);
+        assert_eq!(count(&world, "2.kill.tag.vermin"), 0, "not that stage yet");
+        kill(&mut world, &rat, ada);
+        assert_eq!(count(&world, "1.kill.riftwatch:rat"), 1);
+        assert_eq!(stage(&world), "1");
+        kill(&mut world, &rat, ada);
+        assert_eq!(stage(&world), "2", "both rats: on to the next stage");
+        kill(&mut world, &roach, ada);
+        assert_eq!(count(&world, "2.kill.tag.vermin"), 1, "by its tag");
+        assert_eq!(stage(&world), "2", "the last stage waits for a report");
+        let said: Vec<String> = world
+            .resource::<Outbox>()
+            .0
+            .iter()
+            .filter_map(|o| match o {
+                Outgoing::To(_, text) => Some(text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(said.iter().any(|t| t.contains("rat killed, 2 of 2. Done.")));
+        assert!(said.iter().any(|t| t.contains("Kill a vermin.")));
+        assert!(
+            said.iter()
+                .any(|t| t.contains("that's all it asks. Report to"))
         );
     }
 

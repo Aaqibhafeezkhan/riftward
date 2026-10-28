@@ -53,7 +53,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `trade.rs` | Haggling (deals with shopkeepers, and the prices they set), and active skills aimed at an item (`itemwork`; `appraise` is a shortcut to Appraisal) |
 | `formula.rs` | Formulas: amounts in data (`"roll(2, 5) + floor(power / 3)"`), parsed at load and worked out through `Dice` with their inputs |
 | `effects.rs` | The one effect vocabulary spells and techniques share (`Damage`, `Heal`, `Apply`, `Remove`, `Cure`, …), whom each is on, how long conditions last, and what fits where |
-| `quests.rs` | Quest files (`assets/quests/<zone>/*.quest.ron`, one quest each, `zone:quest`), checked as they load and hot-reloaded into `Quests`; the `board` that lists them where they're posted, `accept`, each character's `QuestLog` (`character_quests`) and `journal` ([Quests](quests.md)) |
+| `quests.rs` | Quest files (`assets/quests/<zone>/*.quest.ron`, one quest each, `zone:quest`), checked as they load and hot-reloaded into `Quests`; the `board` that lists them where they're posted, `accept`, each character's `QuestLog` (`character_quests`) and `journal`; objectives counted from game events as `quest.` facts (`Kill`, from `Died`), and stages moving on ([Quests](quests.md)) |
 | `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, character and item conditions, real items, spawn timers, guild membership and record, quests taken, facts |
 | `aliases.rs` | Per-character aliases |
@@ -131,7 +131,7 @@ Started. One vocabulary of game events, the `GameEvent` message in `events.rs`, 
 | --- | --- | --- |
 | `Left`, `Entered` (with `Way::Walked(direction)` or `Way::Teleported`) | Walking, `goto`, wandering mobs | The room announcements: "A stray dog leaves east.", "Gandalf arrives from the west." |
 | `PhaseChanged(phase)` | The game clock | Announcements to everyone outdoors |
-| `Died` (who, their template if a mob, and the `killer`: whoever struck the blow, or put on the bleeding or poison that did it, `None` if no one else did; their side is `groups::side(killer)`) | The combat round, reactions | World events (`Event(Died(mob))`); quests' `Kill` will |
+| `Died` (who, their template if a mob, and the `killer`: whoever struck the blow, or put on the bleeding or poison that did it, `None` if no one else did; their side is `groups::side(killer)`) | The combat round, reactions | World events (`Event(Died(mob))`); quests' `Kill` |
 | `Obtained` (who, the item and its template, and how: `PickedUp`, `Given(from)`, `Bought(from)`; a bag brings an event for each thing in it) | `get` (not out of your own bag), `give`, `buy` | Quests' `Obtain` will |
 | `Gave` (who, the item and its template, and to whom; one for each thing in a bag) | `give` | Quests' `Give` will |
 | `Examined` (who, the item and its template) | `examine`, and `look` at an item | Quests' `Examine` will |

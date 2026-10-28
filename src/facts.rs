@@ -167,8 +167,6 @@ impl Facts {
         self.get(owner, key, now).is_some()
     }
 
-    // Counted by quests' objectives, once there are any.
-    #[allow(dead_code)]
     /// Its number: zero if it isn't set or isn't a number.
     pub fn number(&self, owner: &Owner, key: &str, now: i64) -> i64 {
         match self.get(owner, key, now) {
@@ -200,8 +198,6 @@ impl Facts {
             .insert((owner.clone(), key.to_string()), Entry { value, until });
     }
 
-    // Counted by quests' objectives, once there are any.
-    #[allow(dead_code)]
     /// Add `n` to a number (a fact not set, or not a number, counts as zero), keeping when it
     /// lapses. Returns the new number.
     pub fn add(&mut self, owner: &Owner, key: &str, n: i64, now: i64, db: &Database) -> i64 {
@@ -226,6 +222,19 @@ impl Facts {
             if let Err(err) = db.delete_fact(scope, &whom, key) {
                 error!("failed to clear the fact {scope}.{key} ({whom}): {err}");
             }
+        }
+    }
+
+    /// Clear every fact `owner` has: a quest taken afresh.
+    pub fn forget(&mut self, owner: &Owner, db: &Database) {
+        let keys: Vec<String> = self
+            .facts
+            .keys()
+            .filter(|(whose, _)| whose == owner)
+            .map(|(_, key)| key.clone())
+            .collect();
+        for key in keys {
+            self.clear(owner, &key, db);
         }
     }
 
