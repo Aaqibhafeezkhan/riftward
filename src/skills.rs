@@ -33,6 +33,7 @@ use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
 use crate::effects::{self, Effect, Reaction, Resist};
 use crate::events::GameEvent;
+use crate::facts::Facts;
 use crate::formula::{Formula, Inputs};
 use crate::output::{
     Actor, Characters, Outbox, Outgoing, Reply, deliver, reply_line, targets_online,
@@ -902,6 +903,8 @@ pub struct Practice<'w, 's> {
     db: Res<'w, Database>,
     time: Res<'w, Time>,
     pub events: MessageWriter<'w, GameEvent>,
+    /// What the game remembers, for the requirements of skills they might discover.
+    story: Res<'w, Facts>,
 }
 
 /// A character ready to use an active skill.
@@ -1024,6 +1027,7 @@ impl Practice<'_, '_> {
             &mut attributes,
             &mut self.dice,
             &self.db,
+            Some(&self.story),
             learner,
             key,
         )
@@ -1048,13 +1052,16 @@ pub fn tough_fight_boost(outmatched: Option<f64>) -> f64 {
 }
 
 /// One use of a skill a character knows: practice, maybe a level, and maybe a discovery and the
-/// experience it brings. Saves the skill, and returns what to tell them.
+/// experience it brings, if they meet its requirement, their facts in `story` among it. Saves the
+/// skill, and returns what to tell them.
+#[allow(clippy::too_many_arguments)]
 pub fn count_use(
     defs: &SkillDefs,
     skills: &mut Skills,
     attributes: &mut Attributes,
     dice: &mut Dice,
     db: &Database,
+    story: Option<&Facts>,
     learner: Learner,
     key: &str,
 ) -> Vec<String> {
@@ -1096,14 +1103,13 @@ pub fn count_use(
         }
     }
     // Discovery doesn't look at guild rank: a skill that needs one is taught, not stumbled on.
-    // Nor, yet, at facts (step 3b of the quest plan).
     let facts = Subject {
         attributes,
         race: learner.race,
         skills: Some(skills),
         guild_rank: None,
-        story: None,
-        character: None,
+        story,
+        character: Some(character_id),
     };
     let chance = DISCOVERY_CHANCE * learner.boost;
     if let Some(found) = discover(defs, &practised, &facts, dice, chance) {
@@ -1223,7 +1229,7 @@ fn practise_passives(
     mut sheets: Query<(&mut Skills, &mut Attributes)>,
     fights: Query<&Outmatched, With<Fighting>>,
     mut dice: ResMut<Dice>,
-    db: Res<Database>,
+    (db, story): (Res<Database>, Res<Facts>),
     players: Characters,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -1273,6 +1279,7 @@ fn practise_passives(
                     &mut attributes,
                     &mut dice,
                     &db,
+                    Some(&story),
                     learner,
                     &key,
                 );
@@ -2139,6 +2146,50 @@ mod tests {
     }
 
     #[test]
+    fn a_skill_can_wait_on_what_the_character_has_done() {
+        let defs = SkillDefs {
+            skills: HashMap::from([
+                tree_skill("axes:basics", None),
+                tree_skill(
+                    "axes:rift_cleaver",
+                    Some(Condition::Flag("char.saw_the_rift_scar".into())),
+                ),
+            ]),
+            trees: HashMap::new(),
+        };
+        let db = Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let ada = db.create_character(account.id, "Ada").unwrap().id;
+        let mut story = Facts::default();
+        let attributes = Attributes::default();
+        let mut skills = Skills::default();
+        skills
+            .0
+            .insert("axes:basics".into(), SkillState::new("Taught"));
+        let used = vec!["axes:basics".to_string()];
+        let found = |story: &Facts| {
+            let facts = Subject {
+                attributes: &attributes,
+                race: "human",
+                skills: Some(&skills),
+                guild_rank: None,
+                story: Some(story),
+                character: Some(ada),
+            };
+            discoverable(&defs, &used, &facts).len()
+        };
+        assert_eq!(found(&story), 0, "not until she's seen it");
+        story.set(
+            &crate::facts::Owner::Character(ada),
+            "saw_the_rift_scar",
+            crate::facts::Value::Bool(true),
+            None,
+            &db,
+        );
+        assert_eq!(found(&story), 1);
+    }
+
+    #[test]
     fn a_discipline_is_practised_by_every_power_in_its_tree() {
         let (key, mut discipline) = tree_skill("adept:foundation", None);
         discipline.def.kind = SkillKind::Passive {
@@ -2186,7 +2237,16 @@ mod tests {
         };
         let practice = |skills: &Skills, key: &str| skills.0[key].practice;
         let mut use_skill = |skills: &mut Skills, key: &str| {
-            count_use(&defs, skills, &mut attributes, &mut dice, &db, learner, key);
+            count_use(
+                &defs,
+                skills,
+                &mut attributes,
+                &mut dice,
+                &db,
+                None,
+                learner,
+                key,
+            );
         };
         // A power practises the discipline too.
         use_skill(&mut skills, "adept:killing_hands");

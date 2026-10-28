@@ -379,7 +379,11 @@ pub(super) fn ability(
     db: Res<Database>,
     mut events: MessageWriter<GameEvent>,
     mut log: ResMut<Outbox>,
-    (resting, time): (Query<Entity, With<Resting>>, Res<Time>),
+    (resting, time, story): (
+        Query<Entity, With<Resting>>,
+        Res<Time>,
+        Res<crate::facts::Facts>,
+    ),
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
 ) {
     let (key, words) = inv.args.split_once(' ').unwrap_or((&inv.args, ""));
@@ -445,6 +449,7 @@ pub(super) fn ability(
         conditions: &condition_defs,
         dice: &mut dice,
         db: &db,
+        story: Some(&story),
         events: &mut events,
         log: &mut log,
         watchers: &watchers,

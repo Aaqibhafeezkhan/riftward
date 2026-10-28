@@ -485,7 +485,7 @@ fn cast(
     mut events: MessageWriter<GameEvent>,
     mut log: ResMut<Outbox>,
     resting: Query<Entity, With<Resting>>,
-    (time, condition_defs): (Res<Time>, Res<ConditionDefs>),
+    (time, condition_defs, story): (Res<Time>, Res<ConditionDefs>, Res<crate::facts::Facts>),
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
 ) {
     let Ok(caster) = fighters.get(inv.entity) else {
@@ -597,6 +597,7 @@ fn cast(
         conditions: &condition_defs,
         dice: &mut dice,
         db: &db,
+        story: Some(&story),
         events: &mut events,
         log: &mut log,
         watchers: &watchers,

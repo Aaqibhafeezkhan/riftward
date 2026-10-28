@@ -37,7 +37,7 @@ There are two today: `Condition` (attributes, race, skills, guild rank; backgrou
 | `InRoom(room)`, `InZone(zone)` | They're there |
 | `All`, `Any`, `Not` | As now |
 
-Where a condition is tested decides whose facts `char.` and `quest.` mean: the character at the trainer, the player reading the board, the one a rule fired for.
+Trainers, Karma and discovering a hidden skill test facts today (*built*); backgrounds, chosen before a character has any, don't. Where a condition is tested decides whose facts `char.` and `quest.` mean: the character at the trainer, the player reading the board, the one a rule fired for.
 
 ## Rules
 

@@ -438,7 +438,7 @@ fn combat_round(
     ),
     rooms: RoomQuery,
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
-    (groups, mut encounters): (Groups, ResMut<Encounters>),
+    (groups, mut encounters, story): (Groups, ResMut<Encounters>, Res<crate::facts::Facts>),
 ) {
     let now = time.elapsed_secs_f64();
     let auras = auras(&fighters, &rooms, &defs, &mobs);
@@ -628,6 +628,7 @@ fn combat_round(
         conditions: &condition_defs,
         dice: &mut dice,
         db: &db,
+        story: Some(&story),
         events: &mut events,
         log: &mut log,
         watchers: &alive_players,
@@ -1952,6 +1953,7 @@ mod tests {
         world.insert_resource(Outbox::default());
         world.insert_resource(Spawns::default());
         world.init_resource::<Encounters>();
+        world.init_resource::<crate::facts::Facts>();
         world.init_resource::<MobTemplates>();
         world.init_resource::<Messages<GameEvent>>();
         let room = world
@@ -3903,6 +3905,7 @@ mod tests {
                         conditions: &conditions,
                         dice: &mut dice,
                         db: &db,
+                        story: None,
                         events: &mut events,
                         log: &mut log,
                         watchers: &[],

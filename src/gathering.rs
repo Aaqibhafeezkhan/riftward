@@ -320,6 +320,7 @@ mod tests {
             },
         )])));
         world.insert_resource(Dice::seeded(9));
+        world.init_resource::<crate::facts::Facts>();
         world.insert_resource(Database::open(":memory:").unwrap());
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Outbox::default());

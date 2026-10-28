@@ -597,6 +597,7 @@ mod tests {
         });
         world.insert_resource(ItemTemplates::default());
         world.insert_resource(Dice::seeded(5));
+        world.init_resource::<crate::facts::Facts>();
         world.insert_resource(crate::db::Database::open(":memory:").unwrap());
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Outbox::default());

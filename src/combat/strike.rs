@@ -17,6 +17,7 @@ use crate::db::Database;
 use crate::dice::Dice;
 use crate::effects::{self, Resist, Who};
 use crate::events::GameEvent;
+use crate::facts::Facts;
 use crate::items::{ItemLocation, ItemQuery, ItemTemplates, capitalized};
 use crate::mobs::{Mob, MobTemplates};
 use crate::money::Purse;
@@ -481,6 +482,8 @@ pub struct Round<'a, 'w, 's, 'iw, 'is, 'ew> {
     pub spells: &'a SpellDefs,
     pub dice: &'a mut Dice,
     pub db: &'a Database,
+    /// What the game remembers, for the requirements of skills a fighter might discover.
+    pub story: Option<&'a Facts>,
     pub events: &'a mut MessageWriter<'ew, GameEvent>,
     pub log: &'a mut Outbox,
     /// Players and the rooms they're in, who see fights there.
@@ -581,6 +584,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             &mut fighter.attributes,
             self.dice,
             self.db,
+            self.story,
             learner,
             key,
         );
