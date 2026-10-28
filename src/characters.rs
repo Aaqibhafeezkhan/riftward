@@ -444,21 +444,21 @@ mod tests {
 
     #[test]
     fn races_shift_attributes_but_not_below_one() {
-        let windling = RaceDef {
-            id: "windling".into(),
-            name: "Windling".into(),
+        let sprite = RaceDef {
+            id: "sprite".into(),
+            name: "Sprite".into(),
             summary: String::new(),
             attributes: BTreeMap::from([(Attribute::Strength, -5), (Attribute::Agility, 3)]),
             karma: 0,
             skills: Vec::new(),
             traits: Vec::new(),
         };
-        let attributes = windling.starting_attributes();
+        let attributes = sprite.starting_attributes();
         assert_eq!(attributes.get(Attribute::Strength), 1);
         assert_eq!(attributes.get(Attribute::Agility), 6);
         assert_eq!(attributes.get(Attribute::Body), 3);
         assert_eq!(attributes.karma_spent(), 0);
-        assert_eq!(windling.shifts(), "+3 Agility, -5 Strength");
+        assert_eq!(sprite.shifts(), "+3 Agility, -5 Strength");
     }
 
     #[test]
@@ -469,10 +469,13 @@ mod tests {
             Some(races.0[0].id.as_str())
         );
         assert_eq!(
-            races.choose("tskrang").map(|r| r.id.as_str()),
-            Some("tskrang")
+            races.choose("lizardman").map(|r| r.id.as_str()),
+            Some("lizardman")
         );
-        assert_eq!(races.choose("T'sk").map(|r| r.id.as_str()), Some("tskrang"));
+        assert_eq!(
+            races.choose("Liz").map(|r| r.id.as_str()),
+            Some("lizardman")
+        );
         assert_eq!(races.choose("tro").map(|r| r.id.as_str()), Some("troll"));
         assert_eq!(races.choose("99"), None);
         assert_eq!(races.choose(""), None);

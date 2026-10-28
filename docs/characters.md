@@ -25,18 +25,19 @@ Races and backgrounds are data, and a builder may remove one that characters alr
 
 ## Races
 
-The eight races of Earthdawn, in `assets/races.ron`. Each shifts the base attributes, Earthdawn-style, and grants racial skills and traits (what every one of the race simply is, like an elf's Fey Mind: see [Traits](effects.md#traits)). Every race's shifts net **+3** points; humans get no shifts and **12 Karma** to spend as they like instead, and **Versatility**, which makes their skills grow faster. A test checks every race keeps to this.
+Ten races, in `assets/races.ron`: Earthdawn's eight, three of them renamed for the setting (the t'skrang are **lizardmen**, the obsidimen **stoneborn**, the windlings **sprites**), and two from *The Agryn's Legacy* ([The setting](setting.md#the-peoples)), **kitsune** and **halflings** (2026-10-27). Each shifts the base attributes, Earthdawn-style, and grants racial skills and traits (what every one of the race simply is, like an elf's Fey Mind: see [Traits](effects.md#traits)). Every race's shifts net **+3** points; humans get no shifts and **12 Karma** to spend as they like instead, and **Versatility**, which makes their skills grow faster. A test checks every race keeps to this.
 
 Since a point costs the rating it reaches, shifts aren't all worth the same: a third point of Agility (5 to 6) is worth 6 Karma, while a lost point low down (3 to 2) saves only 3. At real prices the races' shifts are worth:
 
 | Race | Shifts worth |
 | --- | --- |
-| Dwarf, Elf, Ork, T'skrang | 14 Karma |
-| Troll, Windling | 18 Karma |
-| Obsidiman | 22 Karma |
+| Halfling | 12 Karma (a point of Luck is cheap: 1 to 2 costs 2) |
+| Dwarf, Elf, Kitsune, Lizardman, Ork | 14 Karma |
+| Troll, Sprite | 18 Karma |
+| Stoneborn | 22 Karma |
 | Human | none: 12 Karma instead, and Versatility |
 
-**This is left uneven on purpose for now.** A race is a whole package (shifts, racial skills and any extra Karma), and racial skills and traits are only begun (the elves' Fey Mind, resisting sleep and charm, is the first, a trait since 2026-10-27): a Windling's Flight and Astral Sight, an Ork's Gahad, a human's Versatility are still to come. Each race gets balanced once against its whole package when they are, so a big shift like the Obsidiman's can be paid for with fewer or smaller racial skills. Humans don't open trees without a trainer: Versatility, learning faster, is their edge (2026-10-26).
+**This is left uneven on purpose for now.** A race is a whole package (shifts, racial skills and any extra Karma), and racial skills and traits are only begun (the elves' Fey Mind, resisting sleep and charm, is the first, a trait since 2026-10-27): a sprite's Flight and Astral Sight, an ork's Gahad, a human's Versatility are still to come. Each race gets balanced once against its whole package when they are, so a big shift like the stoneborn's can be paid for with fewer or smaller racial skills. Humans don't open trees without a trainer: Versatility, learning faster, is their edge (2026-10-26).
 
 Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to be weak as well as strong. No shift takes an attribute below 1.
 
@@ -44,12 +45,14 @@ Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to b
 | --- | --- | --- | --- | --- |
 | Dwarf | Stout, stubborn crafters and miners | +2 Body, +1 Strength, +1 Willpower, −1 Reaction | Body 5, Reaction 2 | **Heat Sight** (passive): see warm bodies in darkness |
 | Elf | Graceful, long-lived, close to the living world | +2 Agility, +1 Intuition, +1 Charisma, −1 Body | Agility 5, Body 2 | **Low-Light Vision** (passive), **Fey Mind** (a trait, built: resists sleep and charm by 4) |
+| Halfling | Small, nimble and famously lucky | +2 Agility, +1 Charisma, +1 Luck, −1 Strength | Agility 5, Luck 2, Strength 2 | **Small and Quick** (passive): hard to pin down |
 | Human | Adaptable, found everywhere | +12 Karma | All 3, 32 Karma | **Versatility** (passive): practice builds faster |
-| Obsidiman | Living stone, huge, patient and slow | +3 Body, +3 Strength, −1 Agility, −2 Reaction | Body 6, Strength 6, Reaction 1 | **Stone Skin** (passive): natural armour |
+| Kitsune | Fox-folk of fey blood, clever and hard to fool | +2 Charisma, +1 Agility, +1 Intuition, −1 Strength | Charisma 5, Strength 2 | **Fox Form** (active): become a fox for a while, quick and stealthy but unable to speak or cast; **Foxfire** (active): wisps of flame, more as they grow; **Fey Mind** (the elves' trait, built: resists sleep and charm) |
+| Lizardman | Flamboyant lizard-folk of the rivers | +2 Charisma, +1 Agility, +1 Reaction, −1 Willpower | Charisma 5 | **Tail Combat** (active); **Swimming** (passive) |
 | Ork | Fierce, hardy, quick to anger | +2 Strength, +1 Body, +1 Reaction, −1 Charisma | Strength 5, Charisma 2 | **Low-Light Vision** (passive); **Gahad** (active): a burst of rage |
+| Sprite | Tiny, winged, curious | +3 Agility, +1 Reaction, +1 Intuition, −2 Strength | Agility 6, Strength 1 | **Flight** (passive); **Astral Sight** (active) |
+| Stoneborn | Living stone, huge, patient and slow | +3 Body, +3 Strength, −1 Agility, −2 Reaction | Body 6, Strength 6, Reaction 1 | **Stone Skin** (passive): natural armour |
 | Troll | Towering, proud, warrior culture | +3 Strength, +2 Body, −1 Agility, −1 Logic | Strength 6, Body 5 | **Heat Sight** (passive) |
-| T'skrang | Flamboyant lizard-folk of the rivers | +2 Charisma, +1 Agility, +1 Reaction, −1 Willpower | Charisma 5 | **Tail Combat** (active); **Swimming** (passive) |
-| Windling | Tiny, winged, curious | +3 Agility, +1 Reaction, +1 Intuition, −2 Strength | Agility 6, Strength 1 | **Flight** (passive); **Astral Sight** (active) |
 
 ```ron
 (
@@ -62,7 +65,7 @@ Attributes start from a base of **3** (Luck 1, Magic 0), so races have room to b
 ```
 
 - **Karma counts from where a race starts.** A troll's first six points of Strength weren't bought, so they cost nothing; `lower` can't take an attribute below its race's start.
-- **Size matters later.** Windlings can't wield large weapons, and trolls and obsidimen need bigger gear. That belongs to the item system.
+- **Size matters later.** Sprites can't wield large weapons, halflings find some unwieldy, and trolls and stoneborn need bigger gear. That belongs to the item system.
 - **Racial abilities are ordinary skills that require the race,** using a `Race` condition. They can be taught, but only to students of the same race.
 
 ## Backgrounds
@@ -83,7 +86,7 @@ They're in `assets/backgrounds.ron`, in menu order. Any background can be gated 
 | Herbalist's Apprentice | Intuition 4 | Herbalism, First Aid | A knife, two bandages |
 | Minstrel | Charisma 4 | Performance, Lore | A knife |
 | Scholar | Logic 4 | Lore, Scribing | A quarterstaff |
-| River Pilot | T'skrang | Sailing, Swimming | A knife |
+| River Pilot | Lizardman | Sailing, Swimming | A knife |
 
 ```ron
 (
@@ -99,7 +102,7 @@ They're in `assets/backgrounds.ron`, in menu order. Any background can be gated 
 - **The kit is the tools of that life,** on top of everyone's plain clothes and belt pouch. A weapon in the kit is usable untrained, with Brawling's aim and the weapon's damage (see [Combat](architecture.md#combat)), until its owner takes a lesson. The kit is given once, when a character is first made: worn if it's worn, in hand while hands are free, otherwise in the belt pouch.
 - **Gates follow what a background implies,** and must be affordable from starting Karma. A test checks every background is open to at least one race spending its starting Karma on the gate.
 - **Two backgrounds have no gate,** Street Urchin and Farmhand, so every build has somewhere to start.
-- **Race gates allow cultural backgrounds,** such as the t'skrang River Pilot.
+- **Race gates allow cultural backgrounds,** such as the lizardman River Pilot.
 - **No background is magical.** Everyone starts mundane; Magic bought at creation is latent talent, and a character is Awakened in play by finding a tradition's teacher (see [Magic](magic.md#how-to-awaken)).
 
 ## Conditions
@@ -112,7 +115,7 @@ The shared language for "who qualifies" (`src/conditions.rs`). Backgrounds use i
 | `Race(id)` | The character is of that race |
 | `All([...])`, `Any([...])`, `Not(...)` | Combinations |
 
-Players read them as "Magic 1 and Willpower 4", or "T'skrang".
+Players read them as "Magic 1 and Willpower 4", or "Lizardman".
 
 ## Open questions
 

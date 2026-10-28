@@ -1,4 +1,4 @@
-// Races, in the order the creation menu shows them. Each shifts the base attributes (3, Luck 1,
+// Races, in the order the creation menu shows them (alphabetical). Each shifts the base attributes (3, Luck 1,
 // Magic 0) and grants racial skills once skills exist. Every race's shifts net +3 points;
 // humans get no shifts and 12 Karma instead, plus Versatility. What shifts are really worth in
 // Karma differs by race (docs/characters.md#races), to be balanced with racial skills.
@@ -19,6 +19,13 @@
         traits: ["fey_mind"],
     ),
     (
+        id: "halfling",
+        name: "Halfling",
+        summary: "Small, nimble and famously lucky.",
+        attributes: {Agility: 2, Charisma: 1, Luck: 1, Strength: -1},
+        skills: ["racial:small_and_quick"],
+    ),
+    (
         id: "human",
         name: "Human",
         summary: "Adaptable and everywhere; extra Karma to spend as you like.",
@@ -26,11 +33,19 @@
         skills: ["racial:versatility"],
     ),
     (
-        id: "obsidiman",
-        name: "Obsidiman",
-        summary: "Living stone: huge, patient and slow to move.",
-        attributes: {Body: 3, Strength: 3, Reaction: -2, Agility: -1},
-        skills: ["racial:stone_skin"],
+        id: "kitsune",
+        name: "Kitsune",
+        summary: "Fox-folk of fey blood, clever and hard to fool.",
+        attributes: {Charisma: 2, Agility: 1, Intuition: 1, Strength: -1},
+        skills: ["racial:fox_form", "racial:foxfire"],
+        traits: ["fey_mind"],
+    ),
+    (
+        id: "lizardman",
+        name: "Lizardman",
+        summary: "Flamboyant lizard-folk of the rivers.",
+        attributes: {Charisma: 2, Agility: 1, Reaction: 1, Willpower: -1},
+        skills: ["racial:tail_combat", "racial:swimming"],
     ),
     (
         id: "ork",
@@ -40,24 +55,24 @@
         skills: ["racial:low_light_vision", "racial:gahad"],
     ),
     (
+        id: "sprite",
+        name: "Sprite",
+        summary: "Tiny, winged and endlessly curious.",
+        attributes: {Agility: 3, Reaction: 1, Intuition: 1, Strength: -2},
+        skills: ["racial:flight", "racial:astral_sight"],
+    ),
+    (
+        id: "stoneborn",
+        name: "Stoneborn",
+        summary: "Living stone: huge, patient and slow to move.",
+        attributes: {Body: 3, Strength: 3, Reaction: -2, Agility: -1},
+        skills: ["racial:stone_skin"],
+    ),
+    (
         id: "troll",
         name: "Troll",
         summary: "Towering and proud, of a warrior culture.",
         attributes: {Strength: 3, Body: 2, Agility: -1, Logic: -1},
         skills: ["racial:heat_sight"],
-    ),
-    (
-        id: "tskrang",
-        name: "T'skrang",
-        summary: "Flamboyant lizard-folk of the rivers.",
-        attributes: {Charisma: 2, Agility: 1, Reaction: 1, Willpower: -1},
-        skills: ["racial:tail_combat", "racial:swimming"],
-    ),
-    (
-        id: "windling",
-        name: "Windling",
-        summary: "Tiny, winged and endlessly curious.",
-        attributes: {Agility: 3, Reaction: 1, Intuition: 1, Strength: -2},
-        skills: ["racial:flight", "racial:astral_sight"],
     ),
 ]
