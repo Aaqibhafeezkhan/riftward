@@ -210,8 +210,8 @@ Unlock conditions are data, built from a small set of terms that other systems s
 | --- | --- |
 | `Skill(id, level)` | The character knows the skill at that level or higher |
 | `Stat(name, min)` | An attribute is at least `min` |
-| `Title(id)` | The character holds the title |
-| `Flag(id)` | A named flag is set on the character |
+| `Flag(key)` | A [fact](facts.md) is set: `Flag("char.title.night_wanderer")`, `Flag("world.rats_broke_out")` (*built*; a title is a `char.title.` fact) |
+| `Fact(key, op, value)` | A fact compares: `Fact("char.trust.marin", Gte, 3)` (*built*) |
 | `Race(id)` | The character is of that race |
 | `GuildRank(id)` | The character shows that guild rank or higher: a member in good standing, wearing their tag ([Quests](quests.md#what-rank-unlocks); *built*, and tested by trainers and Karma, not by discovery) |
 | `All([...])`, `Any([...])`, `Not(...)` | Combinations of the above |
@@ -224,7 +224,7 @@ Unlock conditions are data, built from a small set of terms that other systems s
     unlock: All([
         Skill("stealth:basics", 40),
         Skill("nature:herbalism", 20),
-        Any([Title("night_wanderer"), Stat("agility", 18)]),
+        Any([Flag("char.title.night_wanderer"), Stat("agility", 18)]),
         Flag("drank_from_moon_pool"),
     ]),
     trigger: Some(UseSkill("stealth:basics", in_zone: "forest")),

@@ -28,7 +28,7 @@ use thiserror::Error;
 use crate::attributes::{Attribute, Attributes};
 use crate::combat::{Conditions, Fighting, Outmatched};
 use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocation};
-use crate::conditions::{Condition, Facts};
+use crate::conditions::{Condition, Subject};
 use crate::db::{Database, Permission};
 use crate::dice::{Contest, Dice};
 use crate::effects::{self, Effect, Reaction, Resist};
@@ -1096,11 +1096,14 @@ pub fn count_use(
         }
     }
     // Discovery doesn't look at guild rank: a skill that needs one is taught, not stumbled on.
-    let facts = Facts {
+    // Nor, yet, at facts (step 3b of the quest plan).
+    let facts = Subject {
         attributes,
         race: learner.race,
         skills: Some(skills),
         guild_rank: None,
+        story: None,
+        character: None,
     };
     let chance = DISCOVERY_CHANCE * learner.boost;
     if let Some(found) = discover(defs, &practised, &facts, dice, chance) {
@@ -1154,7 +1157,7 @@ fn grows_with(defs: &SkillDefs, skills: &Skills, used: &str) -> Vec<String> {
 /// The skills a character could discover by practising `used`: the others in their trees that
 /// they don't know and whose requirements they meet. Entry skills, which require nothing, are
 /// taught, not discovered.
-fn discoverable<'a>(defs: &'a SkillDefs, used: &[String], facts: &Facts) -> Vec<&'a Skill> {
+fn discoverable<'a>(defs: &'a SkillDefs, used: &[String], facts: &Subject) -> Vec<&'a Skill> {
     let trees: Vec<&String> = used
         .iter()
         .filter_map(|key| defs.skills.get(key).map(|s| &s.tree))
@@ -1178,7 +1181,7 @@ fn discoverable<'a>(defs: &'a SkillDefs, used: &[String], facts: &Facts) -> Vec<
 fn discover<'a>(
     defs: &'a SkillDefs,
     used: &[String],
-    facts: &Facts,
+    facts: &Subject,
     dice: &mut Dice,
     chance: f64,
 ) -> Option<&'a Skill> {
@@ -1323,7 +1326,7 @@ fn karma_cmd(
     defs: Res<SkillDefs>,
     mut sheets: Query<(&mut Skills, &mut Attributes)>,
     db: Res<Database>,
-    shown: Query<&crate::guild::ShownRank>,
+    (shown, story): (Query<&crate::guild::ShownRank>, Res<crate::facts::Facts>),
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -1331,11 +1334,13 @@ fn karma_cmd(
     let Ok((mut skills, mut attributes)) = sheets.get_mut(inv.entity) else {
         return;
     };
-    let facts = Facts {
+    let facts = Subject {
         attributes: &attributes,
         race: &actor.race,
         skills: Some(&skills),
         guild_rank: crate::guild::shown_rank(inv.entity, &shown),
+        story: Some(&story),
+        character: actor.character_id,
     };
     let unmet = |skill: &Skill| {
         skill
@@ -2064,11 +2069,13 @@ mod tests {
         assert_eq!(keys(&known), ["axes:hew", "axes:cleave"]);
         known.0.insert("axes:hew".into(), SkillState::new("Karma"));
         assert_eq!(keys(&known), ["axes:cleave"]);
-        let facts = Facts {
+        let facts = Subject {
             attributes: &Attributes::default(),
             race: "human",
             skills: Some(&known),
             guild_rank: None,
+            story: None,
+            character: None,
         };
         let cleave = &defs.skills["axes:cleave"];
         assert!(
@@ -2108,11 +2115,13 @@ mod tests {
         skills
             .0
             .insert("axes:hew".into(), SkillState::new("Taught"));
-        let facts = Facts {
+        let facts = Subject {
             attributes: &attributes,
             race: "human",
             skills: Some(&skills),
             guild_rank: None,
+            story: None,
+            character: None,
         };
         // Not what they know, nor the entry, nor what they don't qualify for, nor other trees.
         let used = |key: &str| vec![key.to_string()];

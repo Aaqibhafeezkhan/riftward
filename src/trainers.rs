@@ -11,7 +11,7 @@ use bevy::prelude::*;
 
 use crate::attributes::Attributes;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
-use crate::conditions::Facts;
+use crate::conditions::Subject;
 use crate::db::Database;
 use crate::items::capitalized;
 use crate::mobs::{MobQuery, MobTemplates};
@@ -67,7 +67,7 @@ fn learn_cmd(
     (defs, spell_defs): (Res<SkillDefs>, Res<SpellDefs>),
     mut sheets: Query<(&mut Skills, &mut Attributes, &mut Spells, &mut Purse)>,
     db: Res<Database>,
-    shown: Query<&crate::guild::ShownRank>,
+    (shown, story): (Query<&crate::guild::ShownRank>, Res<crate::facts::Facts>),
 ) {
     // Lessons are for players: a mob has no purse to pay with, and nothing to save.
     let Ok((_, Some(player), _, in_room)) = players.get(inv.entity) else {
@@ -102,11 +102,13 @@ fn learn_cmd(
         .collect();
     trainers.sort_by_key(|(entity, _, _)| *entity);
 
-    let facts = Facts {
+    let facts = Subject {
         attributes: &attributes,
         race: &race,
         skills: Some(&skills),
         guild_rank: crate::guild::shown_rank(inv.entity, &shown),
+        story: Some(&story),
+        character: Some(character_id),
     };
     let needs = |lesson: &Lesson| match lesson {
         Lesson::Skill(skill) => skill

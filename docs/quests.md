@@ -413,7 +413,8 @@ In the smallest pull requests that each leave the game working, every one with i
 
 1. *Built.* **The fact store:** the `facts` table, scopes (`world.`, `char.`, `quest.`, `npc.`), values, setting, adding, clearing and lapsing, loaded at startup. Nothing uses it yet.
 2. *Built.* **World flags become facts:** `world_state` moves into the store, and world events, gated spawns and `worldflag` read and write it. Nothing a player sees changes.
-3. **`Fact` in the requirement language:** `Fact(key, op, value)`, with `char.` and `world.` facts, usable by every existing gate (backgrounds, skill requirements, trainers).
+3. *Built.* **`Fact` in the requirement language:** `Fact(key, op, value)` and `Flag(key)`, with `world.`, `char.` and `npc.` facts, tested by trainers and Karma. (Backgrounds are chosen before a character has facts of their own, and test none.)
+    - **3b. Discovery reads facts too:** stumbling on a hidden skill tests its requirement with the character's facts, which means the fact store reaching skill practice in commands and in combat.
 4. **One requirement language:** world events' `When` conditions merge into it, keeping their events as triggers, and it's renamed `Requirement` (it's what every `requires:` holds), so "condition" means only what's on a body, like poisoned. Plus `HasItem`, `InRoom`, `InZone`, and `Has(condition)`: a status condition or trait on the character.
 5. **`facts <player>` and `facts world`,** for GMs.
 

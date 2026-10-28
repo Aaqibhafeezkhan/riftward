@@ -58,7 +58,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |
-| `conditions.rs` | The shared condition language (`Stat`, `Race`, `All`, `Any`, `Not`) |
+| `conditions.rs` | The shared condition language (`Stat`, `Race`, `Skill`, `GuildRank`, `Fact`, `Flag`, `All`, `Any`, `Not`), tested against a `Subject`: who, and what's known of them |
 | `dice.rs` | The `Dice` resource, the only source of randomness |
 
 ### One tick

@@ -29,7 +29,8 @@ There are two today: `Condition` (attributes, race, skills, guild rank; backgrou
 | Condition | Met when |
 | --- | --- |
 | `Stat(attribute, min)`, `Race(id)`, `Skill(id, level)`, `GuildRank(id)` | As now |
-| `Fact(key, op, value)` | A fact compares: `Fact("char.trust.marin", Gte, 3)`, `Fact("world.rats_broke_out", Eq, true)`; `Fact("key")` alone means it's set |
+| `Fact(key, op, value)` | A fact compares (`Eq`, `Ne`, `Gt`, `Gte`, `Lt`, `Lte`): `Fact("char.trust.marin", Gte, 3)`, `Fact("npc.riftwatch:contract_clerk.mood", Eq, "cold")`. Numbers compare as numbers; yes and words only for being equal or not (*built*) |
+| `Flag(key)` | A fact is set at all: `Flag("world.rats_broke_out")`, `Not(Flag("char.sold_out_the_guild"))` (*built*) |
 | `Quest(id, state)` | A character's quest is held, done (with a given ending, or any), or failed: `Quest("riftwatch:crystals_gone_missing", Ended("sold"))` |
 | `HasItem(item or tag, n)` | They carry that many |
 | `Has(condition)` | A status condition or trait is on them: `Has("poisoned")`, `Not(Has("rift_taint"))` |
