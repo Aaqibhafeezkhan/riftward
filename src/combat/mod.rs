@@ -40,6 +40,7 @@ use crate::db::{Database, ItemPlace};
 use crate::dice::Dice;
 use crate::effects::When;
 use crate::events::GameEvent;
+use crate::groups::{self, Groups, InGroup, NoAssist};
 use crate::items::{
     self, ItemLocation, ItemMutQuery, ItemQuery, ItemTemplates, MOB_CORPSE_SECS,
     PLAYER_CORPSE_SECS, Quality, capitalized,
@@ -84,14 +85,16 @@ pub struct CombatPlugin;
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(states::ConditionsPlugin)
+            .init_resource::<Encounters>()
             .add_message::<triggers::Trigger>()
             .add_systems(Update, expire_conditions.run_if(heartbeat()))
             .add_systems(Update, expire_readied.run_if(heartbeat()))
             .add_systems(
                 Update,
                 (
-                    // Aggressive mobs pick their fights just before each round.
-                    (aggression, combat_round)
+                    // Aggressive mobs pick their fights just before each round, and groups
+                    // join their members'.
+                    (aggression, assist, combat_round)
                         .chain()
                         .run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
                     // Then what conditions and skills do about what happened, out of the round.
@@ -372,6 +375,48 @@ fn queued_technique(queue: &ActionQueue, skills: &Skills, defs: &SkillDefs) -> O
     matches!(skill.def.kind, SkillKind::Technique(_)).then(|| skill.key.clone())
 }
 
+/// One side's fight in one room, rated once over its whole length: everyone who has fought on the
+/// side and everyone who has fought against it (or waits their turn to), with their attack and
+/// defence when they joined. Both only grow, and the fallen still count: the fight doesn't get
+/// easier as foes fall, as a whole fight's worth was spent on it. It ends when none of the side
+/// is fighting there. See `docs/progression.md#tough-fights`.
+#[derive(Default, Debug)]
+pub struct Encounter {
+    members: HashMap<Entity, (f64, f64)>,
+    /// Mobs not on the side who have fought its foes beside it: they count for its strength,
+    /// but earn nothing.
+    allies: HashMap<Entity, (f64, f64)>,
+    foes: HashMap<Entity, (f64, f64)>,
+}
+
+impl Encounter {
+    /// How outmatched the side, and those fighting beside it, are by the whole fight (see
+    /// `strike::side_odds`).
+    fn odds(&self) -> Option<f64> {
+        let side: Vec<_> = self
+            .members
+            .values()
+            .chain(self.allies.values())
+            .copied()
+            .collect();
+        let foes: Vec<_> = self.foes.values().copied().collect();
+        strike::side_odds(&side, &foes)
+    }
+
+    /// The experience felling `foe` is worth: the whole fight's, in the share of its foes'
+    /// strength that `foe` was.
+    fn worth(&self, foe: Entity) -> Option<u64> {
+        let strength = |(attack, defence): (f64, f64)| (attack * defence).sqrt();
+        let total: f64 = self.foes.values().copied().map(strength).sum();
+        let share = strength(*self.foes.get(&foe)?) / total;
+        Some((victory_experience(self.odds()?) as f64 * share).round() as u64)
+    }
+}
+
+/// The encounters under way, by side (a group's leader, or someone alone) and room.
+#[derive(Resource, Default)]
+pub struct Encounters(HashMap<(Entity, Entity), Encounter>);
+
 /// One round of every fight.
 #[allow(clippy::too_many_arguments)]
 fn combat_round(
@@ -393,6 +438,7 @@ fn combat_round(
     ),
     rooms: RoomQuery,
     mut item_conditions: Query<(Entity, &mut ItemConditions)>,
+    (groups, mut encounters): (Groups, ResMut<Encounters>),
 ) {
     let now = time.elapsed_secs_f64();
     let auras = auras(&fighters, &rooms, &defs, &mobs);
@@ -468,7 +514,86 @@ fn combat_round(
     }
     let order = first_strike(order, &drawn_in, &targets);
 
-    let outmatched = strike::outmatched(&fighters, &targets, &auras, &items, &templates, &defs);
+    // The encounters under way, each side's whole fight rated once: who has fought on it, and
+    // against it, since it began (see `Encounter`).
+    let rate = |e: Entity| strike::ratings(e, &fighters, &auras, &items, &templates, &defs);
+    let tracked = |who: Entity| {
+        fighters.get(who).is_ok_and(|f| f.player.is_some()) || groups.get(who).is_ok()
+    };
+    let side = |who: Entity| groups::side(who, &groups);
+    // A fight is over for a side once none of it is fighting there.
+    let fighting: HashSet<(Entity, Entity)> = targets
+        .keys()
+        .filter(|who| tracked(**who))
+        .filter_map(|who| Some((side(*who), place(*who)?)))
+        .collect();
+    encounters.0.retain(|key, _| fighting.contains(key));
+    for (a, b) in &targets {
+        for (us, them) in [(*a, *b), (*b, *a)] {
+            let (Some(room), true) = (place(us), tracked(us)) else {
+                continue;
+            };
+            if side(us) == side(them) || fighters.get(them).is_ok_and(|f| f.inanimate) {
+                continue;
+            }
+            let encounter = encounters.0.entry((side(us), room)).or_default();
+            if !encounter.members.contains_key(&us)
+                && let Some(rating) = rate(us)
+            {
+                encounter.members.insert(us, rating);
+            }
+            if !encounter.foes.contains_key(&them)
+                && let Some(rating) = rate(them)
+            {
+                encounter.foes.insert(them, rating);
+            }
+        }
+    }
+    // Those waiting their turn are in the fight too: aggressive mobs in the room who'd attack a
+    // player and aren't fighting anyone else, as a pack's limit holds them back. And mobs
+    // fighting beside the side (a guard taking on the same rats) make it easier, though they
+    // aren't on it and earn nothing.
+    for ((us, room), encounter) in &mut encounters.0 {
+        for f in &fighters {
+            if let Some(foe) = targets.get(&f.entity)
+                && f.player.is_none()
+                && groups.get(f.entity).is_err()
+                && f.in_room.0 == *room
+                && !f.dead
+                && encounter.foes.contains_key(foe)
+                && !encounter.foes.contains_key(&f.entity)
+                && !encounter.allies.contains_key(&f.entity)
+                && let Some(rating) = rate(f.entity)
+            {
+                encounter.allies.insert(f.entity, rating);
+            }
+            let waiting = f.aggressive
+                && !targets.contains_key(&f.entity)
+                && !f.dead
+                && !f.inanimate
+                && !f.puppeted
+                && f.in_room.0 == *room
+                && f.mob
+                    .and_then(|m| Some((m, mobs.0.get(&m.key)?)))
+                    .is_some_and(|(m, def)| !def.spares(&m.key, None));
+            if waiting
+                && !encounter.foes.contains_key(&f.entity)
+                && !encounter.allies.contains_key(&f.entity)
+                && groups::side(f.entity, &groups) != *us
+                && let Some(rating) = rate(f.entity)
+            {
+                encounter.foes.insert(f.entity, rating);
+            }
+        }
+    }
+    // How outmatched each player is: their side's whole fight.
+    let outmatched: HashMap<Entity, f64> = alive_players
+        .iter()
+        .filter_map(|(who, room)| {
+            let odds = encounters.0.get(&(side(*who), *room))?.odds()?;
+            targets.contains_key(who).then_some((*who, odds))
+        })
+        .collect();
     for (who, _) in &alive_players {
         match outmatched.get(who) {
             Some(odds) => commands.entity(*who).insert(Outmatched(*odds)),
@@ -488,6 +613,8 @@ fn combat_round(
         .collect();
 
     let mut fallen: HashSet<Entity> = HashSet::new();
+    // Who fell, and to whom.
+    let mut felled: Vec<(Entity, Entity)> = Vec::new();
     let mut calmed: HashSet<Entity> = HashSet::new();
     let mut used_up_items: Vec<Entity> = Vec::new();
     let mut imbued = Imbued::gather(item_conditions.iter());
@@ -544,6 +671,7 @@ fn combat_round(
         for died in round.react(attacker, target, When::TurnStarts) {
             let slayer = if died == attacker { target } else { attacker };
             fell(&mut commands, died, slayer, &targets);
+            felled.push((died, slayer));
             fallen.insert(died);
         }
         if !acts || fallen.contains(&attacker) || fallen.contains(&target) {
@@ -646,6 +774,7 @@ fn combat_round(
             // A riposte can fell the attacker; then the target struck the blow.
             let slayer = if died == attacker { target } else { attacker };
             fell(&mut commands, died, slayer, &targets);
+            felled.push((died, slayer));
         }
     }
     imbued.write_back(&mut item_conditions);
@@ -657,9 +786,9 @@ fn combat_round(
 
     reveal_fighters(&mut commands, &mut events, &fighters, &targets);
 
-    // Experience for every player who fought a fallen foe: the risk they overcame. A thing
-    // was no risk.
-    for &died in &fallen {
+    // Experience for each foe that falls, to the side that felled it: its share of what the
+    // whole fight was worth, for everyone on that side in the room. A thing was no risk.
+    for &(died, slayer) in &felled {
         let Some(name) = fighters
             .get(died)
             .ok()
@@ -668,15 +797,27 @@ fn combat_round(
         else {
             continue;
         };
-        for (&who, &whom) in &targets {
+        let us = groups::side(slayer, &groups);
+        let Some(room) = fighters.get(slayer).ok().map(|f| f.in_room.0) else {
+            continue;
+        };
+        let Some(points) = encounters
+            .0
+            .get(&(us, room))
+            .and_then(|encounter| encounter.worth(died))
+        else {
+            continue;
+        };
+        for &(who, in_room) in &alive_players {
+            if in_room != room || fallen.contains(&who) || groups::side(who, &groups) != us {
+                continue;
+            }
             let Ok(mut fighter) = fighters.get_mut(who) else {
                 continue;
             };
-            let (true, Some(character_id)) = (whom == died, fighter.player.map(|p| p.character_id))
-            else {
+            let Some(character_id) = fighter.player.map(|p| p.character_id) else {
                 continue;
             };
-            let points = victory_experience(outmatched.get(&who).copied().unwrap_or(1.0));
             let deed = format!("for defeating {name}");
             for line in fighter.attributes.earn(points, &deed, character_id, &db) {
                 log.0.push(Outgoing::line(who, line));
@@ -831,6 +972,69 @@ fn aggression(
             &mut commands,
             &characters,
             &attacker,
+            &foe,
+            foe_fighting,
+            &mut out,
+        );
+    }
+    deliver(out, &mut outbox);
+}
+
+/// Group members free to join a fight: alive, not in one, not resting, not being played, and
+/// not with `autoassist` off.
+type Assisting = (
+    With<InGroup>,
+    Without<Fighting>,
+    Without<Dead>,
+    Without<Resting>,
+    Without<NoAssist>,
+    Without<PuppetedBy>,
+);
+
+/// Group members join a fight one of their group in the room is in, against whoever that member
+/// is fighting: only one they can see, and never one of their own group.
+#[allow(clippy::too_many_arguments)]
+fn assist(
+    mut commands: Commands,
+    idle: Query<Entity, Assisting>,
+    fights: Query<&Fighting>,
+    alive: Query<(), Without<Dead>>,
+    groups: Groups,
+    characters: Characters,
+    hidden: Query<&Conditions>,
+    mut outbox: ResMut<Outbox>,
+) {
+    let mut out = Vec::new();
+    let mut joined: HashSet<Entity> = HashSet::new();
+    for who in &idle {
+        let Some(me) = Actor::get(&characters, who) else {
+            continue;
+        };
+        let mine = groups::side(who, &groups);
+        let foe = groups::members(who, &groups)
+            .into_iter()
+            .find_map(|member| {
+                let Fighting(foe) = fights.get(member).ok()?;
+                let foe = Actor::get(&characters, *foe)?;
+                let near =
+                    |e: Entity| Actor::get(&characters, e).is_some_and(|a| a.room == me.room);
+                (member != who
+                    && near(member)
+                    && foe.room == me.room
+                    && alive.get(foe.entity).is_ok()
+                    && groups::side(foe.entity, &groups) != mine
+                    && sees(&hidden, who, foe.entity))
+                .then_some(foe)
+            });
+        let Some(foe) = foe else {
+            continue;
+        };
+        let foe_fighting = fights.get(foe.entity).is_ok() || joined.contains(&foe.entity);
+        joined.insert(foe.entity);
+        attack(
+            &mut commands,
+            &characters,
+            &me,
             &foe,
             foe_fighting,
             &mut out,
@@ -1052,6 +1256,7 @@ pub fn handle_deaths(
     registry: Res<CommandRegistry>,
     db: Res<Database>,
     mut purses: Query<&mut Purse>,
+    groups: Groups,
 ) {
     let now = unix_now();
     for (entity, mob, in_room, slayer, inanimate) in &dead_mobs {
@@ -1095,32 +1300,83 @@ pub fn handle_deaths(
                     *location = place;
                 }
             }
-            let luck = slayer
-                .and_then(|s| sheets.get(s.0).ok())
-                .map_or(0, |(_, attributes, ..)| attributes.get(Attribute::Luck));
-            // The coins it carried go to whoever killed it, if that was a player: what's left
-            // after any pickpocket.
+            // Its slayer, and their group in the room: alive, and players.
+            let party: Vec<Actor> = slayer
+                .map(|s| groups::members(s.0, &groups))
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|e| Actor::get(&players, e))
+                .filter(|a| {
+                    a.room == in_room.0
+                        && a.character_id.is_some()
+                        && dead_players.get(a.entity).is_err()
+                })
+                .collect();
+            // Loot is found with the Luck of the slayer, or their group's, on average.
+            let lucks: Vec<i32> = match party.as_slice() {
+                [] => slayer.into_iter().map(|s| s.0).collect::<Vec<Entity>>(),
+                _ => party.iter().map(|a| a.entity).collect(),
+            }
+            .into_iter()
+            .filter_map(|e| sheets.get(e).ok())
+            .map(|(_, attributes, ..)| attributes.get(Attribute::Luck))
+            .collect();
+            let luck = match lucks.len() {
+                0 => 0,
+                n => (f64::from(lucks.iter().sum::<i32>()) / n as f64).round() as i32,
+            };
+            // The coins it carried (what's left after any pickpocket) go to whoever killed it,
+            // if that was a player, shared evenly with their group in the room: the odd coins
+            // to the slayer.
             let carried = purses.get(entity).map_or(0, |purse| purse.0);
-            if let Some(slayer) = slayer
-                && let Some(killer) = Actor::get(&players, slayer.0)
-                && killer.character_id.is_some()
-                && let Ok(mut purse) = purses.get_mut(killer.entity)
+            let killer = slayer.and_then(|s| party.iter().find(|a| a.entity == s.0));
+            if let Some(killer) = killer
+                && carried > 0
             {
-                let found = carried;
-                if found > 0 {
-                    purse.0 += found;
-                    purse.save(killer.character_id, &db);
-                    log.0.push(Outgoing::line(
-                        killer.entity,
-                        format!("You take {} from {}.", money::coins(found), the(&mob.name)),
-                    ));
+                let share = carried / party.len() as u64;
+                let odd = carried - share * party.len() as u64;
+                for member in &party {
+                    let got = share
+                        + if member.entity == killer.entity {
+                            odd
+                        } else {
+                            0
+                        };
+                    let Ok(mut purse) = purses.get_mut(member.entity) else {
+                        continue;
+                    };
+                    let line = if party.len() == 1 {
+                        format!("You take {} from {}.", money::coins(got), the(&mob.name))
+                    } else if member.entity == killer.entity {
+                        format!(
+                            "You take {} from {} and share it out: {} for you.",
+                            money::coins(carried),
+                            the(&mob.name),
+                            money::coins(got)
+                        )
+                    } else if got > 0 {
+                        format!(
+                            "{} shares out what {} carried: {} for you.",
+                            killer.name,
+                            the(&mob.name),
+                            money::coins(got)
+                        )
+                    } else {
+                        continue;
+                    };
+                    if got > 0 {
+                        purse.0 += got;
+                        purse.save(member.character_id, &db);
+                    }
+                    log.0.push(Outgoing::line(member.entity, line));
                 }
             }
             let tables = mob_templates.0.get(&mob.key).map(|def| &def.loot);
             for table in tables.into_iter().flatten() {
                 if let Some(Some(id)) = dice.pick(luck, table) {
                     let key = ItemKey::parse(id, &mob.key.zone);
-                    // Found with the slayer's Luck, which helps its quality too.
+                    // Found with the slayer's (or their group's) Luck, which helps its quality
+                    // too.
                     let quality = templates
                         .0
                         .get(&key)
@@ -1695,6 +1951,7 @@ mod tests {
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Outbox::default());
         world.insert_resource(Spawns::default());
+        world.init_resource::<Encounters>();
         world.init_resource::<MobTemplates>();
         world.init_resource::<Messages<GameEvent>>();
         let room = world
@@ -3906,6 +4163,262 @@ mod tests {
             .map(|(_, who)| who)
             .collect();
         assert_eq!(turns, vec![ada, wolf, bob, deer]);
+    }
+
+    #[test]
+    fn a_side_adds_up_its_fighters_against_its_foes() {
+        let (ogre, one) = ((4.0, 4.0), (1.0, 1.0));
+        assert_eq!(strike::side_odds(&[one], &[ogre]), Some(4.0));
+        assert_eq!(
+            strike::side_odds(&[one, one], &[ogre]),
+            Some(2.0),
+            "two together are half as outmatched"
+        );
+        assert_eq!(
+            strike::side_odds(&[one], &[one, one, one, one]),
+            Some(4.0),
+            "four rats are as much as an ogre"
+        );
+    }
+
+    #[test]
+    fn a_whole_fight_is_rated_once_and_shared_out_by_kills() {
+        let e = |n: u32| Entity::from_raw_u32(n).unwrap();
+        let encounter = Encounter {
+            members: HashMap::from([(e(1), (1.0, 1.0))]),
+            allies: HashMap::new(),
+            foes: HashMap::from([(e(2), (1.0, 1.0)), (e(3), (1.0, 1.0))]),
+        };
+        // Two rats are twice an even fight; each is worth half of what that's worth.
+        let whole = victory_experience(2.0);
+        assert_eq!(
+            encounter.worth(e(2)),
+            Some((whole as f64 / 2.0).round() as u64)
+        );
+        assert_eq!(encounter.worth(e(4)), None, "not in this fight");
+    }
+
+    #[test]
+    fn a_fight_counts_those_waiting_their_turn_and_ends_when_the_side_stops() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, None);
+        let ada = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, ada);
+        // One rat at her, another held back by its pack's limit.
+        let (rat, waiting) = (
+            fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]),
+            fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]),
+        );
+        for who in [ada, rat, waiting] {
+            world.get_mut::<Vitals>(who).unwrap().health = 10_000.0;
+        }
+        world.entity_mut(waiting).insert(Aggressive);
+        world.entity_mut(ada).insert(Fighting(rat));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        let foes = |world: &World| {
+            world
+                .resource::<Encounters>()
+                .0
+                .get(&(ada, room))
+                .map(|e| e.foes.len())
+        };
+        assert_eq!(foes(&world), Some(2), "both rats are in it");
+        // She stops fighting: the fight is over.
+        world.entity_mut(ada).remove::<Fighting>();
+        world.entity_mut(rat).remove::<Fighting>();
+        world.entity_mut(waiting).remove::<Aggressive>();
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert_eq!(foes(&world), None);
+    }
+
+    #[test]
+    fn reinforcements_make_a_fight_harder_and_the_fallen_still_count() {
+        let (mut world, room) = world();
+        let ada = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, ada);
+        let (rat, more) = (
+            fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]),
+            fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]),
+        );
+        for who in [ada, rat, more] {
+            world.get_mut::<Vitals>(who).unwrap().health = 10_000.0;
+        }
+        let fight = |world: &World| {
+            let encounter = &world.resource::<Encounters>().0[&(ada, room)];
+            (encounter.foes.len(), encounter.odds().unwrap())
+        };
+        world.entity_mut(ada).insert(Fighting(rat));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        let (foes, alone) = fight(&world);
+        assert_eq!(foes, 1);
+        // Another rat comes in and joins the fight: the same fight, harder.
+        world.entity_mut(more).insert(Fighting(ada));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        let (foes, joined) = fight(&world);
+        assert_eq!(foes, 2);
+        assert!(joined > alone, "harder with two");
+        // The first rat falls: the fight goes on, and is no easier for it.
+        world.entity_mut(rat).insert(Dead).remove::<Fighting>();
+        world.entity_mut(ada).insert(Fighting(more));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert_eq!(fight(&world), (2, joined));
+    }
+
+    #[test]
+    fn a_mob_fighting_beside_you_makes_the_fight_easier() {
+        let (mut world, room) = world();
+        let ada = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, ada);
+        let (rat, guard) = (
+            fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]),
+            fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]),
+        );
+        for who in [ada, rat, guard] {
+            world.get_mut::<Vitals>(who).unwrap().health = 10_000.0;
+        }
+        let odds = |world: &World| world.resource::<Encounters>().0[&(ada, room)].odds();
+        world.entity_mut(ada).insert(Fighting(rat));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        let alone = odds(&world).unwrap();
+        // A guard takes on the same rat.
+        world.entity_mut(guard).insert(Fighting(rat));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        let encounter = &world.resource::<Encounters>().0[&(ada, room)];
+        assert!(encounter.allies.contains_key(&guard));
+        assert!(!encounter.members.contains_key(&guard), "not on her side");
+        assert!(odds(&world).unwrap() < alone, "easier with the guard");
+    }
+
+    #[test]
+    fn a_mob_busy_with_someone_else_isnt_waiting_for_you() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, None);
+        let ada = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, ada);
+        let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        // Another rat, as aggressive, brawls with a guard.
+        let (brawler, guard) = (
+            fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]),
+            fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]),
+        );
+        for who in [ada, rat, brawler, guard] {
+            world.get_mut::<Vitals>(who).unwrap().health = 10_000.0;
+        }
+        world
+            .entity_mut(brawler)
+            .insert((Aggressive, Fighting(guard)));
+        world.entity_mut(guard).insert(Fighting(brawler));
+        world.entity_mut(ada).insert(Fighting(rat));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        let encounter = &world.resource::<Encounters>().0[&(ada, room)];
+        assert_eq!(
+            encounter.foes.keys().copied().collect::<Vec<_>>(),
+            vec![rat],
+            "only the rat she fights"
+        );
+        assert!(encounter.allies.is_empty(), "the guard fights another rat");
+    }
+
+    /// Put `members` in a group led by the first of them.
+    fn group_up(world: &mut World, members: &[Entity]) {
+        for (joined, member) in members.iter().enumerate() {
+            world.entity_mut(*member).insert(InGroup {
+                leader: members[0],
+                joined: joined as u64,
+            });
+        }
+    }
+
+    #[test]
+    fn a_group_in_the_room_shares_a_victory() {
+        let (mut world, room) = world();
+        let ada = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let bob = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let cal = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        for player in [ada, bob, cal] {
+            as_player(&mut world, player);
+        }
+        // Ada fights; Bob, in her group, stands by; Cal isn't in it.
+        group_up(&mut world, &[ada, bob]);
+        let ogre = fighter(&mut world, room, 6, 1, &[BASIC_ATTACK]);
+        world.get_mut::<Vitals>(ogre).unwrap().health = 1.0;
+        world.entity_mut(ada).insert(Fighting(ogre));
+        for _ in 0..30 {
+            world.run_system_once(combat_round).unwrap();
+            world.flush();
+            if world.get::<Dead>(ogre).is_some() {
+                break;
+            }
+        }
+        assert!(world.get::<Dead>(ogre).is_some(), "the ogre falls");
+        let earned = |who: Entity| world.get::<Attributes>(who).unwrap().experience();
+        assert!(earned(ada) > 0, "a real risk");
+        assert_eq!(earned(bob), earned(ada), "the group shares it in full");
+        assert_eq!(earned(cal), 0, "a bystander earns nothing");
+    }
+
+    #[test]
+    fn a_group_splits_the_coins_its_foe_carried() {
+        let (mut world, room) = world();
+        world.init_resource::<RoomIndex>();
+        world.init_resource::<CommandRegistry>();
+        world.insert_resource(MobTemplates(HashMap::from([(
+            MobKey::parse("test:mob", ""),
+            crate::world::MobDef::named("a bandit"),
+        )])));
+        let ada = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let bob = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        for player in [ada, bob] {
+            as_player(&mut world, player);
+            world.entity_mut(player).insert(Purse(0));
+        }
+        group_up(&mut world, &[ada, bob]);
+        let bandit = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let traits = Conditions::default().with_traits(&[FORMLESS.to_string()]);
+        world
+            .entity_mut(bandit)
+            .insert((traits, Dead, Slayer(bob), Purse(11)));
+        world.run_system_once(handle_deaths).unwrap();
+        world.flush();
+        assert_eq!(world.get::<Purse>(ada).unwrap().0, 5);
+        assert_eq!(
+            world.get::<Purse>(bob).unwrap().0,
+            6,
+            "the odd copper to the slayer"
+        );
+    }
+
+    #[test]
+    fn group_members_join_each_others_fights() {
+        let (mut world, room) = world();
+        let ada = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let bob = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let cal = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        for player in [ada, bob, cal] {
+            as_player(&mut world, player);
+        }
+        group_up(&mut world, &[ada, bob, cal]);
+        world.entity_mut(cal).insert(NoAssist);
+        let wolf = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(ada).insert(Fighting(wolf));
+        world.entity_mut(wolf).insert(Fighting(ada));
+        world.run_system_once(assist).unwrap();
+        world.flush();
+        assert_eq!(world.get::<Fighting>(bob).map(|f| f.0), Some(wolf));
+        assert!(world.get::<Fighting>(cal).is_none(), "autoassist is off");
+        assert_eq!(
+            world.get::<Fighting>(wolf).map(|f| f.0),
+            Some(ada),
+            "the wolf keeps its fight"
+        );
     }
 
     #[test]

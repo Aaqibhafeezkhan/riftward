@@ -56,7 +56,11 @@ const SCHEMA: &str = "
         -- 1 if they'd rather not see damage numbers in fights.
         hide_numbers INTEGER NOT NULL DEFAULT 0,
         -- Money in their purse, in copper.
-        coins       INTEGER NOT NULL DEFAULT 0
+        coins       INTEGER NOT NULL DEFAULT 0,
+        -- 1 if they turn followers away.
+        nofollow    INTEGER NOT NULL DEFAULT 0,
+        -- 0 if they'd rather not join their group's fights by themselves.
+        autoassist  INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS character_aliases (
@@ -341,6 +345,10 @@ pub struct CharacterRecord {
     pub hide_numbers: bool,
     /// Money in their purse, in copper.
     pub coins: u64,
+    /// Whether they turn followers away.
+    pub nofollow: bool,
+    /// Whether they join their group's fights by themselves.
+    pub autoassist: bool,
 }
 
 /// SQLite connection. Queries run synchronously on the main thread; they're small and local,
@@ -369,6 +377,8 @@ impl Database {
             ("characters", "experience", "INTEGER"),
             ("characters", "hide_numbers", "INTEGER NOT NULL DEFAULT 0"),
             ("characters", "coins", "INTEGER NOT NULL DEFAULT 0"),
+            ("characters", "nofollow", "INTEGER NOT NULL DEFAULT 0"),
+            ("characters", "autoassist", "INTEGER NOT NULL DEFAULT 1"),
             (
                 "character_skills",
                 "karma_paid",
@@ -450,7 +460,8 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, name, room, race, background, description, health, stamina, vitals_at,
-                 prompt, autoattack, experience, hide_numbers, coins FROM characters
+                 prompt, autoattack, experience, hide_numbers, coins, nofollow, autoassist
+                 FROM characters
                  WHERE account_id = ?1 ORDER BY id",
         )?;
         let rows = stmt.query_map([account_id], |row| {
@@ -471,6 +482,8 @@ impl Database {
                 experience: row.get::<_, Option<i64>>(11)?.map(|e| e.max(0) as u64),
                 hide_numbers: row.get::<_, i64>(12)? != 0,
                 coins: row.get::<_, i64>(13)?.max(0) as u64,
+                nofollow: row.get::<_, i64>(14)? != 0,
+                autoassist: row.get::<_, i64>(15)? != 0,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -504,6 +517,8 @@ impl Database {
             experience: Some(0),
             hide_numbers: false,
             coins: 0,
+            nofollow: false,
+            autoassist: true,
         })
     }
 
@@ -511,6 +526,22 @@ impl Database {
         self.conn().execute(
             "UPDATE characters SET hide_numbers = ?1 WHERE id = ?2",
             params![i64::from(hide), character_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_nofollow(&self, character_id: i64, refuse: bool) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE characters SET nofollow = ?1 WHERE id = ?2",
+            params![i64::from(refuse), character_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_autoassist(&self, character_id: i64, on: bool) -> DbResult<()> {
+        self.conn().execute(
+            "UPDATE characters SET autoassist = ?1 WHERE id = ?2",
+            params![i64::from(on), character_id],
         )?;
         Ok(())
     }

@@ -24,4 +24,6 @@
     // contest rating and a pick from a table a percent better. Luck has no cap.
     // See docs/attributes.md#luck.
     luck_scale: 100,
+    // The most characters in a group, its leader among them. See docs/groups.md.
+    max_group: 6,
 )

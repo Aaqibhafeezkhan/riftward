@@ -16,6 +16,7 @@ mod effects;
 mod events;
 mod formula;
 mod gathering;
+mod groups;
 mod healing;
 mod items;
 mod login;
@@ -105,6 +106,7 @@ fn add_game(app: &mut App, path: String, address: String) {
         gathering::GatheringPlugin,
         tracking::TrackingPlugin,
         stealth::StealthPlugin,
+        groups::GroupsPlugin,
     ))
     // Magic and trade.
     .add_plugins((

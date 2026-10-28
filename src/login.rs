@@ -1001,6 +1001,12 @@ fn enter_game(
     if character.hide_numbers {
         commands.entity(entity).insert(HideNumbers);
     }
+    if character.nofollow {
+        commands.entity(entity).insert(crate::groups::NoFollow);
+    }
+    if !character.autoassist {
+        commands.entity(entity).insert(crate::groups::NoAssist);
+    }
     info!("{name} entered the game (account '{}')", account.username);
 
     out.push(Outgoing::line(

@@ -68,7 +68,7 @@ A skill grows at full speed up to **10 + 2 × character level**. Above that, its
 Character level is separate from skill levels: skills grow by use, and the character grows by deeds.
 
 - **Experience** comes from:
-  - **Victories**, worth the risk you overcame: 100 × the chance you'd have lost, from how outmatched you were (see [Tough fights](#tough-fights)). An even fight gives about 50; a foe twice your match about 89. **A fight you'd have lost less than one time in ten gives nothing:** a foe under about half your strength teaches you nothing, so you outgrow easy prey, and a rat, to a veteran, is worth nothing. Everyone fighting the foe when it dies earns it.
+  - **Victories**, worth the risk you overcame: 100 × the chance you'd have lost, from how outmatched you were by **the whole fight** (see [Tough fights](#tough-fights)). An even fight gives about 50; a fight twice your match about 89. **A fight you'd have lost less than one time in ten gives nothing:** foes under about half your strength teach you nothing, so you outgrow easy prey, and a rat, to a veteran, is worth nothing. It's paid **kill by kill:** each foe that falls is worth its share of the whole fight's experience, by its share of the foes' strength, so clearing the fight earns the fight's worth, and three rats at once pay more than three rats one at a time (2026-10-28). The side that fells a foe earns it: everyone on it in the room.
   - **Discoveries:** 50 for discovering a skill through use, 100 for Awakening.
   - **Not quests.** Contracts and quests pay coin, items and guild merit, never experience (2026-10-27): the experience in a contract is already in the fighting it sends you to do, so a quest can't become the efficient way to level.
 - **Every level costs the same: 1,000 experience,** about 20 even fights. What slows a character down isn't the price of a level but the fights it takes: as they grow stronger, the same foes are worth less and then nothing, so levelling means seeking harder challenges, and how far a character can climb is set by the hardest the world offers (2026-10-26).
@@ -78,12 +78,20 @@ Character level is separate from skill levels: skills grow by use, and the chara
 
 ## Tough fights
 
-A fight against the odds teaches more. Each combat round works out how far each player is **outmatched** by the foe they're fighting, by the [ratio rule](attributes.md#the-ratio-rule): the foe's attack against the player's defence, and the foe's defence against the player's attack, combined as a geometric mean. 1 is an even fight; 4 means the foe is four times their match.
+A fight against the odds teaches more, and is worth more. How **outmatched** a player is comes from their whole fight, by the [ratio rule](attributes.md#the-ratio-rule): their side's attack and defence against their foes', each side's added up, combined as a geometric mean. 1 is an even fight; 4 means the foes are four times their match.
+
+**A fight is rated as a whole, like a D&D encounter** (decided 2026-10-28). An **encounter** is one side's fight in one room, a side being a player alone or a [group](groups.md):
+
+- **It counts everyone who has taken part:** each member of the side who has fought, and each foe who has fought them or waits its turn to (aggressive mobs in the room, held back by a [pack's limit](world.md#packs), who aren't busy fighting someone else), with their attack and defence as they joined. Reinforcements join it as they arrive.
+- **Mobs fighting beside the side count for it:** a guard or a dog taking on the same foes makes the fight easier, though it isn't in the group and earns nothing (its kills pay no one). Mob allies of the foes (a pack's leader, the Rat King) are foes like the rest, each weighing by its strength.
+- **It never gets easier as foes fall:** the fallen still count, since the whole fight, beginning to end, is what was spent on it. Both sides only grow: a member joining partway makes it easier, a foe joining harder.
+- **Each side has its own.** A lone player and a group fighting the same rats are two encounters, each rated by its own members against the foes that fought it, and each paid for its own kills.
+- **It ends** when none of the side is fighting there: the foes are dead, or the side has fled. (`Encounter` in `combat/mod.rs`.)
 
 - **Chances multiply by the odds,** from no change at even odds or better up to **double** at 2 or more, for every gain roll and every [discovery](skills.md#discovery) made during the fight, passive skills like Dodge included. Luck applies on top, as on every roll.
 - **Cooldowns still hold,** so a hard fight speeds learning toward the cooldown, never past it.
 - **Mobs aren't counted;** they don't learn.
-- **Groups compare sides rather than pairs:** five players against one ogre isn't a tough fight even if the ogre outclasses each of them. The combined strength of each side, by the same ratio rule, decides both the odds for skill gains and each member's victory experience ([Groups](groups.md#what-a-group-shares), designed).
+- **Sides, not pairs:** five players against one ogre isn't a tough fight even if the ogre outclasses each of them, and ten rats around one player are, even if each rat is easy. The encounter's odds decide both the odds for skill gains and the victory experience ([Groups](groups.md#what-a-group-shares), built 2026-10-28).
 
 ## Implementation notes
 

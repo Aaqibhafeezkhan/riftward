@@ -198,58 +198,57 @@ pub fn armour_against(
         .sum()
 }
 
-/// How far each player is outmatched by the foe they fight, by the ratio rule: the foe's attack
-/// against their defence, and the foe's defence against their attack, averaged (a geometric
-/// mean). 1 is an even fight; above it, the foe is stronger. Mobs don't learn, so only players
-/// are counted.
-pub fn outmatched(
+/// A fighter's attack and defence ratings this round, as the ratio rule weighs them.
+pub fn ratings(
+    entity: Entity,
     fighters: &Fighters,
-    targets: &HashMap<Entity, Entity>,
     auras: &HashMap<Entity, Bonus>,
     items: &ItemQuery,
     templates: &ItemTemplates,
     defs: &SkillDefs,
-) -> HashMap<Entity, f64> {
-    let ratings = |entity: Entity| {
-        let f = fighters.get(entity).ok()?;
-        let aura = auras.get(&entity).copied().unwrap_or_default();
-        let boosts = boosts(f.skills, defs);
-        let strike = choose_attack(
-            entity,
-            f.auto.and_then(|auto| auto.0.as_deref()),
-            f.player.is_some(),
-            f.vitals.stamina,
-            f.skills,
-            items,
-            templates,
-            defs,
-        )?;
-        let skill = defs.skills.get(&strike.skill)?;
-        let attack = attack_rating(f.attributes, f.skills, skill, aura, &boosts);
-        let defence = defence_rating(
-            f.attributes,
-            f.skills,
-            aura,
-            &boosts,
-            &gear(entity, items, templates),
-        )
-        .total();
-        Some((attack.max(1.0), defence.max(1.0)))
+) -> Option<(f64, f64)> {
+    let f = fighters.get(entity).ok()?;
+    let aura = auras.get(&entity).copied().unwrap_or_default();
+    let boosts = boosts(f.skills, defs);
+    let strike = choose_attack(
+        entity,
+        f.auto.and_then(|auto| auto.0.as_deref()),
+        f.player.is_some(),
+        f.vitals.stamina,
+        f.skills,
+        items,
+        templates,
+        defs,
+    )?;
+    let skill = defs.skills.get(&strike.skill)?;
+    let attack = attack_rating(f.attributes, f.skills, skill, aura, &boosts);
+    let defence = defence_rating(
+        f.attributes,
+        f.skills,
+        aura,
+        &boosts,
+        &gear(entity, items, templates),
+    )
+    .total();
+    Some((attack.max(1.0), defence.max(1.0)))
+}
+
+/// How far a side is outmatched by its foes, by the ratio rule: their attack against its
+/// defence, and their defence against its attack, averaged (a geometric mean). Each side's
+/// attacks and defences add up, as `(attack, defence)` ratings: five against an ogre isn't a
+/// tough fight even if it outclasses each of them, and ten rats are. 1 is an even fight; above
+/// it, the foes are stronger.
+pub fn side_odds(side: &[(f64, f64)], foes: &[(f64, f64)]) -> Option<f64> {
+    let sum = |ratings: &[(f64, f64)]| {
+        ratings
+            .iter()
+            .fold((0.0, 0.0), |(a, d), (attack, defence)| {
+                (a + attack, d + defence)
+            })
     };
-    targets
-        .iter()
-        .filter(|(who, _)| fighters.get(**who).is_ok_and(|f| f.player.is_some()))
-        // Beating a thing teaches nothing faster.
-        .filter(|(_, foe)| fighters.get(**foe).is_ok_and(|f| !f.inanimate))
-        .filter_map(|(who, foe)| {
-            let ((attack, defence), (their_attack, their_defence)) =
-                (ratings(*who)?, ratings(*foe)?);
-            Some((
-                *who,
-                (their_attack / defence * their_defence / attack).sqrt(),
-            ))
-        })
-        .collect()
+    let ((attack, defence), (their_attack, their_defence)) = (sum(side), sum(foes));
+    (attack > 0.0 && their_attack > 0.0)
+        .then(|| (their_attack / defence * their_defence / attack).sqrt())
 }
 
 /// The attack a fighter makes this round: which skill, how much damage, and what it looks like.

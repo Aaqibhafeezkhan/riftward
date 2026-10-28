@@ -39,6 +39,8 @@ pub struct Progression {
     pub practice_half_life_minutes: f64,
     /// The Luck that doubles a roll: each point is 1 / `luck_scale` better (see `dice.rs`).
     pub luck_scale: f64,
+    /// The most characters in a group, its leader among them.
+    pub max_group: usize,
 }
 
 /// Where the progression numbers live, from where the server runs.
