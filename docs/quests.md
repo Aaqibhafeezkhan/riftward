@@ -1,6 +1,6 @@
 # Quests and the Adventurers' Guild
 
-[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked (2026-10-28: `src/quests.rs`, `assets/quests/`); taking quests, the board, perks and lodging are designed, not built.
+[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, and the board can be read (2026-10-28: `src/quests.rs`, `assets/quests/`); taking quests, perks and lodging are designed, not built.
 
 Quests are data, written by builders and GMs, and tracked per character. Most of them come from the **Adventurers' Guild**, whose contracts raise a **guild rank** that is entirely separate from a character's power. A character can ignore quests completely, hunt monsters from the first day and grow just as strong; what they give up is the guild's trust, and the doors it opens.
 
@@ -188,8 +188,8 @@ A quest is one of two kinds, by its `availability`:
 
 **The Guildhall is where open work comes from.** The board in the Contract Hall lists what's on offer; **Marin Harrow logs what each member takes,** and how it ends, in the guild's record. How the work is going is the member's own business, kept in their journal.
 
-- **`board`** (or `contracts`) in the Contract Hall lists what's posted and not claimed, at the reader's rank and one above: the number, the rank, the name and the one-line summary. Non-members see it too, but can't take guild contracts.
-- **`board <n>`** reads a notice in full: its description, what it asks, what it pays, how long a claim lasts.
+- **`board`** (or `contracts`) in the Contract Hall lists what's posted and not claimed, at the reader's rank and one above: the number, the rank, the name and the one-line summary. Non-members (and the expelled) see it too, Bone work only, but can't take guild contracts. Quests that aren't contracts, posted on a board, are listed for everyone. (*Built*, 2026-10-28, numbered by rank and then name; a board is wherever a quest is `posted: Board(room)`, and `posted_when` is tested as a world condition. Nothing is claimed yet, so nothing comes off it.)
+- **`board <n>`** reads a notice in full: its description, what it asks, what it pays, how long a claim lasts. (*Built.*)
 - **`accept <n>`**, with Marin at her counter: "You take the notice down and hand it to Marin Harrow, who writes it into the guild's record against your name." A claimed notice comes off the board. Without the clerk there, nothing can be taken.
 - **Marin's record** is the guild's ledger, and holds only what the guild needs to know: each contract **accepted, completed or failed** (or given up), with the date. It never says how far along you are, only that you took it and how it came out. **`guild record`** shows your entries, and GMs see anyone's.
 - **`journal`** (or `quests`) is your own account, anywhere: each quest you're on, where you are in it in its own words (the stage's journal text), each objective's progress, how long a claim has left; and below, what you've finished. Quests from outside the guild are kept in it too, and in no ledger.
@@ -346,7 +346,7 @@ A group on a quest moves through it together, **as long as they're together:** w
 
 ### Rewards
 
-`Coin(n)`, `Item(id)`, `Set(fact, value)` (which hidden skills, world events, doors and other quests can test; a title is `char.title.<id>`), and for contracts the guild merit. Never experience, skill levels or Karma.
+`Coin(n)`, `Item(id)`, `Set(fact, value)` (which hidden skills, world events, doors and other quests can test; a title is `char.title.<id>`), and for contracts the guild merit. Never experience, skill levels or Karma. Contracts pay coin, items, or both, besides their merit (2026-10-28): a potion or a piece of gear is as good a reward as money. `Coin` and `Item` can be written now (*built*: checked, and shown on the notice, `Item` once per item); they're paid when reporting is built.
 
 ### Saved
 
@@ -429,8 +429,8 @@ In the smallest pull requests that each leave the game working, every one with i
 
 **The engine, with the first contracts**
 
-9. *Built.* **Quest files:** loading `assets/quests/<zone>/*.quest.ron`, checking them, and hot reload. One file, *Rats in the Drains*. No commands yet. The first objectives are `Kill` and `Bring`, the first reward `Coin`; claims and repeats are times in `Minutes`, `Hours` or `Days`, real time, as spawns are.
-10. **The board:** `board` and `board <n>` in the Contract Hall, read-only: what's posted, at your rank and one above.
+9. *Built.* **Quest files:** loading `assets/quests/<zone>/*.quest.ron`, checking them, and hot reload. One file, *Rats in the Drains*. No commands yet. The first objectives are `Kill` and `Bring`, the first rewards `Coin` and `Item`; claims and repeats are times in `Minutes`, `Hours` or `Days`, real time, as spawns are.
+10. *Built.* **The board:** `board` and `board <n>` in the Contract Hall, read-only: what's posted, at your rank and one above.
 11. **Taking a quest:** `accept <n>` with Marin, the `character_quests` table, Marin's record (`guild record`: accepted, completed, failed), and `journal`. Open quests only; nothing counts yet.
 12. **Rules and `Kill`:** objectives as rules over `quest.` facts, `Kill` by template and tag, progress in the journal, and moving from stage to stage.
 13. **`report` and rewards:** coin, merit and `Set`, paid to whoever the quest is reported to. *Rats in the Drains* can be done start to finish. Plus `Bring`, so it asks for the tails. Adds *Roaches in the Cellar*.
@@ -456,7 +456,7 @@ Meat for the Kitchen waits on harvesting; it can be written with step 13 and wor
 
 - [ ] **Rank names and thresholds:** the metals are the setting's own (the Silver Hearth Guildhall's quest board is divided Bone to Platinum: [The setting](setting.md#places)); the Fort lets Silver members and up onto the road to the barrier ([The setting](setting.md#the-wastes), 2026-10-27); still open: are there ranks above Platinum (Mithril, Adamant) reserved for legendary deeds, and do higher ranks open deeper parts of the Wastes?
 - [ ] **Is the Guild Archive members-only?** It holds the public Hermetic Study path to Awakening ([Magic](magic.md#which-paths-are-known)). Members-only would make the public path to magic "join the guild": free and fitting, but a choice to make deliberately.
-- [ ] **Do contracts pay coin at all,** or only merit and items, until there's an economy to balance against?
+- [x] **Do contracts pay coin at all?** Yes, and items too (2026-10-28): a contract's rewards are coin, items (potions, gear, anything with a template) or both, besides its merit. How much is first guesses, to tune in play.
 - [ ] **Theft in the Guild Quarters:** expulsion with paid reinstatement is the guild's answer (2026-10-27); still open: whether a first offence is only a fine or lost merit, and how much reinstatement costs.
 - [ ] **How much a failed or abandoned contract costs:** a share of its merit (half?), or a set amount by rank?
 - [ ] **Board refresh:** are some contracts posted only at certain times or for a while (a bounty that's up for three days), beyond `posted_when`?
