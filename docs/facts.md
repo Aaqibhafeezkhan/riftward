@@ -1,0 +1,82 @@
+# Facts, conditions and rules
+
+[Design summary](README.md) · Status: designed (2026-10-28), not built. One store for what the game remembers (world flags, what a character has done, where they are in a quest, a mob's mood), one language for testing it, and rules that react to events by changing it. Quests are built on these; world events and hidden skills move onto them.
+
+Content feels alive when it reacts to things nobody scripted together. A quest that sets "this character sold out the guild" shouldn't need to know which other quests, mobs and doors will care. So everything the game remembers about its story goes in one place, as **facts**, and everything that reacts tests facts, without knowing who set them.
+
+## Facts
+
+A fact is a named value in a **scope**:
+
+| Scope | Belongs to | Examples |
+| --- | --- | --- |
+| `world.` | The whole game | `world.rats_broke_out`, `world.breaches` (a count), `world.slime_lord_slain` |
+| `char.` | One character | `char.sold_out_the_guild`, `char.title.rat_bane`, `char.trust.marin` (a number), `char.found_door.town:bookcase` |
+| `quest.` | One character's one quest | `quest.courier_found`, `quest.rats` (a counter), `quest.ending` |
+| `npc.` | A mob template, everywhere | `npc.marin.mood`, `npc.narina.secret_told` |
+
+- **Values** are a yes (`true`), a whole number, or a word (`quest.ending = "sold"`). A fact never set is false, zero, or empty, so nothing needs declaring.
+- **Saved,** in one `facts` table: scope, owner (a character, a character's quest, a mob template, or none for the world), key and value. Facts survive restarts; that's their point.
+- **A fact can lapse:** set with `for: Hours(2)`, it's gone after (a rumour, a guard who remembers you for a while).
+- **What already exists moves here:** world flags (`world_state`) become `world.` facts, and the character flags and titles hidden skills were designed with become `char.` facts. `WorldFlag("x")` and `Flag("x")` stay as short ways of writing them.
+
+## One condition language
+
+There are two today: `Condition` (attributes, race, skills, guild rank; backgrounds, skill requirements, trainers) and world events' `When` (world flags and events). They merge into one, used by every gate in the game:
+
+| Condition | Met when |
+| --- | --- |
+| `Stat(attribute, min)`, `Race(id)`, `Skill(id, level)`, `GuildRank(id)` | As now |
+| `Fact(key, op, value)` | A fact compares: `Fact("char.trust.marin", Gte, 3)`, `Fact("world.rats_broke_out", Eq, true)`; `Fact("key")` alone means it's set |
+| `Quest(id, state)` | A character's quest is held, done (with a given ending, or any), or failed: `Quest("riftwatch:crystals_gone_missing", Ended("sold"))` |
+| `HasItem(item or tag, n)` | They carry that many |
+| `InRoom(room)`, `InZone(zone)` | They're there |
+| `All`, `Any`, `Not` | As now |
+
+Where a condition is tested decides whose facts `char.` and `quest.` mean: the character at the trainer, the player reading the board, the one a rule fired for.
+
+## Rules
+
+A **rule** is: when an event happens, if a condition holds, do these actions.
+
+```ron
+(
+    // Someone on the quest walks into the culvert at night, and the courier is there.
+    on: Entered("sewers:stalls_culvert"),
+    if: All([Fact("world.night"), Not(Fact("quest.courier_came"))]),
+    do: [Spawn("courier", "sewers:stalls_culvert"), Set("quest.courier_came", true)],
+)
+```
+
+(`world.night` is the clock's: the [time of day](architecture.md#time) sets it as night falls and clears it at dawn.)
+
+**Events** a rule can match, each written by the system that makes it happen ([game events](architecture.md#game-events)):
+
+| Event | When |
+| --- | --- |
+| `Killed(mob or tag)` | A mob of that template (or tag) dies; credited to the side that killed it |
+| `Obtained(item or tag)` | Someone picks one up or is given one |
+| `Gave(item, to: mob)` | Someone gives a mob an item |
+| `Entered(room)` | Someone walks in |
+| `Asked(mob, topic)` | `ask <mob> about <topic>` |
+| `Examined(thing)`, `Searched(room)` | `examine`, `search` |
+| `Used(skill)` | Someone uses a skill |
+| `Every(minutes)`, `StageBegan`, `StageEnded` | Time passing; a quest moving |
+
+**Actions:** `Set(key, value)`, `Add(key, n)`, `Clear(key)`; `Give(item)`, `Take(item)`; `Spawn(mob, room)`; `Say(mob, text)`; `Announce(scope, text)`; and within a quest, `Advance(stage)`, `End(ending)`, `Fail`. Where an action means what an [effect](effects.md) means, it's the same word.
+
+Rules live in quests (active only while the quest is on that stage), and later in world events and on mobs. A [script](effects.md#scripting) can be a rule's action, as the last resort it already is.
+
+## How it gets built
+
+First, before the quest engine, in five small pull requests: the store, world flags moved onto it, `Fact` in the condition language, one condition language, and `facts` for GMs. See [Quests: how it gets built](quests.md#how-it-gets-built).
+
+## Why did or didn't it happen
+
+Rule-driven content lives or dies on answering that. GMs and admins get **`why`**: `why <player> <quest>` shows the quest's stage, each objective and rule, each condition in it, and whether it held, with the facts it read; `facts <player>` and `facts world` list what's set.
+
+## Open questions
+
+- [ ] **Storylets:** small reactive pieces chosen by matching facts (Valve's dynamic dialogue; Fallen London's storylets) are the right model for `ask` topics and ambient lines ([#24](https://github.com/Foxworks-Studios/riftward/issues/24)): a mob's answer is the best-matching response for the facts in play. After `ask` itself.
+- [ ] **Templated quests:** "kill 10 of any vermin, anywhere", filled in at the board. Cheap variety, beside hand-written ones.
+- [ ] **Who may set `npc.` and `world.` facts in game:** GMs, for live events; builders?

@@ -56,7 +56,7 @@ Planned with `Taunted(by)` and the `Taunt` effect in [Effects](effects.md#modifi
 - **Two sides, two fights:** a lone player and a group (or two groups) fighting the same rats are rated and paid separately, each for the foes that fought them and the kills they made.
 - **Coins** a foe carried are split evenly among the living members in the room, the odd coins to whoever struck the last blow: "You take 11 copper from the bandit and share it out: 6 copper for you."
 - **Loot** falls to the ground as now, for whoever takes it; a loot table rolls with the group's average Luck, among the members present ([Luck](attributes.md#luck)), so there's no sending the luckiest to open every chest.
-- **Contracts:** accepting a guild contract while grouped offers it to every member in the room whose rank allows it. Kills and finds by any member who holds it count for all who do; each earns the contract's full merit, and its coin is split among them ([Quests](quests.md#group-contracts)).
+- **Contracts:** accepting a guild contract while grouped offers it to every member in the room whose rank allows it. Kills and finds by any member who holds it count for every holder in the same room; each earns the contract's full merit, and its coin is split among them ([Quests](quests.md#progress-in-a-group)).
 - **Not shared:** skill practice (each learns from what they do), and what's harvested or picked up.
 
 ## Saved

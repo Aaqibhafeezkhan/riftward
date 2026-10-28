@@ -27,6 +27,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Awakening and the first spells built |
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
+| [Facts, conditions and rules](facts.md) | One store for what the game remembers (world, character, quest and mob facts), one condition language, and rules that react to events | Designed |
 | [Groups](groups.md) | Following, groups formed the ROM way, shared experience and coin, assisting, taunting a pack | Built, but taunting and group contracts |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Membership and ranks built; quests designed |
 | [Effects, conditions and scripting](effects.md) | How designers add skills, spells, conditions and items without code: conditions as data, one effect vocabulary, abilities, formulas, triggers, and Rhai scripting | Conditions, effects, damage types, resisting, item conditions, formulas and reactions in a fight and out of one built (steps 1 to 4); active skills through `use` next |
