@@ -49,22 +49,6 @@ pub const SKILLS_PATH: &str = "skills";
 /// The extension skill tree files use.
 const SKILL_EXTENSION: &str = "skill.ron";
 
-/// The gain chance of an untouched skill at level 0, before practice and difficulty.
-const BASE_GAIN_CHANCE: f64 = 0.25;
-/// The level at which the gain chance is half its first: it's 25 / (25 + level) of it.
-const LEVEL_EASE: f64 = 25.0;
-/// The soft cap: a skill grows at full speed up to 10 + 2 × character level...
-const SOFT_CAP_BASE: u32 = 10;
-const SOFT_CAP_PER_LEVEL: u32 = 2;
-/// ...and past it, its gain chance halves for every 5 levels over.
-const SOFT_CAP_HALVING: f64 = 5.0;
-/// The cooldown after a gain at level 0, in seconds; each level multiplies it by `COOLDOWN_GROWTH`.
-const BASE_COOLDOWN: f64 = 5.0 * 60.0;
-const COOLDOWN_GROWTH: f64 = 1.1;
-/// The chance, per use of a skill, of discovering another in its tree, before Luck.
-const DISCOVERY_CHANCE: f64 = 0.001;
-/// The most a tough fight multiplies the chances of a gain or a discovery.
-const TOUGH_FIGHT_MAX_BOOST: f64 = 2.0;
 pub struct SkillsPlugin;
 
 impl Plugin for SkillsPlugin {
@@ -835,23 +819,26 @@ pub fn faded(practice: f64, elapsed: i64) -> f64 {
 
 /// The chance one use gains a level.
 pub fn gain_chance(level: u32, difficulty: f64, practice: f64, soft_cap: u32) -> f64 {
-    let level_ease = LEVEL_EASE / (LEVEL_EASE + f64::from(level));
+    let p = crate::attributes::progression();
+    let level_ease = p.level_ease / (p.level_ease + f64::from(level));
     let over = f64::from(level.saturating_sub(soft_cap));
     difficulty
-        * BASE_GAIN_CHANCE
+        * p.base_gain_chance
         * level_ease
         * (0.2 + 0.8 * practice)
-        * 0.5f64.powf(over / SOFT_CAP_HALVING)
+        * 0.5f64.powf(over / p.soft_cap_halving)
 }
 
 /// How far a skill grows at full speed for a character of `level`: past it, gains come slowly.
 pub fn soft_cap(level: u32) -> u32 {
-    SOFT_CAP_BASE + SOFT_CAP_PER_LEVEL * level
+    let p = crate::attributes::progression();
+    p.soft_cap_base + p.soft_cap_per_level * level
 }
 
 /// Seconds before a skill can gain again, after gaining a level from `level`.
 pub fn gain_cooldown(level: u32) -> i64 {
-    (BASE_COOLDOWN * COOLDOWN_GROWTH.powi(level as i32)) as i64
+    let p = crate::attributes::progression();
+    (p.gain_cooldown_minutes * 60.0 * p.gain_cooldown_growth.powi(level as i32)) as i64
 }
 
 /// How much a use counts, 0 to 1, `since` seconds after the last: out of a fight, uses closer
@@ -1064,7 +1051,9 @@ pub struct Learner<'a> {
 /// more the foe outclasses them, the likelier a gain or discovery, up to double. An even or easy
 /// fight, or none, gives nothing extra.
 pub fn tough_fight_boost(outmatched: Option<f64>) -> f64 {
-    outmatched.map_or(1.0, |odds| odds.clamp(1.0, TOUGH_FIGHT_MAX_BOOST))
+    outmatched.map_or(1.0, |odds| {
+        odds.clamp(1.0, crate::attributes::progression().tough_fight_max_boost)
+    })
 }
 
 /// One use of a skill a character knows: practice, maybe a level, and maybe a discovery and the
@@ -1145,7 +1134,7 @@ pub fn count_use(
         },
         story,
     );
-    let chance = DISCOVERY_CHANCE * learner.boost * weight;
+    let chance = crate::attributes::progression().discovery_chance * learner.boost * weight;
     if let Some(found) = discover(defs, &practised, &facts, dice, chance) {
         let (found, name) = (found.key.clone(), found.def.name.clone());
         learn(skills, &found, "Discovered", Some(character_id), db);

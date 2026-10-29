@@ -24,12 +24,6 @@ use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::world::Player;
 
-/// Seconds for health to recover from nothing to full, at rest.
-const HEALTH_RECOVERY_SECS: f32 = 600.0;
-/// Seconds for stamina to recover from nothing to full, at rest.
-const STAMINA_RECOVERY_SECS: f32 = 120.0;
-/// How much faster vitals recover while resting.
-const REST_SPEEDUP: f32 = 3.0;
 /// How often everyone's vitals are saved, in seconds, besides at logout.
 const SAVE_EVERY_SECS: f64 = 60.0;
 
@@ -140,8 +134,13 @@ impl Vitals {
     pub fn recover(&mut self, max: Maxima, secs: f32) {
         let (max_health, max_stamina) = (max.health as f32, max.stamina as f32);
         let secs = secs.max(0.0);
-        self.health = (self.health + max_health * secs / HEALTH_RECOVERY_SECS).min(max_health);
-        self.stamina = (self.stamina + max_stamina * secs / STAMINA_RECOVERY_SECS).min(max_stamina);
+        let r = crate::rules::rules();
+        let (health_secs, stamina_secs) = (
+            r.health_recovery_minutes * 60.0,
+            r.stamina_recovery_minutes * 60.0,
+        );
+        self.health = (self.health + max_health * secs / health_secs).min(max_health);
+        self.stamina = (self.stamina + max_stamina * secs / stamina_secs).min(max_stamina);
     }
 
     /// Keep within 0 and the maximums, as after a maximum goes down.
@@ -243,7 +242,7 @@ fn recover(
         after.clamp(max);
         let pace = match (fighting, resting) {
             (true, _) => 0.0,
-            (false, true) => REST_SPEEDUP,
+            (false, true) => crate::rules::rules().rest_speedup,
             (false, false) => 1.0,
         } * conditions.map_or(1.0, |c| c.recovery(&condition_defs) as f32);
         after.recover(max, secs * pace);

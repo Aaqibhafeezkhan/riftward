@@ -32,10 +32,6 @@ use crate::targeting::Keywords;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{ArmourDef, InRoom, Player, WeaponDef};
 
-/// The skill that helps avoid attacks.
-/// Stamina a riposte takes.
-const RIPOSTE_COST: f32 = 1.0;
-
 /// Everything combat needs to know about a fighter, player or mob.
 #[derive(QueryData)]
 #[query_data(mutable)]
@@ -1101,7 +1097,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let Some(counter) = counter.cloned() else {
             return Vec::new();
         };
-        if !self.pay(defender, RIPOSTE_COST) {
+        if !self.pay(defender, crate::rules::rules().riposte_stamina) {
             return Vec::new();
         }
         if let Some(text) = self

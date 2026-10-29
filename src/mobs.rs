@@ -28,9 +28,6 @@ use crate::world::{
     Door, DoorState, InRoom, ItemKey, MobDef, MobKey, RoomKey, SpawnKey, Spawned, Wander, ZoneDef,
 };
 
-/// The chance, in percent, that a mob uses a technique skill on its turn, unless its template says.
-const DEFAULT_TACTICS: u32 = 25;
-
 pub struct MobsPlugin;
 
 impl Plugin for MobsPlugin {
@@ -213,7 +210,7 @@ pub fn spawn_mob(
         vitals,
         skills,
         AutoAttack(def.attack.clone()),
-        Tactics(def.tactics.unwrap_or(DEFAULT_TACTICS)),
+        Tactics(def.tactics.unwrap_or(crate::rules::rules().mob_tactics)),
         Spells(def.spells.iter().cloned().collect()),
         // What it's born with, hidden in its lair or proof against blades, until something ends it.
         // And what it is: its own traits, and its race's.

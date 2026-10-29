@@ -27,8 +27,6 @@ use crate::world::InRoom;
 
 /// The skill that hides and sneaks.
 pub const STEALTH: &str = "stealth:basics";
-/// How much better a deliberate search is than a passing glance: Intuition times this.
-const SEARCH_BONUS: f64 = 2.0;
 
 pub struct StealthPlugin;
 
@@ -226,7 +224,7 @@ fn search(
     });
     let (intuition, luck) = sheets.get(actor.entity).map_or((1.0, 0), |a| {
         (
-            f64::from(a.get(Attribute::Intuition)) * SEARCH_BONUS,
+            f64::from(a.get(Attribute::Intuition)) * crate::rules::rules().search_bonus,
             a.get(Attribute::Luck),
         )
     });

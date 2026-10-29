@@ -39,6 +39,23 @@ pub struct Progression {
     pub practice_half_life_minutes: f64,
     /// Seconds apart uses must be out of a fight to count in full; closer, they count for less.
     pub practice_window_seconds: f64,
+    /// The gain chance of an untouched skill at level 0, before practice and difficulty.
+    pub base_gain_chance: f64,
+    /// The level at which the gain chance is half its first: it's ease / (ease + level) of it.
+    pub level_ease: f64,
+    /// The soft cap: a skill grows at full speed up to base + per level × character level...
+    pub soft_cap_base: u32,
+    pub soft_cap_per_level: u32,
+    /// ...and past it, its gain chance halves for every this many levels over.
+    pub soft_cap_halving: f64,
+    /// Real minutes before a skill can gain again after a gain at level 0, multiplied by the growth
+    /// for each level.
+    pub gain_cooldown_minutes: f64,
+    pub gain_cooldown_growth: f64,
+    /// The chance, per use of a skill, of discovering another in its tree, before Luck.
+    pub discovery_chance: f64,
+    /// The most a tough fight multiplies the chances of a gain or a discovery.
+    pub tough_fight_max_boost: f64,
     /// The Luck that doubles a roll: each point is 1 / `luck_scale` better (see `dice.rs`).
     pub luck_scale: f64,
     /// The most characters in a group, its leader among them.
@@ -337,11 +354,13 @@ impl Attributes {
     }
 
     pub fn health(&self) -> i32 {
-        8 + self.get(Attribute::Body) / 2
+        let r = crate::rules::rules();
+        r.base_vitals + self.get(Attribute::Body) / r.attribute_per_vital.max(1)
     }
 
     pub fn stamina(&self) -> i32 {
-        8 + self.get(Attribute::Willpower) / 2
+        let r = crate::rules::rules();
+        r.base_vitals + self.get(Attribute::Willpower) / r.attribute_per_vital.max(1)
     }
 
     pub fn initiative(&self) -> i32 {

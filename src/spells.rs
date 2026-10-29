@@ -46,8 +46,6 @@ use crate::world::ron_options;
 pub const SPELLS_PATH: &str = "spells";
 /// The extension spell book files use.
 const SPELL_EXTENSION: &str = "spells.ron";
-/// Drain is resisted against its stamina cost times this, as a fixed difficulty.
-const DRAIN_DIFFICULTY: f64 = 2.0;
 
 pub struct SpellsPlugin;
 
@@ -277,7 +275,7 @@ pub fn drain_resistance(spell: &SpellDef, attributes: &Attributes, defs: &SkillD
 
 /// The stamina a cast takes: half, rounded up, when the Drain is resisted.
 pub fn drain_paid(dice: &mut Dice, spell: &SpellDef, resistance: i32, luck: i32) -> u32 {
-    let difficulty = f64::from(spell.drain) * DRAIN_DIFFICULTY;
+    let difficulty = f64::from(spell.drain) * crate::rules::rules().drain_difficulty;
     let held = spell.drain == 0
         || dice
             .opposed(f64::from(resistance.max(1)), luck, difficulty, 0)

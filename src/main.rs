@@ -28,6 +28,7 @@ mod output;
 mod puppet;
 mod quests;
 mod requirements;
+mod rules;
 mod shops;
 mod skills;
 mod spawns;

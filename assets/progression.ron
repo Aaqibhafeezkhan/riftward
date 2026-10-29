@@ -24,6 +24,23 @@
     // second counts a third each), so repeating something teaches no faster than a fight's
     // rounds do. See docs/progression.md#pacing.
     practice_window_seconds: 3.0,
+    // How fast skills grow (docs/progression.md#the-gain-roll). A use's chance of a gain is
+    // difficulty × base_gain_chance × level_ease / (level_ease + level) × (0.2 + 0.8 × practice),
+    // halved for every soft_cap_halving levels past the soft cap, which is
+    // soft_cap_base + soft_cap_per_level × character level.
+    base_gain_chance: 0.25,
+    level_ease: 25.0,
+    soft_cap_base: 10,
+    soft_cap_per_level: 2,
+    soft_cap_halving: 5.0,
+    // After a gain, a skill can't gain again for this many real minutes, times the growth for each
+    // level it has: 5 minutes at level 0, about 9 hours at 49.
+    gain_cooldown_minutes: 5.0,
+    gain_cooldown_growth: 1.1,
+    // The chance, per use, of discovering another skill in its tree, before Luck.
+    discovery_chance: 0.001,
+    // The most a fight against the odds multiplies the chances of a gain or a discovery.
+    tough_fight_max_boost: 2.0,
     // The Luck that doubles a roll: at 100, each point of Luck makes a chance, an amount, a
     // contest rating and a pick from a table a percent better. Luck has no cap.
     // See docs/attributes.md#luck.

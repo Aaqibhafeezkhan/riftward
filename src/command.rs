@@ -427,10 +427,6 @@ pub fn dispatch(
     }
 }
 
-/// How long an action takes outside a fight, before the next can start: short, so eating or
-/// picking a lock doesn't feel slow. In a fight each takes a whole round.
-pub const ACTION_SECS: f64 = 1.0;
-
 /// Run each player's next queued action once they're free to act, outside a fight. In a fight,
 /// combat rounds take actions from the queue instead.
 fn run_queued_actions(
@@ -444,7 +440,8 @@ fn run_queued_actions(
             continue;
         }
         if let Some((id, invocation)) = queue.pop() {
-            queue.next_at = now + ACTION_SECS;
+            // Short, so eating or picking a lock doesn't feel slow; in a fight each takes a round.
+            queue.next_at = now + crate::rules::rules().action_seconds;
             commands.run_system_with(id, invocation);
         }
     }

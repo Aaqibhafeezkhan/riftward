@@ -1,6 +1,6 @@
 //! Combat: fights between players and mobs, made entirely of skills.
 //!
-//! Fights run in rounds, every `ROUND_SECS`. Each round, everyone fighting acts once, in order of
+//! Fights run in rounds, every `round_seconds` (`rules.ron`). Each round, everyone fighting acts once, in order of
 //! initiative (Reaction + Intuition, rolled): a player's next queued action (see `ActionQueue`), or
 //! otherwise their auto-attack, an attack skill they choose with `autoattack` (the basic attack,
 //! Brawling, until they do). Mobs fight with attack skills from their templates, by the same rules.
@@ -70,16 +70,8 @@ pub use states::{
 };
 pub use strike::{Blow, Fighters, Move, Round, name_of};
 
-/// Seconds in a combat round, and between a player's actions.
-pub const ROUND_SECS: f64 = 3.0;
 /// Everyone's most basic attack, used until they choose another.
 pub const BASIC_ATTACK: &str = "brawling:basics";
-/// Stamina it takes to flee.
-const FLEE_COST: f32 = 2.0;
-/// The chance of getting away, before Luck.
-const FLEE_CHANCE: f64 = 0.6;
-/// Seconds a prepared spell or opener can wait for its first turn.
-const READY_TIMEOUT_SECS: f64 = 5.0;
 
 pub struct CombatPlugin;
 
@@ -96,9 +88,9 @@ impl Plugin for CombatPlugin {
                 (
                     // Aggressive mobs pick their fights just before each round, and groups
                     // join their members'.
-                    (aggression, assist, combat_round)
-                        .chain()
-                        .run_if(on_timer(Duration::from_secs_f64(ROUND_SECS))),
+                    (aggression, assist, combat_round).chain().run_if(on_timer(
+                        Duration::from_secs_f64(crate::rules::rules().round_seconds),
+                    )),
                     // Then what conditions and skills do about what happened, out of the round.
                     (triggers::triggers, triggers::react).chain(),
                     // Those who heard a shout for help come running.
@@ -262,7 +254,7 @@ fn expire_readied(
     let now = time.elapsed_secs_f64();
     for (entity, readied, casting) in &ready {
         if let Some(readied) = readied
-            && now >= readied.ready_at + READY_TIMEOUT_SECS
+            && now >= readied.ready_at + crate::rules::rules().ready_timeout_seconds
         {
             let name = skills
                 .skills
@@ -273,7 +265,7 @@ fn expire_readied(
                 .push(Outgoing::line(entity, format!("You let your {name} fade.")));
         }
         if let Some(casting) = casting
-            && now >= casting.ready_at + READY_TIMEOUT_SECS
+            && now >= casting.ready_at + crate::rules::rules().ready_timeout_seconds
         {
             let name = spells
                 .0
@@ -709,9 +701,9 @@ fn combat_round(
             technique = queued_technique(queue, &fighter.skills, &defs);
             if technique.is_some() {
                 queue.pop();
-                queue.next_at = now + ROUND_SECS;
+                queue.next_at = now + crate::rules::rules().round_seconds;
             } else if let Some((id, invocation)) = queue.pop() {
-                queue.next_at = now + ROUND_SECS;
+                queue.next_at = now + crate::rules::rules().round_seconds;
                 if invocation.command == "cast" {
                     queued_cast = Some(invocation.args);
                 } else {
@@ -1673,13 +1665,14 @@ fn flee(
         reply("You're held fast and can't break away!")
     } else if let Some((_, mut vitals, attributes)) = practice.sheet(inv.entity) {
         let luck = attributes.get(Attribute::Luck);
-        if vitals.stamina < FLEE_COST {
+        let flee_cost = crate::rules::rules().flee_stamina;
+        if vitals.stamina < flee_cost {
             reply("You're too exhausted to run!")
         } else {
-            vitals.stamina -= FLEE_COST;
+            vitals.stamina -= flee_cost;
             practice.events.write(GameEvent::StaminaSpent {
                 who: inv.entity,
-                amount: FLEE_COST,
+                amount: flee_cost,
             });
             let exits: Vec<String> = view
                 .rooms
@@ -1702,7 +1695,7 @@ fn flee(
                 .unwrap_or_default();
             if exits.is_empty() {
                 reply("There's nowhere to run!")
-            } else if !practice.chance(luck, FLEE_CHANCE) {
+            } else if !practice.chance(luck, crate::rules::rules().flee_chance) {
                 let mut out = reply("You try to break away, but can't get clear!");
                 out.push(Outgoing::Room {
                     room: actor.room,

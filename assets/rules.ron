@@ -1,0 +1,32 @@
+// The game's rules in numbers. Read when the server starts, so restart it after a change.
+// See docs/architecture.md#data.
+(
+    // Seconds in a combat round: everyone fighting acts once in each, in order of initiative.
+    round_seconds: 3.0,
+    // Seconds an action (eating, picking a lock) takes outside a fight before the next can start;
+    // in a fight each takes a round.
+    action_seconds: 1.0,
+    // Seconds a prepared spell or opener (Backstab) can wait for its first turn before it fades.
+    ready_timeout_seconds: 5.0,
+    // Stamina it takes to flee, and the chance of getting away, before Luck.
+    flee_stamina: 2.0,
+    flee_chance: 0.6,
+    // Stamina a riposte costs.
+    riposte_stamina: 1.0,
+    // The chance, in percent, that a mob uses a combat skill on its turn instead of its
+    // auto-attack, unless its template sets its own `tactics`.
+    mob_tactics: 25,
+    // Most health is base_vitals + Body / attribute_per_vital, and most stamina the same with
+    // Willpower, before passive skills add to them: 8 + Body / 2.
+    base_vitals: 8,
+    attribute_per_vital: 2,
+    // Real minutes for health, and stamina, to recover from nothing to full out of a fight, and
+    // how much faster resting makes it.
+    health_recovery_minutes: 10.0,
+    stamina_recovery_minutes: 2.0,
+    rest_speedup: 3.0,
+    // Drain is resisted against a spell's stamina cost times this, as a fixed difficulty.
+    drain_difficulty: 2.0,
+    // How much better a deliberate `search` is than a passing glance: Intuition times this.
+    search_bonus: 2.0,
+)

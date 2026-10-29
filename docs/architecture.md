@@ -61,6 +61,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |
 | `requirements.rs` | The shared requirement language, what every `requires:` holds (`Stat`, `Race`, `Skill`, `GuildRank`, `Has`, `HasItem`, `InRoom`, `InZone`, `Fact`, `Flag`, `WorldFlag`, `Event`, `All`, `Any`, `Not`), and world events' and gated spawns' `when:`, tested against a `Subject`: someone if anyone, the facts, the zone, and what just happened. `Surroundings` gathers what a command knows of someone (room, what they carry, conditions, rank shown). Not status conditions, which are `combat`'s |
+| `rules.rs` | The game's rules in numbers from `assets/rules.ron` (round and action times, fleeing, vitals, Drain), read at startup |
 | `dice.rs` | The `Dice` resource, the only source of randomness |
 
 ### One tick
@@ -91,6 +92,7 @@ flowchart LR
 | Kind | Where | Reloads |
 | --- | --- | --- |
 | World | `assets/zones/<zone>.zone.ron`, one file per zone; builder commands write back to them | Live, on file change |
+| The game's rules in numbers | `assets/rules.ron` (`src/rules.rs`): round and action times, fleeing and riposte costs, mob tactics, how vitals are made and recover, Drain's difficulty, searching | At startup |
 | The world's givens | `assets/world.ron`: the start and respawn rooms, every character's starting items and skills, the corpse and how long corpses last, and the words for dying | At startup |
 | Accounts, characters, roles | `accounts`, `characters` tables | n/a |
 | Aliases | `character_aliases` table | n/a |
@@ -158,7 +160,7 @@ Started.
 Built (`src/combat/`). The round loop, initiative, damage, death and respawn: infrastructure with no actions of its own. Every action in combat is a skill, starting with the basic attack every character has (see [Skill kinds](skills.md#skill-kinds)). Every roll goes through `Dice`, and every contest follows the [ratio rule](attributes.md#the-ratio-rule).
 
 - **Rounds** every 3 seconds. Everyone fighting acts once, in order of initiative (Reaction + Intuition, plus a d6 with Luck).
-- **Actions and the queue.** Commands marked as actions (`kill`, `flee`, `use`, `pick`, `bash`, future skills) take a round in a fight and a second (`ACTION_SECS`) out of one: at most one at a time, and any typed sooner wait in the player's `ActionQueue` (up to 10; `stop` clears it). In a fight, a queued action takes the player's turn instead of their auto-attack. Everything else (looking, talking, inventory) happens at once.
+- **Actions and the queue.** Commands marked as actions (`kill`, `flee`, `use`, `pick`, `bash`, future skills) take a round in a fight and a second (`action_seconds` in `rules.ron`) out of one: at most one at a time, and any typed sooner wait in the player's `ActionQueue` (up to 10; `stop` clears it). In a fight, a queued action takes the player's turn instead of their auto-attack. Everything else (looking, talking, inventory) happens at once.
 - **Auto-attack.** With nothing queued, a fighter makes their auto-attack: an attack chosen with `autoattack <skill>` if they can make it, otherwise the weapon in their hand, otherwise Brawling, everyone's basic attack (`autoattack default` goes back to that).
 - **Weapons** carry their damage (a short sword 2–5) and name their skill (Swordplay). Trained, a fighter attacks with that skill, and their skill shows in how hard their blows land (below); untrained, they swing it with only their Brawling to guide them, still doing the weapon's damage, and learn nothing of the weapon by it. Weapon skills (Swordplay, Knife Fighting, Axe Fighting, Hammer Fighting, Staff Fighting) have no damage of their own; Brawling's fists do 1–3.
 - **Techniques and conditions:** a technique, used through the queue (`use cleave`), replaces the auto-attack for a turn; openers can start a fight. Techniques leave conditions (staggered, down, bleeding, held, guarding, exposed, or any other with `Apply`) that count down in the fighter's own turns; conditions are data, see [Conditions, as built](effects.md#conditions-as-built). Passive skills add to stats (Toughness, Endurance, Quickened Reflexes) and can counter a dodge (Riposte). See [Step 1, as built](trees.md#step-1-as-built). The combat code is in `src/combat/`: the round in `mod.rs`, attacks in `strike.rs`, conditions in `states.rs`.

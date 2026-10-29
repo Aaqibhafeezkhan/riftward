@@ -277,7 +277,7 @@ pub enum Lasting {
     Minutes(u32),
     Hours(u32),
     Turns(u32),
-    /// So many combat rounds' worth of real time (`ROUND_SECS` each), in a fight or out of one,
+    /// So many combat rounds' worth of real time (`round_seconds` in `rules.ron` each), in a fight or out of one,
     /// unlike `Turns`: a startled deer's two rounds before it bolts.
     Rounds(u32),
     /// Until something ends it: hiding lasts until the hider acts openly or is found.
@@ -290,7 +290,7 @@ impl Lasting {
         let minutes = match self {
             Lasting::Minutes(n) => n,
             Lasting::Hours(n) => n * 60,
-            Lasting::Rounds(n) => return f64::from(n) * crate::combat::ROUND_SECS,
+            Lasting::Rounds(n) => return f64::from(n) * crate::rules::rules().round_seconds,
             Lasting::Turns(_) | Lasting::Indefinitely => 0,
         };
         f64::from(minutes) * REAL_SECS_PER_GAME_DAY as f64 / (24.0 * 60.0)
