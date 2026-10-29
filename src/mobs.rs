@@ -25,7 +25,8 @@ use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{
-    Door, DoorState, InRoom, ItemKey, MobDef, MobKey, RoomKey, SpawnKey, Spawned, Wander, ZoneDef,
+    Aggression, Door, DoorState, InRoom, ItemKey, MobDef, MobKey, RoomKey, SpawnKey, Spawned,
+    Wander, ZoneDef,
 };
 
 pub struct MobsPlugin;
@@ -224,8 +225,15 @@ pub fn spawn_mob(
     if let Some(base) = base {
         entity.insert(base);
     }
-    if def.aggressive && !def.inanimate() {
-        entity.insert(Aggressive);
+    match def.aggressive {
+        _ if def.inanimate() => {}
+        Aggression::Never => {}
+        Aggression::Always => {
+            entity.insert(Aggressive::ANYWHERE);
+        }
+        Aggression::Home => {
+            entity.insert(Aggressive { home: Some(room) });
+        }
     }
     if def.inanimate() {
         entity.insert(Inanimate);

@@ -105,7 +105,7 @@ Each creature with what it does and which existing data does it. Numbers are fir
 | **Grey wolf** | Wolf Den, the deep wood (more at night **(gap: time-of-day spawns)**) | Hunts in packs of three; goes for game and travellers alike; **howls** for the pack when hurt | `aggressive`, `allies: ["wolf"]`, `pack: 3`, `tags: ["wolf"]`; *Howl*: Call for Help with the wolves' own words | A wolf pelt; fangs |
 | **The old she-wolf** | Wolf Den | The pack's leader: while she lives, every wolf in the Darkwood fights better | An `Aura` skill, as the Rat King's, affecting `forest:grey_wolf`; `AfterDeath(Days(7))` | A great grey pelt (rare) |
 | **Forest spider** | Spider Hollow | Waits in its web **(gap: mobs hiding and ambushing, #9)**; a bite that poisons | `aggressive`; passive *Venomous Bite*: reaction `Hits` → `Apply(poisoned)` | Spider silk; a venom sac |
-| **Brown bear** | Bear's Cave | Solitary and huge; ignores you on the paths, savage at home **(gap: territorial)** | `wander: Never`, high Body and Strength, natural armour (*Thick Hide*: `Armour` bonus), a maul | A bear pelt; claws, bear meat |
+| **Brown bear** | Bear's Cave | Solitary and huge; ignores you on the paths, savage at home (`aggressive: Home`, *built*) | `wander: Never`, high Body and Strength, natural armour (*Thick Hide*: `Armour` bonus), a maul | A bear pelt; claws, bear meat |
 | **Crows** | The road, the clearing | Atmosphere: they watch, and caw **(gap: ambient lines)** | A `here` line, `wander: Zone` | Nothing |
 | **The rift-touched stag** | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` trait (resist force, `Struck` → force damage, as thorns; [traits](effects.md#traits) *built*); `AfterDeath(Days(3))`; a Silver contract later | A vitae crystal, left where it dies (loot: what the rift left in it; rare, a crafting reagent later); its antlers to harvesting |
 
@@ -178,7 +178,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Consumables that apply conditions** (*built*) | Deathcap poisoning, later potions of strength | `effects: [...]` on a `consumable`, resolved on the eater | Small |
 | **Time-of-day spawns** (*built* 2026-10-29) | Night wolves, day deer | `when: TimeOfDay([Dusk, Night])`, a term in the shared [requirement language](facts.md#one-requirement-language) | Small |
 | **Ambient lines** | Crows, the hum of the scar, birdsong | `chatter: ["The crow caws.", ...]` on a mob or room, one now and then on the heartbeat | Small |
-| **Territorial aggression** | The bear | `aggressive` only in its spawn's room: `aggressive: Home` | Small |
+| **Territorial aggression** (*built* 2026-10-29) | The bear | `aggressive: Home`: only in the room it was made in | Small |
 | **Room conditions and reactions** (*built* 2026-10-29) | Thickets, webs, darkness, the Rift-Scar's hum | Rooms carry conditions as characters do; their reactions fire on `Enters` and `Every` for whoever is there | Medium |
 | **Mobs hiding and ambushing** | The spider in its web | Issue #9: mobs use Stealth out of a fight, and open from hiding | Medium |
 | **A bonus that counts allies present** | *Pack Hunter* | A passive bonus `per` ally in the fight, or a formula input `allies` | Small to medium |
@@ -206,7 +206,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 Planned 2026-10-29: the gaps left, each a small pull request with its issue, so the deep wood can then be built as data.
 
 1. **Spawns by time of day** ([#26](https://github.com/Foxworks-Studios/riftward/issues/26), *built* 2026-10-29): `TimeOfDay([Dusk, Night])` in the requirement language, for spawns' `when` and anywhere else. Mobs already out when it turns false stay until they're gone; they just aren't replaced.
-2. **Territorial aggression** ([#25](https://github.com/Foxworks-Studios/riftward/issues/25)): `aggressive: Always` or `Home` (only in its spawn's room: the bear), replacing `true` (decided 2026-10-29: no one plays yet, so zone files needn't keep loading unchanged).
+2. **Territorial aggression** ([#25](https://github.com/Foxworks-Studios/riftward/issues/25), *built* 2026-10-29): `aggressive: Always` or `Home` (only in its spawn's room: the bear), replacing `true` (decided 2026-10-29: no one plays yet, so zone files needn't keep loading unchanged).
 3. **Fleeing avoids what a mob avoids** ([#23](https://github.com/Foxworks-Studios/riftward/issues/23)): a deer fleeing a fight doesn't run into the wolf den while another way is open.
 4. **Ambient lines** ([#24](https://github.com/Foxworks-Studios/riftward/issues/24)): `chatter` on mobs and rooms, a line now and then to players there, its rate in `rules.ron`.
 5. **A pack bonus** ([#29](https://github.com/Foxworks-Studios/riftward/issues/29)): an `allies` formula input, how many of its allies fight beside it; *Pack Hunter* is then a trait applying a per-turn `Attack` bonus at that strength.

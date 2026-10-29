@@ -517,7 +517,7 @@
             tags: ["townsfolk"],
             // Goes for any stranger to the town, a rat or worse; never townsfolk or players.
             allies: ["townsfolk", "players"],
-            aggressive: true,
+            aggressive: Always,
             race: "human",
             keywords: ["town", "guard", "watchman"],
             here: "A town guard keeps watch, one hand resting on the hilt of a short sword.",
@@ -536,7 +536,7 @@
             tags: ["townsfolk"],
             // Goes for any stranger to the town, a rat or worse; never townsfolk or players.
             allies: ["townsfolk", "players"],
-            aggressive: true,
+            aggressive: Always,
             keywords: ["stray", "dog", "mutt"],
             here: "A scruffy stray dog noses through the gutter for scraps.",
             description: "A lean, rangy mutt of no particular breed, with one torn ear and a hopeful tail. Every market stall-keeper knows it, and most of them pretend not to feed it.",

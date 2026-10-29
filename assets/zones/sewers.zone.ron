@@ -80,7 +80,7 @@
             health: 3,
             loot: [[(None, 70), ("rat_tail", 30)]],
             coins: (0, 2),
-            aggressive: true,
+            aggressive: Always,
             // Rats keep out of the slimes' tunnels, or they'd drain into them and never break out.
             avoids: ["slime"],
             traits: ["night_eyes"],
@@ -122,7 +122,7 @@
             attack: "beast:bite",
             health: 5,
             // Strikes at people who come near; leaves the rats be.
-            aggressive: true,
+            aggressive: Always,
             traits: ["night_eyes", "venomous"],
         ),
         "ooze": (
@@ -137,7 +137,7 @@
             attack: "beast:acid_touch",
             health: 4,
             loot: [[(None, 50), ("slime_jelly", 50)]],
-            aggressive: true,
+            aggressive: Always,
             traits: ["night_eyes", "formless", "splitting"],
         ),
         "ooze_half": (
@@ -152,7 +152,7 @@
             attack: "beast:acid_touch",
             health: 2,
             loot: [[(None, 80), ("slime_jelly", 20)]],
-            aggressive: true,
+            aggressive: Always,
             traits: ["night_eyes", "formless"],
         ),
         "grey_slime": (
@@ -167,7 +167,7 @@
             attack: "beast:acid_touch",
             health: 12,
             loot: [[("slime_jelly", 100)], [(None, 70), ("slime_jelly", 30)]],
-            aggressive: true,
+            aggressive: Always,
             traits: ["night_eyes", "formless", "rubbery"],
         ),
         "slime_lord": (
@@ -187,7 +187,7 @@
             ],
             health: 40,
             tactics: 30,
-            aggressive: true,
+            aggressive: Always,
             boss: true,
             traits: ["night_eyes", "formless", "rubbery", "mending", "shedding"],
         ),
@@ -209,7 +209,7 @@
             health: 30,
             coins: (150, 400),
             tactics: 30,
-            aggressive: true,
+            aggressive: Always,
             boss: true,
             traits: ["night_eyes"],
         ),

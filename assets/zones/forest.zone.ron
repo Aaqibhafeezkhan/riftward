@@ -305,7 +305,7 @@
             attack: "beast:bite",
             health: 4,
             // Strikes at people who come near; leaves the beasts be.
-            aggressive: true,
+            aggressive: Always,
             traits: ["night_eyes", "venomous"],
         ),
         "red_deer": (
@@ -349,7 +349,7 @@
             skills: {"beast:gore": 3},
             attack: "beast:gore",
             health: 10,
-            aggressive: true,
+            aggressive: Always,
             harvest: {"hide": [(None, 50), ("boar_hide", 50)], "meat": [("boar_meat", 1)]},
             traits: ["night_eyes"],
         ),
@@ -365,7 +365,7 @@
             attack: "beast:gore",
             health: 18,
             tactics: 30,
-            aggressive: true,
+            aggressive: Always,
             traits: ["night_eyes", "furious"],
             harvest: {"hide": [("boar_hide", 1)], "meat": [("boar_meat", 70), ("boar_tusks", 30)]},
         ),
@@ -380,7 +380,7 @@
             health: 8,
             tactics: 30,
             // Leaps out at people who come near; leaves the beasts be.
-            aggressive: true,
+            aggressive: Always,
             harvest: {"meat": [("frog_legs", 1)]},
             traits: ["night_eyes"],
         ),

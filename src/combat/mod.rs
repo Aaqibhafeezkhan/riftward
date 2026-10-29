@@ -195,9 +195,16 @@ pub struct AutoAttack(pub Option<String>);
 #[derive(Component, Debug)]
 pub struct HideNumbers;
 
-/// A mob that attacks players who come near.
-#[derive(Component, Debug)]
-pub struct Aggressive;
+/// A mob that attacks those who come near: anywhere, or only in its home room (`Home`).
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct Aggressive {
+    pub home: Option<Entity>,
+}
+
+impl Aggressive {
+    /// Aggressive wherever it is.
+    pub const ANYWHERE: Aggressive = Aggressive { home: None };
+}
 
 /// How far a player is outmatched by the foe they're fighting (see [`strike::outmatched`]),
 /// updated each round. A tough fight makes their skills quicker to improve and reveal.
@@ -921,7 +928,7 @@ type Present<'w, 's> = Query<
 #[allow(clippy::too_many_arguments)]
 fn aggression(
     mut commands: Commands,
-    aggressors: Query<(Entity, &InRoom, &Mob, Option<&SpawnedBy>), Aggressors>,
+    aggressors: Query<(Entity, &InRoom, &Mob, Option<&SpawnedBy>, &Aggressive), Aggressors>,
     present: Present,
     characters: Characters,
     fights: Query<(Entity, &Fighting)>,
@@ -936,10 +943,14 @@ fn aggression(
     let mut present: Vec<_> = present.iter().collect();
     present.sort_by_key(|(entity, ..)| *entity);
     let mut out = Vec::new();
-    for (mob, in_room, me, spawned_by) in &aggressors {
+    for (mob, in_room, me, spawned_by, aggressive) in &aggressors {
         let Some(def) = templates.0.get(&me.key) else {
             continue;
         };
+        // Away from home, a territorial one lets you pass.
+        if aggressive.home.is_some_and(|home| home != in_room.0) {
+            continue;
+        }
         let pack = spawned_by
             .and_then(|s| spawns.0.get(&s.0))
             .and_then(|def| def.pack);
@@ -2804,7 +2815,7 @@ mod tests {
         let shaman = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
         let dog = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK, "beast:bite"]);
         as_player(&mut world, shaman);
-        world.entity_mut(dog).insert(Aggressive);
+        world.entity_mut(dog).insert(Aggressive::ANYWHERE);
         let calm = spell(
             "shamanic:beast_speech",
             Aim::Other,
@@ -2904,7 +2915,7 @@ mod tests {
     fn aggressive_mobs_ignore_players_they_havent_noticed() {
         let (mut world, room) = world();
         let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
-        world.entity_mut(rat).insert(Aggressive);
+        world.entity_mut(rat).insert(Aggressive::ANYWHERE);
         let player = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
         as_player(&mut world, player);
         world.entity_mut(player).insert(Keywords::from_name("Grok"));
@@ -2920,6 +2931,30 @@ mod tests {
         world.flush();
         assert_eq!(world.get::<Fighting>(rat).map(|f| f.0), Some(player));
         assert!(said(&world, player, "attacks you!"));
+    }
+
+    #[test]
+    fn a_territorial_mob_attacks_only_at_home() {
+        let (mut world, room) = world();
+        let cave = world.spawn_empty().id();
+        let bear = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world
+            .entity_mut(bear)
+            .insert(Aggressive { home: Some(cave) });
+        let player = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, player);
+        world.entity_mut(player).insert(Keywords::from_name("Grok"));
+        aggressive_template(&mut world, None);
+        // Met on the path, it lets them pass.
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        assert!(world.get::<Fighting>(bear).is_none(), "away from home");
+        // In its cave, it doesn't.
+        world.get_mut::<InRoom>(bear).unwrap().0 = cave;
+        world.get_mut::<InRoom>(player).unwrap().0 = cave;
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        assert_eq!(world.get::<Fighting>(bear).map(|f| f.0), Some(player));
     }
 
     #[test]
@@ -4042,7 +4077,7 @@ mod tests {
     /// Make every test mob's template (`test:mob`) aggressive, sparing `allies`.
     fn aggressive_template(world: &mut World, allies: Option<Vec<String>>) {
         let def = crate::world::MobDef {
-            aggressive: true,
+            aggressive: crate::world::Aggression::Always,
             allies,
             ..crate::world::MobDef::named("a brawler")
         };
@@ -4073,7 +4108,7 @@ mod tests {
         let (mut world, room) = world();
         aggressive_template(&mut world, Some(vec!["townsfolk".into(), "players".into()]));
         let guard = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
-        world.entity_mut(guard).insert(Aggressive);
+        world.entity_mut(guard).insert(Aggressive::ANYWHERE);
         let baker = other_mob(&mut world, room, "baker", &["townsfolk"]);
         let player = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
         as_player(&mut world, player);
@@ -4110,7 +4145,7 @@ mod tests {
                 let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
                 world
                     .entity_mut(rat)
-                    .insert((Aggressive, SpawnedBy(key.clone())));
+                    .insert((Aggressive::ANYWHERE, SpawnedBy(key.clone())));
                 rat
             })
             .collect();
@@ -4139,7 +4174,7 @@ mod tests {
         let (mut world, room) = world();
         aggressive_template(&mut world, None);
         let rat = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
-        world.entity_mut(rat).insert(Aggressive);
+        world.entity_mut(rat).insert(Aggressive::ANYWHERE);
         let dog = other_mob(&mut world, room, "dog", &[]);
         world.run_system_once(aggression).unwrap();
         world.flush();
@@ -4319,7 +4354,7 @@ mod tests {
         for who in [ada, rat, waiting] {
             world.get_mut::<Vitals>(who).unwrap().health = 10_000.0;
         }
-        world.entity_mut(waiting).insert(Aggressive);
+        world.entity_mut(waiting).insert(Aggressive::ANYWHERE);
         world.entity_mut(ada).insert(Fighting(rat));
         world.run_system_once(combat_round).unwrap();
         world.flush();
@@ -4420,7 +4455,7 @@ mod tests {
         }
         world
             .entity_mut(brawler)
-            .insert((Aggressive, Fighting(guard)));
+            .insert((Aggressive::ANYWHERE, Fighting(guard)));
         world.entity_mut(guard).insert(Fighting(brawler));
         world.entity_mut(ada).insert(Fighting(rat));
         world.run_system_once(combat_round).unwrap();

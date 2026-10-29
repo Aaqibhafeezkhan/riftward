@@ -124,7 +124,7 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     harvest: {"hide": [("rat_pelt", 1)]},    // cut from its corpse, by kind: Skinning, Butchering
     health: 3,                        // instead of 8 + Body / 2; Toughness still adds to it
     tactics: 25,                      // % chance a turn to use a combat skill instead (default 25)
-    aggressive: true,                 // attacks players in its room, with `kill`
+    aggressive: Always,               // attacks players in its room, with `kill`; `Home`: only in its own
     tags: ["vermin"],                 // what it is, for others' allies
     allies: ["vermin"],               // with allies, attacks anyone here who isn't one, mobs too
     avoids: ["slime"],                // never wanders into a room holding one
@@ -132,6 +132,8 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
     traits: ["skittish"],             // what it is, for good (assets/traits/)
 ),
 ```
+
+**A mob can be territorial,** `aggressive: Home` (*built* 2026-10-29, [#25](https://github.com/Foxworks-Studios/riftward/issues/25)): it attacks only in the room it was made in, its spawn's, and lets you pass anywhere else. The bear savage in its cave, harmless met on a path. `Always` attacks wherever it is; without `aggressive`, a mob only fights back.
 
 **A mob can avoid others,** `avoids: [...]` (*built*, 2026-10-27): by tag or template, as `allies` are. Wandering and crowding never take it into a room holding one; nothing else changes, so a rat that avoids slimes still goes for guards and players. It keeps rats from draining into the slimes' tunnels ([the sewers](riftwatch.md#the-sewers-ecology)), and will keep deer out of the wolf den. The zone test checks each name.
 
@@ -169,13 +171,13 @@ Noted 2026-10-27. Now and then, instead of an ordinary mob, something more monst
     name: "a town guard",
     tags: ["townsfolk"],
     allies: ["townsfolk", "players"],   // any stranger to the town, a rat or worse
-    aggressive: true,
+    aggressive: Always,
     ...
 ),
 "sewer_rat": (
     tags: ["vermin"],
     allies: ["vermin"],                 // players, and the guards and dogs of the town
-    aggressive: true,
+    aggressive: Always,
     ...
 ),
 ```

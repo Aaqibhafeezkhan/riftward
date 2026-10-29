@@ -794,9 +794,10 @@ pub struct MobDef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tactics: Option<u32>,
     /// Attacks who comes near, instead of only fighting back: players, or with `allies`, anyone
-    /// who isn't one.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub aggressive: bool,
+    /// who isn't one. `Always`, wherever it is, or only at `Home`, the room it was made in: the
+    /// bear in its cave, not on the path.
+    #[serde(default, skip_serializing_if = "Aggression::is_never")]
+    pub aggressive: Aggression,
     /// One of a kind, like the Rat King: what someone fighting it needs for a quest always
     /// drops (an ordinary mob's drops are left to chance; it's fine to have to hunt more).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -897,7 +898,7 @@ impl MobDef {
             equipment: Vec::new(),
             health: None,
             tactics: None,
-            aggressive: false,
+            aggressive: Aggression::Never,
             boss: false,
             tags: Vec::new(),
             allies: None,
@@ -1437,6 +1438,24 @@ pub struct Room {
     /// The sky can't be seen from here.
     pub indoors: bool,
     pub terrain: Terrain,
+}
+
+/// Whether a mob picks fights.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Aggression {
+    /// Only fights back.
+    #[default]
+    Never,
+    /// Attacks who comes near, wherever it is.
+    Always,
+    /// Attacks who comes near only at home, the room it was made in (its spawn's).
+    Home,
+}
+
+impl Aggression {
+    fn is_never(&self) -> bool {
+        *self == Aggression::Never
+    }
 }
 
 /// The conditions a room has, by key and strength (`RoomDef::conditions`): brambles, webs, a
