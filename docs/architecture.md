@@ -59,6 +59,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `trainers.rs` | Trainers: mobs whose template `teaches` skills; `learn` lists their lessons and takes one, and teaching a tradition's foundation Awakens a student |
 | `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, character and item conditions, real items, spawn timers, guild membership and record, quests taken, facts |
+| `ambient.rs` | Ambient lines: mobs' and rooms' `chatter`, one now and then to players in a room, on the heartbeat |
 | `aliases.rs` | Per-character aliases |
 | `attributes.rs` | Attributes, Karma costs, `score` and `raise` |
 | `characters.rs` | Races and backgrounds, loaded from `assets/races.ron` and `assets/backgrounds.ron`, and the creation menus |

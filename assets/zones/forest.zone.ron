@@ -266,6 +266,7 @@
             skills: {"beast:peck": 1},
             attack: "beast:peck",
             health: 2,
+            chatter: ["A crow caws from a high branch.", "A crow shifts on its perch and watches you with one black eye."],
         ),
         "rabbit": (
             name: "a rabbit",
@@ -601,6 +602,7 @@
                 "south": "brook_ford",
             },
             environment: Field,
+            chatter: ["Birdsong drifts across the meadow.", "The long grass hisses in the wind."],
         ),
         "high_meadow": (
             name: "High Meadow",

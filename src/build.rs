@@ -574,6 +574,7 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
                 indoors: false,
                 light: from_light,
                 conditions: Vec::new(),
+                chatter: Vec::new(),
                 terrain: Terrain::Paved,
                 environment: from_environment,
                 finds: None,

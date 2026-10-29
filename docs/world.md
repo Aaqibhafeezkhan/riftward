@@ -303,6 +303,19 @@ Separately from its footing, every room has an **environment**: what kind of pla
 - **Light:** a place's condition can light it whatever the hour (`Lights`: a rift's glow) or darken it past any light (`Darkens`: magical dark no torch pierces, though Heat Sight still sees). See [Light and darkness](#light-and-darkness).
 - **The zone test** checks each is a real condition. There's no builder command for them yet: they're set in the zone file. Effects that put a condition on a room (a fog, a ward on a doorway) come later.
 
+### Ambient lines
+
+*Built* (2026-10-29, [#24](https://github.com/Foxworks-Studios/riftward/issues/24)). A little life between fights: a mob template or a room can have `chatter`, lines one of which now and then reaches the players there.
+
+```ron
+"crow": (..., chatter: ["A crow caws from a high branch.", "A crow shifts on its perch and watches you with one black eye."]),
+"north_trunk": (..., chatter: ["Water drips somewhere in the dark."]),
+```
+
+- **A room with a player in it says one about every `chatter_minutes`** (`assets/rules.ron`, first guess 1.5), picked from its own lines and those of the living mobs there that aren't hidden: a hidden spider says nothing. Rolled through `Dice`, from elapsed time.
+- **Repeats are rare, not random** (decided 2026-10-29): each room remembers what it said. A line just said has the least weight (1), and every line passed over gains one each time another is said, up to 5, as a line never said has. So every line comes round, and the same one twice running is about one in eleven with three lines, not one in three.
+- **Today:** crows in the woods, the stray dog in the market, rats squeaking in the sewers, birdsong in the Deer Meadow, dripping in the North Trunk, hawkers in the market. The Rift-Scar's hum will be the scar's.
+
 ### Weather (planned)
 
 Weather, with the time system, will change the ground. A room can say what it becomes when wet, `when_wet: Mud`, so a dirt road turns to mud in the rain and is exhausting to trudge through until it dries. Rain would come and go by zone, announced to everyone outdoors like dawn and dusk, and dry out over some game hours afterwards.

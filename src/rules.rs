@@ -38,6 +38,8 @@ pub struct Rules {
     pub drain_difficulty: f64,
     /// How much better a deliberate search is than a passing glance: Intuition times this.
     pub search_bonus: f64,
+    /// About how many real minutes between ambient lines in a room with a player in it.
+    pub chatter_minutes: f64,
     /// Tracks rooms keep, for Tracking.
     pub tracks: TrackRules,
     /// Finds rooms hold, for Foraging and Herbalism.

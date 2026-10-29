@@ -261,6 +261,9 @@ pub struct RoomDef {
     /// every so often (`Every`). `[(condition: "brambles", strength: 1)]`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<BornWith>,
+    /// Lines the place says now and then to players there: birdsong, dripping water.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chatter: Vec<String>,
     /// What the ground is like, and so how tiring it is to walk into.
     #[serde(default, skip_serializing_if = "Terrain::is_paved")]
     pub terrain: Terrain,
@@ -836,6 +839,10 @@ pub struct MobDef {
     /// teaches, to students who meet their requirements.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub teaches: Vec<String>,
+    /// Lines it says now and then to players nearby, while alive and not hidden: "A crow caws
+    /// from a high branch." See `ambient.rs`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chatter: Vec<String>,
 }
 
 impl MobDef {
@@ -909,6 +916,7 @@ impl MobDef {
             shop: None,
             spells: Vec::new(),
             teaches: Vec::new(),
+            chatter: Vec::new(),
         }
     }
 
@@ -1302,6 +1310,7 @@ impl ZoneDef {
             indoors: false,
             light: None,
             conditions: Vec::new(),
+            chatter: Vec::new(),
             terrain: Terrain::Paved,
             environment: Environment::Town,
             finds: None,
@@ -1753,6 +1762,13 @@ fn sync_world(
                     Some(own) => commands.entity(entity).insert(own),
                     None => commands.entity(entity).remove::<RoomConditions>(),
                 };
+                if def.chatter.is_empty() {
+                    commands.entity(entity).remove::<crate::ambient::Chatter>();
+                } else {
+                    commands
+                        .entity(entity)
+                        .insert(crate::ambient::Chatter(def.chatter.clone()));
+                }
             }
             None => {
                 let entity = commands
@@ -1775,6 +1791,11 @@ fn sync_world(
                 }
                 if let Some(own) = RoomConditions::of(def) {
                     commands.entity(entity).insert(own);
+                }
+                if !def.chatter.is_empty() {
+                    commands
+                        .entity(entity)
+                        .insert(crate::ambient::Chatter(def.chatter.clone()));
                 }
                 index.0.insert(key.clone(), entity);
             }

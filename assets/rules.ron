@@ -29,6 +29,9 @@
     drain_difficulty: 2.0,
     // How much better a deliberate `search` is than a passing glance: Intuition times this.
     search_bonus: 2.0,
+    // About how many real minutes between ambient lines (`chatter` on mobs and rooms) in a room
+    // with a player in it: a crow cawing, water dripping. See docs/world.md#ambient-lines.
+    chatter_minutes: 1.5,
     // Tracks (docs/world.md#tracking): rooms remember who walked in or out for this many real
     // minutes, the most recent `most` of them. Reading one is Tracking against how hard its
     // ground is, a formula in survival.skill.ron; wading water holds none. Ages read as the

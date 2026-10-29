@@ -106,7 +106,7 @@ Each creature with what it does and which existing data does it. Numbers are fir
 | **The old she-wolf** | Wolf Den | The pack's leader: while she lives, every wolf in the Darkwood fights better | An `Aura` skill, as the Rat King's, affecting `forest:grey_wolf`; `AfterDeath(Days(7))` | A great grey pelt (rare) |
 | **Forest spider** | Spider Hollow | Waits in its web **(gap: mobs hiding and ambushing, #9)**; a bite that poisons | `aggressive`; passive *Venomous Bite*: reaction `Hits` → `Apply(poisoned)` | Spider silk; a venom sac |
 | **Brown bear** | Bear's Cave | Solitary and huge; ignores you on the paths, savage at home (`aggressive: Home`, *built*) | `wander: Never`, high Body and Strength, natural armour (*Thick Hide*: `Armour` bonus), a maul | A bear pelt; claws, bear meat |
-| **Crows** | The road, the clearing | Atmosphere: they watch, and caw **(gap: ambient lines)** | A `here` line, `wander: Zone` | Nothing |
+| **Crows** | The road, the clearing | Atmosphere: they watch, and caw (`chatter`, *built*) | A `here` line, `wander: Zone` | Nothing |
 | **The rift-touched stag** | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` trait (resist force, `Struck` → force damage, as thorns; [traits](effects.md#traits) *built*); `AfterDeath(Days(3))`; a Silver contract later | A vitae crystal, left where it dies (loot: what the rift left in it; rare, a crafting reagent later); its antlers to harvesting |
 
 **Food chain, from what's built:** wolves and boars are `aggressive` with allies of their own kind only, so they go for deer and rabbits as readily as players; deer and rabbits aren't aggressive, so they're prey. Without fleeing, prey just stands and dies, which is why fleeing is the first gap worth closing.
@@ -177,7 +177,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Mob conditions from the start, and traits** (*built* 2026-10-27) | The rift-touched stag, the grey slimes, the Slime Lord; any template that "is" something | What a mob *is* is a [trait](effects.md#traits): `traits: ["rift_touched"]`, kept through cures and death. What's merely happening to it from the start is a condition: `conditions: [(condition: "hidden", strength: 8)]`, so a mob born `hidden` lurks unseen until noticed, the start of [#9](https://github.com/Foxworks-Studios/riftward/issues/9)'s ambushers | Small |
 | **Consumables that apply conditions** (*built*) | Deathcap poisoning, later potions of strength | `effects: [...]` on a `consumable`, resolved on the eater | Small |
 | **Time-of-day spawns** (*built* 2026-10-29) | Night wolves, day deer | `when: TimeOfDay([Dusk, Night])`, a term in the shared [requirement language](facts.md#one-requirement-language) | Small |
-| **Ambient lines** | Crows, the hum of the scar, birdsong | `chatter: ["The crow caws.", ...]` on a mob or room, one now and then on the heartbeat | Small |
+| **Ambient lines** (*built* 2026-10-29) | Crows, the hum of the scar, birdsong | `chatter: ["The crow caws.", ...]` on a mob or room, one now and then on the heartbeat | Small |
 | **Territorial aggression** (*built* 2026-10-29) | The bear | `aggressive: Home`: only in the room it was made in | Small |
 | **Room conditions and reactions** (*built* 2026-10-29) | Thickets, webs, darkness, the Rift-Scar's hum | Rooms carry conditions as characters do; their reactions fire on `Enters` and `Every` for whoever is there | Medium |
 | **Mobs hiding and ambushing** | The spider in its web | Issue #9: mobs use Stealth out of a fight, and open from hiding | Medium |
@@ -198,7 +198,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 4. **Harvesting** (*built* 2026-10-29): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
 5. **Fleeing** (*built*), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
 6. **Mob starting conditions and traits** (*built*), for the rift-touched stag; **consumables with effects** (*built*) for deathcaps.
-7. **Time-of-day spawns** (*built* 2026-10-29) and **ambient lines** (code, small).
+7. **Time-of-day spawns** and **ambient lines** (*built* 2026-10-29).
 8. **Room conditions and reactions** (*built* 2026-10-29), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.
 
 ### The engine pieces, in order
@@ -208,7 +208,7 @@ Planned 2026-10-29: the gaps left, each a small pull request with its issue, so 
 1. **Spawns by time of day** ([#26](https://github.com/Foxworks-Studios/riftward/issues/26), *built* 2026-10-29): `TimeOfDay([Dusk, Night])` in the requirement language, for spawns' `when` and anywhere else. Mobs already out when it turns false stay until they're gone; they just aren't replaced.
 2. **Territorial aggression** ([#25](https://github.com/Foxworks-Studios/riftward/issues/25), *built* 2026-10-29): `aggressive: Always` or `Home` (only in its spawn's room: the bear), replacing `true` (decided 2026-10-29: no one plays yet, so zone files needn't keep loading unchanged).
 3. **Fleeing avoids what a mob avoids** ([#23](https://github.com/Foxworks-Studios/riftward/issues/23), *built* 2026-10-29): a deer fleeing a fight doesn't run into the wolf den while another way is open.
-4. **Ambient lines** ([#24](https://github.com/Foxworks-Studios/riftward/issues/24)): `chatter` on mobs and rooms, a line now and then to players there, its rate in `rules.ron`.
+4. **Ambient lines** ([#24](https://github.com/Foxworks-Studios/riftward/issues/24), *built* 2026-10-29): `chatter` on mobs and rooms, a line now and then to players there, its rate in `rules.ron`.
 5. **A pack bonus** ([#29](https://github.com/Foxworks-Studios/riftward/issues/29)): an `allies` formula input, how many of its allies fight beside it; *Pack Hunter* is then a trait applying a per-turn `Attack` bonus at that strength.
 6. **Mobs that hide and ambush** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), first half): a hidden aggressive mob strikes first from hiding, unavoidably, then is seen; out of a fight it hides again. The spider in its web.
 7. **A find with a consequence:** a `Finds` trigger, so a room's condition answers someone gathering there: the bee tree's angry bees.

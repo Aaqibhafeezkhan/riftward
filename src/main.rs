@@ -3,6 +3,7 @@
 //! Run with `cargo run`, then connect with `nc localhost 4000` (or any telnet/MUD client).
 
 mod aliases;
+mod ambient;
 mod attributes;
 mod build;
 mod characters;
@@ -122,6 +123,7 @@ fn add_game(app: &mut App, path: String, address: String) {
         trade::TradePlugin,
         crafting::CraftingPlugin,
         light::LightPlugin,
+        ambient::AmbientPlugin,
         puppet::PuppetPlugin,
         guild::GuildPlugin,
         quests::QuestsPlugin,

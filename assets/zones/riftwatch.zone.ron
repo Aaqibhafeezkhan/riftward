@@ -544,6 +544,7 @@
             skills: {"beast:bite": 3},
             attack: "beast:bite",
             health: 6,
+            chatter: ["The stray dog scratches behind one ear.", "The stray dog sniffs hopefully at your boots."],
         ),
         "contract_clerk": (
             name: "Marin Harrow",
@@ -919,6 +920,7 @@
                 "west": "guild_row",
                 "down": (to: "sewers:market_drain", door: "market_grate"),
             },
+            chatter: ["A hawker bawls the price of onions over the crowd.", "A cart rattles past, its driver shouting for room."],
         ),
         "stalls": (
             name: "Vendor Stalls",

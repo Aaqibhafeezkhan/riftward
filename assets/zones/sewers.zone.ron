@@ -84,6 +84,7 @@
             // Rats keep out of the slimes' tunnels, or they'd drain into them and never break out.
             avoids: ["slime"],
             traits: ["night_eyes"],
+            chatter: ["Something squeaks in the dark.", "Claws skitter over stone somewhere close."],
         ),
         "courier": (
             name: "a courier",
@@ -352,6 +353,7 @@
                 "up": (to: "riftwatch:north_gate", door: "riftwatch:gate_grate"),
             },
             environment: Sewer,
+            chatter: ["Water drips somewhere in the dark.", "A cold draught breathes up the tunnel."],
         ),
         "smugglers_nook": (
             name: "Smugglers' Nook",
