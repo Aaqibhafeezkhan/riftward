@@ -1,6 +1,6 @@
 # Quests and the Adventurers' Guild
 
-[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, the board can be read, and open quests taken, kept in the journal and in Marin's record, with kills counted, stages moving on, quests reported and paid, and claims that run out (2026-10-28: `src/quests.rs`, `assets/quests/`); groups on quests, perks and lodging are designed, not built.
+[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, the board can be read, and open quests taken, kept in the journal and in Marin's record, with kills counted, stages moving on, quests reported and paid, claims that run out, and groups doing them together (2026-10-28: `src/quests.rs`, `assets/quests/`); perks and lodging are designed, not built.
 
 Quests are data, written by builders and GMs, and tracked per character. Most of them come from the **Adventurers' Guild**, whose contracts raise a **guild rank** that is entirely separate from a character's power. A character can ignore quests completely, hunt monsters from the first day and grow just as strong; what they give up is the guild's trust, and the doors it opens.
 
@@ -335,12 +335,12 @@ The `sold` ending pays no merit and sets a flag the guild can learn of later (a 
 
 A group on a quest moves through it together, **as long as they're together:** what any of them does for it counts for every member of the [group](groups.md) who holds the same quest **and is in the same room** when it happens (decided 2026-10-28). A member off in town, or in another zone, gets nothing from what the others do meanwhile, as with a victory's [experience](groups.md#what-a-group-shares).
 
-- **Taking it:** accepting a quest while grouped offers it to every member in the room who may take it, each of whom can take it or not. A claimed contract is held by those who took it together, with one timer.
-- **Kills:** one kill counts once, for every holder in the room. Twenty rats killed by the group finish "Kill twenty rats" for each holder who was there for all twenty, not twenty each; a holder who arrived halfway has their share.
+- **Taking it:** accepting a quest while grouped offers it to every member in the room who may take it, each of whom can take it or not. A claimed contract is held by those who took it together, with one timer. (*Built*, 2026-10-28: "Ada offers to share Rats in the Drains with you: type 'accept' to take it on together." The offer stands two minutes; `accept` alone takes it, with the same checks as the board.)
+- **Kills:** one kill counts once, for every holder in the room. Twenty rats killed by the group finish "Kill twenty rats" for each holder who was there for all twenty, not twenty each; a holder who arrived halfway has their share. (*Built*: a kill by a holder counts for every holder in their group in the room where it died.)
 - **Finding and picking up:** when one member picks up the letter (`Obtain`), every holder in the room moves on, though the letter itself is in one member's pack. The same for `Reach`, `Examine`, `Search` and `Ask`: one of them doing it is all of them there doing it.
 - **Facts a quest sets:** the `quest.` and `char.` facts a stage or rule sets are set for every holder in the room: if the group sold the crystals to Talla, all of them standing there did.
 - **Choices:** the way taken is the way taken for every holder in the room; for a holder elsewhere, the choice is still to come.
-- **Handing over and reporting:** `Bring` items are handed over once, by whoever reports; reporting finishes the quest for every holder in the room with them who has done their part. Each earns its full merit, and the coin is split among them, as a [foe's coins](groups.md#what-a-group-shares) are. A claimed contract, once reported, is over for those who weren't there too, unpaid: the work's been done.
+- **Handing over and reporting:** `Bring` items are handed over once, by whoever reports; reporting finishes the quest for every holder in the room with them who has done their part. Each earns its full merit, and the coin is split among them, as a [foe's coins](groups.md#what-a-group-shares) are. A claimed contract, once reported, is over for those who weren't there too, unpaid: the work's been done. (*Built*: each holder paid also gets the quest's items and facts; the odd coins go to whoever reported; those who weren't there are told it's over, and nothing's owed them.)
 - **Leaving the group** keeps what's been done so far, and the quest goes on alone from there. Someone joining partway can take a quest the group holds and starts it fresh, except a claimed one, which only those who took it hold.
 - **Only those who hold it:** a member who didn't take the quest gets nothing from it, and their deeds don't move it.
 
@@ -435,7 +435,7 @@ In the smallest pull requests that each leave the game working, every one with i
 12. *Built.* **Rules and `Kill`:** objectives as rules over `quest.` facts, `Kill` by template and tag, progress in the journal, and moving from stage to stage. The killer's kills count; the rest of their group's come with step 15.
 13. *Built.* **`report` and rewards:** coin, merit and `Set`, paid to whoever the quest is reported to. *Rats in the Drains* can be done start to finish. Plus `Bring`, so it asks for the tails. Adds *Roaches in the Cellar*.
 14. *Built.* **Claimed quests:** `quest_claims`, off the board while held, deadlines run out and fail on their own (across restarts), `abandon`, and what failing costs.
-15. **Progress in a group:** offering to the group, one claim and timer, and the progress of every holder in the room moving together.
+15. *Built.* **Progress in a group:** offering to the group, one claim and timer, and the progress of every holder in the room moving together. Finding, reaching and the rest count the same way as their objectives arrive.
 16. **`report_to`, `Obtain`, and items given on taking a quest:** adds *Herbs for the Herbalist* and *Word to the Hunter*.
 17. **`Reach`, `Meet` and `posted_when`:** adds *The Ravine*, *The Rat King* and *What Feeds the Slimes*.
 18. **`why`,** for GMs, once there are rules to explain.

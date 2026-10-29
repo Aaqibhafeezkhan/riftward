@@ -44,6 +44,7 @@ impl Plugin for QuestsPlugin {
             .register_asset_loader(QuestLoader)
             .init_resource::<Quests>()
             .init_resource::<Claims>()
+            .init_resource::<Offers>()
             .add_systems(Startup, (load_quests, load_claims))
             .add_systems(Update, (sync_quests, count_kills))
             .add_systems(Update, expire_claims.run_if(crate::time::heartbeat()))
@@ -111,34 +112,52 @@ pub const HELD: &str = "held";
 pub const DONE: &str = "done";
 pub const FAILED: &str = "failed";
 pub const ABANDONED: &str = "abandoned";
+/// A claimed contract the rest of its holders reported while this one was elsewhere: the work's
+/// done, unpaid for them.
+pub const OVER: &str = "over";
 
-/// The claimed quests that are out: each held by one character until a time (unix seconds),
-/// off the board till then. They're the quests held with a deadline, so they come back from
+/// Quests offered to the rest of a group in the room by the member who took one: each of them
+/// can take it (`accept`) for a while, sharing its claim and time.
+#[derive(Resource, Default)]
+pub struct Offers(Vec<Offer>);
+
+struct Offer {
+    to: Entity,
+    quest: String,
+    at: i64,
+}
+
+/// How long an offer stands, in seconds.
+const OFFER_SECS: i64 = 120;
+
+/// The claimed quests that are out: each held by one character, or a group who took it together,
+/// until a time (unix seconds), off the board till then. They're the quests held with a deadline, so they come back from
 /// `character_quests` at startup and a restart neither frees a notice nor forgets one.
 #[derive(Resource, Default, Debug)]
 pub struct Claims(pub HashMap<String, Claim>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Claim {
-    pub character_id: i64,
+    /// Characters, by id.
+    pub holders: Vec<i64>,
     pub until: i64,
 }
 
 fn load_claims(db: Res<Database>, mut claims: ResMut<Claims>) {
     match db.claims() {
         Ok(rows) => {
-            claims.0 = rows
-                .into_iter()
-                .map(|(character_id, quest, until)| {
-                    (
-                        quest,
-                        Claim {
-                            character_id,
-                            until,
-                        },
-                    )
-                })
-                .collect();
+            claims.0.clear();
+            for (character_id, quest, until) in rows {
+                claims
+                    .0
+                    .entry(quest)
+                    .or_insert(Claim {
+                        holders: Vec::new(),
+                        until,
+                    })
+                    .holders
+                    .push(character_id);
+            }
         }
         Err(err) => error!("failed to load quest claims: {err}"),
     }
@@ -165,12 +184,12 @@ fn write_off(
     db: &Database,
     now: i64,
 ) -> Vec<String> {
-    if claims
-        .0
-        .get(&record.quest)
-        .is_some_and(|c| c.character_id == character_id)
-    {
-        claims.0.remove(&record.quest);
+    // Theirs no longer; the notice goes back up once no one holds it.
+    if let Some(claim) = claims.0.get_mut(&record.quest) {
+        claim.holders.retain(|id| *id != character_id);
+        if claim.holders.is_empty() {
+            claims.0.remove(&record.quest);
+        }
     }
     let quest_id = record.quest.clone();
     record.state = state.into();
@@ -216,8 +235,8 @@ fn write_off(
     }
 }
 
-/// Claims whose time is up fail: the holder is told if they're here, it's written off whether
-/// or not, and the notice goes back on the board.
+/// Claims whose time is up fail: each holder is told if they're here, it's written off for each
+/// whether or not, and the notice goes back on the board.
 fn expire_claims(
     mut claims: ResMut<Claims>,
     mut holders: Query<(Entity, &Player, &mut QuestLog, Option<&mut Membership>)>,
@@ -230,52 +249,51 @@ fn expire_claims(
         .0
         .iter()
         .filter(|(_, claim)| claim.until <= now)
-        .map(|(quest, claim)| (quest.clone(), *claim))
+        .map(|(quest, claim)| (quest.clone(), claim.clone()))
         .collect();
     for (quest_id, claim) in due {
         let quest = quests.0.get(&quest_id);
         let name = quest.map_or(quest_id.as_str(), |q| q.name.as_str());
-        let online = holders
-            .iter_mut()
-            .find(|(_, player, ..)| player.character_id == claim.character_id);
-        let offline = match online {
-            Some((entity, _, mut log, membership)) => {
-                let Some(record) = log.get(&quest_id).cloned() else {
-                    claims.0.remove(&quest_id);
+        for character_id in &claim.holders {
+            let online = holders
+                .iter_mut()
+                .find(|(_, player, ..)| player.character_id == *character_id);
+            let offline = match online {
+                Some((entity, _, mut log, membership)) => {
+                    let Some(record) = log.get(&quest_id).cloned() else {
+                        continue;
+                    };
+                    let mut lines = vec![format!(
+                        "\x1b[1;31mYour time for {name} has run out: it's failed, and the \
+                         notice is back on the board.\x1b[0m"
+                    )];
+                    lines.extend(write_off(
+                        quest,
+                        record,
+                        FAILED,
+                        "failed",
+                        *character_id,
+                        Some(&mut log),
+                        membership.map(|m| m.into_inner()),
+                        &mut claims,
+                        &db,
+                        now,
+                    ));
+                    outbox.0.push(Outgoing::line(entity, lines.join(" ")));
                     continue;
-                };
-                let mut lines = vec![format!(
-                    "\x1b[1;31mYour time for {name} has run out: it's failed, and the notice \
-                     is back on the board.\x1b[0m"
-                )];
-                lines.extend(write_off(
-                    quest,
-                    record,
-                    FAILED,
-                    "failed",
-                    claim.character_id,
-                    Some(&mut log),
-                    membership.map(|m| m.into_inner()),
-                    &mut claims,
-                    &db,
-                    now,
-                ));
-                outbox.0.push(Outgoing::line(entity, lines.join(" ")));
-                continue;
-            }
-            None => db
-                .character_quests(claim.character_id)
-                .ok()
-                .and_then(|records| records.into_iter().find(|r| r.quest == quest_id)),
-        };
-        match offline {
-            Some(record) if record.state == HELD => {
+                }
+                None => db
+                    .character_quests(*character_id)
+                    .ok()
+                    .and_then(|records| records.into_iter().find(|r| r.quest == quest_id)),
+            };
+            if let Some(record) = offline.filter(|r| r.state == HELD) {
                 write_off(
                     quest,
                     record,
                     FAILED,
                     "failed",
-                    claim.character_id,
+                    *character_id,
                     None,
                     None,
                     &mut claims,
@@ -283,14 +301,9 @@ fn expire_claims(
                     now,
                 );
             }
-            _ => {
-                claims.0.remove(&quest_id);
-            }
         }
-        info!(
-            "{name}, claimed by character {}, ran out",
-            claim.character_id
-        );
+        claims.0.remove(&quest_id);
+        info!("{name}, claimed by {:?}, ran out", claim.holders);
     }
 }
 
@@ -731,16 +744,17 @@ fn refusal(quest: &QuestDef, log: &QuestLog, now: i64) -> Option<String> {
 
 /// `accept <n>`: take notice `n` from the board here, in front of the guild's clerk, who writes
 /// a contract into the guild's record. A claimed quest comes off the board, theirs until its
-/// time is up.
+/// time is up. Taken in a group, it's offered to the others here; `accept` alone takes what
+/// another member offered, sharing their claim and its time.
 #[allow(clippy::too_many_arguments)]
 fn accept(
     In(inv): In<Invocation>,
-    players: Characters,
+    (players, groups): (Characters, crate::groups::Groups),
     rooms: RoomQuery,
     mobs: crate::mobs::MobQuery,
     (memberships, mut logs): (Query<&Membership>, Query<&mut QuestLog>),
     sheets: Query<(&Attributes, &Skills)>,
-    (quests, mut claims): (Res<Quests>, ResMut<Claims>),
+    (quests, mut claims, mut offers): (Res<Quests>, ResMut<Claims>, ResMut<Offers>),
     // What they are and carry for `requires`, and the facts to clear a quest taken afresh.
     mut both: ParamSet<(Surroundings, ResMut<Facts>)>,
     db: Res<Database>,
@@ -762,20 +776,36 @@ fn accept(
         &around.story,
     );
     let now = unix_now();
+    offers.0.retain(|offer| now - offer.at <= OFFER_SECS);
+    let offered = matches!(inv.args.trim(), "" | "offer")
+        .then(|| offers.0.iter().rev().find(|o| o.to == actor.entity))
+        .flatten()
+        .and_then(|offer| quests.0.get(&offer.quest));
     let reply = (|| {
-        if !quests.0.values().any(|q| q.board().as_ref() == Some(here)) {
-            return Err("There's no board here.".to_string());
+        let quest = match offered {
+            Some(quest) => quest,
+            None => {
+                if !quests.0.values().any(|q| q.board().as_ref() == Some(here)) {
+                    return Err("There's no board here.".to_string());
+                }
+                inv.args
+                    .trim()
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|n| notices.get(n.checked_sub(1)?))
+                    .ok_or_else(|| match inv.args.trim() {
+                        "" | "offer" => inv.usage_error(),
+                        n => format!("There's no notice {n} on the board."),
+                    })?
+            }
+        };
+        // Shared, a claim must still be out to be shared.
+        if offered.is_some()
+            && matches!(quest.availability, Availability::Claimed { .. })
+            && !claims.0.contains_key(&quest.id)
+        {
+            return Err(format!("No one holds {} now to share it.", quest.name));
         }
-        let quest = inv
-            .args
-            .trim()
-            .parse::<usize>()
-            .ok()
-            .and_then(|n| notices.get(n.checked_sub(1)?))
-            .ok_or_else(|| match inv.args.trim() {
-                "" => inv.usage_error(),
-                n => format!("There's no notice {n} on the board."),
-            })?;
         let clerk = crate::guild::clerk_in(actor.room, &mobs)
             .map(|(_, name)| crate::combat::the(&name))
             .ok_or("There's no one here to take it to.")?;
@@ -812,13 +842,15 @@ fn accept(
         }
         Ok((quest, clerk))
     })();
+    let mut told = Vec::new();
     let text = match reply {
         Err(text) => text,
         Ok((quest, clerk)) => {
-            // A claimed quest is theirs alone, until its time is up.
-            let due_at = match &quest.availability {
-                Availability::Claimed { lasts } => Some(now + lasts.secs()),
-                Availability::Open => None,
+            // A claimed quest is theirs alone (or their group's), until its time is up.
+            let due_at = match (&quest.availability, claims.0.get(&quest.id)) {
+                (Availability::Claimed { .. }, Some(claim)) => Some(claim.until),
+                (Availability::Claimed { lasts }, None) => Some(now + lasts.secs()),
+                (Availability::Open, _) => None,
             };
             let record = QuestRecord {
                 quest: quest.id.clone(),
@@ -829,13 +861,45 @@ fn accept(
                 finished_at: log_finished(logs.get(actor.entity).ok(), &quest.id),
             };
             if let Some(until) = due_at {
-                claims.0.insert(
-                    quest.id.clone(),
-                    Claim {
-                        character_id,
+                claims
+                    .0
+                    .entry(quest.id.clone())
+                    .or_insert(Claim {
+                        holders: Vec::new(),
                         until,
-                    },
-                );
+                    })
+                    .holders
+                    .push(character_id);
+            }
+            offers
+                .0
+                .retain(|o| !(o.to == actor.entity && o.quest == quest.id));
+            // Taken from the board in a group, it's offered to the rest of the group here who
+            // don't hold it already.
+            if offered.is_none() {
+                for mate in crate::groups::members(actor.entity, &groups) {
+                    let holds = logs
+                        .get(mate)
+                        .is_ok_and(|log| log.get(&quest.id).is_some_and(|r| r.state == HELD));
+                    let here = Actor::get(&players, mate)
+                        .is_some_and(|a| a.room == actor.room && a.character_id.is_some());
+                    if mate == actor.entity || holds || !here {
+                        continue;
+                    }
+                    offers.0.push(Offer {
+                        to: mate,
+                        quest: quest.id.clone(),
+                        at: now,
+                    });
+                    told.push(Outgoing::line(
+                        mate,
+                        format!(
+                            "{} offers to share {} with you: type 'accept' to take it on \
+                             together.",
+                            actor.name, quest.name
+                        ),
+                    ));
+                }
             }
             match logs.get_mut(actor.entity) {
                 Ok(mut log) => log.put(record, character_id, &db),
@@ -851,11 +915,9 @@ fn accept(
                         quest.id
                     );
                 }
-                let time = match &quest.availability {
-                    Availability::Claimed { lasts } => {
-                        format!(" You have {} to finish it.", lasts.period())
-                    }
-                    Availability::Open => String::new(),
+                let time = match due_at {
+                    Some(due) => format!(" You have {} to finish it.", time_left(due - now)),
+                    None => String::new(),
                 };
                 format!(
                     "{} writes {} into the guild's record against your name.{time} Type \
@@ -871,7 +933,8 @@ fn accept(
             }
         }
     };
-    deliver(vec![Outgoing::line(actor.entity, text)], &mut outbox);
+    told.insert(0, Outgoing::line(actor.entity, text));
+    deliver(told, &mut outbox);
 }
 
 /// When `quest` was last finished, kept over its being taken again, for `repeat`.
@@ -987,16 +1050,18 @@ fn stage_number(record: &QuestRecord) -> Option<usize> {
     record.stage.parse().ok().filter(|n| *n > 0)
 }
 
-/// Kills count for the quests their killer holds: each objective the dead mob answers on the
-/// stage they're on goes up by one, to what it asks; a stage whose objectives are all counted
-/// and done moves on to the next, and the last says it's time to report.
+/// Kills count for the quests their killer holds, for them and every member of their group in
+/// the room who holds the same quest: each objective the dead mob answers on the stage that
+/// holder is on goes up by one, to what it asks; a stage whose objectives are all counted and
+/// done moves on to the next, and the last says it's time to report.
 #[allow(clippy::too_many_arguments)]
 fn count_kills(
     mut events: MessageReader<GameEvent>,
-    mut logs: Query<(&mut QuestLog, &Player)>,
+    mut logs: Query<(&mut QuestLog, &Player, &crate::world::InRoom)>,
+    groups: crate::groups::Groups,
     quests: Res<Quests>,
     mut story: ResMut<Facts>,
-    (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
+    mobs: Res<MobTemplates>,
     db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -1007,98 +1072,135 @@ fn count_kills(
             mob: Some(mob),
             killer: Some(killer),
             name,
+            room,
             ..
         } = event
         else {
             continue;
         };
-        let Ok((mut log, player)) = logs.get_mut(*killer) else {
+        // A member who doesn't hold a quest doesn't move it.
+        let Ok((log, ..)) = logs.get(*killer) else {
             continue;
         };
-        let character_id = player.character_id;
+        let theirs: Vec<String> = log
+            .0
+            .iter()
+            .filter(|r| r.state == HELD)
+            .map(|r| r.quest.clone())
+            .collect();
+        let there: Vec<Entity> = crate::groups::members(*killer, &groups)
+            .into_iter()
+            .filter(|e| logs.get(*e).is_ok_and(|(.., at)| at.0 == *room))
+            .collect();
         let def = mobs.0.get(mob);
-        let held: Vec<QuestRecord> = log.0.iter().filter(|r| r.state == HELD).cloned().collect();
-        for mut record in held {
-            let Some(quest) = quests.0.get(&record.quest) else {
+        for quest_id in theirs {
+            let Some(quest) = quests.0.get(&quest_id) else {
                 continue;
             };
-            let Some(n) = stage_number(&record) else {
-                continue;
-            };
-            let Some(stage) = quest.stages.get(n - 1) else {
-                continue;
-            };
-            let owner = Owner::Quest(character_id, quest.id.clone());
-            let mut counted = false;
-            for objective in &stage.objectives {
-                let (Objective::Kill(which, need), Some(key)) =
-                    (objective, objective.key(n, quest.zone()))
-                else {
+            for holder in &there {
+                let Ok((mut log, player, _)) = logs.get_mut(*holder) else {
                     continue;
                 };
-                if !which.matches(mob, def, quest.zone()) {
+                let Some(record) = log.get(&quest_id).filter(|r| r.state == HELD).cloned() else {
                     continue;
-                }
-                let have = story.number(&owner, &key, now);
-                if have >= i64::from(*need) {
-                    continue;
-                }
-                let have = story.add(&owner, &key, 1, now, &db);
-                counted = true;
-                let done = if have >= i64::from(*need) {
-                    " Done."
-                } else {
-                    ""
                 };
-                out.push(Outgoing::line(
-                    *killer,
-                    format!(
-                        "\x1b[1;33m{}:\x1b[0m {} killed, {have} of {need}.{done}",
-                        quest.name,
-                        without_article(name)
-                    ),
-                ));
-            }
-            if !counted || !stage_done(stage, n, quest, &owner, &story, now) {
-                continue;
-            }
-            // All counted and done: on to the next stage, or back to report.
-            if let Some(next) = quest.stages.get(n) {
-                record.stage = (n + 1).to_string();
-                log.put(record, character_id, &db);
-                out.push(Outgoing::line(
-                    *killer,
-                    format!("\x1b[1;33m{}:\x1b[0m {}", quest.name, next.text),
-                ));
-            } else {
-                let lookup = Lookup {
-                    quests: &quests,
-                    story: &story,
-                    mobs: &mobs,
-                    items: &items,
+                let character_id = player.character_id;
+                let (lines, moved) = tally(
+                    &record,
+                    quest,
+                    character_id,
+                    (mob, def, name),
+                    &mut story,
+                    &mobs,
+                    &db,
                     now,
-                };
-                out.push(Outgoing::line(
-                    *killer,
-                    format!(
-                        "\x1b[1;33m{}:\x1b[0m that's all it asks. Report to {}.",
-                        quest.name,
-                        quest.reported_to(&lookup)
-                    ),
-                ));
+                );
+                if let Some(record) = moved {
+                    log.put(record, character_id, &db);
+                }
+                out.extend(lines.into_iter().map(|line| Outgoing::line(*holder, line)));
             }
         }
     }
     deliver(out, &mut outbox);
 }
 
+/// Count a kill of `mob` (its template, and its name) toward one holder's `record`: what to tell
+/// them, and the record moved on to the next stage if this finished the one they were on.
+#[allow(clippy::too_many_arguments)]
+fn tally(
+    record: &QuestRecord,
+    quest: &QuestDef,
+    character_id: i64,
+    (mob, def, name): (&MobKey, Option<&MobDef>, &str),
+    story: &mut Facts,
+    mobs: &MobTemplates,
+    db: &Database,
+    now: i64,
+) -> (Vec<String>, Option<QuestRecord>) {
+    let mut lines = Vec::new();
+    let Some(n) = stage_number(record) else {
+        return (lines, None);
+    };
+    let Some(stage) = quest.stages.get(n - 1) else {
+        return (lines, None);
+    };
+    let owner = Owner::Quest(character_id, quest.id.clone());
+    let mut counted = false;
+    for objective in &stage.objectives {
+        let (Objective::Kill(which, need), Some(key)) = (objective, objective.key(n, quest.zone()))
+        else {
+            continue;
+        };
+        if !which.matches(mob, def, quest.zone()) {
+            continue;
+        }
+        if story.number(&owner, &key, now) >= i64::from(*need) {
+            continue;
+        }
+        let have = story.add(&owner, &key, 1, now, db);
+        counted = true;
+        let done = if have >= i64::from(*need) {
+            " Done."
+        } else {
+            ""
+        };
+        lines.push(format!(
+            "\x1b[1;33m{}:\x1b[0m {} killed, {have} of {need}.{done}",
+            quest.name,
+            without_article(name)
+        ));
+    }
+    if !counted || !stage_done(stage, n, quest, &owner, story, now) {
+        return (lines, None);
+    }
+    // All counted and done: on to the next stage, or back to report.
+    match quest.stages.get(n) {
+        Some(next) => {
+            lines.push(format!("\x1b[1;33m{}:\x1b[0m {}", quest.name, next.text));
+            let mut record = record.clone();
+            record.stage = (n + 1).to_string();
+            (lines, Some(record))
+        }
+        None => {
+            lines.push(format!(
+                "\x1b[1;33m{}:\x1b[0m that's all it asks. Report to {}.",
+                quest.name,
+                quest.reported_to(mobs)
+            ));
+            (lines, None)
+        }
+    }
+}
+
 /// What's still wanted before `record` can be reported: Err with each thing missing, in the
-/// journal's words; or Ok with the items it takes from `carried`, `Bring`'s due.
+/// journal's words; or Ok with the items it takes from `carried`, `Bring`'s due. Without
+/// `carried` (a holder reported for, not reporting), what's to be brought isn't asked.
 fn readiness(
     quest: &QuestDef,
     record: &QuestRecord,
     character_id: i64,
-    carried: &[(Entity, ItemKey, Vec<String>)],
+    carried: Option<&[(Entity, ItemKey, Vec<String>)]>,
     lookup: &Lookup,
 ) -> Result<Vec<Entity>, Vec<String>> {
     let Some(n) = stage_number(record) else {
@@ -1122,7 +1224,11 @@ fn readiness(
                     missing.push(objective.progress(zone, have, lookup));
                 }
             }
+            // What's brought is brought once, by whoever reports: it isn't asked of the rest.
             Objective::Bring(which, need) => {
+                let Some(carried) = carried else {
+                    continue;
+                };
                 let found: Vec<Entity> = carried
                     .iter()
                     .filter(|(entity, key, tags)| {
@@ -1168,11 +1274,15 @@ struct Desk<'w, 's> {
     story: ResMut<'w, Facts>,
     db: Res<'w, Database>,
     outbox: ResMut<'w, Outbox>,
+    groups: crate::groups::Groups<'w, 's>,
 }
 
 /// `report [<quest>]`: report the quests you hold to whoever here they're for (a quest's
 /// `report_to`, or the guild's clerk). One that's done hands over what it asks to be brought and
-/// pays: coin, items, a contract's merit, and the facts it sets. One that isn't says what's left.
+/// pays: coin, items, a contract's merit, and the facts it sets. It's done too for everyone in
+/// your group here who holds it and has done their part: each is paid its items, merit and
+/// facts, and the coin is split. A claimed one is over, unpaid, for its holders who aren't here.
+/// One that isn't done says what's left.
 fn report(In(inv): In<Invocation>, mut d: Desk) {
     let Some(actor) = Actor::get(&d.players, inv.entity) else {
         return;
@@ -1221,8 +1331,8 @@ fn report(In(inv): In<Invocation>, mut d: Desk) {
     }
     let mut carried = crate::items::carried_items(actor.entity, &d.items, &d.item_templates);
     let mut held = crate::items::hands_full(actor.entity, &d.items);
-    for (mut record, to) in due {
-        let Some(quest) = d.quests.0.get(&record.quest) else {
+    for (record, to) in due {
+        let Some(quest) = d.quests.0.get(&record.quest).cloned() else {
             continue;
         };
         let lookup = Lookup {
@@ -1232,7 +1342,7 @@ fn report(In(inv): In<Invocation>, mut d: Desk) {
             items: &d.item_templates,
             now,
         };
-        let taken = match readiness(quest, &record, character_id, &carried, &lookup) {
+        let taken = match readiness(&quest, &record, character_id, Some(&carried), &lookup) {
             Ok(taken) => taken,
             Err(missing) => {
                 lines.push(format!(
@@ -1243,7 +1353,19 @@ fn report(In(inv): In<Invocation>, mut d: Desk) {
                 continue;
             }
         };
-        let quest = quest.clone();
+        // The rest of the group here who hold it and have done their part.
+        let mates: Vec<(Actor, QuestRecord)> = crate::groups::members(actor.entity, &d.groups)
+            .into_iter()
+            .filter(|e| *e != actor.entity)
+            .filter_map(|e| Actor::get(&d.players, e))
+            .filter(|mate| mate.room == actor.room)
+            .filter_map(|mate| {
+                let id = mate.character_id?;
+                let record = d.logs.get(mate.entity).ok()?.get(&quest.id)?.clone();
+                (record.state == HELD && readiness(&quest, &record, id, None, &lookup).is_ok())
+                    .then_some((mate, record))
+            })
+            .collect();
         let to = crate::items::capitalized(&to);
         lines.push(format!("You report to {to}: {} is done.", quest.name));
         out.push(Outgoing::Room {
@@ -1255,7 +1377,7 @@ fn report(In(inv): In<Invocation>, mut d: Desk) {
         // What it asked to be brought, handed over.
         let mut handed: Vec<(String, usize)> = Vec::new();
         for entity in &taken {
-            let Ok((_, item, _)) = d.items.get(*entity) else {
+            let Ok((_, item, location)) = d.items.get(*entity) else {
                 continue;
             };
             match handed.iter_mut().find(|(name, _)| *name == item.name) {
@@ -1263,8 +1385,7 @@ fn report(In(inv): In<Invocation>, mut d: Desk) {
                 None => handed.push((item.name.clone(), 1)),
             }
             // Out of their hands, it leaves one free for what they're given.
-            if matches!(d.items.get(*entity), Ok((_, _, ItemLocation::Held(who))) if *who == actor.entity)
-            {
+            if *location == ItemLocation::Held(actor.entity) {
                 held = held.saturating_sub(1);
             }
             crate::healing::used_up(&mut d.commands, &d.db, *entity, item);
@@ -1281,7 +1402,7 @@ fn report(In(inv): In<Invocation>, mut d: Desk) {
             lines.push(format!("You hand over {}.", shown.join(", ")));
         }
 
-        // What it pays.
+        // Paid: the coin split among them, the odd coins to whoever reported.
         let copper: u64 = quest
             .rewards
             .iter()
@@ -1290,74 +1411,146 @@ fn report(In(inv): In<Invocation>, mut d: Desk) {
                 _ => 0,
             })
             .sum();
-        if copper > 0
-            && let Ok(mut purse) = d.purses.get_mut(actor.entity)
-        {
-            purse.0 += copper;
-            purse.save(Some(character_id), &d.db);
-            lines.push(format!("You're paid {}.", money::coins(copper)));
-        }
-        for reward in &quest.rewards {
-            match reward {
-                Reward::Item(id) => {
-                    let given = crate::items::hand_new(
-                        &actor,
-                        ItemKey::parse(id, quest.zone()),
-                        &mut held,
-                        &mut d.commands,
-                        &d.item_templates,
-                        &d.rooms,
-                        &d.db,
-                    );
-                    lines.push(format!("You're given {given}."));
-                }
-                Reward::Set(key, value) => {
-                    let (owner, key) = match key.split_once('.') {
-                        Some(("char", rest)) => (Owner::Character(character_id), rest),
-                        Some(("world", rest)) => (Owner::World, rest),
-                        _ => continue,
-                    };
-                    d.story.set(&owner, key, value.clone(), None, &d.db);
-                }
-                Reward::Coin(_) => {}
-            }
-        }
-        if let Some(contract) = &quest.contract {
-            if let Ok(mut m) = d.memberships.get_mut(actor.entity)
-                && !m.expelled
-            {
-                m.contracts += 1;
-                let promoted = m.earn(contract.merit);
-                m.save(Some(character_id), &d.db);
-                lines.push(format!("You earn {} merit.", contract.merit));
-                lines.extend(promoted);
-            }
-            if let Err(err) =
-                d.db.add_guild_record(character_id, &quest.id, "completed", now)
-            {
-                error!(
-                    "failed to write {} into the guild's record: {err}",
-                    quest.id
-                );
-            }
+        let share = copper / (mates.len() as u64 + 1);
+        let odd = copper - share * (mates.len() as u64 + 1);
+        lines.extend(pay(
+            &mut d,
+            &actor,
+            record,
+            &quest,
+            share + odd,
+            &mut held,
+            now,
+        ));
+        for (mate, record) in mates {
+            let mut theirs = vec![format!(
+                "{} reports {} to {to}, for you too: it's done.",
+                actor.name, quest.name
+            )];
+            let mut hands = crate::items::hands_full(mate.entity, &d.items);
+            theirs.extend(pay(&mut d, &mate, record, &quest, share, &mut hands, now));
+            out.push(Outgoing::line(mate.entity, theirs.join("\r\n")));
         }
 
-        if d.claims
-            .0
-            .get(&record.quest)
-            .is_some_and(|c| c.character_id == character_id)
-        {
-            d.claims.0.remove(&record.quest);
-        }
-        record.state = DONE.into();
-        record.finished_at = Some(now);
-        record.due_at = None;
-        if let Ok(mut log) = d.logs.get_mut(actor.entity) {
-            log.put(record, character_id, &d.db);
+        // A claimed contract is over now, unpaid, for those who weren't here for it.
+        if let Some(claim) = d.claims.0.remove(&quest.id) {
+            for id in claim.holders {
+                let entity = d
+                    .players
+                    .iter()
+                    .find(|(_, p, ..)| p.is_some_and(|p| p.character_id == id))
+                    .map(|(e, ..)| e);
+                let record = match entity.and_then(|e| d.logs.get(e).ok()) {
+                    Some(log) => log.get(&quest.id).cloned(),
+                    None => {
+                        d.db.character_quests(id)
+                            .ok()
+                            .and_then(|rs| rs.into_iter().find(|r| r.quest == quest.id))
+                    }
+                };
+                let Some(mut record) = record.filter(|r| r.state == HELD) else {
+                    continue;
+                };
+                record.state = OVER.into();
+                record.due_at = None;
+                match entity.and_then(|e| d.logs.get_mut(e).ok()) {
+                    Some(mut log) => log.put(record, id, &d.db),
+                    None => {
+                        if let Err(err) = d.db.save_character_quest(id, &record) {
+                            error!("failed to save quest {} for {id}: {err}", quest.id);
+                        }
+                    }
+                }
+                if let Some(entity) = entity {
+                    out.push(Outgoing::line(
+                        entity,
+                        format!(
+                            "{} reported {} while you were away: it's over, and nothing's owed \
+                             you for it.",
+                            actor.name, quest.name
+                        ),
+                    ));
+                }
+            }
         }
     }
     out.insert(0, Outgoing::line(actor.entity, lines.join("\r\n")));
     deliver(out, &mut d.outbox);
+}
+
+/// Pay `who` for `quest`, done: `copper` of its coin, its items, a contract's merit (and a line
+/// in Marin's record), and the facts it sets; and mark their `record` done. What to tell them.
+fn pay(
+    d: &mut Desk,
+    who: &Actor,
+    mut record: QuestRecord,
+    quest: &QuestDef,
+    copper: u64,
+    held: &mut usize,
+    now: i64,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    let Some(character_id) = who.character_id else {
+        return lines;
+    };
+    if copper > 0
+        && let Ok(mut purse) = d.purses.get_mut(who.entity)
+    {
+        purse.0 += copper;
+        purse.save(Some(character_id), &d.db);
+        lines.push(format!("You're paid {}.", money::coins(copper)));
+    }
+    for reward in &quest.rewards {
+        match reward {
+            Reward::Item(id) => {
+                let given = crate::items::hand_new(
+                    who,
+                    ItemKey::parse(id, quest.zone()),
+                    held,
+                    &mut d.commands,
+                    &d.item_templates,
+                    &d.rooms,
+                    &d.db,
+                );
+                lines.push(format!("You're given {given}."));
+            }
+            Reward::Set(key, value) => {
+                let (owner, key) = match key.split_once('.') {
+                    Some(("char", rest)) => (Owner::Character(character_id), rest),
+                    Some(("world", rest)) => (Owner::World, rest),
+                    _ => continue,
+                };
+                d.story.set(&owner, key, value.clone(), None, &d.db);
+            }
+            Reward::Coin(_) => {}
+        }
+    }
+    if let Some(contract) = &quest.contract {
+        if let Ok(mut m) = d.memberships.get_mut(who.entity)
+            && !m.expelled
+        {
+            m.contracts += 1;
+            let promoted = m.earn(contract.merit);
+            m.save(Some(character_id), &d.db);
+            lines.push(format!("You earn {} merit.", contract.merit));
+            lines.extend(promoted);
+        }
+        if let Err(err) =
+            d.db.add_guild_record(character_id, &quest.id, "completed", now)
+        {
+            error!(
+                "failed to write {} into the guild's record: {err}",
+                quest.id
+            );
+        }
+    }
+    record.state = DONE.into();
+    record.finished_at = Some(now);
+    record.due_at = None;
+    if let Ok(mut log) = d.logs.get_mut(who.entity) {
+        log.put(record, character_id, &d.db);
+    }
+    lines
 }
 
 /// Whether every objective on stage `n` is counted as it happens, and done.
@@ -1387,14 +1580,12 @@ impl QuestDef {
 
 impl QuestDef {
     /// Who it's reported to, by name: its `report_to`, or the guild's clerk.
-    fn reported_to(&self, lookup: &Lookup) -> String {
+    fn reported_to(&self, mobs: &MobTemplates) -> String {
         let key = match &self.report_to {
             Some(mob) => MobKey::parse(mob, self.zone()),
             None => MobKey::parse(&guild().clerk, ""),
         };
-        lookup
-            .mobs
-            .0
+        mobs.0
             .get(&key)
             .map_or_else(|| key.to_string(), |def| crate::combat::the(&def.name))
     }
@@ -1700,7 +1891,7 @@ mod tests {
         claims.0.insert(
             "riftwatch:rats".into(),
             Claim {
-                character_id: 1,
+                holders: vec![1],
                 until: 100,
             },
         );
@@ -1766,21 +1957,21 @@ mod tests {
             (
                 "riftwatch:rats".into(),
                 Claim {
-                    character_id: ada,
+                    holders: vec![ada],
                     until: now - 1,
                 },
             ),
             (
                 "riftwatch:roaches".into(),
                 Claim {
-                    character_id: bob,
+                    holders: vec![bob],
                     until: now - 1,
                 },
             ),
             (
                 "riftwatch:king".into(),
                 Claim {
-                    character_id: ada,
+                    holders: vec![ada],
                     until: now + 3600,
                 },
             ),
@@ -1965,6 +2156,102 @@ mod tests {
     }
 
     #[test]
+    fn a_kill_counts_for_every_holder_in_the_group_who_is_there() {
+        use crate::groups::InGroup;
+        use bevy::ecs::system::RunSystemOnce;
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let mut world = World::new();
+        world.init_resource::<Facts>();
+        world.init_resource::<Outbox>();
+        world.init_resource::<Messages<GameEvent>>();
+        let rat = MobKey::parse("riftwatch:rat", "");
+        world.insert_resource(MobTemplates(HashMap::from([(
+            rat.clone(),
+            MobDef::named("a rat"),
+        )])));
+        world.insert_resource(Quests(HashMap::from([("riftwatch:rats".into(), rats())])));
+        let (cellar, street) = (world.spawn_empty().id(), world.spawn_empty().id());
+        let mut ids = Vec::new();
+        let mut spawn = |world: &mut World, name: &str, room: Entity, holds: bool| {
+            let id = world
+                .resource::<Database>()
+                .create_character(account.id, name)
+                .unwrap()
+                .id;
+            ids.push(id);
+            let log = match holds {
+                true => vec![QuestRecord {
+                    quest: "riftwatch:rats".into(),
+                    state: HELD.into(),
+                    stage: "1".into(),
+                    taken_at: 0,
+                    due_at: None,
+                    finished_at: None,
+                }],
+                false => Vec::new(),
+            };
+            world
+                .spawn((
+                    crate::world::InRoom(room),
+                    Player {
+                        name: name.into(),
+                        character_id: id,
+                        account: "ada".into(),
+                        role: crate::db::Role::Player,
+                        race: "human".into(),
+                        background: String::new(),
+                        description: String::new(),
+                    },
+                    QuestLog(log),
+                ))
+                .id()
+        };
+        world.insert_resource(db);
+        let ada = spawn(&mut world, "Ada", cellar, true);
+        let bob = spawn(&mut world, "Bob", cellar, true);
+        spawn(&mut world, "Cara", cellar, true);
+        let dan = spawn(&mut world, "Dan", street, true);
+        let eve = spawn(&mut world, "Eve", cellar, false);
+        // Ada leads Bob, Dan and Eve; Cara is on her own.
+        for (n, who) in [ada, bob, dan, eve].into_iter().enumerate() {
+            world.entity_mut(who).insert(InGroup {
+                leader: ada,
+                joined: n as u64,
+            });
+        }
+        let kill = |world: &mut World, killer: Entity| {
+            world.write_message(GameEvent::Died {
+                who: cellar,
+                name: "a rat".into(),
+                room: cellar,
+                mob: Some(rat.clone()),
+                killer: Some(killer),
+            });
+            world.run_system_once(count_kills).unwrap();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+        };
+        let count = |world: &World, id: i64| {
+            world.resource::<Facts>().number(
+                &Owner::Quest(id, "riftwatch:rats".into()),
+                "1.kill.riftwatch:rat",
+                0,
+            )
+        };
+        kill(&mut world, eve);
+        assert_eq!(
+            count(&world, ids[0]),
+            0,
+            "Eve doesn't hold it, so her kill moves nothing"
+        );
+        kill(&mut world, bob);
+        assert_eq!(count(&world, ids[0]), 1, "Bob's kill is Ada's too");
+        assert_eq!(count(&world, ids[1]), 1);
+        assert_eq!(count(&world, ids[2]), 0, "Cara isn't in their group");
+        assert_eq!(count(&world, ids[3]), 0, "Dan isn't there");
+    }
+
+    #[test]
     fn kills_count_stage_by_stage() {
         use bevy::ecs::system::RunSystemOnce;
         let db = crate::db::Database::open(":memory:").unwrap();
@@ -2000,8 +2287,10 @@ mod tests {
             ..rats()
         };
         world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
+        let room = world.spawn_empty().id();
         let ada = world
             .spawn((
+                crate::world::InRoom(room),
                 Player {
                     name: "Ada".into(),
                     character_id: id,
@@ -2023,7 +2312,6 @@ mod tests {
             .id();
         let stranger = world.spawn_empty().id();
         let kill = |world: &mut World, mob: &MobKey, killer: Entity| {
-            let room = world.spawn_empty().id();
             world.write_message(GameEvent::Died {
                 who: room,
                 name: "a rat".into(),
@@ -2128,7 +2416,7 @@ mod tests {
                 items: &items,
                 now: 0,
             };
-            readiness(&quest, record, id, carried, &lookup)
+            readiness(&quest, record, id, Some(carried), &lookup)
         };
         assert_eq!(
             ready(&record("1"), &story, &carried),
