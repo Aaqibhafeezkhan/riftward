@@ -98,6 +98,10 @@ pub struct Choice {
     /// Where it leads; without one, to reporting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<Next>,
+    /// Who this way is reported to, if not whoever the quest is: selling to the fence rather
+    /// than returning to the guild.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report_to: Option<String>,
 }
 
 /// Where a stage leads, once done.
@@ -192,6 +196,11 @@ pub enum Action {
     Clear(String),
     /// A mob says something to them: `Say("contract_clerk", "Mind the culvert.")`.
     Say(String, String),
+    /// A mob comes into the world for the quest, in a room: `Spawn("courier",
+    /// "sewers:stalls_culvert")`. Anyone can see and fight it; it counts only for the holders
+    /// it came for (`Kill(Quest("courier"))`), and it's cleared away once none of them holds the
+    /// quest. One already there for the quest is shared, not doubled.
+    Spawn(String, String),
 }
 
 impl Action {
@@ -223,12 +232,14 @@ pub enum Objective {
     Ask(String, String),
 }
 
-/// Which mobs: a template, or any with a tag.
+/// Which mobs: a template, any with a tag, or the one a quest spawned (`Quest("courier")`, by
+/// the template it was spawned from).
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MobMatch {
     Mob(String),
     Tag(String),
+    Quest(String),
 }
 
 #[allow(dead_code)]
@@ -400,6 +411,13 @@ impl QuestDef {
         let Posted::Board(room) = &self.posted;
         names.rooms.push(full(room));
         names.mobs.extend(self.report_to.as_deref().map(full));
+        names.mobs.extend(
+            self.stages
+                .iter()
+                .flat_map(|s| &s.choices)
+                .filter_map(|c| c.report_to.as_deref())
+                .map(full),
+        );
         names.items.extend(self.gives.iter().map(|id| full(id)));
         names
             .items
@@ -420,7 +438,9 @@ impl QuestDef {
             );
         for objective in self.stages.iter().flat_map(|s| s.all_objectives()) {
             match objective {
-                Objective::Kill(MobMatch::Mob(mob), _) => names.mobs.push(full(mob)),
+                Objective::Kill(MobMatch::Mob(mob) | MobMatch::Quest(mob), _) => {
+                    names.mobs.push(full(mob))
+                }
                 Objective::Bring(ItemMatch::Item(item), _)
                 | Objective::Obtain(ItemMatch::Item(item), _) => names.items.push(full(item)),
                 Objective::Reach(room) => names.rooms.push(full(room)),
@@ -444,6 +464,10 @@ impl QuestDef {
             match action {
                 Action::Give(item) | Action::Take(item) => names.items.push(full(item)),
                 Action::Say(mob, _) => names.mobs.push(full(mob)),
+                Action::Spawn(mob, room) => {
+                    names.mobs.push(full(mob));
+                    names.rooms.push(full(room));
+                }
                 Action::Set(..) | Action::Add(..) | Action::Clear(_) => {}
             }
         }
@@ -463,22 +487,55 @@ impl QuestDef {
 impl QuestDef {
     /// Who it's reported to, by name: its `report_to`, or the guild's clerk.
     pub(super) fn reported_to(&self, mobs: &MobTemplates) -> String {
-        let key = match &self.report_to {
+        self.named(&self.report_key(None), mobs)
+    }
+
+    /// A mob's name, by template: "Marin Harrow", "the hunter".
+    pub(super) fn named(&self, key: &MobKey, mobs: &MobTemplates) -> String {
+        mobs.0
+            .get(key)
+            .map_or_else(|| key.to_string(), |def| crate::combat::the(&def.name))
+    }
+
+    /// Whom it's reported to, the way `choice` if one was taken that says (`report_to` on the
+    /// way), or else the quest's `report_to`, or else the guild's clerk.
+    pub(super) fn report_key(&self, choice: Option<&Choice>) -> MobKey {
+        match choice
+            .and_then(|c| c.report_to.as_ref())
+            .or(self.report_to.as_ref())
+        {
             Some(mob) => MobKey::parse(mob, self.zone()),
             None => MobKey::parse(&guild().clerk, ""),
+        }
+    }
+
+    /// Everyone `place` (a holder's stage) could be reported to: the quest's reporter, or for a
+    /// stage offering choices, each open way's.
+    pub(super) fn report_keys(&self, place: &str, chosen: i64) -> Vec<MobKey> {
+        let Some((_, stage)) = self.stage_at(place) else {
+            return vec![self.report_key(None)];
         };
-        mobs.0
-            .get(&key)
-            .map_or_else(|| key.to_string(), |def| crate::combat::the(&def.name))
+        if stage.choices.is_empty() {
+            return vec![self.report_key(None)];
+        }
+        stage
+            .choices
+            .iter()
+            .enumerate()
+            .filter(|(c, _)| chosen == 0 || chosen == *c as i64 + 1)
+            .map(|(_, choice)| self.report_key(Some(choice)))
+            .collect()
     }
 }
 
 impl MobMatch {
-    /// Whether a mob of template `key` (`def`) is one of these, for a quest in `zone`.
+    /// Whether a mob of template `key` (`def`) is one of these, for a quest in `zone`. A quest's
+    /// own mob is matched by who it came for, not by its template alone (`Deed::counts_for`).
     pub(super) fn matches(&self, key: &MobKey, def: Option<&MobDef>, zone: &str) -> bool {
         match self {
             MobMatch::Mob(id) => MobKey::parse(id, zone) == *key,
             MobMatch::Tag(tag) => def.is_some_and(|def| def.tags.contains(tag)),
+            MobMatch::Quest(_) => false,
         }
     }
 
@@ -487,6 +544,7 @@ impl MobMatch {
         match self {
             MobMatch::Mob(id) => MobKey::parse(id, zone).to_string(),
             MobMatch::Tag(tag) => format!("tag.{tag}"),
+            MobMatch::Quest(id) => format!("quest.{}", MobKey::parse(id, zone)),
         }
     }
 }
@@ -630,7 +688,7 @@ impl Objective {
     /// What it's after, as the journal names it: "sewer rat", "any vermin".
     pub(super) fn what(&self, zone: &str, lookup: &Lookup) -> String {
         match self {
-            Objective::Kill(MobMatch::Mob(id), _) => lookup
+            Objective::Kill(MobMatch::Mob(id) | MobMatch::Quest(id), _) => lookup
                 .mobs
                 .0
                 .get(&MobKey::parse(id, zone))

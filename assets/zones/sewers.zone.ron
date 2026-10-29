@@ -84,6 +84,17 @@
             // Rats keep out of the slimes' tunnels, or they'd drain into them and never break out.
             avoids: ["slime"],
         ),
+        "courier": (
+            name: "a courier",
+            race: "human",
+            keywords: ["courier", "smuggler", "wiry"],
+            here: "A wiry courier crouches at the mouth of the culvert, a satchel hugged to their chest.",
+            description: "Thin and quick, in clothes the colour of sewer stone, with a hood pulled close and a short blade within easy reach. The satchel they carry is held as if it matters more than they do. They watch the way back up to the stalls, not you, until you come close.",
+            attributes: {Agility: 6, Reaction: 5, Strength: 3},
+            skills: {"knives:basics": 12, "athletics:dodge": 10},
+            attack: "knives:basics",
+            coins: (20, 60),
+        ),
         "giant_cockroach": (
             name: "a giant cockroach",
             tags: ["vermin"],

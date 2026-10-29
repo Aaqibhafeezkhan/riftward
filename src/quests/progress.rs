@@ -4,8 +4,9 @@
 use bevy::prelude::*;
 
 use super::actions::{Holder, Stagehand};
-use super::def::{Lead, Objective, QuestDef, Quests, chose_key};
+use super::def::{Lead, MobMatch, Objective, QuestDef, Quests, chose_key};
 use super::journal::{HELD, QuestLog};
+use super::spawned::QuestMobs;
 use crate::db::{Database, QuestRecord};
 use crate::events::GameEvent;
 use crate::facts::{Facts, Owner, Value};
@@ -20,6 +21,8 @@ use crate::world::{InRoom, ItemKey, MobDef, MobKey, Player, Room, RoomKey, witho
 #[derive(Clone, Copy)]
 pub(super) enum Deed<'a> {
     Killed {
+        /// The one killed, for a quest's own mob.
+        who: Entity,
         mob: &'a MobKey,
         def: Option<&'a MobDef>,
         name: &'a str,
@@ -41,9 +44,21 @@ pub(super) enum Deed<'a> {
 }
 
 impl Deed<'_> {
-    /// Whether `objective`, in a quest of `zone`, counts it.
-    fn counts_for(&self, objective: &Objective, zone: &str) -> bool {
+    /// Whether `objective`, in `quest`, counts it for the holder with id `holder`: a quest's own
+    /// mob only for those it came for.
+    fn counts_for(
+        &self,
+        objective: &Objective,
+        quest: &QuestDef,
+        holder: i64,
+        quest_mobs: &QuestMobs,
+    ) -> bool {
+        let zone = quest.zone();
         match (self, objective) {
+            (Deed::Killed { who, mob, .. }, Objective::Kill(MobMatch::Quest(id), _)) => {
+                MobKey::parse(id, zone) == **mob
+                    && quest_mobs.came_for(*who, &quest.id, mob, holder)
+            }
             (Deed::Killed { mob, def, .. }, Objective::Kill(which, _)) => {
                 which.matches(mob, *def, zone)
             }
@@ -96,6 +111,7 @@ pub(super) fn count_progress(
     for event in events.read() {
         let (doer, deed) = match event {
             GameEvent::Died {
+                who,
                 mob: Some(mob),
                 killer: Some(killer),
                 name,
@@ -103,6 +119,7 @@ pub(super) fn count_progress(
             } => (
                 *killer,
                 Deed::Killed {
+                    who: *who,
                     mob,
                     def: mobs.0.get(mob),
                     name,
@@ -181,7 +198,7 @@ pub(super) fn count_progress(
                     holder.character_id,
                     deed,
                     &mut hand.story,
-                    &hand.db,
+                    (&hand.db, &hand.quest_mobs),
                     now,
                 );
                 // All counted and done: it ends, and on to the next stage, or back to report.
@@ -196,11 +213,15 @@ pub(super) fn count_progress(
                             log.put(record, holder.character_id, &hand.db);
                             lines.extend(hand.act(&stage.on_begin, quest, holder));
                         }
-                        Lead::Report(_) => lines.push(format!(
-                            "\x1b[1;33m{}:\x1b[0m that's all it asks. Report to {}.",
-                            quest.name,
-                            quest.reported_to(&mobs)
-                        )),
+                        Lead::Report(_) => {
+                            // To whoever the way taken is reported to.
+                            let choice = way.and_then(|c| quest.stages[i].choices.get(c - 1));
+                            let to = quest.named(&quest.report_key(choice), &mobs);
+                            lines.push(format!(
+                                "\x1b[1;33m{}:\x1b[0m that's all it asks. Report to {to}.",
+                                quest.name
+                            ))
+                        }
                     }
                 }
                 out.extend(lines.into_iter().map(|line| Outgoing::line(*entity, line)));
@@ -219,7 +240,7 @@ fn tally(
     character_id: i64,
     deed: Deed,
     story: &mut Facts,
-    db: &Database,
+    (db, quest_mobs): (&Database, &QuestMobs),
     now: i64,
 ) -> (Vec<String>, Option<(usize, Option<usize>)>) {
     let mut lines = Vec::new();
@@ -237,7 +258,7 @@ fn tally(
             let Some(key) = objective.key(at, quest.zone()) else {
                 continue;
             };
-            if !deed.counts_for(objective, quest.zone()) {
+            if !deed.counts_for(objective, quest, character_id, quest_mobs) {
                 continue;
             }
             let need = i64::from(objective.count());
@@ -290,6 +311,15 @@ fn tally(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What stage actions need, besides what each test sets up.
+    fn stagehand(world: &mut World) {
+        world.init_resource::<QuestMobs>();
+        world.init_resource::<crate::world::RoomIndex>();
+        world.init_resource::<crate::skills::SkillDefs>();
+        world.init_resource::<crate::characters::Races>();
+        world.insert_resource(crate::dice::Dice::seeded(1));
+    }
     use crate::items::ItemTemplates;
     use crate::quests::def::{MobMatch, Next, Stage};
     use crate::quests::testing::rats;
@@ -305,6 +335,7 @@ mod tests {
         world.init_resource::<Facts>();
         world.init_resource::<Outbox>();
         world.init_resource::<Messages<GameEvent>>();
+        stagehand(&mut world);
         world.init_resource::<ItemTemplates>();
         let rat = MobKey::parse("riftwatch:rat", "");
         world.insert_resource(MobTemplates(HashMap::from([(
@@ -404,6 +435,7 @@ mod tests {
         world.init_resource::<Facts>();
         world.init_resource::<Outbox>();
         world.init_resource::<Messages<GameEvent>>();
+        stagehand(&mut world);
         world.init_resource::<MobTemplates>();
         let (letter, knife) = (
             ItemKey::parse("riftwatch:letter", ""),
@@ -532,6 +564,7 @@ mod tests {
         world.init_resource::<Facts>();
         world.init_resource::<Outbox>();
         world.init_resource::<Messages<GameEvent>>();
+        stagehand(&mut world);
         let letter = ItemKey::parse("riftwatch:letter", "");
         world.insert_resource(ItemTemplates(HashMap::from([(
             letter.clone(),
@@ -666,6 +699,7 @@ mod tests {
         world.init_resource::<Facts>();
         world.init_resource::<Outbox>();
         world.init_resource::<Messages<GameEvent>>();
+        stagehand(&mut world);
         world.init_resource::<ItemTemplates>();
         let (rat, roach) = (
             MobKey::parse("riftwatch:rat", ""),
@@ -686,11 +720,13 @@ mod tests {
                             text: "Rats, then.".into(),
                             objectives: kill("rat"),
                             next: Some(Next::Way(Way::End("rats".into()))),
+                            report_to: None,
                         },
                         Choice {
                             text: "Roaches, then.".into(),
                             objectives: kill("roach"),
                             next: Some(Next::Stage("more".into())),
+                            report_to: None,
                         },
                     ],
                     ..Default::default()
@@ -793,6 +829,102 @@ mod tests {
     }
 
     #[test]
+    fn a_quest_mob_counts_only_for_those_it_came_for() {
+        use crate::quests::spawned::QuestMob;
+        use bevy::ecs::system::RunSystemOnce;
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let mut world = World::new();
+        world.insert_resource(db);
+        world.init_resource::<Facts>();
+        world.init_resource::<Outbox>();
+        world.init_resource::<Messages<GameEvent>>();
+        stagehand(&mut world);
+        world.init_resource::<ItemTemplates>();
+        let courier = MobKey::parse("sewers:courier", "");
+        world.insert_resource(MobTemplates(HashMap::from([(
+            courier.clone(),
+            MobDef::named("a courier"),
+        )])));
+        let quest = QuestDef {
+            stages: vec![Stage {
+                text: "Find the courier.".into(),
+                objectives: vec![Objective::Kill(MobMatch::Quest("sewers:courier".into()), 1)],
+                ..Default::default()
+            }],
+            ..rats()
+        };
+        world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
+        let room = world.spawn_empty().id();
+        let holder = |world: &mut World, name: &str| {
+            let id = world
+                .resource::<Database>()
+                .create_character(account.id, name)
+                .unwrap()
+                .id;
+            let e = world
+                .spawn((
+                    InRoom(room),
+                    Player {
+                        name: name.into(),
+                        character_id: id,
+                        account: "ada".into(),
+                        role: crate::db::Role::Player,
+                        race: "human".into(),
+                        background: String::new(),
+                        description: String::new(),
+                    },
+                    QuestLog(vec![QuestRecord {
+                        quest: "riftwatch:rats".into(),
+                        state: HELD.into(),
+                        stage: "1".into(),
+                        taken_at: 0,
+                        due_at: None,
+                        finished_at: None,
+                    }]),
+                ))
+                .id();
+            (e, id)
+        };
+        let (ada, ada_id) = holder(&mut world, "Ada");
+        let (bob, bob_id) = holder(&mut world, "Bob");
+        // Ada's courier, and an ordinary one.
+        let (hers, ordinary) = (world.spawn_empty().id(), world.spawn_empty().id());
+        world.resource_mut::<QuestMobs>().0.insert(
+            hers,
+            QuestMob {
+                quest: "riftwatch:rats".into(),
+                mob: courier.clone(),
+                holders: vec![ada_id],
+            },
+        );
+        let kill = |world: &mut World, who: Entity, killer: Entity| {
+            world.write_message(GameEvent::Died {
+                who,
+                name: "a courier".into(),
+                room,
+                mob: Some(courier.clone()),
+                killer: Some(killer),
+            });
+            world.run_system_once(count_progress).unwrap();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+        };
+        let count = |world: &World, id: i64| {
+            world.resource::<Facts>().number(
+                &Owner::Quest(id, "riftwatch:rats".into()),
+                "1.kill.quest.sewers:courier",
+                0,
+            )
+        };
+        kill(&mut world, ordinary, ada);
+        assert_eq!(count(&world, ada_id), 0, "any courier won't do");
+        kill(&mut world, hers, bob);
+        assert_eq!(count(&world, bob_id), 0, "it didn't come for Bob");
+        kill(&mut world, hers, ada);
+        assert_eq!(count(&world, ada_id), 1, "hers");
+    }
+
+    #[test]
     fn kills_count_stage_by_stage() {
         use bevy::ecs::system::RunSystemOnce;
         let db = crate::db::Database::open(":memory:").unwrap();
@@ -803,6 +935,7 @@ mod tests {
         world.init_resource::<Facts>();
         world.init_resource::<Outbox>();
         world.init_resource::<Messages<GameEvent>>();
+        stagehand(&mut world);
         world.init_resource::<ItemTemplates>();
         let (rat, roach) = (
             MobKey::parse("riftwatch:rat", ""),

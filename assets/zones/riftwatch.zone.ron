@@ -372,6 +372,13 @@
             description: "A sheet of parchment, rolled tight and tied with string.",
             tags: ["scroll"],
         ),
+        "stolen_crystals": (
+            name: "a pouch of vitae crystals",
+            keywords: ["pouch", "crystals", "vitae"],
+            description: "A soft leather pouch, heavy for its size. Inside, three vitae crystals the length of a finger give off a faint, steady warmth. A scrap of the guild's ledger seal is still stuck to one.",
+            bulk: Negligible,
+            tags: ["valuable"],
+        ),
         "guild_letter": (
             name: "a sealed letter",
             keywords: ["letter", "sealed"],

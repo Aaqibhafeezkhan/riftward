@@ -1,0 +1,50 @@
+// Crystals Gone Missing: an investigation, a quest mob, and a choice with two endings.
+(
+    name: "Crystals Gone Missing",
+    summary: "Vitae crystals are leaving the guild's stores, and Marin wants to know how.",
+    description: "Vitae crystals are going missing from the guild's stores, somewhere between the cellar and the ledger. Marin Harrow wants to know how, and wants them back. Ask around, quietly.",
+    posted: Board("contract_hall"),
+    contract: Some((rank: "copper", merit: 30)),
+    availability: Claimed(for: Days(3)),
+    repeat: Once,
+    stages: [
+        (
+            id: "start",
+            journal: "Marin Harrow says crystals are going missing between the cellar and the ledger. Ask her about the crystals.",
+            objectives: [Ask("contract_clerk", "crystals")],
+            topics: {
+                "contract_clerk": [("crystals", "Marin Harrow lowers her voice. \"Three this week. Nobody comes down to the cellar but us, and the rats. Ask in the back alley: anything stolen in this town passes through there.\"")],
+            },
+            next: "alley",
+        ),
+        (
+            id: "alley",
+            journal: "Someone in the back alley may know where stolen crystals go.",
+            objectives: [Ask("hooded_figure", "crystals")],
+            topics: {
+                "hooded_figure": [("crystals", "The hooded figure's hands go still. \"They come up the culvert under the stalls, from the sewers. A courier. Don't tell Marin I said so.\"")],
+            },
+            on_end: [Spawn("sewers:courier", "sewers:stalls_culvert")],
+            next: "courier",
+        ),
+        (
+            id: "courier",
+            journal: "A courier brings the crystals up the culvert under the stalls. Find them.",
+            objectives: [Kill(Quest("sewers:courier"), 1)],
+            on_end: [Give("stolen_crystals")],
+            next: "choice",
+        ),
+        (
+            id: "choice",
+            journal: "You have the stolen crystals. Marin wants them back; the hooded figure in the alley would pay well for them.",
+            choices: [
+                (text: "Return them to Marin.", objectives: [Bring(Item("stolen_crystals"), 1)], next: End("returned")),
+                (text: "Sell them in the back alley.", objectives: [Bring(Item("stolen_crystals"), 1)], next: End("sold"), report_to: Some("hooded_figure")),
+            ],
+        ),
+    ],
+    endings: {
+        "returned": (journal: "You returned the crystals to the guild.", rewards: [Coin(300), Merit(30)]),
+        "sold": (journal: "You sold the guild's crystals in the back alley.", rewards: [Coin(900), Set("char.sold_out_the_guild", true)]),
+    },
+)

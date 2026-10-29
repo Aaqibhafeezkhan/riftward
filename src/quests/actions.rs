@@ -5,12 +5,13 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use super::def::{Action, QuestDef};
+use super::spawned::{QuestMob, QuestMobs};
 use crate::db::Database;
 use crate::facts::{Facts, Owner};
 use crate::items::{ItemQuery, ItemTemplates, Recipient};
 use crate::mobs::MobTemplates;
 use crate::output::RoomQuery;
-use crate::world::{ItemKey, MobKey};
+use crate::world::{ItemKey, MobKey, RoomKey};
 
 /// What stage actions read and change.
 #[derive(SystemParam)]
@@ -22,6 +23,13 @@ pub(super) struct Stagehand<'w, 's> {
     pub(super) rooms: RoomQuery<'w, 's>,
     pub(super) story: ResMut<'w, Facts>,
     pub(super) db: Res<'w, Database>,
+    /// For a quest's mobs: where they go, and how they're made.
+    pub(super) quest_mobs: ResMut<'w, QuestMobs>,
+    index: Res<'w, crate::world::RoomIndex>,
+    places: Query<'w, 's, &'static crate::world::InRoom>,
+    skill_defs: Res<'w, crate::skills::SkillDefs>,
+    races: Res<'w, crate::characters::Races>,
+    dice: ResMut<'w, crate::dice::Dice>,
 }
 
 /// One holder a stage begins or ends for: a player, by their saved id.
@@ -99,6 +107,40 @@ impl Stagehand<'_, '_> {
                 Action::Clear(key) => {
                     if let Some((owner, key)) = whose(key, quest, holder) {
                         self.story.clear(&owner, key, &self.db);
+                    }
+                }
+                Action::Spawn(mob, room) => {
+                    let key = MobKey::parse(mob, zone);
+                    let Some(&room) = self.index.0.get(&RoomKey::parse(room, zone)) else {
+                        warn!("{}: no room {room} to spawn {key} in", quest.id);
+                        continue;
+                    };
+                    // One already there for the quest is theirs too.
+                    if let Some(there) = self.quest_mobs.here(&quest.id, &key, room, &self.places) {
+                        let q = self.quest_mobs.0.get_mut(&there);
+                        if let Some(q) = q.filter(|q| !q.holders.contains(&holder.character_id)) {
+                            q.holders.push(holder.character_id);
+                        }
+                        continue;
+                    }
+                    if let Some(entity) = crate::mobs::spawn_mob(
+                        &mut self.commands,
+                        &self.mob_templates,
+                        &self.item_templates,
+                        &self.skill_defs,
+                        &key,
+                        room,
+                        &self.races,
+                        &mut self.dice,
+                    ) {
+                        self.quest_mobs.0.insert(
+                            entity,
+                            QuestMob {
+                                quest: quest.id.clone(),
+                                mob: key,
+                                holders: vec![holder.character_id],
+                            },
+                        );
                     }
                 }
                 Action::Say(mob, text) => {

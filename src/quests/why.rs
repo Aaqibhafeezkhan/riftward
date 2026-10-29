@@ -214,7 +214,11 @@ fn explain(
                         Lead::Report(Some(end)) => format!("ends {end}"),
                         Lead::Report(None) => "leads to reporting".into(),
                     };
-                    lines.push(format!("  Way {c} ({state}, {leads}): {}", choice.text));
+                    let to = quest.named(&quest.report_key(Some(choice)), lookup.mobs);
+                    lines.push(format!(
+                        "  Way {c} ({state}, {leads}, reported to {to}): {}",
+                        choice.text
+                    ));
                     let (shown, done) = show(&choice.objectives, &format!("{place}.{c}"), 2);
                     lines.extend(shown);
                     if state != "closed" && own && done && matches!(lead, Lead::Report(_)) {

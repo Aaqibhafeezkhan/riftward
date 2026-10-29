@@ -12,7 +12,7 @@ use crate::attributes::Attributes;
 use crate::command::Invocation;
 use crate::db::QuestRecord;
 use crate::facts::Owner;
-use crate::guild::{Membership, guild};
+use crate::guild::Membership;
 use crate::items::ItemLocation;
 use crate::money;
 use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
@@ -34,7 +34,7 @@ pub(super) struct Ready {
 /// reporting), what's to be brought isn't asked. A stage offering choices is ready when its own
 /// objectives and one way's are done: the way already taken, or the first done.
 fn readiness(
-    quest: &QuestDef,
+    (quest, to): (&QuestDef, Option<&MobKey>),
     record: &QuestRecord,
     character_id: i64,
     carried: Option<&[(Entity, ItemKey, Vec<String>)]>,
@@ -65,6 +65,10 @@ fn readiness(
     let mut ways = Vec::new();
     for (c, choice) in stage.choices.iter().enumerate().map(|(c, ch)| (c + 1, ch)) {
         if chosen != 0 && chosen != c as i64 {
+            continue;
+        }
+        // A way reported to someone else isn't taken here.
+        if to.is_some_and(|to| quest.report_key(Some(choice)) != *to) {
             continue;
         }
         // A way that leads on to a stage is taken as it's done, not on reporting.
@@ -226,19 +230,23 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
         return;
     };
     // The quests held that are reported to someone here, with whom.
-    let due: Vec<(QuestRecord, String)> = log
+    let due: Vec<(QuestRecord, String, MobKey)> = log
         .0
         .iter()
         .filter(|r| r.state == HELD)
         .filter_map(|r| {
             let quest = d.quests.0.get(&r.quest)?;
-            let to = match &quest.report_to {
-                Some(mob) => MobKey::parse(mob, quest.zone()),
-                None => MobKey::parse(&guild().clerk, ""),
-            };
-            let (_, name) = here.iter().find(|(key, _)| *key == to)?;
+            // Whoever here it could be reported to, by the ways still open.
+            let (i, _) = quest.stage_at(&r.stage)?;
+            let owner = Owner::Quest(character_id, quest.id.clone());
+            let chosen = d
+                .hand
+                .story
+                .number(&owner, &chose_key(&quest.stage_key(i)), now);
+            let tos = quest.report_keys(&r.stage, chosen);
+            let (key, name) = here.iter().find(|(key, _)| tos.contains(key))?;
             (wanted.is_empty() || quest.name.to_lowercase().contains(&wanted))
-                .then(|| (r.clone(), name.clone()))
+                .then(|| (r.clone(), name.clone(), key.clone()))
         })
         .collect();
     let mut lines = Vec::new();
@@ -256,7 +264,7 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
     let mut carried =
         crate::items::carried_items(actor.entity, &d.hand.items, &d.hand.item_templates);
     let mut held = crate::items::hands_full(actor.entity, &d.hand.items);
-    for (record, to) in due {
+    for (record, to, to_key) in due {
         let Some(quest) = d.quests.0.get(&record.quest).cloned() else {
             continue;
         };
@@ -278,7 +286,7 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
         };
         let mine = |requirement: &Requirement| meets(&d, &actor, requirement);
         let Ready { taken, ending } = match readiness(
-            &quest,
+            (&quest, Some(&to_key)),
             &record,
             character_id,
             Some(&carried),
@@ -306,7 +314,8 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
                 let record = d.logs.get(mate.entity).ok()?.get(&quest.id)?.clone();
                 let theirs = |requirement: &Requirement| meets(&d, &mate, requirement);
                 (record.state == HELD
-                    && readiness(&quest, &record, id, None, &theirs, &lookup).is_ok())
+                    && readiness((&quest, Some(&to_key)), &record, id, None, &theirs, &lookup)
+                        .is_ok())
                 .then_some((mate, record))
             })
             .collect();
@@ -558,6 +567,7 @@ mod tests {
                         text: "Return them.".into(),
                         objectives: vec![Objective::Bring(ItemMatch::Item("crystals".into()), 1)],
                         next: ends("returned"),
+                        report_to: None,
                     },
                     Choice {
                         text: "Sell them.".into(),
@@ -565,6 +575,7 @@ mod tests {
                             crate::requirements::Requirement::WorldFlag("fence_open".into()),
                         )],
                         next: ends("sold"),
+                        report_to: None,
                     },
                 ],
                 ..Default::default()
@@ -618,7 +629,8 @@ mod tests {
             Vec::new(),
         )];
         let ending = |carried: &[_], met: bool| {
-            readiness(&quest, &record, 1, Some(carried), &|_| met, &lookup).map(|r| r.ending)
+            readiness((&quest, None), &record, 1, Some(carried), &|_| met, &lookup)
+                .map(|r| r.ending)
         };
         assert_eq!(ending(&carrying, false), Ok(Some("returned".into())));
         assert_eq!(ending(&[], true), Ok(Some("sold".into())));
@@ -693,7 +705,7 @@ mod tests {
                 places: &|_| None,
                 now: 0,
             };
-            readiness(&quest, record, id, Some(carried), &|_| met, &lookup)
+            readiness((&quest, None), record, id, Some(carried), &|_| met, &lookup)
         };
         assert_eq!(
             ready(&record("1"), &story, &carried, true),

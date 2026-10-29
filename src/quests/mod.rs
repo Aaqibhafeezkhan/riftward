@@ -12,6 +12,7 @@
 //! - `claims`: deadlines, and `abandon`.
 //! - `loot`: what a boss drops for those on its quest.
 //! - `ask`: asking mobs about the topics a quest gives them.
+//! - `spawned`: mobs a quest brings into the world, and clearing them away.
 //! - `why`: GMs' account of where someone stands in a quest, and why.
 
 mod actions;
@@ -23,6 +24,7 @@ mod journal;
 mod loot;
 mod progress;
 mod report;
+mod spawned;
 mod why;
 
 use bevy::prelude::*;
@@ -37,6 +39,7 @@ use journal::journal;
 use loot::{deaths, want_loot};
 use progress::count_progress;
 use report::report;
+use spawned::{QuestMobs, clear_quest_mobs};
 use why::why;
 
 pub use def::Quests;
@@ -51,9 +54,14 @@ impl Plugin for QuestsPlugin {
             .init_resource::<Quests>()
             .init_resource::<Claims>()
             .init_resource::<Offers>()
+            .init_resource::<QuestMobs>()
             .add_systems(Startup, (load_quests, load_claims))
             .add_systems(Update, (sync_quests, count_progress))
-            .add_systems(Update, expire_claims.run_if(crate::time::heartbeat()))
+            .add_systems(
+                Update,
+                (expire_claims, clear_quest_mobs.after(count_progress))
+                    .run_if(crate::time::heartbeat()),
+            )
             // Just before loot is rolled for what died, what holders still need from it.
             .add_systems(
                 Update,
