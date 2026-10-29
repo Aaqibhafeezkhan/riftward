@@ -226,6 +226,21 @@ pub fn targets_in_room<'a>(
         .collect()
 }
 
+/// Everyone in `room`, players and mobs, with their keywords: someone to hand something to.
+pub fn characters_in_room<'a>(
+    room: Entity,
+    characters: &Characters,
+    keywords: &'a Query<&Keywords>,
+) -> Vec<(Entity, &'a Keywords)> {
+    let mut here: Vec<(Entity, &Keywords)> = characters
+        .iter()
+        .filter(|(.., in_room)| in_room.0 == room)
+        .filter_map(|(entity, ..)| Some((entity, keywords.get(entity).ok()?)))
+        .collect();
+    here.sort_by_key(|(entity, _)| *entity);
+    here
+}
+
 /// Every logged-in player with their keywords, for commands that reach anyone online.
 pub fn targets_online<'a>(
     characters: &Characters,

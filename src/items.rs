@@ -1507,7 +1507,7 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
     }
 
     /// `item` and everything inside it, with their templates, if it's now `who`'s; nothing if
-    /// it didn't reach them (a mob's things aren't saved, so don't move).
+    /// it didn't reach them (they'd nowhere to put it).
     fn reached(&self, who: Entity, item: Entity) -> Vec<(Entity, ItemKey)> {
         if self.snapshot.root(item).and_then(ItemLocation::holder) != Some(who) {
             return Vec::new();
@@ -1575,9 +1575,16 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         }
     }
 
-    /// Move an item and save where it went.
+    /// Move an item and save where it went. Somewhere that isn't saved (a mob's hands, worn by
+    /// a mob, in a mob's bag) it moves all the same, as a mob's own gear is, and what was saved of
+    /// it and of anything inside it is forgotten: it resets with the mob, and falls in its corpse.
     fn move_to(&mut self, entity: Entity, location: ItemLocation) {
         let Some(place) = self.place(location) else {
+            self.forget(entity);
+            if let Ok((_, _, mut current)) = self.items.get_mut(entity) {
+                *current = location;
+            }
+            self.snapshot.set_location(entity, location);
             return;
         };
         let Ok((_, mut item, mut current)) = self.items.get_mut(entity) else {
@@ -1595,6 +1602,28 @@ impl<'a, 'w, 's> Mover<'a, 'w, 's> {
         }
         *current = location;
         self.snapshot.set_location(entity, location);
+    }
+
+    /// No longer save `entity`, nor what's inside it (their rows go with its own).
+    fn forget(&mut self, entity: Entity) {
+        let within: Vec<Entity> = self
+            .snapshot
+            .items
+            .iter()
+            .filter(|info| self.snapshot.is_within(info.entity, entity))
+            .map(|info| info.entity)
+            .collect();
+        if let Ok((_, item, _)) = self.items.get(entity)
+            && let Some(id) = item.id
+            && let Err(err) = self.db.delete_item(id)
+        {
+            error!("failed to forget item {id}: {err}");
+        }
+        for e in within {
+            if let Ok((_, mut item, _)) = self.items.get_mut(e) {
+                item.id = None;
+            }
+        }
     }
 
     fn name(&self, entity: Entity) -> String {
@@ -2337,9 +2366,10 @@ fn give_item(
         .filter(|e| *e != me)
         .ok_or_else(|| format!("You aren't carrying {}.", what.describe()))?;
     let who = Target::parse(who).ok_or_else(|| inv.usage_error())?;
+    // Players or mobs: anyone here can be handed something.
     let here = visible(
         me,
-        targets_in_room(mover.actor.room, players, keywords),
+        crate::output::characters_in_room(mover.actor.room, players, keywords),
         hidden,
     );
     let bystanders: Vec<Entity> = here.iter().map(|(e, _)| *e).collect();
@@ -2858,7 +2888,7 @@ mod tests {
                 Exits::default(),
             ))
             .id();
-        // Players: what a mob carries isn't saved, and only what's saved moves.
+        // Ada and Bob, players, whose things are saved; and Grok, a mob, whose aren't.
         let account = world
             .resource::<Database>()
             .create_account("ada", "password123")
@@ -2916,6 +2946,7 @@ mod tests {
             match command {
                 "get" => world.run_system_once_with(get, inv).unwrap(),
                 "give" => world.run_system_once_with(give, inv).unwrap(),
+                "drop" => world.run_system_once_with(drop, inv).unwrap(),
                 _ => world.run_system_once_with(examine, inv).unwrap(),
             }
             let events = world.resource::<Messages<GameEvent>>();
@@ -2961,6 +2992,61 @@ mod tests {
             looked.as_slice(),
             [GameEvent::Examined { who, item, .. }] if (*who, *item) == (ada, the_sack)
         ));
+
+        // A mob takes things and gives them, as a player does: unsaved while it has them.
+        let grok = world
+            .spawn((
+                crate::mobs::Mob {
+                    key: crate::world::MobKey::parse("test:grok", ""),
+                    name: "Grok".into(),
+                    here: String::new(),
+                    description: String::new(),
+                    race: None,
+                },
+                InRoom(room),
+                Keywords::from_name("grok"),
+                Attributes::starting(|_| 5, 0),
+            ))
+            .id();
+        let saved = |world: &World, item: Entity| world.get::<Item>(item).unwrap().id;
+        let knife_row = saved(&world, the_knife).expect("Bob's knife is saved");
+        let given = run(&mut world, bob, "give", "knife grok");
+        assert_eq!(
+            *world.get::<ItemLocation>(the_knife).unwrap(),
+            ItemLocation::Held(grok)
+        );
+        assert_eq!(
+            saved(&world, the_knife),
+            None,
+            "a mob's things aren't saved"
+        );
+        let rows: i64 = world
+            .resource::<Database>()
+            .conn_for_tests()
+            .query_row(
+                "SELECT COUNT(*) FROM items WHERE id = ?1",
+                [knife_row],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rows, 0, "its saved row is gone");
+        assert!(given.iter().any(|e| matches!(e,
+            GameEvent::Gave { who, to, .. } if (*who, *to) == (bob, grok))));
+        // The sack, off the floor where Ada drops it, with what's in it.
+        run(&mut world, ada, "drop", "sack");
+        run(&mut world, grok, "get", "sack");
+        assert_eq!(
+            *world.get::<ItemLocation>(the_sack).unwrap(),
+            ItemLocation::Held(grok)
+        );
+        assert_eq!(saved(&world, the_tail), None, "nor what's in them");
+        // And back to a player, saved again.
+        run(&mut world, grok, "give", "knife ada");
+        assert_eq!(
+            *world.get::<ItemLocation>(the_knife).unwrap(),
+            ItemLocation::Held(ada)
+        );
+        assert!(saved(&world, the_knife).is_some());
     }
 
     #[test]
