@@ -20,6 +20,7 @@ mod effects;
 mod fleeing;
 mod help;
 mod resolve;
+mod rounds;
 mod spawning;
 mod states;
 mod strike;
@@ -59,6 +60,9 @@ use crate::vitals::{Maxima, Resting, Vitals};
 use crate::world::{InRoom, ItemKey, MobKey, Player, RoomIndex, RoomKey, without_article};
 
 pub use casting::MobMove;
+pub use rounds::Rounds;
+#[cfg(test)]
+pub use rounds::takes_in;
 #[cfg(test)]
 pub use states::defs_on_disk;
 pub use states::{
@@ -4775,5 +4779,43 @@ mod tests {
         assert!(world.get::<Readied>(engaged).is_some());
         assert!(said(&world, opener, "You let your brawling:backstab fade."));
         assert!(said(&world, caster, "You let your arcane:spark fade."));
+    }
+
+    #[test]
+    fn eating_heals_and_applies_conditions_on_the_eater() {
+        let (mut world, room) = world();
+        let eater = fighter(&mut world, room, 1, 1, &[]);
+        world.get_mut::<Vitals>(eater).unwrap().health = 50.0;
+        let effects = vec![
+            Effect::Heal {
+                amount: Formula::number(10.0),
+            },
+            Effect::Apply {
+                condition: "nourished".into(),
+                strength: Formula::number(2.0),
+                lasts: Lasting::Minutes(40),
+                on: Who::User,
+            },
+        ];
+        let healed = world
+            .run_system_once(move |mut rounds: Rounds| {
+                let mut healed = 0;
+                rounds.now(|round| {
+                    round.take_in(eater, &effects, |n| {
+                        healed = n;
+                        String::new()
+                    })
+                });
+                healed
+            })
+            .unwrap();
+        world.flush();
+        assert_eq!(healed, 10);
+        assert_eq!(world.get::<Vitals>(eater).unwrap().health, 60.0);
+        assert!(
+            world
+                .get::<Conditions>(eater)
+                .is_some_and(|c| c.has("nourished"))
+        );
     }
 }

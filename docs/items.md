@@ -143,12 +143,14 @@ At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there'
 
 ## Consumables
 
-A template can be eaten or drunk: it's used up. Food and drink speed recovery for a while (`recovery`); a draught gives back health or stamina at once, rolled in its ranges with Luck. See [Healing](trees.md#healing).
+A template can be eaten or drunk (`by`): it's used up, and its `effects` happen to whoever ate or drank it, in the same vocabulary as spells and skills ([effects.md](effects.md)): `Heal` for health at once, `Apply` for a condition (on the eater, whichever `on` it names), `Remove` and `Cure` to take one off. Nothing about food or drink is in code: bread is just an item whose effect is the `nourished` condition, which speeds recovery while it lasts. A meal's wording is the condition's own. See [Healing](trees.md#healing).
 
 ```ron
-"bread": (name: "a loaf of bread", tags: ["food"], consumable: (by: Eat, recovery: (speed: 1.5, minutes: 10))),
-"healing_draught": (name: "a healing draught", tags: ["potion"], consumable: (by: Drink, health: (4, 8))),
+"bread": (name: "a loaf of bread", tags: ["food"], consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "2", lasts: Minutes(80))])),
+"healing_draught": (name: "a healing draught", tags: ["potion"], consumable: (by: Drink, effects: [Heal(amount: "roll(4, 8)")])),
 ```
+
+A poisonous mushroom would `Apply` `poisoned`; an antidote would `Cure` it. The zone test checks each consumable's effects are ones that can happen to the eater and that its conditions exist.
 
 You can only eat or drink what you carry. Bandages are items tagged `bandage`, used up by First Aid.
 

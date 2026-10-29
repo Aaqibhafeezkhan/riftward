@@ -10,7 +10,7 @@
 use bevy::prelude::*;
 
 use crate::attributes::Attributes;
-use crate::combat::{Conditions, Dead, Fighting, the};
+use crate::combat::{ConditionDefs, Conditions, Dead, Fighting, the};
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
 use crate::db::{Database, Permission};
 use crate::events::GameEvent;
@@ -205,7 +205,7 @@ type Recovering<'w, 's> = Query<
         Option<&'static BaseHealth>,
         Has<Resting>,
         Has<Fighting>,
-        Option<&'static Nourished>,
+        Option<&'static Conditions>,
     ),
     Without<Dead>,
 >;
@@ -213,24 +213,6 @@ type Recovering<'w, 's> = Query<
 /// Sitting down to rest. Walking, attacking or being attacked gets them up.
 #[derive(Component, Debug)]
 pub struct Resting;
-
-/// Fed: recovering `speed` times as fast until `until` (seconds since the server started), on
-/// top of resting. Gone at logout.
-#[derive(Component, Debug, Clone, Copy, PartialEq)]
-pub struct Nourished {
-    pub speed: f32,
-    pub until: f64,
-}
-
-impl Nourished {
-    /// Another meal: the better speed, and whichever lasts longer.
-    pub fn with(self, speed: f32, until: f64) -> Self {
-        Self {
-            speed: self.speed.max(speed),
-            until: self.until.max(until),
-        }
-    }
-}
 
 /// A character's prompt format. Lives on the player entity.
 #[derive(Component, Clone, Debug)]
@@ -243,17 +225,18 @@ fn unix_now() -> i64 {
         .unwrap_or_default()
 }
 
-/// Recover everyone's vitals by the time since the last heartbeat.
+/// Recover everyone's vitals by the time since the last heartbeat: faster resting, and faster
+/// for conditions that say so (`Recovery`: a meal's `nourished`).
 fn recover(
     time: Res<Time>,
     mut last: Local<Option<f64>>,
     mut characters: Recovering,
-    defs: Res<SkillDefs>,
+    (defs, condition_defs): (Res<SkillDefs>, Res<ConditionDefs>),
 ) {
     let now = time.elapsed_secs_f64();
     let secs = last.map_or(0.0, |last| now - last) as f32;
     *last = Some(now);
-    for (mut vitals, attributes, skills, base, resting, fighting, fed) in &mut characters {
+    for (mut vitals, attributes, skills, base, resting, fighting, conditions) in &mut characters {
         let max = Maxima::of(attributes, skills, &defs, base);
         let before = vitals.clone();
         let mut after = before.clone();
@@ -262,9 +245,7 @@ fn recover(
             (true, _) => 0.0,
             (false, true) => REST_SPEEDUP,
             (false, false) => 1.0,
-        } * fed
-            .filter(|fed| fed.until > now)
-            .map_or(1.0, |fed| fed.speed);
+        } * conditions.map_or(1.0, |c| c.recovery(&condition_defs) as f32);
         after.recover(max, secs * pace);
         if after != before {
             *vitals = after;
@@ -602,6 +583,7 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(Time::<()>::default());
         world.insert_resource(SkillDefs::default());
+        world.init_resource::<ConditionDefs>();
         let hurt = Vitals {
             health: 0.0,
             stamina: 0.0,
@@ -631,21 +613,27 @@ mod tests {
     }
 
     #[test]
-    fn a_meal_speeds_recovery_until_it_wears_off() {
+    fn a_meal_speeds_recovery_while_its_nourishment_lasts() {
+        use crate::combat::{Lasts, defs_on_disk};
         let mut world = World::new();
         world.insert_resource(Time::<()>::default());
         world.insert_resource(SkillDefs::default());
+        let defs = defs_on_disk();
+        world.insert_resource(defs_on_disk());
         let hurt = Vitals {
             health: 0.0,
             stamina: 0.0,
         };
         let plain = world.spawn((hurt.clone(), sheet(), Skills::default())).id();
-        let fed = world.spawn((hurt.clone(), sheet(), Skills::default())).id();
-        // Twice as fast for the first 30 seconds only.
-        world.entity_mut(fed).insert(Nourished {
-            speed: 2.0,
-            until: 30.0,
-        });
+        // Nourished at 4: a quarter faster for each point, twice as fast.
+        let mut fed = Conditions::default();
+        fed.apply(&defs, "nourished", 4, Lasts::Until(600.0));
+        // A lesser meal after changes nothing.
+        fed.apply(&defs, "nourished", 1, Lasts::Until(60.0));
+        assert_eq!(fed.recovery(&defs), 2.0);
+        let fed = world
+            .spawn((hurt.clone(), sheet(), Skills::default(), fed))
+            .id();
         let recover = world.register_system(recover);
         world.run_system(recover).unwrap();
         world
@@ -656,25 +644,13 @@ mod tests {
         // Health 10 refills in 600 seconds: 20 seconds is a third of a point, or two thirds fed.
         assert!((health(&world, plain) - 1.0 / 3.0).abs() < 1e-4);
         assert!((health(&world, fed) - 2.0 / 3.0).abs() < 1e-4);
-        // Worn off: both recover alike from here.
+        // Its nourishment gone, they recover alike from here.
+        world.get_mut::<Conditions>(fed).unwrap().0.clear();
         world
             .resource_mut::<Time>()
             .advance_by(std::time::Duration::from_secs(20));
         world.run_system(recover).unwrap();
         assert!((health(&world, fed) - health(&world, plain) - 1.0 / 3.0).abs() < 1e-4);
-        // A second meal never makes it slower or shorter.
-        let meal = Nourished {
-            speed: 1.5,
-            until: 100.0,
-        };
-        assert_eq!(meal.with(1.25, 50.0), meal, "a lesser meal changes nothing");
-        assert_eq!(
-            meal.with(2.0, 200.0),
-            Nourished {
-                speed: 2.0,
-                until: 200.0
-            }
-        );
     }
 
     #[test]

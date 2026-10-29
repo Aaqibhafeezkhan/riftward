@@ -255,6 +255,9 @@ pub enum Modifier {
     DamageDealt(f64),
     /// Damage they take, multiplied.
     DamageTaken(f64),
+    /// Recovers health and stamina out of a fight this much faster per point of strength, on top
+    /// of resting: `Recovery(0.25)` at strength 2 is half as fast again. A good meal.
+    Recovery(f64),
     /// Health at the start of each of their turns in a fight: lost if negative (bleeding,
     /// poison), gained if positive (regenerating).
     HealthEachTurn(i32),
@@ -758,6 +761,17 @@ impl Conditions {
             Modifier::DamageDealt(x) => Some(*x),
             _ => None,
         })
+    }
+
+    /// How many times as fast they recover out of a fight: 1, and what `Recovery` adds.
+    pub fn recovery(&self, defs: &ConditionDefs) -> f64 {
+        1.0 + self
+            .modifiers(defs)
+            .filter_map(|(m, strength)| match m {
+                Modifier::Recovery(x) => Some(*x * f64::from(strength)),
+                _ => None,
+            })
+            .sum::<f64>()
     }
 
     /// What the damage they take is multiplied by.

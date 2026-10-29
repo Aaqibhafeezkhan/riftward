@@ -341,7 +341,7 @@
             keywords: ["bread", "loaf"],
             description: "A dense brown loaf, still faintly warm from the baker's oven.",
             tags: ["food"],
-            consumable: (by: Eat, recovery: (speed: 1.5, minutes: 10)),
+            consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "2", lasts: Minutes(80))]),
             value: 3,
         ),
         "water_flask": (
@@ -349,7 +349,7 @@
             keywords: ["flask", "water"],
             description: "A small clay flask of clean water, corked with a twist of rag.",
             tags: ["drink"],
-            consumable: (by: Drink, recovery: (speed: 1.25, minutes: 5)),
+            consumable: (by: Drink, effects: [Apply(condition: "nourished", strength: "1", lasts: Minutes(40))]),
             value: 5,
         ),
         "bandage": (
@@ -391,7 +391,7 @@
             keywords: ["draught", "potion", "healing"],
             description: "A stoppered vial of cloudy red liquid that smells of honey and iron.",
             tags: ["potion"],
-            consumable: (by: Drink, health: (4, 8)),
+            consumable: (by: Drink, effects: [Heal(amount: "roll(4, 8)")]),
             value: 50,
         ),
         "backpack": (

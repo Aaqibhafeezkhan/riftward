@@ -214,6 +214,19 @@
             ],
         ),
     ),
+    // What a meal leaves: recovering faster out of a fight, a quarter as fast again for each point
+    // (bread and nuts 2, berries and water 1). Another meal keeps the better, and the longer.
+    "nourished": (
+        name: "nourished",
+        description: "well fed, and recovering faster",
+        tags: ["food"],
+        stacking: Strongest,
+        modifiers: [Recovery(0.25)],
+        text: (
+            applied: (bearer: "You feel refreshed, and will recover faster for a while."),
+            fades: (bearer: "The good of your last meal wears off."),
+        ),
+    ),
     "regenerating": (
         name: "regenerating",
         description: "healing {strength} each turn",

@@ -9,7 +9,7 @@
             description: "A heel of bread, hard as wood and only a little nibbled.",
             bulk: Negligible,
             tags: ["food"],
-            consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
+            consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "1", lasts: Minutes(40))]),
             value: 1,
         ),
         "silver_locket": (

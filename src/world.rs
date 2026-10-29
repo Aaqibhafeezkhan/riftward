@@ -452,25 +452,16 @@ pub enum Having {
     Carried,
 }
 
-/// Food, drink or a draught: how it's taken, and what it does. A draught gives back health or
-/// stamina at once, rolled in each range; food and drink only speed recovery for a while.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+/// Food, drink or a draught: how it's taken, and what it does to whoever takes it, in the
+/// [effects](crate::effects)' own words: `Heal(amount: "roll(4, 8)")` for a draught,
+/// `Apply(condition: "nourished", strength: "2", lasts: Minutes(80))` for a meal, a poison for a
+/// deathcap. Only effects on the one who takes it, with nothing to aim at or contest
+/// (`combat::takes_in`).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ConsumableDef {
     pub by: Consume,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub health: Option<(u32, u32)>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stamina: Option<(u32, u32)>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recovery: Option<RecoveryDef>,
-}
-
-/// Faster recovery for a while, from a meal: health and stamina come back `speed` times as fast
-/// for `minutes`, out of a fight.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
-pub struct RecoveryDef {
-    pub speed: f32,
-    pub minutes: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<crate::effects::Effect>,
 }
 
 /// How something is consumed: `eat` or `drink`.
@@ -1934,9 +1925,25 @@ mod tests {
             .map(|race| race.id)
             .collect();
 
+        let conditions = crate::combat::defs_on_disk();
         let mut problems = Vec::new();
         for zone in &zones {
             for (item_id, item) in &zone.items {
+                // What eating or drinking it does: only to whoever takes it in, and only
+                // conditions that exist.
+                for effect in item.consumable.iter().flat_map(|c| &c.effects) {
+                    if !crate::combat::takes_in(effect) {
+                        problems.push(format!(
+                            "item {}:{item_id}: a consumable can't {effect:?}",
+                            zone.id
+                        ));
+                    }
+                    if let Some(name) = effect.condition()
+                        && conditions.condition(name).is_none()
+                    {
+                        problems.push(format!("item {}:{item_id}: no condition '{name}'", zone.id));
+                    }
+                }
                 let key = item.container.as_ref().and_then(|c| c.lock.as_ref());
                 if let Some(key) = key.and_then(|lock| lock.key.as_ref())
                     && !item_exists(&ItemKey::parse(key, &zone.id))

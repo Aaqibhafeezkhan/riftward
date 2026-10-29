@@ -77,7 +77,7 @@ pub fn buys(shop: &ShopDef, def: &ItemDef) -> bool {
     if def.container.is_some() {
         kinds.push("container");
     }
-    match def.consumable.map(|c| c.by) {
+    match def.consumable.as_ref().map(|c| c.by) {
         Some(Consume::Eat) => kinds.push("food"),
         Some(Consume::Drink) => kinds.push("drink"),
         None => {}
@@ -523,9 +523,7 @@ mod tests {
         bread.value = Some(3);
         bread.consumable = Some(ConsumableDef {
             by: Consume::Eat,
-            health: None,
-            stamina: None,
-            recovery: None,
+            effects: Vec::new(),
         });
         let mut herb = ItemDef::named("a sprig of yarrow");
         herb.tags = vec!["herb".into()];

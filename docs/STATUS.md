@@ -8,7 +8,7 @@ A handoff note for picking the work back up: what's built, what's next, and what
 
 Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is committed, tested live on a scratch server, and documented.
 
-- **Engine:** telnet with proper negotiation (`src/telnet.rs`), prompts marked with EOR or GA for MUD clients, one command per tick, an action queue (combat actions take a 3-second round), game events, a game clock (a day every 3 real hours), a one-second heartbeat.
+- **Engine:** telnet with proper negotiation (`src/telnet.rs`), prompts marked with EOR or GA for MUD clients, one command per tick, an action queue (actions take a 3-second round in a fight, a second out of one), game events, a game clock (a day every 3 real hours), a one-second heartbeat.
 - **World:** zone files (RON, hot-reloaded) for Riftwatch (25 rooms), its sewers (23) and the edge of the Darkwood (6, with the hedge-shaman); doors and locks; terrain that costs stamina to cross; in-game building.
 - **Items:** templates, Bulk and encumbrance, hands and wear slots, containers and automatic placement, weapons, corpses that rot, real items that survive restarts, item spawns, unique items.
 - **Mobs:** templates and spawns (keeping a count, breeding, after-death and reseed timers, gated by world flags), wandering and crowding, crowds breaking through closed doors (rats gnawing through the grates), pack limits, aggression, auras, the players' vitals, technique skills used by chance, and equipment they fight with and drop; and [mobs fighting mobs](world.md#mobs-fighting-mobs): tags and allies on templates, so the guards and the stray dog fight the rats in a breakout.
@@ -55,7 +55,7 @@ Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order
 - Haggling's numbers are first guesses: deals of a twentieth to a fifth, lasting ten minutes, and shopkeepers at 5 to 10. Deals aren't saved, and a deal is only struck by those who know Haggling.
 - Prices are first guesses (see [Prices](economy.md#prices)), and so is buying at a third. A shop's resale stock and a player's money on death are open questions.
 - Puppeting is for GMs and admins (builders can't). `help` still lists GM commands under "Building" and "Admin" ([#4](https://github.com/Foxworks-Studios/riftward/issues/4)). While puppeting, the builder hears nothing of their own body, even if it's attacked. Lessons (`learn`) and account commands (`raise`, `alias`, `describe`) are for players only.
-- Conditions: Nourished is still its own component, not data ([#20](https://github.com/Foxworks-Studios/riftward/issues/20)); Hidden is a condition now. Modifiers beyond the fifteen built (initiative, attributes, blind, fear, haste…) come when something needs them. Little content uses the newer conditions yet (envenomed blades poison, nothing casts sleep); designers can, with `Apply`, `Imbue` and `grants`.
+- Conditions: Nourished and Hidden are data conditions now. Modifiers beyond the fifteen built (initiative, attributes, blind, fear, haste…) come when something needs them. Little content uses the newer conditions yet (envenomed blades poison, nothing casts sleep); designers can, with `Apply`, `Imbue` and `grants`.
 - Item conditions can't yet change an item's own stats (rust), make it impossible to remove (curses), or go on armour.
 - No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built) ([#9](https://github.com/Foxworks-Studios/riftward/issues/9)).
 - Hiding isn't saved: logging out shows you, and a restart forgets everyone's hiding.

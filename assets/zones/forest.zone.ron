@@ -9,7 +9,7 @@
             description: "Small dark berries, tart and a little bitter, stained purple at the stems.",
             bulk: Negligible,
             tags: ["food"],
-            consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
+            consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "1", lasts: Minutes(40))]),
             value: 1,
         ),
         "mushrooms": (
@@ -18,7 +18,7 @@
             description: "Pale, fleshy caps with brown gills, smelling of damp earth.",
             bulk: Negligible,
             tags: ["food"],
-            consumable: (by: Eat, recovery: (speed: 1.5, minutes: 5)),
+            consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "2", lasts: Minutes(40))]),
             value: 2,
         ),
         "hazelnuts": (
@@ -27,7 +27,7 @@
             description: "A double handful of hazelnuts, cracked and ready to eat.",
             bulk: Negligible,
             tags: ["food"],
-            consumable: (by: Eat, recovery: (speed: 1.5, minutes: 10)),
+            consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "2", lasts: Minutes(80))]),
             value: 1,
         ),
         "yarrow": (
@@ -61,7 +61,7 @@
             description: "Broad, bright green leaves that smell strongly of garlic when bruised.",
             bulk: Negligible,
             tags: ["food"],
-            consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
+            consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "1", lasts: Minutes(40))]),
             value: 1,
         ),
         "sorrel": (
@@ -70,7 +70,7 @@
             description: "Arrow-shaped leaves with a sharp, lemony taste.",
             bulk: Negligible,
             tags: ["food"],
-            consumable: (by: Eat, recovery: (speed: 1.25, minutes: 5)),
+            consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "1", lasts: Minutes(40))]),
             value: 1,
         ),
         "watercress": (
@@ -79,7 +79,7 @@
             description: "Peppery dark leaves, cold and dripping from the brook.",
             bulk: Negligible,
             tags: ["food"],
-            consumable: (by: Eat, recovery: (speed: 1.5, minutes: 5)),
+            consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "2", lasts: Minutes(40))]),
             value: 2,
         ),
         "chamomile": (

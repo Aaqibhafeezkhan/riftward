@@ -146,7 +146,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 | The Rift-Scar | Nothing wholesome | Riftbloom (rare, glows) | |
 
 - **All data:** each is an item template plus a finds table; new kinds like `"wood"` and `"fish"` are just tables until a skill finds them (Woodcutting, Fishing: new skills made of `Find`).
-- **Poisonous food** (deathcap): eating it should poison you **(gap: consumables that apply conditions)**. Food today only heals or speeds recovery.
+- **Poisonous food** (deathcap): eating it should poison you: a consumable whose `effects` `Apply` `poisoned` (*built* 2026-10-29, the mushroom itself not yet).
 - **Honey from a bee tree:** foraging it angers the bees **(gap: a find with a consequence)**.
 
 ## Hazards and atmosphere
@@ -174,7 +174,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Fleeing** (*built* 2026-10-27) | Deer and rabbits, a hurt wolf breaking off | A `Flee` effect, as the `flee` command: out of a fight, the bearer leaves by a random walkable exit, away from what it avoids; in one, a chance to break away. Data does the rest: the *skittish* trait puts `startled` on at `Arrives`, `only: Foes` (so other deer don't startle it), for `Rounds(2)`, and `startled` `Fades` → `Flee`, which makes the window ([Prey](#prey-a-window-then-gone)); in a fight it tries to break away half its turns, and on `Hurt(0.5)` | Small to medium |
 | **Harvesting corpses** | Pelts, meat, fangs, antlers | `harvest` tables on mob templates, carried onto the corpse; `Find` aimed at a corpse (`aim: Item`) finding a kind from it, once per kind; Skinning and Butchering as data | Small to medium |
 | **Mob conditions from the start, and traits** (*built* 2026-10-27) | The rift-touched stag, the grey slimes, the Slime Lord; any template that "is" something | What a mob *is* is a [trait](effects.md#traits): `traits: ["rift_touched"]`, kept through cures and death. What's merely happening to it from the start is a condition: `conditions: [(condition: "hidden", strength: 8)]`, so a mob born `hidden` lurks unseen until noticed, the start of [#9](https://github.com/Foxworks-Studios/riftward/issues/9)'s ambushers | Small |
-| **Consumables that apply conditions** | Deathcap poisoning, later potions of strength | `effects: [...]` on a `consumable`, resolved as an active skill's are, on the eater | Small |
+| **Consumables that apply conditions** (*built*) | Deathcap poisoning, later potions of strength | `effects: [...]` on a `consumable`, resolved on the eater | Small |
 | **Time-of-day spawns** | Night wolves, day deer | The spawn `when` condition gains `TimeOfDay(Night)` (designed in [world.md](world.md)) | Small |
 | **Ambient lines** | Crows, the hum of the scar, birdsong | `chatter: ["The crow caws.", ...]` on a mob or room, one now and then on the heartbeat | Small |
 | **Territorial aggression** | The bear | `aggressive` only in its spawn's room: `aggressive: Home` | Small |
@@ -196,7 +196,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 3. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. No material loot: what they yield waits for harvesting.
 4. **Harvesting** (code, small to medium): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
 5. **Fleeing** (*built*), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
-6. **Mob starting conditions and traits** (*built*), for the rift-touched stag; **consumables with effects** for deathcaps.
+6. **Mob starting conditions and traits** (*built*), for the rift-touched stag; **consumables with effects** (*built*) for deathcaps.
 7. **Time-of-day spawns** and **ambient lines** (code, small).
 8. **Room conditions and reactions** (code, medium), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.
 
