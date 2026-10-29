@@ -140,6 +140,9 @@ pub enum GameEvent {
     /// `who` searched `room`. Quests' `Search` will listen.
     #[allow(dead_code)]
     Searched { who: Entity, room: Entity },
+    /// `who` tried to find something of a kind (`"forage"`, `"herbs"`) in `room`, whether or not
+    /// they did: the bees in a honey tree answer it.
+    Gathered { who: Entity, room: Entity },
     /// `who` asked a mob of template `mob` about `topic` (`ask`), as the asker wrote it, in
     /// lowercase. Quests' `Ask` listens.
     Asked {
@@ -220,6 +223,7 @@ fn text(event: &GameEvent) -> Option<String> {
         | GameEvent::Gave { .. }
         | GameEvent::Examined { .. }
         | GameEvent::Searched { .. }
+        | GameEvent::Gathered { .. }
         | GameEvent::Asked { .. }
         | GameEvent::Flees { .. } => return None,
     };
@@ -279,6 +283,7 @@ fn announce(
             | GameEvent::Gave { .. }
             | GameEvent::Examined { .. }
             | GameEvent::Searched { .. }
+            | GameEvent::Gathered { .. }
             | GameEvent::Asked { .. }
             | GameEvent::Flees { .. } => {}
             GameEvent::PhaseChanged(_) => {

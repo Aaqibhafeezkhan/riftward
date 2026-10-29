@@ -148,7 +148,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 
 - **All data:** each is an item template plus a finds table; new kinds like `"wood"` and `"fish"` are just tables until a skill finds them (Woodcutting, Fishing: new skills made of `Find`).
 - **Poisonous food** (deathcap): eating it should poison you: a consumable whose `effects` `Apply` `poisoned` (*built* 2026-10-29, the mushroom itself not yet).
-- **Honey from a bee tree:** foraging it angers the bees **(gap: a find with a consequence)**.
+- **Honey from a bee tree:** foraging there angers the bees: the `angry_bees` [room condition](world.md#room-conditions) answers `Gathers`, stinging half the time (*built*; the tree and its honey wait for the deep wood).
 
 ## Hazards and atmosphere
 
@@ -211,7 +211,7 @@ Planned 2026-10-29: the gaps left, each a small pull request with its issue, so 
 4. **Ambient lines** ([#24](https://github.com/Foxworks-Studios/riftward/issues/24), *built* 2026-10-29): `chatter` on mobs and rooms, a line now and then to players there, its rate in `rules.ron`.
 5. **A pack bonus** ([#29](https://github.com/Foxworks-Studios/riftward/issues/29), *built* 2026-10-29): an `allies` formula input, how many of its allies fight beside it; *Pack Hunter* is then a trait applying a per-turn `Attack` bonus at that strength.
 6. **Mobs that hide and ambush** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), first half, *built* 2026-10-29): a hidden aggressive mob strikes first from hiding, unavoidably, then is seen; out of a fight it hides again. The spider in its web.
-7. **A find with a consequence:** a `Finds` trigger, so a room's condition answers someone gathering there: the bee tree's angry bees.
+7. **A find with a consequence** (*built* 2026-10-29): a `Finds` trigger, so a room's condition answers someone gathering there: the bee tree's angry bees.
 8. **Hidden doors** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), second half): found with `search`, remembered per character.
 
 Later, once the deep wood exists: Navigation and getting lost, ranged combat, Rift-touched mutations. Then the deep wood itself, as data.

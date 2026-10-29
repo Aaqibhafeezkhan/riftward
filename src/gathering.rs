@@ -267,6 +267,11 @@ fn roomwork(In(inv): In<Invocation>, mut g: Gatherer) {
             None
         };
         let quality = Quality::of_find(Blow::of(margin));
+        // Found or not, they searched: a room's bees may take it badly.
+        g.practice.events.write(crate::events::GameEvent::Gathered {
+            who: actor.entity,
+            room: actor.room,
+        });
         let learner = Learner {
             character_id: actor.character_id,
             race: &actor.race,
@@ -611,6 +616,13 @@ mod tests {
             .filter(|(_, l)| **l == ItemLocation::Held(forager))
             .count();
         assert_eq!(held, 1, "in hand");
+        // Their searching is something the room's bees can answer.
+        let gathered = world
+            .resource_mut::<Messages<GameEvent>>()
+            .drain()
+            .filter(|e| matches!(e, GameEvent::Gathered { who, .. } if *who == forager))
+            .count();
+        assert_eq!(gathered, 1);
         // Three to a patch: two more, then nothing.
         search(&mut world, forager, FORAGING);
         search(&mut world, forager, FORAGING);

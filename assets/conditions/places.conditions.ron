@@ -25,4 +25,24 @@
             looks: ["Brambles snag at everything here, thick and thorny."],
         ),
     ),
+    // A honey tree's bees (docs/darkwood.md, flora): whoever forages or gathers here may be stung.
+    "angry_bees": (
+        name: "angry bees",
+        description: "a nest of bees that take badly to anyone rummaging nearby",
+        tags: ["nature"],
+        modifiers: [],
+        reactions: [(
+            on: Gathers,
+            chance: "0.5",
+            effects: [Damage(amount: "roll(1, 2 + strength)", type: "physical")],
+            text: (
+                actor: "Bees boil out of the tree, and a sting {harm} you!",
+                target: "Bees boil out of the tree, and a sting {harm} you!",
+                room: "Bees boil out of the tree around {actor}, and a sting {harm} them!",
+            ),
+        )],
+        text: (
+            looks: ["Bees drone in and out of a hollow high in a tree."],
+        ),
+    ),
 }

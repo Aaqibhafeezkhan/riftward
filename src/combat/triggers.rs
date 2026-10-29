@@ -99,6 +99,15 @@ pub(super) fn triggers(
                 let when = if *drink { When::Drinks } else { When::Eats };
                 triggers.write(Trigger::new(*who, *who, when));
             }
+            GameEvent::Gathered { who, room } => {
+                triggers.write(Trigger::new(*who, *who, When::Gathers));
+                if rooms.contains(*room) {
+                    triggers.write(Trigger {
+                        room: Some(*room),
+                        ..Trigger::new(*who, *who, When::Gathers)
+                    });
+                }
+            }
             // Put on by a reaction, it sets off no more.
             GameEvent::ConditionApplied {
                 who,

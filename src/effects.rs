@@ -211,6 +211,9 @@ pub enum When {
     Eats,
     /// The bearer drinks something.
     Drinks,
+    /// The bearer tries to find something in a room, foraging or gathering herbs, whether or not
+    /// they do. A room's own condition answers it too: the bees of a honey tree.
+    Gathers,
     /// This condition takes hold, at whoever put it on. Only a condition's own reactions.
     Applied,
     /// This condition runs out, in time or turns; not when it's cured, removed or broken. Only a

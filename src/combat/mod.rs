@@ -3742,6 +3742,23 @@ mod tests {
     }
 
     #[test]
+    fn a_rooms_bees_may_sting_whoever_gathers_there() {
+        let (mut world, room) = world();
+        world.init_resource::<Messages<triggers::Trigger>>();
+        world
+            .entity_mut(room)
+            .insert(crate::world::RoomConditions(vec![("angry_bees".into(), 1)]));
+        let forager = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        // Half the time, each try: ten tries, and they've been stung.
+        for _ in 0..10 {
+            world.write_message(GameEvent::Gathered { who: forager, room });
+            react_to_events(&mut world);
+        }
+        assert!(world.get::<Vitals>(forager).unwrap().health < 100.0);
+        assert!(said(&world, forager, "Bees boil out of the tree"));
+    }
+
+    #[test]
     fn some_reactions_come_round_every_so_often() {
         let (mut world, room) = world();
         world.init_resource::<Messages<triggers::Trigger>>();
