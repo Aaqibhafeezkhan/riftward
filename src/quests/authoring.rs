@@ -281,7 +281,8 @@ fn stage(quest: &mut QuestDef, value: &str) -> Result<String, String> {
 }
 
 /// An objective as typed: `kill <mob> <n>`, `kill tag <tag> <n>`, `bring <item> <n>`, `bring tag
-/// <tag> <n>`, `find <item> <n>`, `reach <room>`, `ask <mob> <topic>`, `escort <mob> <room>`.
+/// <tag> <n>`, `find <item> <n>`, `reach <room>`, `ask <mob> <topic>`, `escort <mob> <room>`,
+/// `give <item> <mob>`.
 fn objective(text: &str) -> Result<Objective, String> {
     let words: Vec<&str> = text.split_whitespace().collect();
     let n = |w: &str| {
@@ -302,11 +303,15 @@ fn objective(text: &str) -> Result<Objective, String> {
             mob: mob.to_string(),
             to: room.to_string(),
         },
+        ["give", item, mob] => Objective::Give {
+            item: item.to_string(),
+            to: mob.to_string(),
+        },
         _ => {
             return Err(
                 "An objective: kill <mob> <n>, kill tag <tag> <n>, bring <item> <n>, \
                         bring tag <tag> <n>, find <item> <n>, reach <room>, ask <mob> <topic>, \
-                        escort <mob> <room>."
+                        escort <mob> <room>, give <item> <mob>."
                     .into(),
             );
         }

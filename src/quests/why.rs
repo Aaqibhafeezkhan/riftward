@@ -265,7 +265,8 @@ fn objective_line(
         | Objective::Obtain(..)
         | Objective::Reach(_)
         | Objective::Ask(..)
-        | Objective::Escort { .. } => {
+        | Objective::Escort { .. }
+        | Objective::Give { .. } => {
             let key = objective.key(place, zone).unwrap_or_default();
             let have = lookup.story.number(owner, &key, lookup.now);
             let done = have >= i64::from(need);
@@ -274,6 +275,7 @@ fn objective_line(
                 Objective::Obtain(..) => "Find",
                 Objective::Ask(..) => "Ask",
                 Objective::Escort { .. } => "Escort",
+                Objective::Give { .. } => "Give",
                 _ => "Reach",
             };
             (

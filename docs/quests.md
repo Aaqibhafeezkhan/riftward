@@ -248,7 +248,7 @@ Collection (kill so many, bring so many) is the simplest kind, and the first con
 | Objective | Done when |
 | --- | --- |
 | `Ask(mob, topic)` | You ask someone about something: `ask talla about crystals`. While a stage is active it gives that mob that topic and what they say, so this is the first, small piece of [dialogue](#dialogue) (*built*, 2026-10-28: a stage's `topics`, by mob; counted for every holder of the group there; a quest that asks about a topic its stage doesn't answer is refused) |
-| `Give(item, to: mob)` | You give someone an item (`give` exists) |
+| `Give(item, to: mob)` | You give someone an item (`give` exists) (*built*, 2026-10-28, written `Give(item: "stolen_crystals", to: "contract_clerk")`: counted from the `Gave` event for every holder of the group there; the quest takes what's given, as `Bring` does, and handing it over isn't losing it for `fails_if`) |
 | `Examine(thing)` | You look closely at an item or a room's feature |
 | `Search(room)` | You search the room (`search` exists), finding what the quest has put there |
 | `Escort(mob, to: room)` | A mob following you reaches the room alive (*built*, 2026-10-28, written `Escort(mob: "herbalist", to: "forest:ravine")`: a holder in the game on that stage finds the mob, which falls in behind them and follows as anyone follows a leader; its walking into the room counts for every holder of the group there; once it isn't wanted (done, failed, given up, its holder gone) it stops following and heads home. An escort's death fails the quest with `fails_if: [Dies(...)]`.) |
@@ -445,7 +445,7 @@ In the smallest pull requests that each leave the game working, every one with i
 19. *Built.* **Stages by id, `next`, and actions** (`Give`, `Take`, `Set`, `Say`) when a stage begins or ends.
 20. *Built.* **`ask <mob> about <topic>`** and the `Ask` objective: topics given by quest stages.
 21. *Built.* **Choices and endings,** each with its own rewards and journal line.
-22. *Built.* **Quest mobs:** `Spawn` for a quest, tied to it, counted by `Kill(Quest(...))`, cleared when it ends. *Crystals Gone Missing* can be written in full. (It is, in `assets/quests/riftwatch/crystals_gone_missing.quest.ron`: both ways `Bring` the crystals, one reported to Marin and the other, by the way's own `report_to`, to the hooded figure, since giving to a mob waits on [#55](https://github.com/Foxworks-Studios/riftward/issues/55).)
+22. *Built.* **Quest mobs:** `Spawn` for a quest, tied to it, counted by `Kill(Quest(...))`, cleared when it ends. *Crystals Gone Missing* can be written in full. (It is, in `assets/quests/riftwatch/crystals_gone_missing.quest.ron`: the crystals are given to Marin or to the hooded figure, `Give(item: ..., to: ...)`, and each way is reported to whoever got them.)
 23. *Built.* **`fails_if`:** a death, a lost item.
 24. *Built.* **Escort:** a mob following the holder on the quest's say-so, `Escort(mob, to: room)`. *Narina's Secret* waits on the Rift-Scar, which isn't built yet (it's beyond the deep wood in [the Darkwood](darkwood.md)): it's written once that exists (decided 2026-10-28).
 25. **GM quest tools:** `quest grant`, `advance`, `reward`, `release`; writing quests in game (`quest create`, `quest edit`) last.

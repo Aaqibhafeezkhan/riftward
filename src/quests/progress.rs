@@ -42,6 +42,15 @@ pub(super) enum Deed<'a> {
         topic: &'a str,
         name: &'a str,
     },
+    /// They gave an item to a mob.
+    Gave {
+        /// The item given, for the quest to take.
+        given: Entity,
+        item: &'a ItemKey,
+        to: &'a MobKey,
+        name: &'a str,
+        whom: &'a str,
+    },
     /// A mob they're escorting walked into a room.
     Escorted {
         mob: &'a MobKey,
@@ -76,6 +85,9 @@ impl Deed<'_> {
             (Deed::Reached { room, .. }, Objective::Reach(id)) => {
                 RoomKey::parse(id, zone) == **room
             }
+            (Deed::Gave { item, to, .. }, Objective::Give { item: id, to: whom }) => {
+                ItemKey::parse(id, zone) == **item && MobKey::parse(whom, zone) == **to
+            }
             (Deed::Escorted { mob, room, .. }, Objective::Escort { mob: id, to }) => {
                 MobKey::parse(id, zone) == **mob && RoomKey::parse(to, zone) == **room
             }
@@ -93,6 +105,11 @@ impl Deed<'_> {
             Deed::Obtained { name, .. } => format!("{} found", without_article(name)),
             Deed::Reached { name, .. } => format!("{name} reached"),
             Deed::Escorted { name, .. } => format!("{} brought safely", crate::combat::the(name)),
+            Deed::Gave { name, whom, .. } => format!(
+                "{} given to {}",
+                without_article(name),
+                crate::combat::the(whom)
+            ),
             Deed::Asked { name, topic, .. } => {
                 format!("{} asked about {topic}", crate::combat::the(name))
             }
@@ -119,7 +136,7 @@ pub(super) fn count_progress(
     quests: Res<Quests>,
     mut hand: Stagehand,
     (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
-    (places, escorts): (Places, Escorts),
+    (places, escorts, takers): (Places, Escorts, Query<&crate::mobs::Mob>),
     mut outbox: ResMut<Outbox>,
 ) {
     let now = unix_now();
@@ -168,6 +185,22 @@ pub(super) fn count_progress(
                     },
                 )
             }
+            // Given to a mob: someone a quest may want it given to.
+            GameEvent::Gave { who, item, key, to } => {
+                let (Ok(mob), Some(def)) = (takers.get(*to), items.0.get(key)) else {
+                    continue;
+                };
+                (
+                    *who,
+                    Deed::Gave {
+                        given: *item,
+                        item: key,
+                        to: &mob.key,
+                        name: &def.name,
+                        whom: &mob.name,
+                    },
+                )
+            }
             GameEvent::Asked { who, mob, topic } => (
                 *who,
                 Deed::Asked {
@@ -196,6 +229,8 @@ pub(super) fn count_progress(
             continue;
         };
         let room = at.0;
+        // What the quest takes, given as it asked.
+        let mut taken = None;
         let theirs: Vec<String> = log
             .0
             .iter()
@@ -223,7 +258,7 @@ pub(super) fn count_progress(
                     character_id: player.character_id,
                     room: at.0,
                 };
-                let (mut lines, finished) = tally(
+                let (mut lines, counted, finished) = tally(
                     &record,
                     quest,
                     holder.character_id,
@@ -232,6 +267,15 @@ pub(super) fn count_progress(
                     (&hand.db, &hand.quest_mobs),
                     now,
                 );
+                // Given as the quest asked, the quest takes it; and it isn't lost.
+                if counted && let Deed::Gave { given, item, .. } = deed {
+                    taken = Some(given);
+                    hand.story.clear(
+                        &Owner::Quest(holder.character_id, quest.id.clone()),
+                        &super::failures::had_key(item),
+                        &hand.db,
+                    );
+                }
                 // All counted and done: it ends, and on to the next stage, or back to report.
                 // The last stage ends when it's reported.
                 if let Some((i, way)) = finished {
@@ -266,11 +310,20 @@ pub(super) fn count_progress(
                 out.extend(lines.into_iter().map(|line| Outgoing::line(*entity, line)));
             }
         }
+        if let Some(given) = taken
+            && let Ok(mut entity) = hand.commands.get_entity(given)
+        {
+            entity.despawn();
+        }
     }
     deliver(out, &mut outbox);
 }
 
-/// Count `deed` toward one holder's `record`: what to tell them, and, if this finished the stage
+/// A stage finished: where it stands, and the way taken through it, if it offers choices.
+type Finished = Option<(usize, Option<usize>)>;
+
+/// Count `deed` toward one holder's `record`: what to tell them, whether it counted, and, if this
+/// finished the stage
 /// they were on (every objective counted as it happens, and done), where it stands and the way
 /// taken through it, if it offers choices. The first way done is the way taken; the others close.
 fn tally(
@@ -281,10 +334,10 @@ fn tally(
     story: &mut Facts,
     (db, quest_mobs): (&Database, &QuestMobs),
     now: i64,
-) -> (Vec<String>, Option<(usize, Option<usize>)>) {
+) -> (Vec<String>, bool, Finished) {
     let mut lines = Vec::new();
     let Some((i, stage)) = quest.stage_at(&record.stage) else {
-        return (lines, None);
+        return (lines, false, None);
     };
     let place = quest.stage_key(i);
     let owner = Owner::Quest(character_id, quest.id.clone());
@@ -324,17 +377,17 @@ fn tally(
         })
     };
     if !counted || !done(&stage.objectives, &place) {
-        return (lines, None);
+        return (lines, counted, None);
     }
     if stage.choices.is_empty() {
-        return (lines, Some((i, None)));
+        return (lines, true, Some((i, None)));
     }
     let way = parts.iter().find_map(|(choice, at, objectives)| {
         let c = (*choice)?;
         (open(Some(c)) && done(objectives, at)).then_some(c)
     });
     let Some(c) = way else {
-        return (lines, None);
+        return (lines, true, None);
     };
     if chosen == 0 {
         story.set(&owner, &chose_key(&place), Value::Int(c as i64), None, db);
@@ -344,7 +397,7 @@ fn tally(
             stage.choices[c - 1].text
         ));
     }
-    (lines, Some((i, Some(c))))
+    (lines, true, Some((i, Some(c))))
 }
 
 #[cfg(test)]
@@ -1069,6 +1122,126 @@ mod tests {
         assert_eq!(count(&world), 0, "not there yet");
         walk(&mut world, ravine);
         assert_eq!(count(&world), 1, "brought safely");
+    }
+
+    #[test]
+    fn what_is_given_as_asked_counts_and_the_quest_takes_it() {
+        use crate::items::{Item, ItemLocation, Quality};
+        use crate::world::{DoorState, ItemDef};
+        use bevy::ecs::system::RunSystemOnce;
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let id = db.create_character(account.id, "Ada").unwrap().id;
+        let mut world = World::new();
+        world.insert_resource(db);
+        world.init_resource::<Facts>();
+        world.init_resource::<Outbox>();
+        world.init_resource::<Messages<GameEvent>>();
+        stagehand(&mut world);
+        let crystals = ItemKey::parse("riftwatch:crystals", "");
+        world.insert_resource(ItemTemplates(HashMap::from([(
+            crystals.clone(),
+            ItemDef::named("a pouch of crystals"),
+        )])));
+        world.init_resource::<MobTemplates>();
+        let quest = QuestDef {
+            stages: vec![Stage {
+                text: "Return the crystals.".into(),
+                objectives: vec![Objective::Give {
+                    item: "crystals".into(),
+                    to: "clerk".into(),
+                }],
+                ..Default::default()
+            }],
+            ..rats()
+        };
+        world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
+        let room = world.spawn_empty().id();
+        let ada = world
+            .spawn((
+                InRoom(room),
+                Player {
+                    name: "Ada".into(),
+                    character_id: id,
+                    account: "ada".into(),
+                    role: crate::db::Role::Player,
+                    race: "human".into(),
+                    background: String::new(),
+                    description: String::new(),
+                },
+                QuestLog(vec![QuestRecord {
+                    quest: "riftwatch:rats".into(),
+                    state: HELD.into(),
+                    stage: "1".into(),
+                    taken_at: 0,
+                    due_at: None,
+                    finished_at: None,
+                }]),
+            ))
+            .id();
+        let mob = |world: &mut World, id: &str, name: &str| {
+            world
+                .spawn((
+                    crate::mobs::Mob {
+                        key: MobKey::parse(id, ""),
+                        name: name.into(),
+                        here: String::new(),
+                        description: String::new(),
+                        race: None,
+                    },
+                    InRoom(room),
+                ))
+                .id()
+        };
+        let (marin, talla) = (
+            mob(&mut world, "riftwatch:clerk", "Marin Harrow"),
+            mob(&mut world, "riftwatch:fence", "Talla Mirk"),
+        );
+        let owner = Owner::Quest(id, "riftwatch:rats".into());
+        let had = super::super::failures::had_key(&crystals);
+        world.resource_scope(|world, mut story: Mut<Facts>| {
+            let db = world.resource::<Database>();
+            story.set(&owner, &had, Value::Bool(true), None, db);
+        });
+        let give = |world: &mut World, to: Entity| {
+            let item = world
+                .spawn((
+                    Item {
+                        key: crystals.clone(),
+                        name: "a pouch of crystals".into(),
+                        id: None,
+                        state: DoorState::Open,
+                        quality: Quality::Standard,
+                    },
+                    ItemLocation::Held(to),
+                ))
+                .id();
+            world.write_message(GameEvent::Gave {
+                who: ada,
+                item,
+                key: crystals.clone(),
+                to,
+            });
+            world.run_system_once(count_progress).unwrap();
+            world.flush();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+            item
+        };
+        let given = |world: &World| {
+            world
+                .resource::<Facts>()
+                .number(&owner, "1.give.riftwatch:crystals.riftwatch:clerk", 0)
+        };
+        let to_talla = give(&mut world, talla);
+        assert_eq!(given(&world), 0, "not who it asks for");
+        assert!(world.get_entity(to_talla).is_ok(), "Talla keeps hers");
+        let to_marin = give(&mut world, marin);
+        assert_eq!(given(&world), 1);
+        assert!(world.get_entity(to_marin).is_err(), "the quest takes it");
+        assert!(
+            world.resource::<Facts>().get(&owner, &had, 0).is_none(),
+            "given as asked, it isn't lost"
+        );
     }
 
     #[test]

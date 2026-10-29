@@ -137,6 +137,7 @@ At Strength 1 that's 5 and 10. Every worn and stored item counts in full; there'
 - **Touching makes an item real.** Getting, dropping, putting, giving or wearing an item gives it a row in an `items` table: its template, where it is, when it was dropped, and when it decays. From then on every move updates that row, and the item survives restarts wherever it ends up. Looking at or examining an item doesn't count.
 - **Startup restores real items** to their saved locations, removing any whose decay time has passed.
 - **Resets only manage their own spawns.** Once a spawned item is picked up, it is real and no longer the reset's; the next reset spawns a fresh one.
+- **A mob's things aren't saved** (2026-10-28, [#55](https://github.com/Foxworks-Studios/riftward/issues/55)): a mob takes, carries, wears and gives items as a player does, and what goes to a mob (handed to it, picked up, put in its bag) is no longer real: its row, and those of anything inside it, are deleted, and it resets with the mob and falls in its corpse, as the gear it spawns with does. Handed back to a player, it's real again. A unique item given to a mob is forgotten too, so its spawn may make another.
 - **Conditions put on one item** (`Imbue`) are saved with it in `item_conditions`, and come back with it.
 - **Mobs stay temporary** and reset with their zone.
 

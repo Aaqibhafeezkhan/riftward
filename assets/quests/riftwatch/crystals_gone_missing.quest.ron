@@ -38,8 +38,8 @@
             id: "choice",
             journal: "You have the stolen crystals. Marin wants them back; the hooded figure in the alley would pay well for them.",
             choices: [
-                (text: "Return them to Marin.", objectives: [Bring(Item("stolen_crystals"), 1)], next: End("returned")),
-                (text: "Sell them in the back alley.", objectives: [Bring(Item("stolen_crystals"), 1)], next: End("sold"), report_to: Some("hooded_figure")),
+                (text: "Return them to Marin.", objectives: [Give(item: "stolen_crystals", to: "contract_clerk")], next: End("returned")),
+                (text: "Sell them in the back alley.", objectives: [Give(item: "stolen_crystals", to: "hooded_figure")], next: End("sold"), report_to: Some("hooded_figure")),
             ],
         ),
     ],

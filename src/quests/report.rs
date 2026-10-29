@@ -117,7 +117,8 @@ fn unmet(
             | Objective::Obtain(..)
             | Objective::Reach(_)
             | Objective::Ask(..)
-            | Objective::Escort { .. } => {
+            | Objective::Escort { .. }
+            | Objective::Give { .. } => {
                 let need = objective.count();
                 let key = objective.key(at, zone);
                 let have = key.map(|key| lookup.story.number(owner, &key, lookup.now));

@@ -254,6 +254,9 @@ pub enum Objective {
     /// A mob of this template, following them on the quest's say-so, walks into the room:
     /// `Escort(mob: "herbalist", to: "forest:ravine")`.
     Escort { mob: String, to: String },
+    /// One of this item given to a mob of this template: `Give(item: "stolen_crystals", to:
+    /// "contract_clerk")`. The quest takes what's given, as `Bring` does.
+    Give { item: String, to: String },
 }
 
 /// Which mobs: a template, any with a tag, or the one a quest spawned (`Quest("courier")`, by
@@ -478,6 +481,10 @@ impl QuestDef {
                 Objective::Escort { mob, to } => {
                     names.mobs.push(full(mob));
                     names.rooms.push(full(to));
+                }
+                Objective::Give { item, to } => {
+                    names.items.push(full(item));
+                    names.mobs.push(full(to));
                 }
                 Objective::Kill(MobMatch::Tag(_), _)
                 | Objective::Bring(ItemMatch::Tag(_), _)
@@ -720,6 +727,11 @@ impl Objective {
                 MobKey::parse(mob, zone),
                 RoomKey::parse(to, zone)
             )),
+            Objective::Give { item, to } => Some(format!(
+                "{stage}.give.{}.{}",
+                ItemKey::parse(item, zone),
+                MobKey::parse(to, zone)
+            )),
             Objective::Bring(..) | Objective::Meet(_) => None,
         }
     }
@@ -748,6 +760,20 @@ impl Objective {
                 (lookup.places)(&key).unwrap_or_else(|| key.to_string())
             }
             Objective::Meet(requirement) => requirement.describe(&|id| id.to_string()),
+            Objective::Give { item, to } => {
+                let thing = lookup
+                    .items
+                    .0
+                    .get(&ItemKey::parse(item, zone))
+                    .map_or(item.as_str(), |def| without_article(&def.name))
+                    .to_string();
+                let whom = lookup
+                    .mobs
+                    .0
+                    .get(&MobKey::parse(to, zone))
+                    .map_or_else(|| to.clone(), |def| crate::combat::the(&def.name));
+                format!("{thing} to {whom}")
+            }
             Objective::Escort { mob, to } => {
                 let name = lookup
                     .mobs
@@ -800,6 +826,10 @@ impl Objective {
                 0 => format!("Escort {what}"),
                 _ => format!("Escort {what} (done)"),
             },
+            Objective::Give { .. } => match have.unwrap_or(0) {
+                0 => format!("Give {what}"),
+                _ => format!("Give {what} (done)"),
+            },
         }
     }
 
@@ -809,7 +839,8 @@ impl Objective {
             Objective::Reach(_)
             | Objective::Meet(_)
             | Objective::Ask(..)
-            | Objective::Escort { .. } => 1,
+            | Objective::Escort { .. }
+            | Objective::Give { .. } => 1,
         }
     }
 }
