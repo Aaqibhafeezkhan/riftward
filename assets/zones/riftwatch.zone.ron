@@ -114,8 +114,16 @@
         "torch": (
             name: "a pitch torch",
             keywords: ["torch", "pitch"],
-            description: "A length of wood wrapped in pitch-soaked rags, ready to be lit.",
+            description: "A length of wood wrapped in pitch-soaked rags, burning with a smoky, spitting flame.",
+            tags: ["light"],
             value: 3,
+        ),
+        "lamppost": (
+            name: "an iron lamppost",
+            keywords: ["lamppost", "lamp", "post"],
+            description: "A tall iron post topped with a glass lantern, lit at dusk by the watch and burning till dawn.",
+            fixed: true,
+            tags: ["light"],
         ),
         "practice_sword": (
             name: "a wooden practice sword",
@@ -663,6 +671,72 @@
         ),
     },
     spawns: {
+        "north_gate_lamp": (
+            item: "lamppost",
+            room: "north_gate",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "market_lamp": (
+            item: "lamppost",
+            room: "market",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "stalls_lamp": (
+            item: "lamppost",
+            room: "stalls",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "herbalist_lamp": (
+            item: "lamppost",
+            room: "herbalist",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "tinkers_corner_lamp": (
+            item: "lamppost",
+            room: "tinkers_corner",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "guild_row_lamp": (
+            item: "lamppost",
+            room: "guild_row",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "high_street_lamp": (
+            item: "lamppost",
+            room: "high_street",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "garrison_yard_lamp": (
+            item: "lamppost",
+            room: "garrison_yard",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "training_yard_lamp": (
+            item: "lamppost",
+            room: "training_yard",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "keep_gate_lamp": (
+            item: "lamppost",
+            room: "keep_gate",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
+        "keep_courtyard_lamp": (
+            item: "lamppost",
+            room: "keep_courtyard",
+            every: Hours(1),
+            refill: Keep(1),
+        ),
         "training_dummies": (
             mob: "training_dummy",
             room: "training_yard",

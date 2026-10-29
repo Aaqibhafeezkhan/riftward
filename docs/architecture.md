@@ -32,6 +32,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `output.rs` | Characters and what they're told: the `Characters` query and `Actor` (players and mobs alike), `Outgoing`, the `Outbox` and `flush_outbox`, which delivers it to connections and puppeteers, target candidate lists |
 | `puppet.rs` | Puppeting: `puppet` (`possess`) and `release`, and letting go when the puppet or puppeteer goes |
 | `world.rs` | Zone assets (rooms, doors, item and mob templates, spawns), room entities, the `RoomIndex`, and `sync_world`, which applies zone changes live |
+| `light.rs` | Light and darkness: how rooms are lit (`Light`, `RoomLight`), which rooms something lights now (`LitRooms`), and putting `in_the_dark` on those who can't see |
 | `items.rs` | Item entities, Bulk and placement rules, persistence, template grants and item conditions (loading, saving, expiring, passing to the holder), and the item commands |
 | `mobs.rs` | Mob entities, wandering and crowding, `summon` and `purge` |
 | `spawns.rs` | Spawns for mobs and items: timers, breeding, counting by origin, container contents, unique items |

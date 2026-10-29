@@ -16,6 +16,13 @@
         description: "no body to leave behind: when it dies, it runs away into a puddle, and whatever was in it is left lying there",
         modifiers: [],
     ),
+    // Creatures at home in the dark: the woods' beasts at night, and everything in the sewers.
+    // They see in the dark that blinds a traveller without a torch.
+    "night_eyes": (
+        name: "night eyes",
+        description: "eyes that see in the dark",
+        modifiers: [SeesInDark],
+    ),
     // The sewers' slimes (docs/riftwatch.md#the-sewers-ecology).
     "rubbery": (
         name: "rubbery",

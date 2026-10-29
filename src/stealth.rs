@@ -60,9 +60,14 @@ impl Plugin for StealthPlugin {
 #[derive(Component, Debug)]
 pub struct Sneaking;
 
-/// Whether `viewer` can see `target`: anyone not hidden, or hidden but noticed by them.
+/// Whether `viewer` can see `target`: not in the dark themselves, and the target not hidden, or
+/// hidden but noticed by them.
 pub fn sees(hidden: &Query<&Conditions>, viewer: Entity, target: Entity) -> bool {
-    viewer == target || hidden.get(target).ok().is_none_or(|c| c.seen_by(viewer))
+    viewer == target
+        || (!hidden
+            .get(viewer)
+            .is_ok_and(|c| c.has(crate::light::IN_THE_DARK))
+            && hidden.get(target).ok().is_none_or(|c| c.seen_by(viewer)))
 }
 
 /// Whether `viewer` can see someone with these `conditions`, for those holding them already.

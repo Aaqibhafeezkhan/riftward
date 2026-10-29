@@ -2,6 +2,12 @@
 {
     // Like the elves of old tales: magic that would put them to sleep or bend their minds finds
     // little purchase.
+    // Dwarves and trolls see warm bodies in the dark (docs/characters.md#races).
+    "heat_sight": (
+        name: "Heat Sight",
+        description: "seeing the warmth of living things, and the shape of a place, where others see only darkness",
+        modifiers: [SeesInDark],
+    ),
     "fey_mind": (
         name: "Fey Mind",
         description: "an elf's mind, hard to lull or bend: resisting sleep and charm by 4 more",

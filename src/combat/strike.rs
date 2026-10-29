@@ -765,6 +765,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let (room, a_name, is_player) = (a.in_room.0, name_of(a.player, a.mob), a.player.is_some());
         let chosen = a.auto.and_then(|auto| auto.0.clone());
         let blessing = a.conditions.attack(self.conditions);
+        let attack_times = a.conditions.attack_times(self.conditions);
         let stamina = a.vitals.stamina;
         let a_attributes = a.attributes.clone();
         let a_skills = a.skills.clone();
@@ -885,8 +886,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let (accuracy, extra) = t.map_or((0, 0), |t| (t.accuracy, t.damage));
         let a_aura = self.auras.get(&attacker).copied().unwrap_or_default();
         let a_boosts = boosts(&a_skills, self.defs);
-        let rating = attack_rating(&a_attributes, &a_skills, skill, a_aura, &a_boosts)
-            + f64::from(accuracy + blessing);
+        let rating = (attack_rating(&a_attributes, &a_skills, skill, a_aura, &a_boosts)
+            + f64::from(accuracy + blessing))
+            * attack_times;
         // A grab only applies its effects; anything else hurts.
         let harmless = t.is_some_and(|t| t.strike == StrikeKind::Harmless);
         let blow = (!harmless).then(|| BlowDamage {

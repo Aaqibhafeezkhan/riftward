@@ -271,6 +271,10 @@ pub enum Modifier {
     CantMove,
     /// Can't cast spells.
     CantCast,
+    /// Their attacks multiplied: half for someone fighting in the dark.
+    AttackTimes(f64),
+    /// Sees in the dark: a dwarf's Heat Sight, a wolf's eyes. Never `in_the_dark`.
+    SeesInDark,
 }
 
 /// What a condition says. Bearer lines are the bearer's own; room lines are what everyone else
@@ -688,6 +692,19 @@ impl Conditions {
 
     fn any(&self, defs: &ConditionDefs, flag: Modifier) -> bool {
         self.modifiers(defs).any(|(m, _)| *m == flag)
+    }
+
+    /// What their attacks are multiplied by: half in the dark.
+    pub fn attack_times(&self, defs: &ConditionDefs) -> f64 {
+        self.product(defs, |m| match m {
+            Modifier::AttackTimes(x) => Some(*x),
+            _ => None,
+        })
+    }
+
+    /// Whether they see in the dark.
+    pub fn sees_in_dark(&self, defs: &ConditionDefs) -> bool {
+        self.any(defs, Modifier::SeesInDark)
     }
 
     /// How much better they attack.

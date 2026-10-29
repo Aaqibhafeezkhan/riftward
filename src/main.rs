@@ -21,6 +21,7 @@ mod groups;
 mod guild;
 mod healing;
 mod items;
+mod light;
 mod login;
 mod mobs;
 mod money;
@@ -120,6 +121,7 @@ fn add_game(app: &mut App, path: String, address: String) {
         shops::ShopsPlugin,
         trade::TradePlugin,
         crafting::CraftingPlugin,
+        light::LightPlugin,
         puppet::PuppetPlugin,
         guild::GuildPlugin,
         quests::QuestsPlugin,

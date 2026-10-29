@@ -43,7 +43,7 @@ North is up: the North Gate opens onto the forest road, the market is the centre
 
 ## The sewers
 
-The sewers mirror the town above, a tunnel beneath each district, and loop rather than dead-end, so the rats have room to spread.
+The sewers are dark ([Light and darkness](world.md#light-and-darkness)): bring a torch, since the rats, roaches, snakes and slimes all see in the dark. They mirror the town above, a tunnel beneath each district, and loop rather than dead-end, so the rats have room to spread.
 
 ```mermaid
 flowchart TB

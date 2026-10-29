@@ -294,6 +294,14 @@
     // Out of sight. Its strength is how well they hid (Stealth plus Agility); those who notice
     // them anyway still see them. Hiding puts it on, until they act openly, walk away without
     // sneaking, or fight. Who sees whom, and noticing, are in src/stealth.rs.
+    // In a room too dark to see in (docs/world.md#light-and-darkness). The code knows this one by
+    // name: it puts it on and takes it off as the light changes, and someone with it sees no one.
+    "in_the_dark": (
+        name: "in the dark",
+        description: "unable to see for the dark, and fighting blind",
+        tags: ["dark"],
+        modifiers: [AttackTimes(0.5), DefenceTimes(0.5)],
+    ),
     "hidden": (
         name: "hidden",
         description: "out of sight of anyone who hasn't noticed you",

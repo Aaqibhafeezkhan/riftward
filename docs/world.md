@@ -273,6 +273,21 @@ Separately from its footing, every room has an **environment**: what kind of pla
 - **`forage` and `gather`** (shortcuts to `use foraging` and `use herbalism`) search the room (see [Gathering](trees.md#gathering)). Each room holds three finds of each kind, and grows one back every 10 minutes (`finds` in `assets/rules.ron`), so no one strips one bush forever. Finds aren't saved: a restart lets everything grow back.
 - **Builders** set a room's environment with `environment <kind>`, or in the zone file; a room dug out of another takes its environment.
 
+### Light and darkness
+
+*Built* (2026-10-29). Every room is lit one of three ways, set in the zone file (`light: Dark`) or with the builder `light` command:
+
+| `light` | Lit |
+| --- | --- |
+| `Daylight` (the default outdoors) | By the sun: dark at night |
+| `Lit` (the default indoors) | Always: lamps nobody needs to see |
+| `Dark` | Never, but by what's brought in: caves, the deep wood. A room dug out of a dark one is dark too |
+
+- **Light sources are items tagged `light`:** lying in the room (Riftwatch's iron lampposts, the hunter's campfire, a dropped torch) or carried by anyone there, at any depth (a torch, later a lantern). Carried means lit for now; lighting, putting out and burning down come with item decay.
+- **In a dark room, someone who can't see in the dark is `in_the_dark`** (a condition the light system puts on and takes off as the light changes): `look` shows only the exits ("It's too dark to see. You can feel your way to the exits."), they see no one (so they can't target anyone, nor aim a spell or skill at anyone but themselves, and a blinded mob picks no fights), and they fight blind, attacking and defending at half. A glimpse into a dark room shows no one.
+- **Seeing in the dark** is a `SeesInDark` modifier: the dwarves' and trolls' Heat Sight (a racial trait), and night eyes on the west woods' beasts, so at night the woods belong to them and a traveller wants a torch.
+- **Riftwatch at night:** lampposts light the gate, the market and stalls, the herbalist's and tinkers', Guild Row, High Street, the garrison and training yards, and the keep's gate and courtyard. The back alley, the archery butts and the watchtower go dark. Indoor rooms stay lit. **The sewers are dark** (decided 2026-10-29): every room is `light: Dark`, and everything living down there has night eyes, so going down without a torch means fighting rats you can't see, at half. Harwin sells torches, and the Guild Cellar chest holds one.
+
 ### Weather (planned)
 
 Weather, with the time system, will change the ground. A room can say what it becomes when wet, `when_wet: Mud`, so a dirt road turns to mud in the rain and is exhausting to trudge through until it dries. Rain would come and go by zone, announced to everyone outdoors like dawn and dusk, and dry out over some game hours afterwards.

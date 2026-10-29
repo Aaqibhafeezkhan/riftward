@@ -514,9 +514,12 @@ fn cast(
     ) {
         return said(&mut log, refusal);
     }
+    // In the dark, they can aim only at themselves.
+    let blind = caster.conditions.has(crate::light::IN_THE_DARK);
     let candidates: Vec<(Entity, &Keywords)> = fighters
         .iter()
         .filter(|f| f.in_room.0 == room && !f.dead && can_see(inv.entity, f.entity, f.conditions))
+        .filter(|f| !blind || f.entity == inv.entity)
         .filter_map(|f| Some((f.entity, f.keywords?)))
         .collect();
     let players: HashSet<Entity> = fighters

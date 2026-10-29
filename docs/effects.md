@@ -96,7 +96,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 | `CantCast` | Silenced | |
 | `CantUseTechniques` | | |
 | `WontAttack` | Won't start or continue a fight | ✓ Calm (one-off today) |
-| `Blind` | Can't target; defends at half | |
+| `Blind` | Can't target; defends at half | ✓ as the `in_the_dark` condition, which the light system puts on and takes off: the code knows it by name, and it halves attack (`AttackTimes(0.5)`) and defence (`DefenceTimes(0.5)`). A blinding spell would be another condition like it |
 | `Mute` | Can't speak | |
 | `Untargetable` | Sanctuary | |
 
@@ -114,7 +114,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 | Modifier | Does | Today |
 | --- | --- | --- |
 | `SeesHidden` / `SeesInvisible` | | |
-| `SeesInDark` | | |
+| `SeesInDark` | Never `in_the_dark` ([Light and darkness](world.md#light-and-darkness)) | ✓ Heat Sight (dwarves, trolls), night eyes (the woods' beasts) |
 | `SensesMagic` | Sees magic conditions on people and things | |
 | `Hidden` | Out of sight to those who haven't noticed | ✓ Hidden |
 | `Invisible` | Unseen by all but those who see invisible | |

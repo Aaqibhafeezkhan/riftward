@@ -110,6 +110,14 @@ impl Plugin for BuildPlugin {
             )
             .add_command(
                 build(
+                    "light",
+                    "light [daylight | lit | dark | default]",
+                    "show or set how this room is lit: by day (outdoors), always (indoors), or never",
+                ),
+                light_cmd,
+            )
+            .add_command(
+                build(
                     "link",
                     "link <dir> <room>",
                     "add a one-way exit to an existing room",
@@ -279,6 +287,7 @@ zone_edit_command!(desc_cmd, describe);
 zone_edit_command!(flag_cmd, room_flag);
 zone_edit_command!(terrain_cmd, room_terrain);
 zone_edit_command!(environment_cmd, room_environment);
+zone_edit_command!(light_cmd, room_light);
 zone_edit_command!(unlink_cmd, unlink);
 
 fn link_cmd(
@@ -548,6 +557,8 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
         let id = unique_room_id(&slugify(name), zone);
         // A room dug out of a forest is forest too.
         let from_environment = room_mut(zone, here)?.environment;
+        // Dug out of a dark place, it's dark too.
+        let from_light = room_mut(zone, here)?.light;
         let mut exits = BTreeMap::new();
         let way_back = opposite_direction(&dir);
         if let Some(back) = way_back {
@@ -561,6 +572,7 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
                 exits,
                 no_wander: false,
                 indoors: false,
+                light: from_light,
                 terrain: Terrain::Paved,
                 environment: from_environment,
                 finds: None,
@@ -678,6 +690,43 @@ fn room_environment(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef
     edit_zone(zones, &here.zone, |zone| {
         room_mut(zone, here)?.environment = environment;
         Ok(show(environment))
+    })
+}
+
+/// `light [<kind>]`: show or set how the current room is lit; `default` goes back to lit by day
+/// outdoors and always indoors.
+fn room_light(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
+    use crate::light::Light;
+    let show = |own: Option<Light>, indoors: bool| {
+        let light = own.unwrap_or(if indoors { Light::Lit } else { Light::Daylight });
+        let how = match light {
+            Light::Daylight => "lit by day, and dark at night but for what's brought in",
+            Light::Lit => "always lit",
+            Light::Dark => "dark but for what's brought in",
+        };
+        let default = if own.is_none() { " (its default)" } else { "" };
+        format!("[{here}] is {how}{default}.")
+    };
+    let wanted = inv.args.trim().to_ascii_lowercase();
+    let light = match wanted.as_str() {
+        "" => {
+            let zone = zone_def(zones, &here.zone)?;
+            let room = zone
+                .rooms
+                .get(&here.room)
+                .ok_or("This room no longer exists in its zone file.")?;
+            return Ok(show(room.light, room.indoors));
+        }
+        "daylight" => Some(Light::Daylight),
+        "lit" => Some(Light::Lit),
+        "dark" => Some(Light::Dark),
+        "default" => None,
+        _ => return Err(inv.usage_error()),
+    };
+    edit_zone(zones, &here.zone, |zone| {
+        let room = room_mut(zone, here)?;
+        room.light = light;
+        Ok(show(light, room.indoors))
     })
 }
 

@@ -191,7 +191,7 @@
             keywords: ["campfire", "fire"],
             description: "A ring of blackened stones around a bed of glowing embers, with a spit and an iron pot hung over it. Something is always cooking, or about to be.",
             fixed: true,
-            tags: ["fire"],
+            tags: ["fire", "light"],
         ),
         "roast_rabbit": (
             name: "a roast rabbit",
@@ -278,7 +278,7 @@
             attack: "beast:bite",
             health: 3,
             avoids: ["boar"],
-            traits: ["skittish"],
+            traits: ["night_eyes", "skittish"],
             harvest: {"hide": [("rabbit_pelt", 1)], "meat": [("rabbit_meat", 1)]},
         ),
         "fox": (
@@ -291,7 +291,7 @@
             attack: "beast:bite",
             health: 6,
             avoids: ["boar"],
-            traits: ["skittish"],
+            traits: ["night_eyes", "skittish"],
             harvest: {"hide": [("fox_pelt", 1)]},
         ),
         "adder": (
@@ -306,7 +306,7 @@
             health: 4,
             // Strikes at people who come near; leaves the beasts be.
             aggressive: true,
-            traits: ["venomous"],
+            traits: ["night_eyes", "venomous"],
         ),
         "red_deer": (
             name: "a red deer",
@@ -320,7 +320,7 @@
             attack: "beast:hooves",
             health: 10,
             avoids: ["boar"],
-            traits: ["skittish"],
+            traits: ["night_eyes", "skittish"],
             harvest: {"hide": [("deer_hide", 1)], "meat": [("venison", 1)]},
         ),
         "red_stag": (
@@ -336,6 +336,7 @@
             health: 25,
             tactics: 20,
             harvest: {"hide": [("deer_hide", 1)], "meat": [("venison", 60), ("stag_antlers", 40)]},
+            traits: ["night_eyes"],
         ),
         "young_boar": (
             name: "a young boar",
@@ -350,6 +351,7 @@
             health: 10,
             aggressive: true,
             harvest: {"hide": [(None, 50), ("boar_hide", 50)], "meat": [("boar_meat", 1)]},
+            traits: ["night_eyes"],
         ),
         "wild_boar": (
             name: "a wild boar",
@@ -364,7 +366,7 @@
             health: 18,
             tactics: 30,
             aggressive: true,
-            traits: ["furious"],
+            traits: ["night_eyes", "furious"],
             harvest: {"hide": [("boar_hide", 1)], "meat": [("boar_meat", 70), ("boar_tusks", 30)]},
         ),
         "giant_frog": (
@@ -380,6 +382,7 @@
             // Leaps out at people who come near; leaves the beasts be.
             aggressive: true,
             harvest: {"meat": [("frog_legs", 1)]},
+            traits: ["night_eyes"],
         ),
         "badger": (
             name: "a badger",
@@ -390,7 +393,7 @@
             skills: {"beast:bite": 5},
             attack: "beast:bite",
             health: 14,
-            traits: ["thick_hide"],
+            traits: ["night_eyes", "thick_hide"],
             harvest: {"hide": [("badger_pelt", 1)]},
         ),
         "hedge_shaman": (

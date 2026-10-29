@@ -252,6 +252,10 @@ pub struct RoomDef {
     /// Under a roof or underground: the sky can't be seen, so dawn and dusk pass unnoticed.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub indoors: bool,
+    /// How it's lit, when not its default: `Daylight` outdoors (dark at night), `Lit` indoors.
+    /// `Dark` is never lit but by what's brought in: caves, the deep wood.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub light: Option<crate::light::Light>,
     /// What the ground is like, and so how tiring it is to walk into.
     #[serde(default, skip_serializing_if = "Terrain::is_paved")]
     pub terrain: Terrain,
@@ -1290,6 +1294,7 @@ impl ZoneDef {
             exits: BTreeMap::new(),
             no_wander: false,
             indoors: false,
+            light: None,
             terrain: Terrain::Paved,
             environment: Environment::Town,
             finds: None,
@@ -1694,6 +1699,12 @@ fn sync_world(
                 room.no_wander = def.no_wander;
                 room.indoors = def.indoors;
                 room.terrain = def.terrain;
+                match def.light {
+                    Some(light) => commands
+                        .entity(entity)
+                        .insert(crate::light::RoomLight(light)),
+                    None => commands.entity(entity).remove::<crate::light::RoomLight>(),
+                };
             }
             None => {
                 let entity = commands
@@ -1709,6 +1720,11 @@ fn sync_world(
                         Exits::default(),
                     ))
                     .id();
+                if let Some(light) = def.light {
+                    commands
+                        .entity(entity)
+                        .insert(crate::light::RoomLight(light));
+                }
                 index.0.insert(key.clone(), entity);
             }
         }

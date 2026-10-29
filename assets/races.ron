@@ -9,6 +9,7 @@
         summary: "Stout, stubborn crafters and miners.",
         attributes: {Body: 2, Strength: 1, Willpower: 1, Reaction: -1},
         skills: ["racial:heat_sight"],
+        traits: ["heat_sight"],
     ),
     (
         id: "elf",
@@ -74,5 +75,6 @@
         summary: "Towering and proud, of a warrior culture.",
         attributes: {Strength: 3, Body: 2, Agility: -1, Logic: -1},
         skills: ["racial:heat_sight"],
+        traits: ["heat_sight"],
     ),
 ]

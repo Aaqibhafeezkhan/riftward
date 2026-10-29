@@ -21,7 +21,7 @@ use crate::items::{Snapshot, bulk_limits, coloured, counted_with};
 use crate::mobs::{self, MobQuery};
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver, targets_in_room};
 use crate::skills::{Learner, Practice, fill};
-use crate::stealth::{STEALTH, Sneaking, hide_as, sees, stealth_rating, unhide, visible};
+use crate::stealth::{STEALTH, Sneaking, hide_as, stealth_rating, unhide, visible};
 use crate::targeting::{Keywords, Target};
 use crate::vitals::Resting;
 use crate::world::{Door, DoorState, InRoom, Obstacle, Player};
@@ -41,9 +41,29 @@ pub struct View<'w, 's> {
     /// What's on everyone, for what stops them moving and what others see of them.
     pub conditions: Query<'w, 's, &'static Conditions>,
     pub condition_defs: Res<'w, ConditionDefs>,
+    /// How rooms are lit, and which something lights now.
+    pub room_light: Query<'w, 's, &'static crate::light::RoomLight>,
+    pub lit: Res<'w, crate::light::LitRooms>,
 }
 
 impl View<'_, '_> {
+    /// Whether `room` is too dark for `viewer` to see in right now: it needs light and has none,
+    /// not even one they carry, and they can't see in the dark. Worked out afresh, so someone
+    /// walking in sees it as it is.
+    pub fn too_dark(&self, room: Entity, viewer: Entity) -> bool {
+        let Ok((info, _, _)) = self.rooms.get(room) else {
+            return false;
+        };
+        crate::light::Light::of(info, self.room_light.get(room).ok())
+            .needs_light(crate::time::GameTime::now().phase())
+            && !self.lit.0.contains(&room)
+            && !crate::light::carries_light(viewer, &self.items, &self.templates)
+            && !self
+                .conditions
+                .get(viewer)
+                .is_ok_and(|c| c.sees_in_dark(&self.condition_defs))
+    }
+
     /// What others see of `who`'s conditions, one hint a line: "A faint shimmer surrounds Grok."
     pub fn hints(&self, who: Entity, name: &str) -> String {
         self.conditions
@@ -591,8 +611,12 @@ fn glimpse(room: Entity, viewer: Entity, players: &Characters, view: &View) -> S
         .map(|(room, _, _)| room.name.clone())
         .unwrap_or_default();
     let mut text = format!("{name}.\r\n");
-    // Everyone the viewer can see but themselves, player or mob.
-    let shown = |who: Entity| who != viewer && sees(&view.hidden, viewer, who);
+    if view.too_dark(room, viewer) {
+        return text + "  It's too dark to make out anyone there.\r\n";
+    }
+    // Everyone the viewer can see but themselves, player or mob: the light there is what counts.
+    let shown =
+        |who: Entity| who != viewer && view.hidden.get(who).ok().is_none_or(|c| c.seen_by(viewer));
     for name in mobs::names_in(room, &view.mobs, shown) {
         text += &format!("  {} is there.\r\n", capitalized(&name));
     }
@@ -624,7 +648,13 @@ pub fn describe_room(
     if show_id {
         text += &format!(" \x1b[2m[{key}]\x1b[0m");
     }
-    text += &format!("\r\n{}\r\n", info.description);
+    // In the dark, all they have is the way out.
+    let dark = view.too_dark(room, viewer);
+    if dark {
+        text += "\r\nIt's too dark to see. You can feel your way to the exits.\r\n";
+    } else {
+        text += &format!("\r\n{}\r\n", info.description);
+    }
 
     let exit_list: Vec<_> = exits
         .0
@@ -649,6 +679,9 @@ pub fn describe_room(
         }
     );
 
+    if dark {
+        return text;
+    }
     // Fixed things, like a chest or a signpost, are part of the room; loose things lie in it.
     let fixed = |entity: Entity| {
         view.items
@@ -701,8 +734,10 @@ pub fn describe_room(
             paint(&name, format!("{} lies here.", capitalized(&line)))
         );
     }
-    // Everyone the viewer can see but themselves, player or mob.
-    let shown = |who: Entity| who != viewer && sees(&view.hidden, viewer, who);
+    // Everyone the viewer can see but themselves, player or mob. It isn't dark here, whatever
+    // their last room was like.
+    let shown =
+        |who: Entity| who != viewer && view.hidden.get(who).ok().is_none_or(|c| c.seen_by(viewer));
     for line in mobs::here_lines(room, &view.mobs, shown) {
         text += &format!("{line}\r\n");
     }

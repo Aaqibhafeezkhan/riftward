@@ -83,6 +83,7 @@
             aggressive: true,
             // Rats keep out of the slimes' tunnels, or they'd drain into them and never break out.
             avoids: ["slime"],
+            traits: ["night_eyes"],
         ),
         "courier": (
             name: "a courier",
@@ -107,7 +108,7 @@
             attack: "beast:rat_bite",
             health: 2,
             avoids: ["slime"],
-            traits: ["skittish"],
+            traits: ["night_eyes", "skittish"],
         ),
         "sewer_snake": (
             name: "a sewer snake",
@@ -122,7 +123,7 @@
             health: 5,
             // Strikes at people who come near; leaves the rats be.
             aggressive: true,
-            traits: ["venomous"],
+            traits: ["night_eyes", "venomous"],
         ),
         "ooze": (
             name: "an ooze",
@@ -137,7 +138,7 @@
             health: 4,
             loot: [[(None, 50), ("slime_jelly", 50)]],
             aggressive: true,
-            traits: ["formless", "splitting"],
+            traits: ["night_eyes", "formless", "splitting"],
         ),
         "ooze_half": (
             name: "a torn-off ooze",
@@ -152,7 +153,7 @@
             health: 2,
             loot: [[(None, 80), ("slime_jelly", 20)]],
             aggressive: true,
-            traits: ["formless"],
+            traits: ["night_eyes", "formless"],
         ),
         "grey_slime": (
             name: "a grey slime",
@@ -167,7 +168,7 @@
             health: 12,
             loot: [[("slime_jelly", 100)], [(None, 70), ("slime_jelly", 30)]],
             aggressive: true,
-            traits: ["formless", "rubbery"],
+            traits: ["night_eyes", "formless", "rubbery"],
         ),
         "slime_lord": (
             name: "the Slime Lord",
@@ -188,7 +189,7 @@
             tactics: 30,
             aggressive: true,
             boss: true,
-            traits: ["formless", "rubbery", "mending", "shedding"],
+            traits: ["night_eyes", "formless", "rubbery", "mending", "shedding"],
         ),
         "rat_king": (
             name: "the Rat King",
@@ -210,6 +211,7 @@
             tactics: 30,
             aggressive: true,
             boss: true,
+            traits: ["night_eyes"],
         ),
     },
     spawns: {
@@ -331,6 +333,7 @@
             description: "The main sewer ends at a great stone arch in the town wall, where the filth of Riftwatch pours out between thick iron bars into a ditch beyond. Daylight and fresh air slip through the bars, along with the sound of the world outside.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "south": "north_trunk",
             },
@@ -341,6 +344,7 @@
             description: "The broadest tunnel in the sewers runs north beneath the gate road, its channel deep and fast. Cartwheels rumble overhead, shaking grit from the vaulted ceiling.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "north": "outflow_arch",
                 "south": "market_drain",
@@ -354,6 +358,7 @@
             description: "A dry alcove has been bricked off from the tunnel and fitted with shelves. Someone has been using it: there are crate marks in the dust, a stub of candle, and a ledger page torn to pieces.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "west": "north_trunk",
             },
@@ -364,6 +369,7 @@
             description: "Beneath the market square, storm grates let in slivers of daylight and every scrap the stalls throw away. Rotten vegetables and worse pile against the walls, and footsteps pass back and forth overhead.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "north": "north_trunk",
                 "south": "great_drain",
@@ -378,6 +384,7 @@
             description: "A low culvert runs east under the vendor stalls. Spilled dyes stain the water in sickly streaks of blue and red.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "west": "market_drain",
                 "east": "tunnel_east",
@@ -391,6 +398,7 @@
             description: "Thin light falls through a rusted grate above onto a slick stone landing. Filthy water from the market drains collects here before running on into the dark.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "up": (to: "riftwatch:back_alley", door: "riftwatch:sewer_grate"),
                 "north": "stalls_culvert",
@@ -404,6 +412,7 @@
             description: "A well-built tunnel beneath Guild Row, its brickwork newer and its walkway wider. Somebody once paid to keep this stretch in good repair.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "east": "market_drain",
                 "north": "guild_drain",
@@ -417,6 +426,7 @@
             description: "A short spur ends beneath the guildhall at an iron ladder, which climbs to a heavy hatch in the ceiling. Muffled voices and the scrape of chairs come through from above.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "south": "guild_tunnel",
                 "up": (to: "riftwatch:guild_cellar", door: "riftwatch:guild_hatch"),
@@ -428,6 +438,7 @@
             description: "A low brick tunnel, its ceiling furred with moss and dripping steadily. The walkway beside the channel is narrow and treacherous.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "east": "guild_tunnel",
                 "west": "cistern",
@@ -440,6 +451,7 @@
             description: "The tunnel opens into a vaulted cistern, far older than the sewers around it. Black water stands still and deep beneath crumbling pillars, and the echoes come back wrong.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "east": "tunnel_west",
                 "down": "drowned_stair",
@@ -451,6 +463,7 @@
             description: "Worn steps descend from the cistern's edge into black water and vanish beneath it. Something was down there once, before the water came: the carvings on the walls are in no script you know.",
             terrain: Wading,
             indoors: true,
+            light: Dark,
             exits: {
                 "down": (to: "sunken_hall", needs: Swim(4)),
                 "up": "cistern",
@@ -462,6 +475,7 @@
             description: "You surface in a pocket of stale air beneath a vaulted ceiling. Pillars carved with the same strange script march away into the dark, and the water here is still and cold as a tomb. Whoever built this place, the city above was laid on top of it and forgotten.",
             terrain: Wading,
             indoors: true,
+            light: Dark,
             exits: {
                 "up": (to: "drowned_stair", needs: Swim(4)),
             },
@@ -472,6 +486,7 @@
             description: "Beneath the shrine, an old burial passage has been cut through by the sewers. Skulls and long bones are stacked in neat niches along the walls, and nothing down here has disturbed them.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "north": "tunnel_west",
                 "east": "great_drain",
@@ -483,6 +498,7 @@
             description: "The sewers' spine runs south beneath High Street, a tall arched tunnel where several channels meet and churn together. The roar of water fills the space.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "north": "market_drain",
                 "east": "outfall",
@@ -497,6 +513,7 @@
             description: "The tunnel grows deeper and colder beneath the keep's foundations. The stone here is massive and dressed with care, built to hold up walls rather than to carry filth.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "north": "great_drain",
                 "east": "garrison_drain",
@@ -509,6 +526,7 @@
             description: "A rusted sluice gate holds back a pool of stagnant water at the end of the keep's drain. Set into the wall above it, a stout iron door leads up toward the keep's lowest levels.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "north": "keep_drain",
                 "up": (to: "riftwatch:keep_dungeon", door: "riftwatch:dungeon_door"),
@@ -520,6 +538,7 @@
             description: "A barred grate overhead lets in the tramp of marching boots and the barked orders of the garrison yard. The drain beneath is choked with mud and spent straw from the stables.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "up": (to: "riftwatch:garrison_yard", door: "riftwatch:garrison_grate"),
                 "north": "outfall",
@@ -533,6 +552,7 @@
             description: "A collapsed section has dammed the channel, and the tunnel here stands waist-deep in cold, filthy water. Things bump against your legs in the murk.",
             terrain: Wading,
             indoors: true,
+            light: Dark,
             exits: {
                 "west": "garrison_drain",
                 "north": "tunnel_east",
@@ -544,6 +564,7 @@
             description: "The tunnel narrows and the stink thickens. Scratching echoes from somewhere ahead, and small tracks crisscross the muck on the walkway.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "west": "stalls_culvert",
                 "south": "flooded_tunnel",
@@ -556,6 +577,7 @@
             description: "The brickwork here is honeycombed with burrows, gnawed through mortar and earth alike. The walls squeak and rustle, and dozens of small passages branch off too narrow for anything larger than a rat.",
             terrain: Uneven,
             indoors: true,
+            light: Dark,
             exits: {
                 "west": "tunnel_east",
                 "east": "collapsed_gallery",
@@ -568,6 +590,7 @@
             description: "Half of the ceiling has fallen in, leaving a slope of rubble to climb over. Rats scatter across the debris at every step.",
             terrain: Rough,
             indoors: true,
+            light: Dark,
             exits: {
                 "west": "rat_runs",
                 "south": "nest",
@@ -579,6 +602,7 @@
             description: "A wide chamber built to hold floodwater, now a shallow, reeking lake. Its edges are crowded with rats, and the overflow channels lead off into the rest of the sewers.",
             terrain: Wading,
             indoors: true,
+            light: Dark,
             exits: {
                 "north": "rat_runs",
                 "east": "nest",
@@ -590,6 +614,7 @@
             description: "A collapsed section of tunnel heaped with rubbish, gnawed bones and shredded cloth. The heaps shift and rustle, and countless small eyes catch what little light there is.",
             terrain: Rough,
             indoors: true,
+            light: Dark,
             exits: {
                 "north": "collapsed_gallery",
                 "west": "overflow_chamber",

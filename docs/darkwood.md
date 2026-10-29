@@ -154,7 +154,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 
 - **Bramble Thicket:** pushing through scratches **(gap: room reactions: `Enters` → `Damage`)**, and it's rough going.
 - **Spider Hollow's webs:** walking in, you may be caught (`held`) **(gap: room reactions)**.
-- **The deep wood is dark:** hard to see in, and harder at night **(gap: room conditions, darkness and sight)**. A torch would help (torches exist, but light nothing yet).
+- **The deep wood is dark:** its rooms will be `light: Dark`, and the west woods are dark at night; torches light the way, and the beasts have night eyes ([Light and darkness](world.md#light-and-darkness), *built*).
 - **Getting lost** in the deep wood without Navigation **(gap, later: a Navigation skill and lost-ness)**.
 - **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded **(gap: room conditions with `Every` reactions)**. It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
 - **Night** changes the forest: more wolves, fewer deer **(gap: time-of-day spawns)**.
