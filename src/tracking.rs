@@ -259,6 +259,7 @@ fn trackwork(
             character_id: actor.character_id,
             race: &actor.race,
             boost: 1.0,
+            fighting: false,
         };
         let gains = practice.exercise(actor.entity, learner, key);
 

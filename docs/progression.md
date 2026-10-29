@@ -43,6 +43,12 @@ For a skill at level 10, within its soft cap (base chance 18%):
 | Warmed up, then 4 hours away | 0.44 | 10% |
 | Warmed up, then a day away | 0.01 | 4% |
 
+## Pacing
+
+Decided 2026-10-29. In a fight a skill is used about once a round, every 3 seconds. Out of one, an action takes only a second, and some skills (sneaking as you walk, haggling) take none, so repeating one could teach three times as fast. To keep them even, **out of a fight a use counts for less when it follows the last one quickly**: a use t seconds after the previous counts for t / 3 of one (`practice_window_seconds` in `assets/progression.ron`), and in full after 3 seconds. Foraging every second counts a third each time, about the same as once a round in a fight.
+
+A use's weight multiplies its gain chance, the practice it builds and its chance of a discovery. In a fight every use counts in full, since rounds pace it already, and a dodge against each of several attackers still counts. The time of the last try isn't saved, so the first use after logging in counts in full.
+
 ## Gain cooldown
 
 After a gain, that skill cannot gain again until its cooldown ends. A starting curve is 5 minutes × 1.1<sup>level</sup>: 5 minutes at level 0, about 9 hours at level 49.
@@ -104,5 +110,5 @@ A fight against the odds teaches more, and is worth more. How **outmatched** a p
 - [ ] **Is the gain cooldown per skill or shared across all skills?** Leaning: per skill, so a varied session makes progress on several.
 - [ ] **Does practice fade while logged off?** Leaning: yes, by real time.
 - [ ] **Confirm:** skill levels never decay, and gaining a level keeps practice.
-- [ ] **Do uses need a minimum gap to build practice?** Only if cooldowns alone prove too easy to exploit.
+- [x] **Do uses need a minimum gap to build practice?** Not a gap but a ramp: out of a fight, uses closer than a round apart count for less ([Pacing](#pacing)).
 - [ ] **Does Luck apply to skill-gain rolls?** It speeds progression within the cooldowns, and may make Luck the attribute everyone raises first.

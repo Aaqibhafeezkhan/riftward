@@ -140,6 +140,7 @@ pub fn bargain(
         character_id: actor.character_id,
         race: &actor.race,
         boost: 1.0,
+        fighting: false,
     };
     let gains = practice.exercise(actor.entity, learner, HAGGLING);
     if let Some(text) = &skill.def.text {
@@ -247,6 +248,7 @@ fn itemwork(
             character_id: actor.character_id,
             race: &actor.race,
             boost: 1.0,
+            fighting: false,
         };
         let gains = practice.exercise(actor.entity, learner, key);
         let text = skill.def.text.as_ref().ok_or_else(String::new)?;

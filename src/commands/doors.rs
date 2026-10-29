@@ -498,6 +498,7 @@ pub fn lockwork(
             character_id: it.actor.character_id,
             race: &it.actor.race,
             boost: 1.0,
+            fighting: false,
         };
         gains = practice.exercise(it.actor.entity, learner, key);
         let text = skill.def.text.as_ref().ok_or_else(String::new)?;

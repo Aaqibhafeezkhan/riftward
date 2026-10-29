@@ -804,6 +804,9 @@ pub struct SkillState {
     pub ready_at: f64,
     /// Trigger amounts towards a passive skill's next use, like stamina spent. Not saved.
     pub pending: f64,
+    /// When it was last used, in unix seconds to the fraction, for pacing practice out of a
+    /// fight. Not saved.
+    pub tried_at: f64,
     /// Karma paid to unlock it, if it was unlocked.
     pub karma_paid: u32,
 }
@@ -818,6 +821,7 @@ impl SkillState {
             learned_via: learned_via.into(),
             ready_at: 0.0,
             pending: 0.0,
+            tried_at: 0.0,
             karma_paid: 0,
         }
     }
@@ -855,26 +859,41 @@ pub fn gain_cooldown(level: u32) -> i64 {
     (BASE_COOLDOWN * COOLDOWN_GROWTH.powi(level as i32)) as i64
 }
 
-/// One use of a skill at unix time `now`: practice fades and builds, and if the skill is off its
-/// gain cooldown, `roll` is asked whether the chance comes up. Returns whether it gained a level.
+/// How much a use counts, 0 to 1, `since` seconds after the last: out of a fight, uses closer
+/// together than `practice_window_seconds` (`progression.ron`, a combat round) count for that
+/// much less, so trying again every second teaches no faster than a fight does. In a fight,
+/// rounds pace it already.
+pub fn pace(since: f64, fighting: bool) -> f64 {
+    let window = crate::attributes::progression().practice_window_seconds;
+    if fighting || window <= 0.0 {
+        1.0
+    } else {
+        (since / window).clamp(0.0, 1.0)
+    }
+}
+
+/// One use of a skill at unix time `now`, counting for `weight` of a full one (see [`pace`]):
+/// practice fades and builds, and if the skill is off its gain cooldown, `roll` is asked whether
+/// the chance comes up. Returns whether it gained a level.
 pub fn roll_skill_gain(
     state: &mut SkillState,
     difficulty: f64,
     soft_cap: u32,
     now: i64,
+    weight: f64,
     roll: impl FnOnce(f64) -> bool,
 ) -> bool {
     let practice = faded(state.practice, state.last_used.map_or(0, |at| now - at));
     let mut gained = false;
-    if now >= state.next_gain_at {
-        let chance = gain_chance(state.level, difficulty, practice, soft_cap);
+    if now >= state.next_gain_at && weight > 0.0 {
+        let chance = gain_chance(state.level, difficulty, practice, soft_cap) * weight;
         if roll(chance) {
             state.next_gain_at = now + gain_cooldown(state.level);
             state.level += 1;
             gained = true;
         }
     }
-    state.practice = practice + 0.1 * (1.0 - practice);
+    state.practice = practice + 0.1 * weight * (1.0 - practice);
     state.last_used = Some(now);
     gained
 }
@@ -1034,14 +1053,16 @@ impl Practice<'_, '_> {
     }
 }
 
-/// The character practising a skill: who to save it for, their race for requirements, and how
-/// much a tough fight multiplies their chances of a gain or a discovery (1 for none).
+/// The character practising a skill: who to save it for, their race for requirements, how
+/// much a tough fight multiplies their chances of a gain or a discovery (1 for none), and
+/// whether they're fighting (out of a fight, quick repeats count for less: [`pace`]).
 #[derive(Clone, Copy)]
 pub struct Learner<'a> {
     /// Their saved character; a mob has none, and doesn\'t learn.
     pub character_id: Option<i64>,
     pub race: &'a str,
     pub boost: f64,
+    pub fighting: bool,
 }
 
 /// What a fight against odds of `outmatched` (see `combat::Outmatched`) does for learning: the
@@ -1074,6 +1095,14 @@ pub fn count_use(
     }
     let luck = attributes.get(Attribute::Luck);
     let cap = soft_cap(attributes.level());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64());
+    // How much this use counts, from how soon it follows the last.
+    let weight = skills.0.get_mut(key).map_or(1.0, |state| {
+        let since = now - std::mem::replace(&mut state.tried_at, now);
+        pace(since, learner.fighting)
+    });
     let mut lines = Vec::new();
     // Skills that grow with this one or its tree, like the Adept's Inner Discipline, are practised
     // by this use too.
@@ -1083,9 +1112,14 @@ pub fn count_use(
         let (Some(skill), Some(state)) = (defs.skills.get(key), skills.0.get_mut(key)) else {
             continue;
         };
-        let gained = roll_skill_gain(state, skill.def.difficulty, cap, unix_now(), |chance| {
-            dice.chance(luck, chance * learner.boost)
-        });
+        let gained = roll_skill_gain(
+            state,
+            skill.def.difficulty,
+            cap,
+            now as i64,
+            weight,
+            |chance| dice.chance(luck, chance * learner.boost),
+        );
         if let Err(err) = db.save_skill(character_id, key, state) {
             error!("failed to save {key} for character {character_id}: {err}");
         }
@@ -1116,7 +1150,7 @@ pub fn count_use(
         },
         story,
     );
-    let chance = DISCOVERY_CHANCE * learner.boost;
+    let chance = DISCOVERY_CHANCE * learner.boost * weight;
     if let Some(found) = discover(defs, &practised, &facts, dice, chance) {
         let (found, name) = (found.key.clone(), found.def.name.clone());
         learn(skills, &found, "Discovered", Some(character_id), db);
@@ -1283,6 +1317,7 @@ fn practise_passives(
                     character_id: actor.character_id,
                     race: &actor.race,
                     boost: tough_fight_boost(fights.get(who).ok().map(|o| o.0)),
+                    fighting: fights.contains(who),
                 };
                 let lines = count_use(
                     &defs,
@@ -1945,13 +1980,13 @@ mod tests {
     #[test]
     fn a_gain_starts_the_cooldown_and_uses_still_build_practice() {
         let mut state = SkillState::new("Starting");
-        assert!(roll_skill_gain(&mut state, 1.0, 50, 1000, |_| true));
+        assert!(roll_skill_gain(&mut state, 1.0, 50, 1000, 1.0, |_| true));
         assert_eq!(state.level, 1);
         assert_eq!(state.next_gain_at, 1300);
         assert!(close(state.practice, 0.1));
         // On cooldown: no roll, but practice still builds.
         let rolled = std::cell::Cell::new(false);
-        assert!(!roll_skill_gain(&mut state, 1.0, 50, 1010, |_| {
+        assert!(!roll_skill_gain(&mut state, 1.0, 50, 1010, 1.0, |_| {
             rolled.set(true);
             true
         }));
@@ -1959,8 +1994,23 @@ mod tests {
         assert_eq!(state.level, 1);
         assert!(state.practice > 0.18);
         // After the cooldown it can gain again.
-        assert!(roll_skill_gain(&mut state, 1.0, 50, 1300, |_| true));
+        assert!(roll_skill_gain(&mut state, 1.0, 50, 1300, 1.0, |_| true));
         assert_eq!(state.level, 2);
+    }
+
+    #[test]
+    fn quick_repeats_out_of_a_fight_count_for_less() {
+        // One use a second counts a third each: a round's worth every three seconds.
+        assert!(close(pace(1.0, false), 1.0 / 3.0));
+        assert!(close(pace(0.0, false), 0.0));
+        assert!(close(pace(10.0, false), 1.0));
+        assert!(close(pace(0.0, true), 1.0), "a fight paces itself");
+        // A use that counts for nothing builds no practice and can't gain.
+        let mut state = SkillState::new("Starting");
+        assert!(!roll_skill_gain(&mut state, 1.0, 50, 1000, 0.0, |_| true));
+        assert!(close(state.practice, 0.0));
+        roll_skill_gain(&mut state, 1.0, 50, 1001, 0.5, |_| false);
+        assert!(close(state.practice, 0.05));
     }
 
     #[test]
@@ -2267,6 +2317,7 @@ mod tests {
             character_id: Some(1),
             race: "human",
             boost: 1.0,
+            fighting: true,
         };
         let practice = |skills: &Skills, key: &str| skills.0[key].practice;
         let mut use_skill = |skills: &mut Skills, key: &str| {

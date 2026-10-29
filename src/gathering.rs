@@ -196,6 +196,7 @@ fn roomwork(In(inv): In<Invocation>, mut g: Gatherer) {
             character_id: actor.character_id,
             race: &actor.race,
             boost: 1.0,
+            fighting: false,
         };
         gains = g.practice.exercise(actor.entity, learner, key);
 

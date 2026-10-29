@@ -8,7 +8,7 @@ A handoff note for picking the work back up: what's built, what's next, and what
 
 Riftward is a classless telnet MUD on headless Bevy 0.20. Everything below is committed, tested live on a scratch server, and documented.
 
-- **Engine:** telnet with proper negotiation (`src/telnet.rs`), prompts marked with EOR or GA for MUD clients, one command per tick, an action queue (actions take a 3-second round in a fight, a second out of one), game events, a game clock (a day every 3 real hours), a one-second heartbeat.
+- **Engine:** telnet with proper negotiation (`src/telnet.rs`), prompts marked with EOR or GA for MUD clients, one command per tick, an action queue (actions take a 3-second round in a fight, a second out of one), skill practice paced so out of a fight it grows no faster than in one, game events, a game clock (a day every 3 real hours), a one-second heartbeat.
 - **World:** zone files (RON, hot-reloaded) for Riftwatch (25 rooms), its sewers (23) and the edge of the Darkwood (6, with the hedge-shaman); doors and locks; terrain that costs stamina to cross; in-game building.
 - **Items:** templates, Bulk and encumbrance, hands and wear slots, containers and automatic placement, weapons, corpses that rot, real items that survive restarts, item spawns, unique items.
 - **Mobs:** templates and spawns (keeping a count, breeding, after-death and reseed timers, gated by world flags), wandering and crowding, crowds breaking through closed doors (rats gnawing through the grates), pack limits, aggression, auras, the players' vitals, technique skills used by chance, and equipment they fight with and drop; and [mobs fighting mobs](world.md#mobs-fighting-mobs): tags and allies on templates, so the guards and the stray dog fight the rats in a breakout.

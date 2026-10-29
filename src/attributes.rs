@@ -37,6 +37,8 @@ pub struct Progression {
     pub awakening_experience: u64,
     /// Real minutes for a skill's practice to halve while it goes unused.
     pub practice_half_life_minutes: f64,
+    /// Seconds apart uses must be out of a fight to count in full; closer, they count for less.
+    pub practice_window_seconds: f64,
     /// The Luck that doubles a roll: each point is 1 / `luck_scale` better (see `dice.rs`).
     pub luck_scale: f64,
     /// The most characters in a group, its leader among them.

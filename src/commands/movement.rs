@@ -395,6 +395,7 @@ fn sneak_through(
         character_id: actor.character_id,
         race: &actor.race,
         boost: 1.0,
+        fighting: false,
     };
     for line in practice.exercise(actor.entity, learner, STEALTH) {
         out.push(Outgoing::line(actor.entity, line));
@@ -466,6 +467,7 @@ fn cross(
             character_id: actor.character_id,
             race: &actor.race,
             boost: 1.0,
+            fighting: false,
         };
         practice.exercise(actor.entity, learner, key)
     } else {

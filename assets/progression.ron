@@ -20,6 +20,10 @@
     // a break of an hour or two keeps most of it, an evening away leaves it cold.
     // See docs/progression.md#the-gain-roll.
     practice_half_life_minutes: 240,
+    // Out of a fight, uses of a skill closer together than this count for that much less (one a
+    // second counts a third each), so repeating something teaches no faster than a fight's
+    // rounds do. See docs/progression.md#pacing.
+    practice_window_seconds: 3.0,
     // The Luck that doubles a roll: at 100, each point of Luck makes a chance, an amount, a
     // contest rating and a pick from a table a percent better. Luck has no cap.
     // See docs/attributes.md#luck.

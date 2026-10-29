@@ -577,6 +577,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             character_id: Some(player.character_id),
             race: &player.race,
             boost: tough_fight_boost(self.outmatched.get(&who).copied()),
+            fighting: self.engaged.contains_key(&who),
         };
         let lines = count_use(
             self.defs,
