@@ -15,6 +15,7 @@
 //! - `loot`: what a boss drops for those on its quest.
 //! - `ask`: asking mobs about the topics a quest gives them.
 //! - `spawned`: mobs a quest brings into the world, and clearing them away.
+//! - `gm`: the GMs' `quest` tools.
 //! - `why`: GMs' account of where someone stands in a quest, and why.
 
 mod actions;
@@ -24,6 +25,7 @@ mod claims;
 mod def;
 mod escort;
 mod failures;
+mod gm;
 mod journal;
 mod loot;
 mod progress;
@@ -41,6 +43,7 @@ use claims::{Claims, abandon, expire_claims, load_claims};
 use def::{QuestDef, QuestLoader, load_quests, sync_quests};
 use escort::{end_escorts, start_escorts};
 use failures::{fail_on_deaths, fail_on_losses, fail_pending};
+use gm::quest_cmd;
 use journal::journal;
 use loot::{deaths, want_loot};
 use progress::count_progress;
@@ -119,6 +122,13 @@ impl Plugin for QuestsPlugin {
                     .usage("abandon <quest>")
                     .summary("give up a quest you're on; a contract costs some merit"),
                 abandon,
+            )
+            .add_command(
+                CommandSpec::new("quest", Category::Admin)
+                    .usage("quest grant|advance|reward <player> <quest> [<way>|<ending>], or quest release <quest>")
+                    .summary("run quests by hand: give one, push someone on, pay one out, take one back")
+                    .permission(Permission::Events),
+                quest_cmd,
             )
             .add_command(
                 CommandSpec::new("why", Category::Admin)

@@ -162,15 +162,15 @@ fn unmet(
 #[derive(SystemParam)]
 pub(super) struct Desk<'w, 's> {
     /// Items, rooms, templates, facts and the database, shared with stage actions.
-    hand: Stagehand<'w, 's>,
-    players: Characters<'w, 's>,
+    pub(super) hand: Stagehand<'w, 's>,
+    pub(super) players: Characters<'w, 's>,
     mobs: crate::mobs::MobQuery<'w, 's>,
-    logs: Query<'w, 's, &'static mut QuestLog>,
+    pub(super) logs: Query<'w, 's, &'static mut QuestLog>,
     memberships: Query<'w, 's, &'static mut Membership>,
     purses: Query<'w, 's, &'static mut crate::money::Purse>,
-    quests: Res<'w, Quests>,
-    claims: ResMut<'w, Claims>,
-    outbox: ResMut<'w, Outbox>,
+    pub(super) quests: Res<'w, Quests>,
+    pub(super) claims: ResMut<'w, Claims>,
+    pub(super) outbox: ResMut<'w, Outbox>,
     groups: crate::groups::Groups<'w, 's>,
     index: Res<'w, crate::world::RoomIndex>,
     sheets: Query<'w, 's, (&'static Attributes, &'static Skills)>,
@@ -445,7 +445,7 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
 /// Pay `who` for `quest`, done (ending `ending`, if one): `copper` of its coin, its items, its
 /// merit for a contract (and a line in Marin's record), and the facts it sets; and mark their
 /// `record` done, with the ending kept as the quest's `ending` fact. What to tell them.
-fn pay(
+pub(super) fn pay(
     d: &mut Desk,
     who: &Actor,
     mut record: QuestRecord,

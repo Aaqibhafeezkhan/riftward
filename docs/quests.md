@@ -394,10 +394,10 @@ GMs and admins make and run quests from inside the game, like builders do rooms:
 | Command | Does |
 | --- | --- |
 | `quest create <id>` / `quest edit <id> <field> ...` | Write a quest, saved to its RON file |
-| `quest grant <player> <id>` | Give a quest to a player directly |
-| `quest advance <player> <id>` | Push a player past a stage, for `Manual` goals or a broken one |
-| `quest reward <player> <id>` | Pay out the rewards by hand |
-| `quest release <id>` | Put a claimed notice back on the board, its holder's claim written off |
+| `quest grant <player> <id>` | Give a quest to a player directly (*built*, 2026-10-28: someone in the game, past the board, rank, `requires` and repeat checks; not one they hold or one claimed by someone else; what it gives and its first stage's `on_begin` follow) |
+| `quest advance <player> <id>` | Push a player past a stage, for `Manual` goals or a broken one (*built*: its `on_end` and the next stage's `on_begin` run; a stage offering choices takes a way's number, `quest advance ada crystals 2`; a quest whose stage is gone goes back to its first; at the last stage it says to `quest reward`) |
+| `quest reward <player> <id>` | Pay out the rewards by hand (*built*: as reporting pays, without asking for anything; a quest with endings takes the ending reached, or one named, `quest reward ada crystals returned`) |
+| `quest release <id>` | Put a claimed notice back on the board, its holder's claim written off (*built*: for each holder, in the game or not, at no cost; Marin's record says "released", and what it gave is taken back) |
 | `why <player> <quest>` | Show the quest's stage, each objective and rule, each condition and whether it held, and the facts it read ([Facts](facts.md#why-did-or-didnt-it-happen)) (*built*: online or not; what needs them in the game, like what they carry or a `Meet`, is said to be unknown while they're away) |
 | `facts <player>` / `facts world` | List the facts set: a player's own and their quests', online or not, or the world's (*built*) |
 | `guild promote <player>` / `guild merit <player> <n>` | Run a promotion trial live, or correct merit (*built*: merit raises rank through Iron by itself, and says when a trial rank is earned) |
@@ -449,6 +449,8 @@ In the smallest pull requests that each leave the game working, every one with i
 23. *Built.* **`fails_if`:** a death, a lost item.
 24. *Built.* **Escort:** a mob following the holder on the quest's say-so, `Escort(mob, to: room)`. *Narina's Secret* waits on the Rift-Scar, which isn't built yet (it's beyond the deep wood in [the Darkwood](darkwood.md)): it's written once that exists (decided 2026-10-28).
 25. **GM quest tools:** `quest grant`, `advance`, `reward`, `release`; writing quests in game (`quest create`, `quest edit`) last.
+    - *Built.* **25a.** `quest grant`, `advance`, `reward` and `release`.
+    - **25b.** `quest create` and `quest edit`, saved to the quest's file.
 
 Meat for the Kitchen waits on harvesting; it can be written with step 13 and works once Butchering exists.
 
