@@ -14,7 +14,8 @@ use crate::facts::{Owner, Value};
 use crate::output::{Actor, Outgoing, deliver};
 use crate::time::unix_now;
 
-/// `quest grant|advance|reward <player> <quest> [<way>|<ending>]`, `quest release <quest>`.
+/// `quest grant|advance|reward <player> <quest> [<way>|<ending>]`, `quest release <quest>`, and
+/// writing quests: `quest create|edit|show` (`authoring.rs`).
 pub(super) fn quest_cmd(In(inv): In<Invocation>, mut d: Desk) {
     let Some(gm) = Actor::get(&d.players, inv.entity) else {
         return;
@@ -23,6 +24,9 @@ pub(super) fn quest_cmd(In(inv): In<Invocation>, mut d: Desk) {
     let (sub, rest) = args.split_once(' ').unwrap_or((args, ""));
     let mut out = Vec::new();
     let reply = match sub {
+        "create" => super::authoring::create(&mut d, &gm, rest),
+        "edit" => super::authoring::edit(&mut d, &gm, rest),
+        "show" => super::authoring::show(&d, rest),
         "release" => match find(&d.quests, rest.trim()) {
             Some((quest, _)) => release(&mut d, &quest, &mut out),
             None => format!("There's no quest like '{}'.", rest.trim()),

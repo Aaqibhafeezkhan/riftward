@@ -37,27 +37,31 @@ pub struct QuestDef {
     /// Where it's offered.
     pub posted: Posted,
     /// Only shown, and only takeable, while this holds.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub posted_when: Option<Requirement>,
     /// A guild contract: its rank, and the merit it pays.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contract: Option<Contract>,
     pub availability: Availability,
     /// Who may take it, beyond a contract's rank.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requires: Option<Requirement>,
     /// How soon a character can take it again once they've finished it.
     pub repeat: Repeat,
+    /// Being written: off the board until it's posted (`quest edit <id> post`), though a GM can
+    /// still `quest grant` it to try it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub draft: bool,
     /// In order; a stage's objectives in any order, all of them needed.
     pub stages: Vec<Stage>,
     /// The mob it's reported to; the guild's clerk if none, for a contract.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report_to: Option<String>,
     /// Items handed to whoever takes it from the board (the letter to carry), taken back if
     /// it's given up or fails.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gives: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rewards: Vec<Reward>,
     /// The ways it can end, by name, each with its journal line and its own rewards, in place of
     /// `rewards` (and of a contract's merit, which an ending pays only as `Merit`).
@@ -819,6 +823,46 @@ pub struct Names {
     pub items: Vec<String>,
 }
 
+/// What a quest file written in the game starts with: comments are lost when it's rewritten.
+const QUEST_FILE_HEADER: &str = "\
+// Quest file. Ids are this zone's own unless written zone:id.
+// Rewritten by the GMs' quest create and quest edit, so comments other than this header are lost.
+";
+
+impl QuestDef {
+    /// The quest as its file is written.
+    pub(super) fn file_contents(&self) -> Result<String, ron::Error> {
+        // Apostrophes left as they are, and a line with quotes in it as a raw string, `r#"..."#`,
+        // so the file reads as it was written.
+        let pretty = ron::ser::PrettyConfig::new()
+            .struct_names(false)
+            .escape_strings(false);
+        let body = ron_options().to_string_pretty(self, pretty)?;
+        Ok(format!("{QUEST_FILE_HEADER}{body}\n"))
+    }
+
+    /// Where its file is, under the asset folder: `quests/<zone>/<quest>.quest.ron`.
+    pub(super) fn file_path(&self) -> std::path::PathBuf {
+        let (zone, quest) = self.id.split_once(':').unwrap_or(("", &self.id));
+        bevy::asset::io::file::FileAssetReader::get_base_path()
+            .join("assets")
+            .join(QUESTS_PATH)
+            .join(zone)
+            .join(format!("{quest}.{QUEST_EXTENSION}"))
+    }
+
+    /// Write it to its file, making the zone's folder if it's the first. The file watcher reloads
+    /// it, which is harmless as `Quests` already has it.
+    pub(super) fn save(&self) -> Result<(), String> {
+        let path = self.file_path();
+        let contents = self.file_contents().map_err(|err| err.to_string())?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|err| err.to_string())?;
+        }
+        std::fs::write(&path, contents).map_err(|err| err.to_string())
+    }
+}
+
 /// Every quest, by id.
 #[derive(Resource, Default)]
 pub struct Quests(pub HashMap<String, QuestDef>);
@@ -970,6 +1014,26 @@ mod tests {
     }
 
     #[test]
+    fn every_quest_file_reads_back_as_it_is_written() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("assets")
+            .join(QUESTS_PATH);
+        for folder in std::fs::read_dir(root).unwrap() {
+            for entry in std::fs::read_dir(folder.unwrap().path()).unwrap() {
+                let path = entry.unwrap().path();
+                let quest: QuestDef = ron_options()
+                    .from_str(&std::fs::read_to_string(&path).unwrap())
+                    .unwrap();
+                let written = quest.file_contents().unwrap();
+                let back: QuestDef = ron_options()
+                    .from_str(&written)
+                    .unwrap_or_else(|err| panic!("{}: {err}\n{written}", path.display()));
+                assert_eq!(back, quest, "{}", path.display());
+            }
+        }
+    }
+
+    #[test]
     fn quests_are_named_for_their_zone_and_file() {
         let path = Path::new("quests/riftwatch/rats_in_the_drains.quest.ron");
         assert_eq!(quest_id(path), "riftwatch:rats_in_the_drains");
@@ -1109,6 +1173,7 @@ mod tests {
             gives: Vec::new(),
             endings: Default::default(),
             fails_if: Vec::new(),
+            draft: false,
             rewards: Vec::new(),
         };
         let stage = |objectives| Stage {

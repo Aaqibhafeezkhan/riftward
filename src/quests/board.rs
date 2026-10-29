@@ -197,7 +197,7 @@ fn posted<'a>(
         .0
         .values()
         .filter(|q| q.board().as_ref() == Some(here))
-        .filter(|q| !claims.0.contains_key(&q.id))
+        .filter(|q| !q.draft && !claims.0.contains_key(&q.id))
         .filter(|q| q.contract.is_none() || q.rank() <= highest)
         .filter(|q| {
             q.posted_when

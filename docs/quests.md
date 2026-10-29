@@ -133,7 +133,7 @@ One engine runs every quest: a guild contract is a quest the guild posts, with a
 
 ### Quest files
 
-**Each quest is its own RON file,** in a folder named for the zone it belongs to: `assets/quests/riftwatch/rats_in_the_drains.quest.ron` is the quest `riftwatch:rats_in_the_drains`, named the way rooms and mobs are. Bare ids inside it (`contract_hall`) are the zone's own; anything else is `zone:id` (`sewers:sewer_rat`). Files are hot-reloaded, and each is checked when it loads, as skills and spells are: its text must be there, and a contract's rank must be a real one; a file that fails keeps the version before it. That every mob, item and room it names exists is checked by the tests, against the zone files (*built*: at load, the zones may not be in yet).
+**Each quest is its own RON file,** in a folder named for the zone it belongs to: `assets/quests/riftwatch/rats_in_the_drains.quest.ron` is the quest `riftwatch:rats_in_the_drains`, named the way rooms and mobs are. Bare ids inside it (`contract_hall`) are the zone's own; anything else is `zone:id` (`sewers:sewer_rat`). Files are hot-reloaded, and each is checked when it loads, as skills and spells are (a file `quest edit` rewrites loses its comments, as a zone file does): its text must be there, and a contract's rank must be a real one; a file that fails keeps the version before it. That every mob, item and room it names exists is checked by the tests, against the zone files (*built*: at load, the zones may not be in yet).
 
 ```ron
 // assets/quests/riftwatch/rats_in_the_drains.quest.ron
@@ -393,7 +393,7 @@ GMs and admins make and run quests from inside the game, like builders do rooms:
 
 | Command | Does |
 | --- | --- |
-| `quest create <id>` / `quest edit <id> <field> ...` | Write a quest, saved to its RON file |
+| `quest create <id>` / `quest edit <id> <field> ...` | Write a quest, saved to its RON file (*built*, 2026-10-28: `quest create <zone:id> <name>` makes a draft on the board where the GM stands, off the board until `quest edit <id> post`; `quest edit` sets the name, summary, description, board, rank and merit, open or claimed, repeat, who it's reported to, coin and item rewards, and stages, their objectives (`kill`, `bring`, `find`, `reach`, `ask`, `escort`) and topics; each edit is checked before it's saved, and `quest show <id>` prints the file. Choices, endings, stage actions and `fails_if` are written in the file, which reloads by itself) |
 | `quest grant <player> <id>` | Give a quest to a player directly (*built*, 2026-10-28: someone in the game, past the board, rank, `requires` and repeat checks; not one they hold or one claimed by someone else; what it gives and its first stage's `on_begin` follow) |
 | `quest advance <player> <id>` | Push a player past a stage, for `Manual` goals or a broken one (*built*: its `on_end` and the next stage's `on_begin` run; a stage offering choices takes a way's number, `quest advance ada crystals 2`; a quest whose stage is gone goes back to its first; at the last stage it says to `quest reward`) |
 | `quest reward <player> <id>` | Pay out the rewards by hand (*built*: as reporting pays, without asking for anything; a quest with endings takes the ending reached, or one named, `quest reward ada crystals returned`) |
@@ -450,7 +450,7 @@ In the smallest pull requests that each leave the game working, every one with i
 24. *Built.* **Escort:** a mob following the holder on the quest's say-so, `Escort(mob, to: room)`. *Narina's Secret* waits on the Rift-Scar, which isn't built yet (it's beyond the deep wood in [the Darkwood](darkwood.md)): it's written once that exists (decided 2026-10-28).
 25. **GM quest tools:** `quest grant`, `advance`, `reward`, `release`; writing quests in game (`quest create`, `quest edit`) last.
     - *Built.* **25a.** `quest grant`, `advance`, `reward` and `release`.
-    - **25b.** `quest create` and `quest edit`, saved to the quest's file.
+    - *Built.* **25b.** `quest create` and `quest edit`, saved to the quest's file (and `quest show`).
 
 Meat for the Kitchen waits on harvesting; it can be written with step 13 and works once Butchering exists.
 

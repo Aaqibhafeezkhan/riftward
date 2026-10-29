@@ -16,10 +16,12 @@
 //! - `ask`: asking mobs about the topics a quest gives them.
 //! - `spawned`: mobs a quest brings into the world, and clearing them away.
 //! - `gm`: the GMs' `quest` tools.
+//! - `authoring`: writing quests in the game, saved to their files.
 //! - `why`: GMs' account of where someone stands in a quest, and why.
 
 mod actions;
 mod ask;
+mod authoring;
 mod board;
 mod claims;
 mod def;
@@ -125,8 +127,11 @@ impl Plugin for QuestsPlugin {
             )
             .add_command(
                 CommandSpec::new("quest", Category::Admin)
-                    .usage("quest grant|advance|reward <player> <quest> [<way>|<ending>], or quest release <quest>")
-                    .summary("run quests by hand: give one, push someone on, pay one out, take one back")
+                    .usage(
+                        "quest grant|advance|reward <player> <quest> [<way>|<ending>], quest \
+                         release <quest>, or quest create <zone:id> <name>|edit <id> ...|show <id>",
+                    )
+                    .summary("run quests by hand, and write them: create, edit and show")
                     .permission(Permission::Events),
                 quest_cmd,
             )
@@ -175,6 +180,7 @@ pub(super) mod testing {
             gives: Vec::new(),
             endings: Default::default(),
             fails_if: Vec::new(),
+            draft: false,
             rewards: vec![Reward::Coin(250)],
         }
     }

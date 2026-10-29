@@ -168,7 +168,7 @@ pub(super) struct Desk<'w, 's> {
     pub(super) logs: Query<'w, 's, &'static mut QuestLog>,
     memberships: Query<'w, 's, &'static mut Membership>,
     purses: Query<'w, 's, &'static mut crate::money::Purse>,
-    pub(super) quests: Res<'w, Quests>,
+    pub(super) quests: ResMut<'w, Quests>,
     pub(super) claims: ResMut<'w, Claims>,
     pub(super) outbox: ResMut<'w, Outbox>,
     groups: crate::groups::Groups<'w, 's>,
