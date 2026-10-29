@@ -1,0 +1,18 @@
+// The Rat King: posted only while the rats are out of the sewers.
+(
+    name: "The Rat King",
+    summary: "The rats have broken out, and something leads them. Kill it.",
+    description: "The rats have broken out of the sewers, and they move as if something leads them: a knot of rats the size of a dog, their tails fused together, that the rest obey. Find the Rat King in the sewers, kill it, and bring Marin Harrow one of its teeth as proof.",
+    posted: Board("contract_hall"),
+    posted_when: Some(WorldFlag("rats_broke_out")),
+    contract: Some((rank: "copper", merit: 25)),
+    availability: Claimed(for: Days(2)),
+    repeat: Every(Days(2)),
+    stages: [
+        (
+            text: "Kill the Rat King in the sewers and bring back one of its teeth.",
+            objectives: [Kill(Mob("sewers:rat_king"), 1), Bring(Item("sewers:kings_tooth"), 1)],
+        ),
+    ],
+    rewards: [Coin(500), Set("char.title.ratbane", true)],
+)

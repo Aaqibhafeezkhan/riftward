@@ -114,6 +114,10 @@ pub enum Objective {
     /// So many of these items come by (picked up, given, bought) while on the stage: nothing is
     /// handed over. A clue; the letter you're to carry.
     Obtain(ItemMatch, u32),
+    /// The room reached, while on the stage: `Reach("forest:ravine")`.
+    Reach(String),
+    /// A requirement that holds when reporting: a flag, a skill's level, a world flag.
+    Meet(Requirement),
 }
 
 /// Which mobs: a template, or any with a tag.
@@ -223,9 +227,11 @@ impl QuestDef {
                 Objective::Kill(MobMatch::Mob(mob), _) => names.mobs.push(full(mob)),
                 Objective::Bring(ItemMatch::Item(item), _)
                 | Objective::Obtain(ItemMatch::Item(item), _) => names.items.push(full(item)),
+                Objective::Reach(room) => names.rooms.push(full(room)),
                 Objective::Kill(MobMatch::Tag(_), _)
                 | Objective::Bring(ItemMatch::Tag(_), _)
-                | Objective::Obtain(ItemMatch::Tag(_), _) => {}
+                | Objective::Obtain(ItemMatch::Tag(_), _)
+                | Objective::Meet(_) => {}
             }
         }
         names
@@ -283,7 +289,8 @@ impl Objective {
                 Some(format!("{stage}.obtain.{}", ItemKey::parse(id, zone)))
             }
             Objective::Obtain(ItemMatch::Tag(tag), _) => Some(format!("{stage}.obtain.tag.{tag}")),
-            Objective::Bring(..) => None,
+            Objective::Reach(room) => Some(format!("{stage}.reach.{}", RoomKey::parse(room, zone))),
+            Objective::Bring(..) | Objective::Meet(_) => None,
         }
     }
 
@@ -306,6 +313,11 @@ impl Objective {
             Objective::Kill(MobMatch::Tag(tag), _)
             | Objective::Bring(ItemMatch::Tag(tag), _)
             | Objective::Obtain(ItemMatch::Tag(tag), _) => format!("any {tag}"),
+            Objective::Reach(room) => {
+                let key = RoomKey::parse(room, zone);
+                (lookup.places)(&key).unwrap_or_else(|| key.to_string())
+            }
+            Objective::Meet(requirement) => requirement.describe(&|id| id.to_string()),
         }
     }
 
@@ -327,12 +339,18 @@ impl Objective {
                 format!("{verb} {what}: {have} of {need}{done}")
             }
             Objective::Bring(_, need) => format!("Bring {what}: {need}, counted when you report"),
+            Objective::Reach(_) => match have.unwrap_or(0) {
+                0 => format!("Reach {what}"),
+                _ => format!("Reach {what} (done)"),
+            },
+            Objective::Meet(_) => format!("Needs {what}, checked when you report"),
         }
     }
 
     pub(super) fn count(&self) -> u32 {
         match self {
             Objective::Kill(_, n) | Objective::Bring(_, n) | Objective::Obtain(_, n) => *n,
+            Objective::Reach(_) | Objective::Meet(_) => 1,
         }
     }
 }

@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use super::claims::Claims;
 use super::def::{Objective, QuestDef, Quests, Reward};
 use super::journal::{DONE, HELD, Lookup, OVER, QuestLog, stage_number};
+use crate::attributes::Attributes;
 use crate::command::Invocation;
 use crate::db::{Database, QuestRecord};
 use crate::facts::{Facts, Owner};
@@ -15,9 +16,10 @@ use crate::items::{ItemLocation, ItemTemplates};
 use crate::mobs::MobTemplates;
 use crate::money;
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
-use crate::requirements::ItemMatch;
+use crate::requirements::{ItemMatch, Requirement, Subject, Who};
+use crate::skills::Skills;
 use crate::time::unix_now;
-use crate::world::{ItemKey, MobKey};
+use crate::world::{ItemKey, MobKey, RoomKey};
 
 /// What's still wanted before `record` can be reported: Err with each thing missing, in the
 /// journal's words; or Ok with the items it takes from `carried`, `Bring`'s due. Without
@@ -27,6 +29,7 @@ fn readiness(
     record: &QuestRecord,
     character_id: i64,
     carried: Option<&[(Entity, ItemKey, Vec<String>)]>,
+    meets: &dyn Fn(&Requirement) -> bool,
     lookup: &Lookup,
 ) -> Result<Vec<Entity>, Vec<String>> {
     let Some(n) = stage_number(record) else {
@@ -43,11 +46,17 @@ fn readiness(
     let (mut missing, mut taken) = (Vec::new(), Vec::new());
     for objective in &stage.objectives {
         match objective {
-            Objective::Kill(_, need) | Objective::Obtain(_, need) => {
+            Objective::Kill(..) | Objective::Obtain(..) | Objective::Reach(_) => {
+                let need = objective.count();
                 let key = objective.key(n, zone);
                 let have = key.map(|key| lookup.story.number(&owner, &key, lookup.now));
-                if have.unwrap_or(0) < i64::from(*need) {
+                if have.unwrap_or(0) < i64::from(need) {
                     missing.push(objective.progress(zone, have, lookup));
+                }
+            }
+            Objective::Meet(requirement) => {
+                if !meets(requirement) {
+                    missing.push(format!("Needs {}", objective.what(zone, lookup)));
                 }
             }
             // What's brought is brought once, by whoever reports: it isn't asked of the rest.
@@ -101,6 +110,33 @@ pub(super) struct Desk<'w, 's> {
     db: Res<'w, Database>,
     outbox: ResMut<'w, Outbox>,
     groups: crate::groups::Groups<'w, 's>,
+    index: Res<'w, crate::world::RoomIndex>,
+    sheets: Query<'w, 's, (&'static Attributes, &'static Skills)>,
+    conditions: Query<'w, 's, &'static crate::combat::Conditions>,
+    shown: Query<'w, 's, &'static crate::guild::ShownRank>,
+}
+
+/// Whether `who` meets `requirement` now, as reporting tests a `Meet`.
+fn meets(d: &Desk, who: &Actor, requirement: &Requirement) -> bool {
+    let Ok((attributes, skills)) = d.sheets.get(who.entity) else {
+        return false;
+    };
+    let room = d.rooms.get(who.room).ok().map(|(_, key, _)| key.clone());
+    let carrying = crate::items::carried(who.entity, &d.items, &d.item_templates);
+    let subject = Subject::of(
+        Who {
+            attributes,
+            race: &who.race,
+            skills: Some(skills),
+            guild_rank: crate::guild::shown_rank(who.entity, &d.shown),
+            character: who.character_id,
+            conditions: d.conditions.get(who.entity).ok(),
+            room: room.as_ref(),
+            carrying: Some(&carrying),
+        },
+        Some(&d.story),
+    );
+    requirement.met(&subject)
 }
 
 /// `report [<quest>]`: report the quests you hold to whoever here they're for (a quest's
@@ -161,14 +197,27 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
         let Some(quest) = d.quests.0.get(&record.quest).cloned() else {
             continue;
         };
+        let places = |key: &RoomKey| {
+            let room = d.index.0.get(key)?;
+            d.rooms.get(*room).ok().map(|(room, ..)| room.name.clone())
+        };
         let lookup = Lookup {
             quests: &d.quests,
             story: &d.story,
             mobs: &d.mob_templates,
             items: &d.item_templates,
+            places: &places,
             now,
         };
-        let taken = match readiness(&quest, &record, character_id, Some(&carried), &lookup) {
+        let mine = |requirement: &Requirement| meets(&d, &actor, requirement);
+        let taken = match readiness(
+            &quest,
+            &record,
+            character_id,
+            Some(&carried),
+            &mine,
+            &lookup,
+        ) {
             Ok(taken) => taken,
             Err(missing) => {
                 lines.push(format!(
@@ -188,8 +237,10 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
             .filter_map(|mate| {
                 let id = mate.character_id?;
                 let record = d.logs.get(mate.entity).ok()?.get(&quest.id)?.clone();
-                (record.state == HELD && readiness(&quest, &record, id, None, &lookup).is_ok())
-                    .then_some((mate, record))
+                let theirs = |requirement: &Requirement| meets(&d, &mate, requirement);
+                (record.state == HELD
+                    && readiness(&quest, &record, id, None, &theirs, &lookup).is_ok())
+                .then_some((mate, record))
             })
             .collect();
         lines.push(format!("You report to {to}: {} is done.", quest.name));
@@ -401,6 +452,9 @@ mod tests {
                         Objective::Kill(MobMatch::Mob("rat".into()), 2),
                         Objective::Bring(ItemMatch::Item("sewers:rat_tail".into()), 2),
                         Objective::Bring(ItemMatch::Tag("herb".into()), 1),
+                        Objective::Meet(crate::requirements::Requirement::WorldFlag(
+                            "rats_broke_out".into(),
+                        )),
                     ],
                 },
             ],
@@ -433,26 +487,28 @@ mod tests {
                 vec!["herb".into()],
             ),
         ];
-        let ready = |record: &QuestRecord, story: &Facts, carried: &[_]| {
+        let ready = |record: &QuestRecord, story: &Facts, carried: &[_], met: bool| {
             let lookup = Lookup {
                 quests: &Quests::default(),
                 story,
                 mobs: &mobs,
                 items: &items,
+                places: &|_| None,
                 now: 0,
             };
-            readiness(&quest, record, id, Some(carried), &lookup)
+            readiness(&quest, record, id, Some(carried), &|_| met, &lookup)
         };
         assert_eq!(
-            ready(&record("1"), &story, &carried),
+            ready(&record("1"), &story, &carried, true),
             Err(vec!["Find the nest.".to_string()]),
             "not on the last stage"
         );
         assert_eq!(
-            ready(&record("2"), &story, &carried),
+            ready(&record("2"), &story, &carried, false),
             Err(vec![
                 "Kill rat: 0 of 2".to_string(),
-                "Bring sewers:rat_tail: 1 of 2".to_string()
+                "Bring sewers:rat_tail: 1 of 2".to_string(),
+                "Needs rats broke out".to_string()
             ])
         );
         let owner = Owner::Quest(id, quest.id.clone());
@@ -465,7 +521,7 @@ mod tests {
         );
         let mut carried = carried;
         carried.push((tail2, tail_key, Vec::new()));
-        let mut taken = ready(&record("2"), &story, &carried).unwrap();
+        let mut taken = ready(&record("2"), &story, &carried, true).unwrap();
         taken.sort();
         let mut wanted = vec![tail, tail2, yarrow];
         wanted.sort();

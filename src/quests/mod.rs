@@ -10,11 +10,13 @@
 //! - `progress`: counting kills, and moving through stages.
 //! - `report`: `report`, and paying out.
 //! - `claims`: deadlines, and `abandon`.
+//! - `loot`: quest items a holder still needs always drop for them.
 
 mod board;
 mod claims;
 mod def;
 mod journal;
+mod loot;
 mod progress;
 mod report;
 
@@ -25,6 +27,7 @@ use board::{Offers, accept, board};
 use claims::{Claims, abandon, expire_claims, load_claims};
 use def::{QuestDef, QuestLoader, load_quests, sync_quests};
 use journal::journal;
+use loot::{deaths, want_loot};
 use progress::count_progress;
 use report::report;
 
@@ -43,6 +46,14 @@ impl Plugin for QuestsPlugin {
             .add_systems(Startup, (load_quests, load_claims))
             .add_systems(Update, (sync_quests, count_progress))
             .add_systems(Update, expire_claims.run_if(crate::time::heartbeat()))
+            // Just before loot is rolled for what died, what holders still need from it.
+            .add_systems(
+                Update,
+                want_loot
+                    .run_if(deaths)
+                    .after(crate::combat::abandon_fights)
+                    .before(crate::combat::handle_deaths),
+            )
             .add_command(
                 CommandSpec::new("board", Category::Interaction)
                     .shortcuts(&["contracts"])

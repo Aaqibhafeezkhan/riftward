@@ -86,6 +86,7 @@ impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(states::ConditionsPlugin)
             .init_resource::<Encounters>()
+            .init_resource::<WantedLoot>()
             .add_message::<triggers::Trigger>()
             .add_systems(Update, expire_conditions.run_if(heartbeat()))
             .add_systems(Update, expire_readied.run_if(heartbeat()))
@@ -1196,7 +1197,7 @@ pub fn in_danger(
 /// Anyone who disconnects in the middle of a fight is cut down as they go: no one escapes a
 /// fight by leaving the game (`quit` refuses while they're in one). They die like anyone else,
 /// so their gear stays on their corpse and they wake at the shrine next time.
-fn abandon_fights(
+pub fn abandon_fights(
     mut commands: Commands,
     leaving: Query<(Entity, &Connection, &Player, &InRoom), StillFighting>,
     fights: Query<(Entity, &Fighting), Without<Dead>>,
@@ -1226,6 +1227,12 @@ fn abandon_fights(
         info!("{} left in the middle of a fight, and died", player.name);
     }
 }
+
+/// The items each player still needs for a quest they're on (filled by `quests` just before
+/// deaths are handled): a boss whose loot can hold one always leaves one for its slayer's group,
+/// whatever the roll. An ordinary mob's drops are left to chance.
+#[derive(Resource, Default, Debug)]
+pub struct WantedLoot(pub HashMap<Entity, Vec<ItemKey>>);
 
 /// Mobs killed this round, with who killed them.
 type DeadMobs<'w, 's> = Query<
@@ -1266,7 +1273,7 @@ pub fn handle_deaths(
     registry: Res<CommandRegistry>,
     db: Res<Database>,
     mut purses: Query<&mut Purse>,
-    groups: Groups,
+    (groups, wanted): (Groups, Res<WantedLoot>),
 ) {
     let now = unix_now();
     for (entity, mob, in_room, slayer, inanimate) in &dead_mobs {
@@ -1381,18 +1388,45 @@ pub fn handle_deaths(
                     log.0.push(Outgoing::line(member.entity, line));
                 }
             }
-            let tables = mob_templates.0.get(&mob.key).map(|def| &def.loot);
+            let def = mob_templates.0.get(&mob.key);
+            let tables = def.map(|def| &def.loot);
+            let boss = def.is_some_and(|def| def.boss);
+            let mut found = Vec::new();
             for table in tables.into_iter().flatten() {
                 if let Some(Some(id)) = dice.pick(luck, table) {
-                    let key = ItemKey::parse(id, &mob.key.zone);
-                    // Found with the slayer's (or their group's) Luck, which helps its quality
-                    // too.
-                    let quality = templates
-                        .0
-                        .get(&key)
-                        .map_or(Quality::Standard, |def| Quality::roll(&mut dice, luck, def));
-                    items::spawn_item(&mut commands, &templates, key, None, place, quality);
+                    found.push(ItemKey::parse(id, &mob.key.zone));
                 }
+            }
+            // A boss drops what the slayer's group needs for a quest, if it can and didn't: there's
+            // only one of it.
+            let could: Vec<ItemKey> = tables
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter_map(|(id, _)| id.as_ref())
+                .map(|id| ItemKey::parse(id, &mob.key.zone))
+                .collect();
+            let needed: Vec<ItemKey> = party
+                .iter()
+                .map(|a| a.entity)
+                .chain(slayer.map(|s| s.0))
+                .filter_map(|who| wanted.0.get(&who))
+                .flatten()
+                .filter(|key| boss && could.contains(key) && !found.contains(key))
+                .cloned()
+                .collect();
+            for key in needed {
+                if !found.contains(&key) {
+                    found.push(key);
+                }
+            }
+            for key in found {
+                // Found with the slayer's (or their group's) Luck, which helps its quality too.
+                let quality = templates
+                    .0
+                    .get(&key)
+                    .map_or(Quality::Standard, |def| Quality::roll(&mut dice, luck, def));
+                items::spawn_item(&mut commands, &templates, key, None, place, quality);
             }
         }
         commands.entity(entity).despawn();
@@ -1962,6 +1996,7 @@ mod tests {
         world.insert_resource(Outbox::default());
         world.insert_resource(Spawns::default());
         world.init_resource::<Encounters>();
+        world.init_resource::<WantedLoot>();
         world.init_resource::<crate::facts::Facts>();
         world.init_resource::<MobTemplates>();
         world.init_resource::<Messages<GameEvent>>();
@@ -4505,6 +4540,88 @@ mod tests {
             left,
             vec![(jelly, ItemLocation::Room(room))],
             "no corpse, jelly on the floor"
+        );
+    }
+
+    #[test]
+    fn what_a_group_needs_from_a_boss_drops_once_whatever_the_roll() {
+        let (mut world, room) = world();
+        world.init_resource::<RoomIndex>();
+        world.init_resource::<CommandRegistry>();
+        let tooth = ItemKey::parse("test:tooth", "");
+        world
+            .resource_mut::<ItemTemplates>()
+            .0
+            .insert(tooth.clone(), ItemDef::named("a tooth"));
+        // A rat that leaves its loot on the floor, and drops a tooth `chance` in 100; the Rat
+        // King, if it's a `boss`.
+        let rats = |world: &mut World, chance: u32, has_tooth: bool, boss: bool| {
+            let mut def = crate::world::MobDef::named("a rat");
+            def.boss = boss;
+            if has_tooth {
+                def.loot = vec![vec![(None, 100 - chance), (Some("tooth".into()), chance)]];
+            }
+            world.insert_resource(MobTemplates(HashMap::from([(
+                MobKey::parse("test:mob", ""),
+                def,
+            )])));
+        };
+        let teeth = |world: &mut World| {
+            world
+                .query::<&Item>()
+                .iter(world)
+                .filter(|item| item.key == tooth)
+                .count()
+        };
+        // Ada, Bob and Cal, in a group, each on a quest for a tooth.
+        let ada = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let bob = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let cal = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        for player in [ada, bob, cal] {
+            as_player(&mut world, player);
+        }
+        group_up(&mut world, &[ada, bob, cal]);
+        let kill = |world: &mut World| {
+            let rat = fighter(world, room, 1, 1, &[BASIC_ATTACK]);
+            let traits = Conditions::default().with_traits(&[FORMLESS.to_string()]);
+            world.entity_mut(rat).insert((traits, Dead, Slayer(bob)));
+            world.run_system_once(handle_deaths).unwrap();
+            world.flush();
+            let n = teeth(world);
+            // Clear the floor for the next.
+            let found: Vec<Entity> = world
+                .query::<(Entity, &Item)>()
+                .iter(world)
+                .filter(|(_, item)| item.key == tooth)
+                .map(|(e, _)| e)
+                .collect();
+            for e in found {
+                world.despawn(e);
+            }
+            n
+        };
+
+        rats(&mut world, 0, true, true);
+        assert_eq!(kill(&mut world), 0, "left to chance, it never drops");
+        world.resource_mut::<WantedLoot>().0 = HashMap::from([
+            (ada, vec![tooth.clone()]),
+            (bob, vec![tooth.clone(), tooth.clone()]),
+            (cal, vec![tooth.clone()]),
+        ]);
+        assert_eq!(
+            kill(&mut world),
+            1,
+            "three want it from a boss: one drops, not three"
+        );
+        rats(&mut world, 100, true, true);
+        assert_eq!(kill(&mut world), 1, "it dropped anyway: no second one");
+        rats(&mut world, 0, false, true);
+        assert_eq!(kill(&mut world), 0, "a boss that can't drop one doesn't");
+        rats(&mut world, 0, true, false);
+        assert_eq!(
+            kill(&mut world),
+            0,
+            "an ordinary rat's drops are left to chance, wanted or not"
         );
     }
 

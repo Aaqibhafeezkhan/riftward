@@ -744,6 +744,10 @@ pub struct MobDef {
     /// who isn't one.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub aggressive: bool,
+    /// One of a kind, like the Rat King: what someone fighting it needs for a quest always
+    /// drops (an ordinary mob's drops are left to chance; it's fine to have to hunt more).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub boss: bool,
     /// What it is, for others' `allies`: `vermin`, `townsfolk`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
@@ -840,6 +844,7 @@ impl MobDef {
             health: None,
             tactics: None,
             aggressive: false,
+            boss: false,
             tags: Vec::new(),
             allies: None,
             avoids: Vec::new(),

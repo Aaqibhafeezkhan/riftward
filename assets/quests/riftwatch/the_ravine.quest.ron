@@ -1,0 +1,17 @@
+// The Ravine: an Iron contract to go somewhere hard to reach, and come back.
+(
+    name: "The Ravine",
+    summary: "Climb down into the ravine off the forest road, and come back to say what's there.",
+    description: "The forest road runs along the lip of a steep ravine, and travellers say something pale glimmers among the rocks below. The guild wants to know whether the climb can be made, and what grows down there. Get to the floor of the ravine, and come back to tell Marin Harrow.",
+    posted: Board("contract_hall"),
+    contract: Some((rank: "iron", merit: 15)),
+    availability: Claimed(for: Days(2)),
+    repeat: Every(Days(2)),
+    stages: [
+        (
+            text: "Climb down to the floor of the ravine off the forest road, then come back and report.",
+            objectives: [Reach("forest:ravine")],
+        ),
+    ],
+    rewards: [Coin(300)],
+)

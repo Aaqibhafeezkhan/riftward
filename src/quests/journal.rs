@@ -10,7 +10,7 @@ use crate::items::ItemTemplates;
 use crate::mobs::MobTemplates;
 use crate::output::{Outbox, Outgoing, deliver};
 use crate::time::unix_now;
-use crate::world::Player;
+use crate::world::{Player, Room, RoomIndex, RoomKey};
 
 /// The quests a character has taken, and how each stands: loaded when they enter the game and
 /// saved as it changes.
@@ -54,16 +54,19 @@ pub(super) fn journal(
     quests: Res<Quests>,
     story: Res<Facts>,
     (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
+    (index, rooms): (Res<RoomIndex>, Query<&Room>),
     mut outbox: ResMut<Outbox>,
 ) {
     let Ok((log, player)) = logs.get(inv.entity) else {
         return;
     };
+    let places = |key: &RoomKey| room_name(key, &index, &rooms);
     let lookup = Lookup {
         quests: &quests,
         story: &story,
         mobs: &mobs,
         items: &items,
+        places: &places,
         now: unix_now(),
     };
     deliver(
@@ -81,6 +84,8 @@ pub(super) struct Lookup<'a> {
     pub(super) story: &'a Facts,
     pub(super) mobs: &'a MobTemplates,
     pub(super) items: &'a ItemTemplates,
+    /// A room's name, by its key.
+    pub(super) places: &'a dyn Fn(&RoomKey) -> Option<String>,
     pub(super) now: i64,
 }
 
@@ -149,6 +154,12 @@ pub(super) fn time_left(secs: i64) -> String {
     format!("{n} {unit}{}", if n == 1 { "" } else { "s" })
 }
 
+/// A room's name, by its key, if it's in the world.
+pub(super) fn room_name(key: &RoomKey, index: &RoomIndex, rooms: &Query<&Room>) -> Option<String> {
+    let entity = index.0.get(key)?;
+    rooms.get(*entity).ok().map(|room| room.name.clone())
+}
+
 /// The stage someone is on, counted from 1.
 pub(super) fn stage_number(record: &QuestRecord) -> Option<usize> {
     record.stage.parse().ok().filter(|n| *n > 0)
@@ -190,6 +201,7 @@ mod tests {
             story: &story,
             mobs: &mobs,
             items: &items,
+            places: &|_| None,
             now: 0,
         };
         assert_eq!(

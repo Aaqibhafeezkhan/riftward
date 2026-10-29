@@ -176,6 +176,7 @@
             health: 40,
             tactics: 30,
             aggressive: true,
+            boss: true,
             traits: ["formless", "rubbery", "mending", "shedding"],
         ),
         "rat_king": (
@@ -197,6 +198,7 @@
             coins: (150, 400),
             tactics: 30,
             aggressive: true,
+            boss: true,
         ),
     },
     spawns: {

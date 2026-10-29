@@ -1,0 +1,17 @@
+// What Feeds the Slimes: the thing at the bottom of the cistern.
+(
+    name: "What Feeds the Slimes",
+    summary: "Something in the deep sewers keeps the slimes coming. Find it and kill it.",
+    description: "Kill as many oozes as you like in the deep sewers and there are always more. The guild thinks something down there is making them. Find whatever it is in the old cistern, kill it, and bring Marin Harrow the heart of it.",
+    posted: Board("contract_hall"),
+    contract: Some((rank: "copper", merit: 25)),
+    availability: Claimed(for: Days(2)),
+    repeat: Every(Days(2)),
+    stages: [
+        (
+            text: "Find what feeds the slimes in the old cistern, kill it, and bring back its heart.",
+            objectives: [Kill(Mob("sewers:slime_lord"), 1), Bring(Item("sewers:heart_of_the_deep"), 1)],
+        ),
+    ],
+    rewards: [Coin(500)],
+)

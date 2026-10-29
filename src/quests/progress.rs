@@ -1,5 +1,5 @@
-//! Counting what holders do toward their quests (kills, and things obtained), as the quest's own
-//! facts, and moving them from stage to stage.
+//! Counting what holders do toward their quests (kills, things obtained, places reached), as the
+//! quest's own facts, and moving them from stage to stage.
 
 use bevy::prelude::*;
 
@@ -13,7 +13,7 @@ use crate::mobs::MobTemplates;
 use crate::output::{Outbox, Outgoing, deliver};
 use crate::requirements::ItemMatch;
 use crate::time::unix_now;
-use crate::world::{InRoom, ItemKey, MobDef, MobKey, Player, without_article};
+use crate::world::{InRoom, ItemKey, MobDef, MobKey, Player, Room, RoomKey, without_article};
 
 /// Something a holder did that an objective may count: a mob killed, or an item come by.
 #[derive(Clone, Copy)]
@@ -26,6 +26,10 @@ pub(super) enum Deed<'a> {
     Obtained {
         item: &'a ItemKey,
         tags: &'a [String],
+        name: &'a str,
+    },
+    Reached {
+        room: &'a RoomKey,
         name: &'a str,
     },
 }
@@ -41,6 +45,9 @@ impl Deed<'_> {
                 ItemMatch::Item(id) => ItemKey::parse(id, zone) == **item,
                 ItemMatch::Tag(tag) => tags.contains(tag),
             },
+            (Deed::Reached { room, .. }, Objective::Reach(id)) => {
+                RoomKey::parse(id, zone) == **room
+            }
             _ => false,
         }
     }
@@ -50,13 +57,14 @@ impl Deed<'_> {
         match self {
             Deed::Killed { name, .. } => format!("{} killed", without_article(name)),
             Deed::Obtained { name, .. } => format!("{} found", without_article(name)),
+            Deed::Reached { name, .. } => format!("{name} reached"),
         }
     }
 }
 
 /// What holders do counts for the quests they hold, for them and every member of their group in
-/// the room who holds the same quest: a kill (by whoever struck it) or an item come by (picked
-/// up, given, bought). Each objective the deed answers on the stage that holder is on goes up by
+/// the room who holds the same quest: a kill (by whoever struck it), an item come by (picked
+/// up, given, bought), or a room walked into. Each objective the deed answers on the stage that holder is on goes up by
 /// one, to what it asks; a stage whose objectives are all counted and done moves on to the next,
 /// and the last says it's time to report.
 #[allow(clippy::too_many_arguments)]
@@ -67,6 +75,7 @@ pub(super) fn count_progress(
     quests: Res<Quests>,
     mut story: ResMut<Facts>,
     (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
+    places: Query<(&Room, &RoomKey)>,
     db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -87,6 +96,18 @@ pub(super) fn count_progress(
                     name,
                 },
             ),
+            GameEvent::Entered { who, room, .. } => {
+                let Ok((place, key)) = places.get(*room) else {
+                    continue;
+                };
+                (
+                    *who,
+                    Deed::Reached {
+                        room: key,
+                        name: &place.name,
+                    },
+                )
+            }
             GameEvent::Obtained { who, key, .. } => {
                 let Some(def) = items.0.get(key) else {
                     continue;
@@ -365,14 +386,29 @@ mod tests {
                     objectives: vec![Objective::Obtain(ItemMatch::Item("letter".into()), 1)],
                 },
                 Stage {
-                    text: "Now the rats.".into(),
-                    objectives: vec![Objective::Kill(MobMatch::Mob("rat".into()), 1)],
+                    text: "Now take it down the ravine.".into(),
+                    objectives: vec![Objective::Reach("ravine".into())],
                 },
             ],
             ..rats()
         };
         world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
-        let room = world.spawn_empty().id();
+        let place = |world: &mut World, id: &str, name: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: name.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: false,
+                        terrain: Default::default(),
+                    },
+                    RoomKey::parse(id, ""),
+                ))
+                .id()
+        };
+        let street = place(&mut world, "riftwatch:street", "A Street");
+        let room = place(&mut world, "riftwatch:ravine", "Ravine Floor");
         let ada = world
             .spawn((
                 InRoom(room),
@@ -410,9 +446,38 @@ mod tests {
         obtain(&mut world, &knife);
         assert_eq!(stage(&world), "1", "not what it asks for");
         obtain(&mut world, &letter);
-        assert_eq!(stage(&world), "2", "the letter found: on to the rats");
-        assert!(world.resource::<Outbox>().0.iter().any(|o| matches!(o,
-            Outgoing::To(_, text) if text.contains("sealed letter found, 1 of 1. Done."))));
+        assert_eq!(stage(&world), "2", "the letter found: on to the ravine");
+        let enter = |world: &mut World, room: Entity| {
+            world.write_message(GameEvent::Entered {
+                who: ada,
+                name: "Ada".into(),
+                room,
+                way: crate::events::Way::Walked(None),
+                witnesses: None,
+            });
+            world.run_system_once(count_progress).unwrap();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+        };
+        let reached = |world: &World| {
+            world.resource::<Facts>().number(
+                &Owner::Quest(id, "riftwatch:rats".into()),
+                "2.reach.riftwatch:ravine",
+                0,
+            )
+        };
+        enter(&mut world, street);
+        assert_eq!(reached(&world), 0, "somewhere else");
+        enter(&mut world, room);
+        assert_eq!(reached(&world), 1);
+        let said = |text: &str| {
+            world.resource::<Outbox>().0.iter().any(|o| {
+                matches!(o,
+                Outgoing::To(_, line) if line.contains(text))
+            })
+        };
+        assert!(said("sealed letter found, 1 of 1. Done."));
+        assert!(said("Ravine Floor reached, 1 of 1. Done."));
+        assert!(said("that's all it asks"));
     }
 
     #[test]
