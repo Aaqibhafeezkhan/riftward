@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use super::def::Quests;
+use super::def::{Objective, Quests, chose_key};
 use crate::command::Invocation;
 use crate::db::{Database, QuestRecord};
 use crate::facts::{Facts, Owner};
@@ -118,14 +118,34 @@ fn journal_text(log: &QuestLog, character_id: i64, lookup: &Lookup) -> String {
                 .map(|due| format!(" (due in {})", time_left(due - lookup.now)))
                 .unwrap_or_default();
             let mut text = format!("  {}{due}\r\n    {}", quest.name, stage.text);
-            for objective in &stage.objectives {
-                let have = objective
-                    .key(&place, quest.zone())
-                    .map(|key| lookup.story.number(&owner, &key, lookup.now));
-                text += &format!(
-                    "\r\n      {}",
-                    objective.progress(quest.zone(), have, lookup)
-                );
+            let progress = |objectives: &[Objective], at: &str, indent: &str| {
+                objectives
+                    .iter()
+                    .map(|objective| {
+                        let have = objective
+                            .key(at, quest.zone())
+                            .map(|key| lookup.story.number(&owner, &key, lookup.now));
+                        format!(
+                            "\r\n{indent}{}",
+                            objective.progress(quest.zone(), have, lookup)
+                        )
+                    })
+                    .collect::<String>()
+            };
+            text += &progress(&stage.objectives, &place, "      ");
+            // Its ways: each, until one is taken; then that one.
+            let chosen = lookup.story.number(&owner, &chose_key(&place), lookup.now);
+            for (c, choice) in stage.choices.iter().enumerate().map(|(c, ch)| (c + 1, ch)) {
+                if chosen != 0 && chosen != c as i64 {
+                    continue;
+                }
+                let how = match (chosen, c) {
+                    (0, 1) => "Either",
+                    (0, _) => "Or",
+                    _ => "The way taken",
+                };
+                text += &format!("\r\n      {how}: {}", choice.text);
+                text += &progress(&choice.objectives, &format!("{place}.{c}"), "        ");
             }
             text
         })
@@ -134,7 +154,20 @@ fn journal_text(log: &QuestLog, character_id: i64, lookup: &Lookup) -> String {
         .0
         .iter()
         .filter(|r| r.state == DONE)
-        .map(|r| name(&r.quest))
+        .map(|r| {
+            // How it ended, if it ended one way.
+            let ending = quests.0.get(&r.quest).and_then(|q| {
+                let owner = Owner::Quest(character_id, q.id.clone());
+                match lookup.story.get(&owner, "ending", lookup.now)? {
+                    crate::facts::Value::Word(e) => q.endings.get(e),
+                    _ => None,
+                }
+            });
+            match ending {
+                Some(ending) => format!("{} ({})", name(&r.quest), ending.journal),
+                None => name(&r.quest),
+            }
+        })
         .collect();
     let mut lines = vec![if held.is_empty() {
         "You aren't on any quests. The board in the Contract Hall has work.".to_string()

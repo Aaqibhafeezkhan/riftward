@@ -59,6 +59,54 @@ pub struct QuestDef {
     pub gives: Vec<String>,
     #[serde(default)]
     pub rewards: Vec<Reward>,
+    /// The ways it can end, by name, each with its journal line and its own rewards, in place of
+    /// `rewards` (and of a contract's merit, which an ending pays only as `Merit`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub endings: BTreeMap<String, EndingDef>,
+}
+
+/// One way a quest can end.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct EndingDef {
+    /// What the journal says of it, once done: "You sold the guild's crystals to Talla Mirk."
+    pub journal: String,
+    #[serde(default)]
+    pub rewards: Vec<Reward>,
+}
+
+/// Where a stage or a choice leads: another stage (`next: "alley"`), or an ending, reported for
+/// (`next: End("sold")`).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum Next {
+    Stage(String),
+    Way(Way),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Way {
+    End(String),
+}
+
+/// One way through a stage that offers a choice: whichever's objectives are done first is the
+/// way taken, and the others close.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct Choice {
+    /// How the journal puts it: "Sell them to Talla Mirk."
+    pub text: String,
+    pub objectives: Vec<Objective>,
+    /// Where it leads; without one, to reporting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<Next>,
+}
+
+/// Where a stage leads, once done.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Lead<'a> {
+    /// To the stage at this place among them.
+    Stage(usize),
+    /// To reporting, and the ending it's reported for, if one.
+    Report(Option<&'a str>),
 }
 
 #[allow(dead_code)]
@@ -106,11 +154,17 @@ pub struct Stage {
     /// What the journal says while it's the stage they're on.
     #[serde(alias = "journal")]
     pub text: String,
+    /// What it asks, whichever way through it; a stage offering choices may ask nothing more.
+    #[serde(default)]
     pub objectives: Vec<Objective>,
     /// The stage it leads to once done, by id. Without one, the stage after it; after the last,
     /// it's time to report.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub next: Option<String>,
+    pub next: Option<Next>,
+    /// Ways through it, each with its own objectives and where it leads: the first done is the
+    /// way taken. Its own `objectives`, if any, are needed whichever way.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<Choice>,
     /// What mobs say while it's the stage a holder is on, when asked (`ask <mob> about <topic>`):
     /// by mob, each topic and its answer, written as it's to be read.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -184,6 +238,8 @@ pub enum Reward {
     Coin(u64),
     /// One of this item: `Item("healing_draught")`. Say it twice for two.
     Item(String),
+    /// Guild merit, for an ending: `Merit(30)`.
+    Merit(i64),
     /// A fact about the character or the world, for others to test: `Set("char.title.
     /// rat_catcher", true)`, `Set("world.drains_cleared", true)`.
     Set(String, crate::facts::Value),
@@ -208,7 +264,7 @@ impl QuestDef {
         }
         for stage in &self.stages {
             // What it asks to be asked, it gives an answer to.
-            for objective in &stage.objectives {
+            for objective in stage.all_objectives() {
                 if let Objective::Ask(mob, topic) = objective
                     && !stage.topics.get(mob).is_some_and(|topics| {
                         topics.iter().any(|(t, _)| t.eq_ignore_ascii_case(topic))
@@ -219,10 +275,45 @@ impl QuestDef {
                     ));
                 }
             }
-            if let Some(next) = &stage.next
-                && !ids.contains(&next.as_str())
+            let leads = std::iter::once(&stage.next).chain(stage.choices.iter().map(|c| &c.next));
+            for next in leads {
+                match next {
+                    Some(Next::Stage(id)) if !ids.contains(&id.as_str()) => {
+                        return Err(format!("leads to a stage it doesn't have: {id}"));
+                    }
+                    Some(Next::Way(Way::End(end))) if !self.endings.contains_key(end) => {
+                        return Err(format!("ends a way it doesn't have: {end}"));
+                    }
+                    _ => {}
+                }
+            }
+            // What's brought or met is checked on reporting, so it can't lead on to a stage.
+            let at_report = |objectives: &[Objective]| {
+                objectives
+                    .iter()
+                    .any(|o| matches!(o, Objective::Bring(..) | Objective::Meet(_)))
+            };
+            let leads_on = |next: &Option<Next>| matches!(next, Some(Next::Stage(_)));
+            if at_report(&stage.objectives)
+                && (leads_on(&stage.next) || stage.choices.iter().any(|c| leads_on(&c.next)))
             {
-                return Err(format!("leads to a stage it doesn't have: {next}"));
+                return Err("asks for something on reporting, and leads on to a stage".into());
+            }
+            if stage
+                .choices
+                .iter()
+                .any(|c| at_report(&c.objectives) && leads_on(&c.next))
+            {
+                return Err(
+                    "offers a way that asks for something on reporting, and leads on".into(),
+                );
+            }
+            if stage
+                .choices
+                .iter()
+                .any(|c| blank(&c.text) || c.objectives.is_empty())
+            {
+                return Err("offers a way with no text or nothing to do".into());
             }
             for action in stage.on_begin.iter().chain(&stage.on_end) {
                 if let Some(key) = action.fact()
@@ -240,10 +331,10 @@ impl QuestDef {
             if blank(&stage.text) {
                 return Err(format!("stage {} has no text", n + 1));
             }
-            if stage.objectives.is_empty() {
+            if stage.objectives.is_empty() && stage.choices.is_empty() {
                 return Err(format!("stage {} has no objectives", n + 1));
             }
-            if stage.objectives.iter().any(|o| o.count() == 0) {
+            if stage.all_objectives().any(|o| o.count() == 0) {
                 return Err(format!("stage {} asks for none of something", n + 1));
             }
         }
@@ -264,7 +355,16 @@ impl QuestDef {
         {
             return Err("can't wait for a death; give it minutes, hours or days".into());
         }
-        for reward in &self.rewards {
+        for (name, ending) in &self.endings {
+            if blank(&ending.journal) {
+                return Err(format!("ends {name} with nothing for the journal"));
+            }
+        }
+        for reward in self
+            .rewards
+            .iter()
+            .chain(self.endings.values().flat_map(|e| &e.rewards))
+        {
             if let Reward::Set(key, _) = reward
                 && !(key.starts_with("char.") || key.starts_with("world."))
             {
@@ -305,9 +405,20 @@ impl QuestDef {
             .items
             .extend(self.rewards.iter().filter_map(|reward| match reward {
                 Reward::Item(id) => Some(full(id)),
-                Reward::Coin(_) | Reward::Set(..) => None,
+                Reward::Coin(_) | Reward::Set(..) | Reward::Merit(_) => None,
             }));
-        for objective in self.stages.iter().flat_map(|s| &s.objectives) {
+        names
+            .items
+            .extend(
+                self.endings
+                    .values()
+                    .flat_map(|e| &e.rewards)
+                    .filter_map(|r| match r {
+                        Reward::Item(id) => Some(full(id)),
+                        _ => None,
+                    }),
+            );
+        for objective in self.stages.iter().flat_map(|s| s.all_objectives()) {
             match objective {
                 Objective::Kill(MobMatch::Mob(mob), _) => names.mobs.push(full(mob)),
                 Objective::Bring(ItemMatch::Item(item), _)
@@ -399,17 +510,100 @@ impl QuestDef {
         }
     }
 
-    /// The stage the one at `i` leads to: its `next`, or the one after it. None after the last:
-    /// it's time to report.
-    pub(super) fn next_after(&self, i: usize) -> Option<usize> {
-        match &self.stages.get(i)?.next {
-            Some(next) => self
+    /// Where the stage at `i` leads once done, the way `choice` (a number from 1) if it offers
+    /// choices: its `next` (a stage, or an ending to report for); without one, the stage after
+    /// it, or for the last (or a way chosen), reporting.
+    pub(super) fn lead(&self, i: usize, choice: Option<usize>) -> Lead<'_> {
+        let Some(stage) = self.stages.get(i) else {
+            return Lead::Report(None);
+        };
+        let chosen = choice
+            .and_then(|c| stage.choices.get(c.checked_sub(1)?))
+            .map(|c| &c.next);
+        match chosen.unwrap_or(&stage.next) {
+            Some(Next::Stage(id)) => self
                 .stages
                 .iter()
-                .position(|s| s.id.as_deref() == Some(next)),
-            None => (i + 1 < self.stages.len()).then_some(i + 1),
+                .position(|s| s.id.as_deref() == Some(id))
+                .map_or(Lead::Report(None), Lead::Stage),
+            Some(Next::Way(Way::End(end))) => Lead::Report(Some(end)),
+            None if chosen.is_none() && i + 1 < self.stages.len() => Lead::Stage(i + 1),
+            None => Lead::Report(None),
         }
     }
+
+    /// The stage the one at `i` leads to, if it leads to one rather than to reporting (choices
+    /// aside: a stage offering them leads where the way taken does).
+    pub(super) fn next_after(&self, i: usize) -> Option<usize> {
+        match self.lead(i, None) {
+            Lead::Stage(next) => Some(next),
+            Lead::Report(_) => None,
+        }
+    }
+}
+
+impl QuestDef {
+    /// What it pays, ending `ending` if it ended one way: that ending's rewards, and its merit (a
+    /// contract's merit is paid only as an ending's `Merit`); otherwise its own rewards, and a
+    /// contract's merit. The merit is `None` for a quest that isn't a contract.
+    pub(super) fn pays(&self, ending: Option<&str>) -> (&[Reward], Option<i64>) {
+        let merit_in = |rewards: &[Reward]| -> i64 {
+            rewards
+                .iter()
+                .map(|r| match r {
+                    Reward::Merit(n) => *n,
+                    _ => 0,
+                })
+                .sum()
+        };
+        match ending.and_then(|e| self.endings.get(e)) {
+            Some(ending) => (
+                &ending.rewards,
+                self.contract.as_ref().map(|_| merit_in(&ending.rewards)),
+            ),
+            None => (
+                &self.rewards,
+                self.contract
+                    .as_ref()
+                    .map(|c| c.merit + merit_in(&self.rewards)),
+            ),
+        }
+    }
+}
+
+impl Stage {
+    /// Every objective on it, its own and each choice's.
+    pub(super) fn all_objectives(&self) -> impl Iterator<Item = &Objective> {
+        self.objectives
+            .iter()
+            .chain(self.choices.iter().flat_map(|c| &c.objectives))
+    }
+
+    /// Its parts, each with the place its facts are kept under: its own objectives (needed
+    /// whichever way) under the stage's place, then each choice's, by number from 1, under
+    /// `<place>.<n>`.
+    pub(super) fn parts<'a>(
+        &'a self,
+        place: &str,
+    ) -> Vec<(Option<usize>, String, &'a [Objective])> {
+        let mut parts = Vec::new();
+        if !self.objectives.is_empty() {
+            parts.push((None, place.to_string(), self.objectives.as_slice()));
+        }
+        for (c, choice) in self.choices.iter().enumerate() {
+            parts.push((
+                Some(c + 1),
+                format!("{place}.{}", c + 1),
+                choice.objectives.as_slice(),
+            ));
+        }
+        parts
+    }
+}
+
+/// The quest fact that keeps which way was taken through the stage kept as `place`.
+pub(super) fn chose_key(place: &str) -> String {
+    format!("{place}.chose")
 }
 
 impl Objective {
@@ -675,7 +869,7 @@ mod tests {
     fn stages_go_by_id_or_number_and_lead_where_they_say() {
         let stage = |id: Option<&str>, next: Option<&str>| Stage {
             id: id.map(String::from),
-            next: next.map(String::from),
+            next: next.map(|n| Next::Stage(n.into())),
             text: "Do it.".into(),
             objectives: vec![Objective::Reach("hall".into())],
             ..Default::default()
@@ -734,6 +928,60 @@ mod tests {
     }
 
     #[test]
+    fn choices_and_endings_read_as_the_design_writes_them() {
+        let quest: QuestDef = ron_options()
+            .from_str(
+                r#"(
+                name: "Crystals",
+                summary: "Crystals.",
+                description: "Crystals, at length.",
+                posted: Board("contract_hall"),
+                contract: Some((rank: "copper", merit: 30)),
+                availability: Open,
+                repeat: Once,
+                stages: [
+                    (id: "start", journal: "Ask around.", objectives: [Reach("alley")], next: "choice"),
+                    (
+                        id: "choice",
+                        journal: "Return them, or sell them.",
+                        choices: [
+                            (text: "Return them.", objectives: [Bring(Item("crystals"), 1)], next: End("returned")),
+                            (text: "Sell them.", objectives: [Reach("fence")], next: End("sold")),
+                        ],
+                    ),
+                ],
+                endings: {
+                    "returned": (journal: "You returned them.", rewards: [Coin(300), Merit(30)]),
+                    "sold": (journal: "You sold them.", rewards: [Coin(900), Set("char.sold_out", true)]),
+                },
+            )"#,
+            )
+            .unwrap();
+        assert!(quest.check().is_ok(), "{:?}", quest.check());
+        assert_eq!(quest.lead(0, None), Lead::Stage(1));
+        assert_eq!(quest.lead(1, Some(1)), Lead::Report(Some("returned")));
+        assert_eq!(quest.lead(1, Some(2)), Lead::Report(Some("sold")));
+        // An ending pays its own, and a contract's merit only as it says.
+        assert_eq!(quest.pays(Some("returned")).1, Some(30));
+        assert_eq!(
+            quest.pays(Some("sold")).1,
+            Some(0),
+            "selling out pays no merit"
+        );
+        assert_eq!(quest.pays(None).1, Some(30));
+
+        let mut bad = quest.clone();
+        bad.stages[1].choices[1].next = Some(Next::Way(Way::End("lost".into())));
+        assert!(bad.check().is_err(), "an ending it doesn't have");
+        let mut stuck = quest.clone();
+        stuck.stages[0].objectives = vec![Objective::Bring(ItemMatch::Item("x".into()), 1)];
+        assert!(
+            stuck.check().is_err(),
+            "what's brought on reporting can't lead on"
+        );
+    }
+
+    #[test]
     fn a_quest_with_nothing_to_do_is_refused() {
         let quest = |stages: Vec<Stage>, contract: Option<Contract>| QuestDef {
             id: "test:quest".into(),
@@ -749,6 +997,7 @@ mod tests {
             stages,
             report_to: None,
             gives: Vec::new(),
+            endings: Default::default(),
             rewards: Vec::new(),
         };
         let stage = |objectives| Stage {

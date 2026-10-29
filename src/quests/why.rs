@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 
 use super::claims::Claims;
-use super::def::{Objective, QuestDef, Quests};
+use super::def::{Lead, Objective, QuestDef, Quests, chose_key};
 use super::journal::{HELD, Lookup, QuestLog, room_name, time_left};
 use crate::attributes::Attributes;
 use crate::command::Invocation;
@@ -182,17 +182,46 @@ fn explain(
                     quest.stages.len(),
                     stage.text
                 ));
-                let mut ready = last;
-                for objective in &stage.objectives {
-                    let (line, done) =
-                        objective_line(objective, &place, zone, &owner, subject, carried, lookup);
-                    ready &= done.unwrap_or(false);
-                    lines.push(format!("  {line}"));
-                    if let (Objective::Meet(requirement), Some(subject)) = (objective, subject) {
-                        terms(requirement, subject, 2, &mut lines);
+                // Each objective, and whether all of them are done.
+                let show = |objectives: &[Objective], at: &str, depth: usize| {
+                    let (mut shown, mut all) = (Vec::new(), true);
+                    let pad = "  ".repeat(depth);
+                    for objective in objectives {
+                        let (line, done) =
+                            objective_line(objective, at, zone, &owner, subject, carried, lookup);
+                        all &= done.unwrap_or(false);
+                        shown.push(format!("{pad}{line}"));
+                        if let (Objective::Meet(requirement), Some(subject)) = (objective, subject)
+                        {
+                            terms(requirement, subject, depth + 1, &mut shown);
+                        }
+                    }
+                    (shown, all)
+                };
+                let (shown, own) = show(&stage.objectives, &place, 1);
+                lines.extend(shown);
+                let mut ready = last && own;
+                let chosen = lookup.story.number(&owner, &chose_key(&place), lookup.now);
+                for (c, choice) in stage.choices.iter().enumerate().map(|(c, ch)| (c + 1, ch)) {
+                    let state = match chosen {
+                        0 => "open",
+                        n if n == c as i64 => "taken",
+                        _ => "closed",
+                    };
+                    let lead = quest.lead(i, Some(c));
+                    let leads = match lead {
+                        Lead::Stage(next) => format!("leads to {}", quest.stage_key(next)),
+                        Lead::Report(Some(end)) => format!("ends {end}"),
+                        Lead::Report(None) => "leads to reporting".into(),
+                    };
+                    lines.push(format!("  Way {c} ({state}, {leads}): {}", choice.text));
+                    let (shown, done) = show(&choice.objectives, &format!("{place}.{c}"), 2);
+                    lines.extend(shown);
+                    if state != "closed" && own && done && matches!(lead, Lead::Report(_)) {
+                        ready = true;
                     }
                 }
-                lines.push(if !last {
+                lines.push(if !last && stage.choices.is_empty() {
                     "Not the last stage: it moves on when every objective here is done.".into()
                 } else if ready {
                     format!("Ready to report to {}.", quest.reported_to(lookup.mobs))

@@ -69,7 +69,7 @@ impl QuestDef {
             .iter()
             .map(|reward| match reward {
                 Reward::Coin(copper) => *copper,
-                Reward::Item(_) | Reward::Set(..) => 0,
+                Reward::Item(_) | Reward::Set(..) | Reward::Merit(_) => 0,
             })
             .sum();
         let mut pays: Vec<String> = (copper > 0)
@@ -85,10 +85,14 @@ impl QuestDef {
                         .map_or_else(|| id.clone(), |def| def.name.clone()),
                 ),
                 // What a quest sets is for the world to notice, not the notice to say.
-                Reward::Coin(_) | Reward::Set(..) => None,
+                Reward::Coin(_) | Reward::Set(..) | Reward::Merit(_) => None,
             }
         }));
-        pays.extend(self.contract.as_ref().map(|c| format!("{} merit", c.merit)));
+        pays.extend(self.pays(None).1.map(|merit| format!("{merit} merit")));
+        // A quest with endings pays as it ends.
+        if !self.endings.is_empty() {
+            pays.clear();
+        }
         if let [rest @ .., last] = pays.as_slice() {
             // "2 gold and 5 silver, and 10 merit"; "2 gold and 10 merit".
             let text = match rest {
@@ -99,6 +103,9 @@ impl QuestDef {
                 _ => format!("{} and {last}", rest.join(", ")),
             };
             lines.push(format!("It pays {text}."));
+        }
+        if !self.endings.is_empty() {
+            lines.push("What it pays depends on how it ends.".into());
         }
         lines.push(match &self.availability {
             Availability::Open => "Anyone may take it, and any number at once.".to_string(),

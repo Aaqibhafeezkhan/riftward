@@ -4,11 +4,11 @@
 use bevy::prelude::*;
 
 use super::actions::{Holder, Stagehand};
-use super::def::{Objective, QuestDef, Quests, Stage};
+use super::def::{Lead, Objective, QuestDef, Quests, chose_key};
 use super::journal::{HELD, QuestLog};
 use crate::db::{Database, QuestRecord};
 use crate::events::GameEvent;
-use crate::facts::{Facts, Owner};
+use crate::facts::{Facts, Owner, Value};
 use crate::items::ItemTemplates;
 use crate::mobs::MobTemplates;
 use crate::output::{Outbox, Outgoing, deliver};
@@ -186,9 +186,9 @@ pub(super) fn count_progress(
                 );
                 // All counted and done: it ends, and on to the next stage, or back to report.
                 // The last stage ends when it's reported.
-                if let Some(i) = finished {
-                    match quest.next_after(i) {
-                        Some(next) => {
+                if let Some((i, way)) = finished {
+                    match quest.lead(i, way) {
+                        Lead::Stage(next) => {
                             lines.extend(hand.act(&quest.stages[i].on_end, quest, holder));
                             let stage = &quest.stages[next];
                             lines.push(format!("\x1b[1;33m{}:\x1b[0m {}", quest.name, stage.text));
@@ -196,7 +196,7 @@ pub(super) fn count_progress(
                             log.put(record, holder.character_id, &hand.db);
                             lines.extend(hand.act(&stage.on_begin, quest, holder));
                         }
-                        None => lines.push(format!(
+                        Lead::Report(_) => lines.push(format!(
                             "\x1b[1;33m{}:\x1b[0m that's all it asks. Report to {}.",
                             quest.name,
                             quest.reported_to(&mobs)
@@ -210,8 +210,9 @@ pub(super) fn count_progress(
     deliver(out, &mut outbox);
 }
 
-/// Count `deed` toward one holder's `record`: what to tell them, and the stage (where it stands)
-/// if this finished the one they were on and every objective on it is counted and done.
+/// Count `deed` toward one holder's `record`: what to tell them, and, if this finished the stage
+/// they were on (every objective counted as it happens, and done), where it stands and the way
+/// taken through it, if it offers choices. The first way done is the way taken; the others close.
 fn tally(
     record: &QuestRecord,
     quest: &QuestDef,
@@ -220,59 +221,77 @@ fn tally(
     story: &mut Facts,
     db: &Database,
     now: i64,
-) -> (Vec<String>, Option<usize>) {
+) -> (Vec<String>, Option<(usize, Option<usize>)>) {
     let mut lines = Vec::new();
     let Some((i, stage)) = quest.stage_at(&record.stage) else {
         return (lines, None);
     };
     let place = quest.stage_key(i);
     let owner = Owner::Quest(character_id, quest.id.clone());
+    let chosen = story.number(&owner, &chose_key(&place), now);
+    let open = |choice: Option<usize>| choice.is_none_or(|c| chosen == 0 || chosen == c as i64);
+    let parts = stage.parts(&place);
     let mut counted = false;
-    for objective in &stage.objectives {
-        let Some(key) = objective.key(&place, quest.zone()) else {
-            continue;
-        };
-        if !deed.counts_for(objective, quest.zone()) {
-            continue;
+    for (_, at, objectives) in parts.iter().filter(|(choice, ..)| open(*choice)) {
+        for objective in objectives.iter() {
+            let Some(key) = objective.key(at, quest.zone()) else {
+                continue;
+            };
+            if !deed.counts_for(objective, quest.zone()) {
+                continue;
+            }
+            let need = i64::from(objective.count());
+            if story.number(&owner, &key, now) >= need {
+                continue;
+            }
+            let have = story.add(&owner, &key, 1, now, db);
+            counted = true;
+            let done = if have >= need { " Done." } else { "" };
+            lines.push(format!(
+                "\x1b[1;33m{}:\x1b[0m {}, {have} of {need}.{done}",
+                quest.name,
+                deed.told()
+            ));
         }
-        let need = i64::from(objective.count());
-        if story.number(&owner, &key, now) >= need {
-            continue;
-        }
-        let have = story.add(&owner, &key, 1, now, db);
-        counted = true;
-        let done = if have >= need { " Done." } else { "" };
+    }
+    // Done when all of it is counted and done: a way that asks for something on reporting is
+    // taken on reporting.
+    let done = |objectives: &[Objective], at: &str| {
+        objectives.iter().all(|objective| {
+            objective
+                .key(at, quest.zone())
+                .is_some_and(|key| story.number(&owner, &key, now) >= i64::from(objective.count()))
+        })
+    };
+    if !counted || !done(&stage.objectives, &place) {
+        return (lines, None);
+    }
+    if stage.choices.is_empty() {
+        return (lines, Some((i, None)));
+    }
+    let way = parts.iter().find_map(|(choice, at, objectives)| {
+        let c = (*choice)?;
+        (open(Some(c)) && done(objectives, at)).then_some(c)
+    });
+    let Some(c) = way else {
+        return (lines, None);
+    };
+    if chosen == 0 {
+        story.set(&owner, &chose_key(&place), Value::Int(c as i64), None, db);
         lines.push(format!(
-            "\x1b[1;33m{}:\x1b[0m {}, {have} of {need}.{done}",
+            "\x1b[1;33m{}:\x1b[0m {}",
             quest.name,
-            deed.told()
+            stage.choices[c - 1].text
         ));
     }
-    let finished = counted && stage_done(stage, &place, quest, &owner, story, now);
-    (lines, finished.then_some(i))
-}
-
-/// Whether every objective on the stage kept as `place` is counted as it happens, and done.
-fn stage_done(
-    stage: &Stage,
-    place: &str,
-    quest: &QuestDef,
-    owner: &Owner,
-    story: &Facts,
-    now: i64,
-) -> bool {
-    stage.objectives.iter().all(|objective| {
-        objective
-            .key(place, quest.zone())
-            .is_some_and(|key| story.number(owner, &key, now) >= i64::from(objective.count()))
-    })
+    (lines, Some((i, Some(c))))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::items::ItemTemplates;
-    use crate::quests::def::MobMatch;
+    use crate::quests::def::{MobMatch, Next, Stage};
     use crate::quests::testing::rats;
     use std::collections::HashMap;
 
@@ -533,7 +552,7 @@ mod tests {
                     id: Some("nest".into()),
                     text: "Find the nest.".into(),
                     objectives: kill_rat(),
-                    next: Some("king".into()),
+                    next: Some(Next::Stage("king".into())),
                     on_end: vec![
                         Action::Set("quest.found_nest".into(), crate::facts::Value::Bool(true)),
                         Action::Say("clerk".into(), "Now the king.".into()),
@@ -633,6 +652,143 @@ mod tests {
         assert!(
             said.iter()
                 .any(|t| t.contains("You're given a sealed letter"))
+        );
+    }
+
+    #[test]
+    fn the_first_way_done_is_the_way_taken() {
+        use crate::quests::def::{Choice, Way};
+        use bevy::ecs::system::RunSystemOnce;
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let mut world = World::new();
+        world.insert_resource(db);
+        world.init_resource::<Facts>();
+        world.init_resource::<Outbox>();
+        world.init_resource::<Messages<GameEvent>>();
+        world.init_resource::<ItemTemplates>();
+        let (rat, roach) = (
+            MobKey::parse("riftwatch:rat", ""),
+            MobKey::parse("riftwatch:roach", ""),
+        );
+        world.insert_resource(MobTemplates(HashMap::from([
+            (rat.clone(), MobDef::named("a rat")),
+            (roach.clone(), MobDef::named("a roach")),
+        ])));
+        let kill = |id: &str| vec![Objective::Kill(MobMatch::Mob(id.into()), 1)];
+        let quest = QuestDef {
+            stages: vec![
+                Stage {
+                    id: Some("which".into()),
+                    text: "Rats or roaches?".into(),
+                    choices: vec![
+                        Choice {
+                            text: "Rats, then.".into(),
+                            objectives: kill("rat"),
+                            next: Some(Next::Way(Way::End("rats".into()))),
+                        },
+                        Choice {
+                            text: "Roaches, then.".into(),
+                            objectives: kill("roach"),
+                            next: Some(Next::Stage("more".into())),
+                        },
+                    ],
+                    ..Default::default()
+                },
+                Stage {
+                    id: Some("more".into()),
+                    text: "More roaches.".into(),
+                    objectives: kill("roach"),
+                    ..Default::default()
+                },
+            ],
+            endings: [(
+                "rats".to_string(),
+                crate::quests::def::EndingDef {
+                    journal: "Rats it was.".into(),
+                    rewards: Vec::new(),
+                },
+            )]
+            .into(),
+            ..rats()
+        };
+        assert!(quest.check().is_ok(), "{:?}", quest.check());
+        world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
+        let room = world.spawn_empty().id();
+        let holder = |world: &mut World, name: &str| {
+            let id = world
+                .resource::<Database>()
+                .create_character(account.id, name)
+                .unwrap()
+                .id;
+            let e = world
+                .spawn((
+                    InRoom(room),
+                    Player {
+                        name: name.into(),
+                        character_id: id,
+                        account: "ada".into(),
+                        role: crate::db::Role::Player,
+                        race: "human".into(),
+                        background: String::new(),
+                        description: String::new(),
+                    },
+                    QuestLog(vec![QuestRecord {
+                        quest: "riftwatch:rats".into(),
+                        state: HELD.into(),
+                        stage: "which".into(),
+                        taken_at: 0,
+                        due_at: None,
+                        finished_at: None,
+                    }]),
+                ))
+                .id();
+            (e, id)
+        };
+        let (ada, ada_id) = holder(&mut world, "Ada");
+        let (bob, bob_id) = holder(&mut world, "Bob");
+        let kill = |world: &mut World, mob: &MobKey, killer: Entity| {
+            world.write_message(GameEvent::Died {
+                who: room,
+                name: "a beast".into(),
+                room,
+                mob: Some(mob.clone()),
+                killer: Some(killer),
+            });
+            world.run_system_once(count_progress).unwrap();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+        };
+        let stage =
+            |world: &World, who: Entity| world.get::<QuestLog>(who).unwrap().0[0].stage.clone();
+        let chose = |world: &World, id: i64| {
+            world.resource::<Facts>().number(
+                &Owner::Quest(id, "riftwatch:rats".into()),
+                "which.chose",
+                0,
+            )
+        };
+        // Ada kills a roach: that way, on to more roaches.
+        kill(&mut world, &roach, ada);
+        assert_eq!(
+            (stage(&world, ada), chose(&world, ada_id)),
+            ("more".into(), 2)
+        );
+        // Bob kills a rat: that way, which ends for reporting; he stays to report.
+        kill(&mut world, &rat, bob);
+        assert_eq!(
+            (stage(&world, bob), chose(&world, bob_id)),
+            ("which".into(), 1)
+        );
+        // The roach way is closed to him now.
+        kill(&mut world, &roach, bob);
+        assert_eq!(stage(&world, bob), "which", "a closed way counts no more");
+        assert_eq!(
+            world.resource::<Facts>().number(
+                &Owner::Quest(bob_id, "riftwatch:rats".into()),
+                "which.2.kill.riftwatch:roach",
+                0
+            ),
+            0
         );
     }
 

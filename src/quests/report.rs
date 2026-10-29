@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use super::actions::{Holder, Stagehand};
 use super::claims::Claims;
-use super::def::{Objective, QuestDef, Quests, Reward};
+use super::def::{Lead, Objective, QuestDef, Quests, Reward, chose_key};
 use super::journal::{DONE, HELD, Lookup, OVER, QuestLog};
 use crate::attributes::Attributes;
 use crate::command::Invocation;
@@ -21,9 +21,18 @@ use crate::skills::Skills;
 use crate::time::unix_now;
 use crate::world::{ItemKey, MobKey, RoomKey};
 
+/// What a quest ready to report comes to: the items it takes, `Bring`'s due, and the ending it's
+/// reported for, if one (the way a choice led, or where its last stage leads).
+#[derive(Debug, PartialEq)]
+pub(super) struct Ready {
+    pub(super) taken: Vec<Entity>,
+    pub(super) ending: Option<String>,
+}
+
 /// What's still wanted before `record` can be reported: Err with each thing missing, in the
-/// journal's words; or Ok with the items it takes from `carried`, `Bring`'s due. Without
-/// `carried` (a holder reported for, not reporting), what's to be brought isn't asked.
+/// journal's words; or what it comes to. Without `carried` (a holder reported for, not
+/// reporting), what's to be brought isn't asked. A stage offering choices is ready when its own
+/// objectives and one way's are done: the way already taken, or the first done.
 fn readiness(
     quest: &QuestDef,
     record: &QuestRecord,
@@ -31,26 +40,82 @@ fn readiness(
     carried: Option<&[(Entity, ItemKey, Vec<String>)]>,
     meets: &dyn Fn(&Requirement) -> bool,
     lookup: &Lookup,
-) -> Result<Vec<Entity>, Vec<String>> {
+) -> Result<Ready, Vec<String>> {
     let Some((i, stage)) = quest.stage_at(&record.stage) else {
         return Err(vec!["its place in it is lost".into()]);
     };
-    if quest.next_after(i).is_some() {
-        return Err(vec![stage.text.clone()]);
-    }
     let place = quest.stage_key(i);
     let owner = Owner::Quest(character_id, quest.id.clone());
+    let check = |objectives: &[Objective], at: &str, taken: &mut Vec<Entity>| {
+        unmet(quest, objectives, at, &owner, carried, meets, lookup, taken)
+    };
+    let mut taken = Vec::new();
+    let mut missing = check(&stage.objectives, &place, &mut taken);
+    if stage.choices.is_empty() {
+        return match quest.lead(i, None) {
+            Lead::Stage(_) => Err(vec![stage.text.clone()]),
+            Lead::Report(_) if !missing.is_empty() => Err(missing),
+            Lead::Report(ending) => Ok(Ready {
+                taken,
+                ending: ending.map(String::from),
+            }),
+        };
+    }
+    let chosen = lookup.story.number(&owner, &chose_key(&place), lookup.now);
+    let mut ways = Vec::new();
+    for (c, choice) in stage.choices.iter().enumerate().map(|(c, ch)| (c + 1, ch)) {
+        if chosen != 0 && chosen != c as i64 {
+            continue;
+        }
+        // A way that leads on to a stage is taken as it's done, not on reporting.
+        let Lead::Report(ending) = quest.lead(i, Some(c)) else {
+            continue;
+        };
+        let mut theirs = taken.clone();
+        let short = check(&choice.objectives, &format!("{place}.{c}"), &mut theirs);
+        if short.is_empty() && missing.is_empty() {
+            return Ok(Ready {
+                taken: theirs,
+                ending: ending.map(String::from),
+            });
+        }
+        if !short.is_empty() {
+            ways.push(format!("{} ({})", choice.text, short.join("; ")));
+        }
+    }
+    if !ways.is_empty() {
+        missing.push(format!("Either: {}", ways.join(" Or: ")));
+    }
+    if missing.is_empty() {
+        missing.push(stage.text.clone());
+    }
+    Err(missing)
+}
+
+/// Which of `objectives`, kept under `at`, aren't done: each in the journal's words. What it's
+/// to bring is found in `carried` and added to `taken`.
+#[allow(clippy::too_many_arguments)]
+fn unmet(
+    quest: &QuestDef,
+    objectives: &[Objective],
+    at: &str,
+    owner: &Owner,
+    carried: Option<&[(Entity, ItemKey, Vec<String>)]>,
+    meets: &dyn Fn(&Requirement) -> bool,
+    lookup: &Lookup,
+    taken: &mut Vec<Entity>,
+) -> Vec<String> {
     let zone = quest.zone();
-    let (mut missing, mut taken) = (Vec::new(), Vec::new());
-    for objective in &stage.objectives {
+    let mut missing = Vec::new();
+    for objective in objectives {
         match objective {
             Objective::Kill(..)
             | Objective::Obtain(..)
             | Objective::Reach(_)
             | Objective::Ask(..) => {
                 let need = objective.count();
-                let key = objective.key(&place, zone);
-                let have = key.map(|key| lookup.story.number(&owner, &key, lookup.now));
+                let key = objective.key(at, zone);
+                let have = key.map(|key| lookup.story.number(owner, &key, lookup.now));
                 if have.unwrap_or(0) < i64::from(need) {
                     missing.push(objective.progress(zone, have, lookup));
                 }
@@ -85,11 +150,7 @@ fn readiness(
             }
         }
     }
-    if missing.is_empty() {
-        Ok(taken)
-    } else {
-        Err(missing)
-    }
+    missing
 }
 
 /// What `report` reads and changes.
@@ -216,7 +277,7 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
             now,
         };
         let mine = |requirement: &Requirement| meets(&d, &actor, requirement);
-        let taken = match readiness(
+        let Ready { taken, ending } = match readiness(
             &quest,
             &record,
             character_id,
@@ -224,7 +285,7 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
             &mine,
             &lookup,
         ) {
-            Ok(taken) => taken,
+            Ok(ready) => ready,
             Err(missing) => {
                 lines.push(format!(
                     "{}: not done yet. {}.",
@@ -286,7 +347,8 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
 
         // Paid: the coin split among them, the odd coins to whoever reported.
         let copper: u64 = quest
-            .rewards
+            .pays(ending.as_deref())
+            .0
             .iter()
             .map(|reward| match reward {
                 Reward::Coin(copper) => *copper,
@@ -295,11 +357,12 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
             .sum();
         let share = copper / (mates.len() as u64 + 1);
         let odd = copper - share * (mates.len() as u64 + 1);
+        let ending = ending.as_deref();
         lines.extend(pay(
             &mut d,
             &actor,
             record,
-            &quest,
+            (&quest, ending),
             share + odd,
             &mut held,
             now,
@@ -310,7 +373,15 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
                 actor.name, quest.name
             )];
             let mut hands = crate::items::hands_full(mate.entity, &d.hand.items);
-            theirs.extend(pay(&mut d, &mate, record, &quest, share, &mut hands, now));
+            theirs.extend(pay(
+                &mut d,
+                &mate,
+                record,
+                (&quest, ending),
+                share,
+                &mut hands,
+                now,
+            ));
             out.push(Outgoing::line(mate.entity, theirs.join("\r\n")));
         }
 
@@ -361,13 +432,14 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
     deliver(out, &mut d.outbox);
 }
 
-/// Pay `who` for `quest`, done: `copper` of its coin, its items, a contract's merit (and a line
-/// in Marin's record), and the facts it sets; and mark their `record` done. What to tell them.
+/// Pay `who` for `quest`, done (ending `ending`, if one): `copper` of its coin, its items, its
+/// merit for a contract (and a line in Marin's record), and the facts it sets; and mark their
+/// `record` done, with the ending kept as the quest's `ending` fact. What to tell them.
 fn pay(
     d: &mut Desk,
     who: &Actor,
     mut record: QuestRecord,
-    quest: &QuestDef,
+    (quest, ending): (&QuestDef, Option<&str>),
     copper: u64,
     held: &mut usize,
     now: i64,
@@ -376,6 +448,10 @@ fn pay(
     let Some(character_id) = who.character_id else {
         return lines;
     };
+    // How it ended, first.
+    if let Some(def) = ending.and_then(|e| quest.endings.get(e)) {
+        lines.push(def.journal.clone());
+    }
     if copper > 0
         && let Ok(mut purse) = d.purses.get_mut(who.entity)
     {
@@ -383,7 +459,8 @@ fn pay(
         purse.save(Some(character_id), &d.hand.db);
         lines.push(format!("You're paid {}.", money::coins(copper)));
     }
-    for reward in &quest.rewards {
+    let (rewards, merit) = quest.pays(ending);
+    for reward in rewards {
         match reward {
             Reward::Item(id) => {
                 let given = crate::items::hand_new(
@@ -407,17 +484,19 @@ fn pay(
                     .story
                     .set(&owner, key, value.clone(), None, &d.hand.db);
             }
-            Reward::Coin(_) => {}
+            Reward::Coin(_) | Reward::Merit(_) => {}
         }
     }
-    if let Some(contract) = &quest.contract {
+    if let Some(merit) = merit {
         if let Ok(mut m) = d.memberships.get_mut(who.entity)
             && !m.expelled
         {
             m.contracts += 1;
-            let promoted = m.earn(contract.merit);
+            let promoted = m.earn(merit);
             m.save(Some(character_id), &d.hand.db);
-            lines.push(format!("You earn {} merit.", contract.merit));
+            if merit > 0 {
+                lines.push(format!("You earn {merit} merit."));
+            }
             lines.extend(promoted);
         }
         if let Err(err) = d
@@ -430,6 +509,15 @@ fn pay(
                 quest.id
             );
         }
+    }
+    if let Some(ending) = ending {
+        d.hand.story.set(
+            &Owner::Quest(character_id, quest.id.clone()),
+            "ending",
+            crate::facts::Value::Word(ending.into()),
+            None,
+            &d.hand.db,
+        );
     }
     // Its last stage ends with it.
     if let Some((i, _)) = quest.stage_at(&record.stage) {
@@ -457,6 +545,90 @@ mod tests {
     use crate::mobs::MobTemplates;
     use crate::quests::def::{MobMatch, Stage};
     use crate::quests::testing::rats;
+
+    #[test]
+    fn a_way_asking_for_something_is_taken_on_reporting() {
+        use crate::quests::def::{Choice, EndingDef, Next, Way};
+        let ends = |end: &str| Some(Next::Way(Way::End(end.into())));
+        let quest = QuestDef {
+            stages: vec![Stage {
+                text: "Return them, or sell them.".into(),
+                choices: vec![
+                    Choice {
+                        text: "Return them.".into(),
+                        objectives: vec![Objective::Bring(ItemMatch::Item("crystals".into()), 1)],
+                        next: ends("returned"),
+                    },
+                    Choice {
+                        text: "Sell them.".into(),
+                        objectives: vec![Objective::Meet(
+                            crate::requirements::Requirement::WorldFlag("fence_open".into()),
+                        )],
+                        next: ends("sold"),
+                    },
+                ],
+                ..Default::default()
+            }],
+            endings: [
+                (
+                    "returned".to_string(),
+                    EndingDef {
+                        journal: "Returned.".into(),
+                        rewards: Vec::new(),
+                    },
+                ),
+                (
+                    "sold".to_string(),
+                    EndingDef {
+                        journal: "Sold.".into(),
+                        rewards: Vec::new(),
+                    },
+                ),
+            ]
+            .into(),
+            ..rats()
+        };
+        assert!(quest.check().is_ok(), "{:?}", quest.check());
+        let record = QuestRecord {
+            quest: quest.id.clone(),
+            state: HELD.into(),
+            stage: "1".into(),
+            taken_at: 0,
+            due_at: None,
+            finished_at: None,
+        };
+        let (story, mobs, items) = (
+            Facts::default(),
+            MobTemplates::default(),
+            ItemTemplates::default(),
+        );
+        let lookup = Lookup {
+            quests: &Quests::default(),
+            story: &story,
+            mobs: &mobs,
+            items: &items,
+            places: &|_| None,
+            now: 0,
+        };
+        let mut world = World::new();
+        let crystals = world.spawn_empty().id();
+        let carrying = [(
+            crystals,
+            ItemKey::parse("riftwatch:crystals", ""),
+            Vec::new(),
+        )];
+        let ending = |carried: &[_], met: bool| {
+            readiness(&quest, &record, 1, Some(carried), &|_| met, &lookup).map(|r| r.ending)
+        };
+        assert_eq!(ending(&carrying, false), Ok(Some("returned".into())));
+        assert_eq!(ending(&[], true), Ok(Some("sold".into())));
+        assert_eq!(
+            ending(&carrying, true),
+            Ok(Some("returned".into())),
+            "the first way done"
+        );
+        assert!(ending(&[], false).unwrap_err()[0].starts_with("Either: Return them."));
+    }
 
     #[test]
     fn a_quest_is_ready_to_report_when_all_it_asks_is_done() {
@@ -546,7 +718,7 @@ mod tests {
         );
         let mut carried = carried;
         carried.push((tail2, tail_key, Vec::new()));
-        let mut taken = ready(&record("2"), &story, &carried, true).unwrap();
+        let mut taken = ready(&record("2"), &story, &carried, true).unwrap().taken;
         taken.sort();
         let mut wanted = vec![tail, tail2, yarrow];
         wanted.sort();

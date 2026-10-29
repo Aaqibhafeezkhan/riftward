@@ -237,7 +237,7 @@ Collection (kill so many, bring so many) is the simplest kind, and the first con
 
 **What that asks of a quest file,** beyond the collection example above:
 
-- **Steps by name, not only in order.** A list of stages runs in order, as before; a stage can instead say where it leads (`next: "alley"`), or offer **choices**, each its own set of objectives and its own next stage: whichever is done first is the way taken, and the other closes. A quest can end in more than one way (`End("returned")`, `End("sold")`), each with its own rewards and its own line in the journal. (*Built*, 2026-10-28: a stage's `id`, and `next` naming the stage it leads to, past any between; choices and endings are still to come.)
+- **Steps by name, not only in order.** A list of stages runs in order, as before; a stage can instead say where it leads (`next: "alley"`), or offer **choices**, each its own set of objectives and its own next stage: whichever is done first is the way taken, and the other closes. A quest can end in more than one way (`End("returned")`, `End("sold")`), each with its own rewards and its own line in the journal. (*Built*, 2026-10-28: a stage's `id`, `next` naming the stage it leads to or `End("sold")`, its `choices`, and the quest's `endings`. The first way whose objectives are all done is taken, and the others close: a way counted as it happens is taken then, one that asks for something to be brought or met is taken on reporting, and a stage that asks for something on reporting can't lead on to another. An ending pays its own rewards in place of the quest's, and a contract's merit only as its `Merit(n)`; the journal shows each way while the choice is open, then the way taken, and a finished quest's ending line. The way taken and the ending are kept as the quest's facts, `<stage>.chose` and `ending`.)
 - **Actions when a stage begins or ends,** in one small vocabulary, shared with the [effects](effects.md) where the meaning is the same: `Give(item)` and `Take(item)`, `Spawn(mob, room)` (a mob that exists for the quest), `Set`, `Add` and `Clear` on [facts](facts.md) (`char.sold_out_the_guild`, `world.courier_caught`, `quest.warned`), `Say(mob, text)` (someone speaks to the holder), `Fail`. They're the actions of [rules](facts.md#rules), and a stage can carry rules of its own besides its objectives. (*Built*, 2026-10-28: `on_begin` and `on_end` with `Give(item)`, `Take(item)`, `Set`, `Add` and `Clear` on `char.`, `world.` and `quest.` facts, and `Say(mob, text)` ("Marin Harrow says, \"Take this letter back with you.\""). They run for each holder as their own stage begins or ends: the first begins on taking the quest; one ends as its objectives are done and the next begins; the last ends when it's reported. `Spawn` and `Fail` come with quest mobs and `fails_if`.)
 - **Ways to fail,** besides a claim running out: `fails_if: [Dies("narina"), Lost("letter")]`, an escort killed or a carried item gone.
 - **The journal follows the story:** each stage has its own `journal` text, so your journal says what's happening now ("Talla Mirk says the crystals go down the culvert at night."), not a list of counters. Hidden objectives stay hidden until their stage.
@@ -308,7 +308,7 @@ A Copper contract, claimed, three days. It uses most of the above, and is the ta
     ],
     endings: {
         "returned": (journal: "You returned the crystals to the guild.", rewards: [Coin(300), Merit(30)]),
-        "sold": (journal: "You sold the guild's crystals to Talla Mirk.", rewards: [Coin(900), Flag("sold_out_the_guild")]),
+        "sold": (journal: "You sold the guild's crystals to Talla Mirk.", rewards: [Coin(900), Set("char.sold_out_the_guild", true)]),
     },
     fails_if: [Lost("stolen_crystals")],
 )
@@ -322,7 +322,7 @@ The `sold` ending pays no merit and sets a flag the guild can learn of later (a 
 
 | Needed | Exists? |
 | --- | --- |
-| Stages by id, `next`, choices and endings | The quest engine's own |
+| Stages by id, `next`, choices and endings | Built (2026-10-28) |
 | Actions on a stage's start and end (`Give`, `Take`, `Spawn`, `Flag`, `WorldFlag`, `Say`, `Fail`) | Some exist as effects (`Spawn`), world flags exist; the rest are the engine's |
 | `ask <mob> about <topic>` | Yes (2026-10-28): answers from quest stages' topics |
 | Events for asking, giving, examining and searching | `give`, `examine` and `search` exist; none writes a game event yet |
@@ -346,7 +346,7 @@ A group on a quest moves through it together, **as long as they're together:** w
 
 ### Rewards
 
-`Coin(n)`, `Item(id)`, `Set(fact, value)` (which hidden skills, world events, doors and other quests can test; a title is `char.title.<id>`), and for contracts the guild merit. Never experience, skill levels or Karma. Contracts pay coin, items, or both, besides their merit (2026-10-28): a potion or a piece of gear is as good a reward as money. *Built:* `Coin(n)`, `Item(id)` (once per item, into a free hand or at their feet) and `Set("char.title.rat_catcher", true)` (a `char.` or `world.` fact; the notice doesn't mention it), paid on `report`, with the contract's merit.
+`Coin(n)`, `Item(id)`, `Set(fact, value)` (which hidden skills, world events, doors and other quests can test; a title is `char.title.<id>`), `Merit(n)` (for an ending), and for contracts the guild merit. Never experience, skill levels or Karma. Contracts pay coin, items, or both, besides their merit (2026-10-28): a potion or a piece of gear is as good a reward as money. *Built:* `Coin(n)`, `Item(id)` (once per item, into a free hand or at their feet) and `Set("char.title.rat_catcher", true)` (a `char.` or `world.` fact; the notice doesn't mention it), paid on `report`, with the contract's merit.
 
 ### Saved
 
@@ -444,7 +444,7 @@ In the smallest pull requests that each leave the game working, every one with i
 
 19. *Built.* **Stages by id, `next`, and actions** (`Give`, `Take`, `Set`, `Say`) when a stage begins or ends.
 20. *Built.* **`ask <mob> about <topic>`** and the `Ask` objective: topics given by quest stages.
-21. **Choices and endings,** each with its own rewards and journal line.
+21. *Built.* **Choices and endings,** each with its own rewards and journal line.
 22. **Quest mobs:** `Spawn` for a quest, tied to it, counted by `Kill(Quest(...))`, cleared when it ends. *Crystals Gone Missing* can be written in full.
 23. **`fails_if`:** a death, a lost item.
 24. **Escort:** a mob following the holder on the quest's say-so, `Escort(mob, to: room)`. *Narina's Secret*.

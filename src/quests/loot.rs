@@ -42,7 +42,13 @@ pub(super) fn want_loot(
             };
             let place = quest.stage_key(i);
             let owner = Owner::Quest(player.character_id, quest.id.clone());
-            for objective in &stage.objectives {
+            // Every way's, while none is taken: any of them may be the one.
+            let todo: Vec<(String, &Objective)> = stage
+                .parts(&place)
+                .into_iter()
+                .flat_map(|(_, at, objectives)| objectives.iter().map(move |o| (at.clone(), o)))
+                .collect();
+            for (at, objective) in &todo {
                 let still = match objective {
                     Objective::Bring(ItemMatch::Item(id), need) => {
                         let key = ItemKey::parse(id, quest.zone());
@@ -56,7 +62,7 @@ pub(super) fn want_loot(
                         (have < *need as usize).then_some(key)
                     }
                     Objective::Obtain(ItemMatch::Item(id), need) => objective
-                        .key(&place, quest.zone())
+                        .key(at, quest.zone())
                         .filter(|key| story.number(&owner, key, now) < i64::from(*need))
                         .map(|_| ItemKey::parse(id, quest.zone())),
                     _ => None,

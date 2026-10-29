@@ -136,6 +136,7 @@ pub(super) mod testing {
             }],
             report_to: None,
             gives: Vec::new(),
+            endings: Default::default(),
             rewards: vec![Reward::Coin(250)],
         }
     }
