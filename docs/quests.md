@@ -1,6 +1,6 @@
 # Quests and the Adventurers' Guild
 
-[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, the board can be read, and open quests taken, kept in the journal and in Marin's record, with kills counted, stages moving on, quests reported and paid, claims that run out, and groups doing them together (2026-10-28: `src/quests.rs`, `assets/quests/`); perks and lodging are designed, not built.
+[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, the board can be read, and open quests taken, kept in the journal and in Marin's record, with kills counted, stages moving on, quests reported and paid, claims that run out, and groups doing them together (2026-10-28: `src/quests/`, `assets/quests/`); perks and lodging are designed, not built.
 
 Quests are data, written by builders and GMs, and tracked per character. Most of them come from the **Adventurers' Guild**, whose contracts raise a **guild rank** that is entirely separate from a character's power. A character can ignore quests completely, hunt monsters from the first day and grow just as strong; what they give up is the guild's trust, and the doors it opens.
 
