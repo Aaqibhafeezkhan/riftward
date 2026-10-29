@@ -43,7 +43,7 @@ fn readiness(
     let (mut missing, mut taken) = (Vec::new(), Vec::new());
     for objective in &stage.objectives {
         match objective {
-            Objective::Kill(_, need) => {
+            Objective::Kill(_, need) | Objective::Obtain(_, need) => {
                 let key = objective.key(n, zone);
                 let have = key.map(|key| lookup.story.number(&owner, &key, lookup.now));
                 if have.unwrap_or(0) < i64::from(*need) {
@@ -192,7 +192,6 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
                     .then_some((mate, record))
             })
             .collect();
-        let to = crate::items::capitalized(&to);
         lines.push(format!("You report to {to}: {} is done.", quest.name));
         out.push(Outgoing::Room {
             room: actor.room,

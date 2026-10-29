@@ -204,7 +204,7 @@ This replaces the earlier plan of a physical token (2026-10-28): the record is t
 | --- | --- | --- |
 | `Kill(mob, n)` | `n` of that mob template, or of mobs with that tag (`Kill(Mob("sewers:sewer_rat"), 20)`, `Kill(Tag("vermin"), 20)`), are killed by you or your group | As they die |
 | `Bring(item, n)` | You have `n` of that item, or of items with that tag (`Bring(Item("sewers:rat_tail"), 10)`, `Bring(Tag("herb"), 5)`, matched as `HasItem` matches), when you report: they're handed over | When reported |
-| `Obtain(item, n)` | You pick up, or are given, `n` of that item or tag; unlike `Bring`, nothing is handed over (the letter you're to carry; a clue) | As it happens |
+| `Obtain(item, n)` | You pick up, or are given, `n` of that item or tag; unlike `Bring`, nothing is handed over (the letter you're to carry; a clue) | As it happens (*built*: picking up, being given and buying, for every holder of the group there, as kills are; "Find sealed letter: 0 of 1") |
 | `Reach(room)` | You enter the room | As it happens |
 | `Use(skill, n)` | You use the skill `n` times | As it happens |
 | `Meet(condition)` | A condition holds: a flag, a skill level, a world flag | When reported |
@@ -362,11 +362,11 @@ Written as data, to find what the engine needs. Rank and merit are first guesses
 | Quest | Kind | Asks | Report to | Pays |
 | --- | --- | --- | --- | --- |
 | **Rats in the Drains** (Bone) | Claimed, a day | Kill 20 sewer rats, bring 10 rat tails | Marin | Coin, 10 merit (*written*: 2 gold) |
-| **Herbs for the Herbalist** (Bone) | Open, always | Bring 5 herbs (any with the `herb` tag) | Narina Greenthorn | Coin, 2 merit |
+| **Herbs for the Herbalist** (Bone) | Open, always | Bring 5 herbs (any with the `herb` tag) | Narina Greenthorn | Coin, 2 merit (*written*: 4 silver) |
 | **Roaches in the Cellar** (Bone) | Claimed, a day | Kill 6 giant cockroaches | Marin | Coin, 8 merit (*written*: 1 gold 6 silver) |
 | **The Rat King** (Copper) | Claimed, two days; posted only while the rats have broken out | Kill the Rat King, bring his tooth | Marin | Coin, 25 merit, a title |
 | **What Feeds the Slimes** (Copper) | Claimed, two days | Kill the Slime Lord, bring the heart of the deep | Marin | Coin, 25 merit |
-| **Word to the Hunter** (Bone) | Claimed, a day | Carry a letter to the hunter in the woods (handed over on taking it) | The hunter | Coin, 5 merit |
+| **Word to the Hunter** (Bone) | Claimed, a day | Carry a letter to the hunter in the woods (handed over on taking it) | The hunter | Coin, 5 merit (*written*: 1 gold) |
 | **The Ravine** (Iron) | Claimed, two days | Reach the ravine floor and come back | Marin | Coin, 15 merit |
 | **Meat for the Kitchen** (Bone) | Open, always | Bring 4 portions of meat | Marin | Coin, 2 merit |
 
@@ -379,8 +379,8 @@ What the engine itself is (quest files, the board, Marin's record, `accept`, `jo
 | **Who killed it, on a death:** the `Died` event names its `killer` (and so their side) | Every `Kill` | Yes (2026-10-28): whoever struck the blow, or put on the bleeding or poison that did it |
 | **Kills by tag** | `Kill(Tag("vermin"))` | Mobs have tags; matching them is new |
 | **Bring by template or tag, and taking the items** | Rat tails, herbs, the King's tooth | Items have tags; handing over is new |
-| **Report to any mob,** in any zone | Narina, the hunter | No |
-| **Items handed over on taking a quest,** taken back if it's abandoned | The letter to the hunter | No: and the letter itself, an item template |
+| **Report to any mob,** in any zone | Narina, the hunter | Yes (2026-10-28): `report_to: Some("herbalist")`, `Some("forest:hunter")` |
+| **Items handed over on taking a quest,** taken back if it's abandoned | The letter to the hunter | Yes (2026-10-28): `gives: ["guild_letter"]`, handed to whoever takes it from the board (not to each member it's shared with), taken back if it's given up or fails while they're in the game; the letter is `riftwatch:guild_letter` |
 | **Posting only while a world condition holds** | The Rat King, posted only while the rats are out | The requirement language exists (world events); boards using it is new |
 | **A deadline that runs out on its own,** across restarts | Every claimed quest | A heartbeat system and `quest_claims` |
 | **A skill-use event** | `Use(skill, n)` | No: none of the first contracts needs it yet |
@@ -436,7 +436,7 @@ In the smallest pull requests that each leave the game working, every one with i
 13. *Built.* **`report` and rewards:** coin, merit and `Set`, paid to whoever the quest is reported to. *Rats in the Drains* can be done start to finish. Plus `Bring`, so it asks for the tails. Adds *Roaches in the Cellar*.
 14. *Built.* **Claimed quests:** `quest_claims`, off the board while held, deadlines run out and fail on their own (across restarts), `abandon`, and what failing costs.
 15. *Built.* **Progress in a group:** offering to the group, one claim and timer, and the progress of every holder in the room moving together. Finding, reaching and the rest count the same way as their objectives arrive.
-16. **`report_to`, `Obtain`, and items given on taking a quest:** adds *Herbs for the Herbalist* and *Word to the Hunter*.
+16. *Built.* **`report_to`, `Obtain`, and items given on taking a quest:** adds *Herbs for the Herbalist* and *Word to the Hunter*.
 17. **`Reach`, `Meet` and `posted_when`:** adds *The Ravine*, *The Rat King* and *What Feeds the Slimes*.
 18. **`why`,** for GMs, once there are rules to explain.
 

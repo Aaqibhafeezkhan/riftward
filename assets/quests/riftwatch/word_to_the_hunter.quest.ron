@@ -1,0 +1,19 @@
+// Word to the Hunter: a delivery. Marin hands over the letter; the hunter takes it.
+(
+    name: "Word to the Hunter",
+    summary: "A letter for the hunter at the old charcoal kilns.",
+    description: "The guild has word for the hunter who camps at the old charcoal burners' kilns in the woods, and no one to spare to carry it. Take Marin Harrow's letter out to her, and put it into her hands yourself.",
+    posted: Board("contract_hall"),
+    contract: Some((rank: "bone", merit: 5)),
+    availability: Claimed(for: Days(1)),
+    repeat: Every(Days(1)),
+    stages: [
+        (
+            text: "Carry Marin Harrow's letter to the hunter at the old kilns in the woods.",
+            objectives: [Bring(Item("guild_letter"), 1)],
+        ),
+    ],
+    report_to: Some("forest:hunter"),
+    gives: ["guild_letter"],
+    rewards: [Coin(100)],
+)

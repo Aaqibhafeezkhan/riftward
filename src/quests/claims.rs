@@ -10,9 +10,10 @@ use super::journal::{ABANDONED, FAILED, HELD, QuestLog};
 use crate::command::Invocation;
 use crate::db::{Database, QuestRecord};
 use crate::guild::Membership;
+use crate::items::{ItemQuery, ItemTemplates};
 use crate::output::{Outbox, Outgoing, deliver};
 use crate::time::unix_now;
-use crate::world::Player;
+use crate::world::{ItemKey, Player};
 
 /// The claimed quests that are out: each held by one character, or a group who took it together,
 /// until a time (unix seconds), off the board till then. They're the quests held with a deadline, so they come back from
@@ -119,12 +120,42 @@ fn write_off(
     }
 }
 
+/// Take back what `quest` gave `who` to carry (the letter), one of each it gave, if they still
+/// have it. What to tell them. Someone not in the game keeps it, for now.
+pub(super) fn take_back(
+    who: Entity,
+    quest: &QuestDef,
+    items: &ItemQuery,
+    templates: &ItemTemplates,
+    commands: &mut Commands,
+    db: &Database,
+) -> Vec<String> {
+    let mut carried = crate::items::carried_items(who, items, templates);
+    let mut names = Vec::new();
+    for id in &quest.gives {
+        let key = ItemKey::parse(id, quest.zone());
+        let Some(at) = carried.iter().position(|(_, k, _)| *k == key) else {
+            continue;
+        };
+        let (entity, ..) = carried.remove(at);
+        if let Ok((_, item, _)) = items.get(entity) {
+            names.push(item.name.clone());
+            crate::healing::used_up(commands, db, entity, item);
+        }
+    }
+    match names.is_empty() {
+        true => Vec::new(),
+        false => vec![format!("You hand back {}.", names.join(", "))],
+    }
+}
+
 /// Claims whose time is up fail: each holder is told if they're here, it's written off for each
 /// whether or not, and the notice goes back on the board.
 pub(super) fn expire_claims(
     mut claims: ResMut<Claims>,
     mut holders: Query<(Entity, &Player, &mut QuestLog, Option<&mut Membership>)>,
     quests: Res<Quests>,
+    (mut commands, items, templates): (Commands, ItemQuery, Res<ItemTemplates>),
     db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -163,6 +194,16 @@ pub(super) fn expire_claims(
                         &db,
                         now,
                     ));
+                    if let Some(quest) = quest {
+                        lines.extend(take_back(
+                            entity,
+                            quest,
+                            &items,
+                            &templates,
+                            &mut commands,
+                            &db,
+                        ));
+                    }
                     outbox.0.push(Outgoing::line(entity, lines.join(" ")));
                     continue;
                 }
@@ -198,6 +239,7 @@ pub(super) fn abandon(
     mut holders: Query<(&Player, &mut QuestLog, Option<&mut Membership>)>,
     quests: Res<Quests>,
     mut claims: ResMut<Claims>,
+    (mut commands, items, templates): (Commands, ItemQuery, Res<ItemTemplates>),
     db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -231,6 +273,16 @@ pub(super) fn abandon(
                     &db,
                     unix_now(),
                 ));
+                if let Some(quest) = quest {
+                    lines.extend(take_back(
+                        inv.entity,
+                        quest,
+                        &items,
+                        &templates,
+                        &mut commands,
+                        &db,
+                    ));
+                }
                 lines.join(" ")
             }
         }
@@ -273,6 +325,7 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(db);
         world.init_resource::<Outbox>();
+        world.init_resource::<ItemTemplates>();
         let contract = |id: &str| QuestDef {
             id: format!("riftwatch:{id}"),
             contract: Some(Contract {

@@ -1,5 +1,5 @@
-//! Counting what holders do toward their quests (kills, for now), as the quest's own facts, and
-//! moving them from stage to stage.
+//! Counting what holders do toward their quests (kills, and things obtained), as the quest's own
+//! facts, and moving them from stage to stage.
 
 use bevy::prelude::*;
 
@@ -8,54 +8,115 @@ use super::journal::{HELD, QuestLog, stage_number};
 use crate::db::{Database, QuestRecord};
 use crate::events::GameEvent;
 use crate::facts::{Facts, Owner};
+use crate::items::ItemTemplates;
 use crate::mobs::MobTemplates;
 use crate::output::{Outbox, Outgoing, deliver};
+use crate::requirements::ItemMatch;
 use crate::time::unix_now;
-use crate::world::{MobDef, MobKey, Player, without_article};
+use crate::world::{InRoom, ItemKey, MobDef, MobKey, Player, without_article};
 
-/// Kills count for the quests their killer holds, for them and every member of their group in
-/// the room who holds the same quest: each objective the dead mob answers on the stage that
-/// holder is on goes up by one, to what it asks; a stage whose objectives are all counted and
-/// done moves on to the next, and the last says it's time to report.
+/// Something a holder did that an objective may count: a mob killed, or an item come by.
+#[derive(Clone, Copy)]
+pub(super) enum Deed<'a> {
+    Killed {
+        mob: &'a MobKey,
+        def: Option<&'a MobDef>,
+        name: &'a str,
+    },
+    Obtained {
+        item: &'a ItemKey,
+        tags: &'a [String],
+        name: &'a str,
+    },
+}
+
+impl Deed<'_> {
+    /// Whether `objective`, in a quest of `zone`, counts it.
+    fn counts_for(&self, objective: &Objective, zone: &str) -> bool {
+        match (self, objective) {
+            (Deed::Killed { mob, def, .. }, Objective::Kill(which, _)) => {
+                which.matches(mob, *def, zone)
+            }
+            (Deed::Obtained { item, tags, .. }, Objective::Obtain(which, _)) => match which {
+                ItemMatch::Item(id) => ItemKey::parse(id, zone) == **item,
+                ItemMatch::Tag(tag) => tags.contains(tag),
+            },
+            _ => false,
+        }
+    }
+
+    /// How it's told: "sewer rat killed", "sealed letter found".
+    fn told(&self) -> String {
+        match self {
+            Deed::Killed { name, .. } => format!("{} killed", without_article(name)),
+            Deed::Obtained { name, .. } => format!("{} found", without_article(name)),
+        }
+    }
+}
+
+/// What holders do counts for the quests they hold, for them and every member of their group in
+/// the room who holds the same quest: a kill (by whoever struck it) or an item come by (picked
+/// up, given, bought). Each objective the deed answers on the stage that holder is on goes up by
+/// one, to what it asks; a stage whose objectives are all counted and done moves on to the next,
+/// and the last says it's time to report.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn count_kills(
+pub(super) fn count_progress(
     mut events: MessageReader<GameEvent>,
-    mut logs: Query<(&mut QuestLog, &Player, &crate::world::InRoom)>,
+    mut logs: Query<(&mut QuestLog, &Player, &InRoom)>,
     groups: crate::groups::Groups,
     quests: Res<Quests>,
     mut story: ResMut<Facts>,
-    mobs: Res<MobTemplates>,
+    (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
     db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
     let now = unix_now();
     let mut out = Vec::new();
     for event in events.read() {
-        let GameEvent::Died {
-            mob: Some(mob),
-            killer: Some(killer),
-            name,
-            room,
-            ..
-        } = event
-        else {
-            continue;
+        let (doer, deed) = match event {
+            GameEvent::Died {
+                mob: Some(mob),
+                killer: Some(killer),
+                name,
+                ..
+            } => (
+                *killer,
+                Deed::Killed {
+                    mob,
+                    def: mobs.0.get(mob),
+                    name,
+                },
+            ),
+            GameEvent::Obtained { who, key, .. } => {
+                let Some(def) = items.0.get(key) else {
+                    continue;
+                };
+                (
+                    *who,
+                    Deed::Obtained {
+                        item: key,
+                        tags: &def.tags,
+                        name: &def.name,
+                    },
+                )
+            }
+            _ => continue,
         };
         // A member who doesn't hold a quest doesn't move it.
-        let Ok((log, ..)) = logs.get(*killer) else {
+        let Ok((log, _, at)) = logs.get(doer) else {
             continue;
         };
+        let room = at.0;
         let theirs: Vec<String> = log
             .0
             .iter()
             .filter(|r| r.state == HELD)
             .map(|r| r.quest.clone())
             .collect();
-        let there: Vec<Entity> = crate::groups::members(*killer, &groups)
+        let there: Vec<Entity> = crate::groups::members(doer, &groups)
             .into_iter()
-            .filter(|e| logs.get(*e).is_ok_and(|(.., at)| at.0 == *room))
+            .filter(|e| logs.get(*e).is_ok_and(|(.., at)| at.0 == room))
             .collect();
-        let def = mobs.0.get(mob);
         for quest_id in theirs {
             let Some(quest) = quests.0.get(&quest_id) else {
                 continue;
@@ -72,7 +133,7 @@ pub(super) fn count_kills(
                     &record,
                     quest,
                     character_id,
-                    (mob, def, name),
+                    deed,
                     &mut story,
                     &mobs,
                     &db,
@@ -88,14 +149,14 @@ pub(super) fn count_kills(
     deliver(out, &mut outbox);
 }
 
-/// Count a kill of `mob` (its template, and its name) toward one holder's `record`: what to tell
-/// them, and the record moved on to the next stage if this finished the one they were on.
+/// Count `deed` toward one holder's `record`: what to tell them, and the record moved on to the
+/// next stage if this finished the one they were on.
 #[allow(clippy::too_many_arguments)]
 fn tally(
     record: &QuestRecord,
     quest: &QuestDef,
     character_id: i64,
-    (mob, def, name): (&MobKey, Option<&MobDef>, &str),
+    deed: Deed,
     story: &mut Facts,
     mobs: &MobTemplates,
     db: &Database,
@@ -111,27 +172,23 @@ fn tally(
     let owner = Owner::Quest(character_id, quest.id.clone());
     let mut counted = false;
     for objective in &stage.objectives {
-        let (Objective::Kill(which, need), Some(key)) = (objective, objective.key(n, quest.zone()))
-        else {
+        let Some(key) = objective.key(n, quest.zone()) else {
             continue;
         };
-        if !which.matches(mob, def, quest.zone()) {
+        if !deed.counts_for(objective, quest.zone()) {
             continue;
         }
-        if story.number(&owner, &key, now) >= i64::from(*need) {
+        let need = i64::from(objective.count());
+        if story.number(&owner, &key, now) >= need {
             continue;
         }
         let have = story.add(&owner, &key, 1, now, db);
         counted = true;
-        let done = if have >= i64::from(*need) {
-            " Done."
-        } else {
-            ""
-        };
+        let done = if have >= need { " Done." } else { "" };
         lines.push(format!(
-            "\x1b[1;33m{}:\x1b[0m {} killed, {have} of {need}.{done}",
+            "\x1b[1;33m{}:\x1b[0m {}, {have} of {need}.{done}",
             quest.name,
-            without_article(name)
+            deed.told()
         ));
     }
     if !counted || !stage_done(stage, n, quest, &owner, story, now) {
@@ -190,6 +247,7 @@ mod tests {
         world.init_resource::<Facts>();
         world.init_resource::<Outbox>();
         world.init_resource::<Messages<GameEvent>>();
+        world.init_resource::<ItemTemplates>();
         let rat = MobKey::parse("riftwatch:rat", "");
         world.insert_resource(MobTemplates(HashMap::from([(
             rat.clone(),
@@ -253,7 +311,7 @@ mod tests {
                 mob: Some(rat.clone()),
                 killer: Some(killer),
             });
-            world.run_system_once(count_kills).unwrap();
+            world.run_system_once(count_progress).unwrap();
             world.resource_mut::<Messages<GameEvent>>().clear();
         };
         let count = |world: &World, id: i64| {
@@ -274,6 +332,87 @@ mod tests {
         assert_eq!(count(&world, ids[1]), 1);
         assert_eq!(count(&world, ids[2]), 0, "Cara isn't in their group");
         assert_eq!(count(&world, ids[3]), 0, "Dan isn't there");
+    }
+
+    #[test]
+    fn what_a_holder_comes_by_counts_too() {
+        use crate::requirements::ItemMatch;
+        use bevy::ecs::system::RunSystemOnce;
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let id = db.create_character(account.id, "Ada").unwrap().id;
+        let mut world = World::new();
+        world.insert_resource(db);
+        world.init_resource::<Facts>();
+        world.init_resource::<Outbox>();
+        world.init_resource::<Messages<GameEvent>>();
+        world.init_resource::<MobTemplates>();
+        let (letter, knife) = (
+            ItemKey::parse("riftwatch:letter", ""),
+            ItemKey::parse("riftwatch:knife", ""),
+        );
+        world.insert_resource(ItemTemplates(HashMap::from([
+            (
+                letter.clone(),
+                crate::world::ItemDef::named("a sealed letter"),
+            ),
+            (knife.clone(), crate::world::ItemDef::named("a knife")),
+        ])));
+        let quest = QuestDef {
+            stages: vec![
+                Stage {
+                    text: "Find the letter.".into(),
+                    objectives: vec![Objective::Obtain(ItemMatch::Item("letter".into()), 1)],
+                },
+                Stage {
+                    text: "Now the rats.".into(),
+                    objectives: vec![Objective::Kill(MobMatch::Mob("rat".into()), 1)],
+                },
+            ],
+            ..rats()
+        };
+        world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
+        let room = world.spawn_empty().id();
+        let ada = world
+            .spawn((
+                InRoom(room),
+                Player {
+                    name: "Ada".into(),
+                    character_id: id,
+                    account: "ada".into(),
+                    role: crate::db::Role::Player,
+                    race: "human".into(),
+                    background: String::new(),
+                    description: String::new(),
+                },
+                QuestLog(vec![QuestRecord {
+                    quest: "riftwatch:rats".into(),
+                    state: HELD.into(),
+                    stage: "1".into(),
+                    taken_at: 0,
+                    due_at: None,
+                    finished_at: None,
+                }]),
+            ))
+            .id();
+        let obtain = |world: &mut World, key: &ItemKey| {
+            let item = world.spawn_empty().id();
+            world.write_message(GameEvent::Obtained {
+                who: ada,
+                item,
+                key: key.clone(),
+                how: crate::events::Got::PickedUp,
+            });
+            world.run_system_once(count_progress).unwrap();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+        };
+        let stage = |world: &World| world.get::<QuestLog>(ada).unwrap().0[0].stage.clone();
+        obtain(&mut world, &knife);
+        assert_eq!(stage(&world), "1", "not what it asks for");
+        obtain(&mut world, &letter);
+        assert_eq!(stage(&world), "2", "the letter found: on to the rats");
+        assert!(world.resource::<Outbox>().0.iter().any(|o| matches!(o,
+            Outgoing::To(_, text) if text.contains("sealed letter found, 1 of 1. Done."))));
     }
 
     #[test]
@@ -344,7 +483,7 @@ mod tests {
                 mob: Some(mob.clone()),
                 killer: Some(killer),
             });
-            world.run_system_once(count_kills).unwrap();
+            world.run_system_once(count_progress).unwrap();
             world.resource_mut::<Messages<GameEvent>>().clear();
         };
         let stage = |world: &World| world.get::<QuestLog>(ada).unwrap().0[0].stage.clone();

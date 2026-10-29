@@ -53,6 +53,10 @@ pub struct QuestDef {
     /// The mob it's reported to; the guild's clerk if none, for a contract.
     #[serde(default)]
     pub report_to: Option<String>,
+    /// Items handed to whoever takes it from the board (the letter to carry), taken back if
+    /// it's given up or fails.
+    #[serde(default)]
+    pub gives: Vec<String>,
     #[serde(default)]
     pub rewards: Vec<Reward>,
 }
@@ -107,6 +111,9 @@ pub enum Objective {
     Kill(MobMatch, u32),
     /// So many of these items had when reporting, and handed over.
     Bring(ItemMatch, u32),
+    /// So many of these items come by (picked up, given, bought) while on the stage: nothing is
+    /// handed over. A clue; the letter you're to carry.
+    Obtain(ItemMatch, u32),
 }
 
 /// Which mobs: a template, or any with a tag.
@@ -204,6 +211,7 @@ impl QuestDef {
         let Posted::Board(room) = &self.posted;
         names.rooms.push(full(room));
         names.mobs.extend(self.report_to.as_deref().map(full));
+        names.items.extend(self.gives.iter().map(|id| full(id)));
         names
             .items
             .extend(self.rewards.iter().filter_map(|reward| match reward {
@@ -213,8 +221,11 @@ impl QuestDef {
         for objective in self.stages.iter().flat_map(|s| &s.objectives) {
             match objective {
                 Objective::Kill(MobMatch::Mob(mob), _) => names.mobs.push(full(mob)),
-                Objective::Bring(ItemMatch::Item(item), _) => names.items.push(full(item)),
-                Objective::Kill(MobMatch::Tag(_), _) | Objective::Bring(ItemMatch::Tag(_), _) => {}
+                Objective::Bring(ItemMatch::Item(item), _)
+                | Objective::Obtain(ItemMatch::Item(item), _) => names.items.push(full(item)),
+                Objective::Kill(MobMatch::Tag(_), _)
+                | Objective::Bring(ItemMatch::Tag(_), _)
+                | Objective::Obtain(ItemMatch::Tag(_), _) => {}
             }
         }
         names
@@ -263,15 +274,20 @@ impl MobMatch {
 
 impl Objective {
     /// The quest fact that counts it on stage `stage`, if it's counted as it happens:
-    /// `1.kill.sewers:sewer_rat`. `Bring` is checked when reporting.
+    /// `1.kill.sewers:sewer_rat`, `1.obtain.riftwatch:guild_letter`, `1.obtain.tag.herb`.
+    /// `Bring` is checked when reporting.
     pub(super) fn key(&self, stage: usize, zone: &str) -> Option<String> {
         match self {
             Objective::Kill(which, _) => Some(format!("{stage}.kill.{}", which.label(zone))),
+            Objective::Obtain(ItemMatch::Item(id), _) => {
+                Some(format!("{stage}.obtain.{}", ItemKey::parse(id, zone)))
+            }
+            Objective::Obtain(ItemMatch::Tag(tag), _) => Some(format!("{stage}.obtain.tag.{tag}")),
             Objective::Bring(..) => None,
         }
     }
 
-    /// What it's after, as the journal names it: "sewer rat", "anything vermin".
+    /// What it's after, as the journal names it: "sewer rat", "any vermin".
     pub(super) fn what(&self, zone: &str, lookup: &Lookup) -> String {
         match self {
             Objective::Kill(MobMatch::Mob(id), _) => lookup
@@ -280,15 +296,16 @@ impl Objective {
                 .get(&MobKey::parse(id, zone))
                 .map_or(id.as_str(), |def| without_article(&def.name))
                 .to_string(),
-            Objective::Bring(ItemMatch::Item(id), _) => lookup
+            Objective::Bring(ItemMatch::Item(id), _)
+            | Objective::Obtain(ItemMatch::Item(id), _) => lookup
                 .items
                 .0
                 .get(&ItemKey::parse(id, zone))
                 .map_or(id.as_str(), |def| without_article(&def.name))
                 .to_string(),
-            Objective::Kill(MobMatch::Tag(tag), _) | Objective::Bring(ItemMatch::Tag(tag), _) => {
-                format!("anything {tag}")
-            }
+            Objective::Kill(MobMatch::Tag(tag), _)
+            | Objective::Bring(ItemMatch::Tag(tag), _)
+            | Objective::Obtain(ItemMatch::Tag(tag), _) => format!("any {tag}"),
         }
     }
 
@@ -296,14 +313,18 @@ impl Objective {
     pub(super) fn progress(&self, zone: &str, have: Option<i64>, lookup: &Lookup) -> String {
         let what = self.what(zone, lookup);
         match self {
-            Objective::Kill(_, need) => {
+            Objective::Kill(_, need) | Objective::Obtain(_, need) => {
                 let have = have.unwrap_or(0).min(i64::from(*need));
                 let done = if have >= i64::from(*need) {
                     " (done)"
                 } else {
                     ""
                 };
-                format!("Kill {what}: {have} of {need}{done}")
+                let verb = match self {
+                    Objective::Kill(..) => "Kill",
+                    _ => "Find",
+                };
+                format!("{verb} {what}: {have} of {need}{done}")
             }
             Objective::Bring(_, need) => format!("Bring {what}: {need}, counted when you report"),
         }
@@ -311,7 +332,7 @@ impl Objective {
 
     pub(super) fn count(&self) -> u32 {
         match self {
-            Objective::Kill(_, n) | Objective::Bring(_, n) => *n,
+            Objective::Kill(_, n) | Objective::Bring(_, n) | Objective::Obtain(_, n) => *n,
         }
     }
 }
@@ -495,6 +516,7 @@ mod tests {
             repeat: Repeat::Always,
             stages,
             report_to: None,
+            gives: Vec::new(),
             rewards: Vec::new(),
         };
         let stage = |objectives| Stage {

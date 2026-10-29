@@ -1,0 +1,18 @@
+// Herbs for the Herbalist: always open, and reported to Narina rather than the guild.
+(
+    name: "Herbs for the Herbalist",
+    summary: "Narina Greenthorn always needs more herbs than she can gather.",
+    description: "Narina Greenthorn keeps the herbalist's stall stocked with salves and draughts, and she can never gather enough herbs herself. Bring her any five herbs from the woods and fields, and she'll pay for them, with the guild's thanks.",
+    posted: Board("contract_hall"),
+    contract: Some((rank: "bone", merit: 2)),
+    availability: Open,
+    repeat: Always,
+    stages: [
+        (
+            text: "Gather five herbs and take them to Narina Greenthorn at her stall.",
+            objectives: [Bring(Tag("herb"), 5)],
+        ),
+    ],
+    report_to: Some("herbalist"),
+    rewards: [Coin(40)],
+)

@@ -236,6 +236,8 @@ pub(super) fn accept(
     (quests, mut claims, mut offers): (Res<Quests>, ResMut<Claims>, ResMut<Offers>),
     // What they are and carry for `requires`, and the facts to clear a quest taken afresh.
     mut both: ParamSet<(Surroundings, ResMut<Facts>)>,
+    // What it gives whoever takes it.
+    (mut commands, items, item_templates): (Commands, crate::items::ItemQuery, Res<ItemTemplates>),
     db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -322,6 +324,7 @@ pub(super) fn accept(
         Ok((quest, clerk))
     })();
     let mut told = Vec::new();
+    let mut handed = String::new();
     let text = match reply {
         Err(text) => text,
         Ok((quest, clerk)) => {
@@ -353,6 +356,31 @@ pub(super) fn accept(
             offers
                 .0
                 .retain(|o| !(o.to == actor.entity && o.quest == quest.id));
+            // What it gives to carry goes to whoever took it from the board, not to every
+            // member who shares it.
+            if offered.is_none() && !quest.gives.is_empty() {
+                let mut held = crate::items::hands_full(actor.entity, &items);
+                let given: Vec<String> = quest
+                    .gives
+                    .iter()
+                    .map(|id| {
+                        crate::items::hand_new(
+                            &actor,
+                            ItemKey::parse(id, quest.zone()),
+                            &mut held,
+                            &mut commands,
+                            &item_templates,
+                            &rooms,
+                            &db,
+                        )
+                    })
+                    .collect();
+                handed = format!(
+                    "\r\n{} hands you {}.",
+                    crate::items::capitalized(&clerk),
+                    given.join(", ")
+                );
+            }
             // Taken from the board in a group, it's offered to the rest of the group here who
             // don't hold it already.
             if offered.is_none() {
@@ -412,7 +440,7 @@ pub(super) fn accept(
             }
         }
     };
-    told.insert(0, Outgoing::line(actor.entity, text));
+    told.insert(0, Outgoing::line(actor.entity, text + &handed));
     deliver(told, &mut outbox);
 }
 

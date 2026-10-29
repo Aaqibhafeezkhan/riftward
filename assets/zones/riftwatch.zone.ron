@@ -372,6 +372,13 @@
             description: "A sheet of parchment, rolled tight and tied with string.",
             tags: ["scroll"],
         ),
+        "guild_letter": (
+            name: "a sealed letter",
+            keywords: ["letter", "sealed"],
+            description: "A folded letter closed with the guild's crossed sword and lantern in red wax, addressed in a neat hand to \"the hunter, at the old kilns\".",
+            bulk: Negligible,
+            tags: ["letter"],
+        ),
         "healing_draught": (
             name: "a healing draught",
             keywords: ["draught", "potion", "healing"],

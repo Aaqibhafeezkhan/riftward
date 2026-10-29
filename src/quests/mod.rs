@@ -25,7 +25,7 @@ use board::{Offers, accept, board};
 use claims::{Claims, abandon, expire_claims, load_claims};
 use def::{QuestDef, QuestLoader, load_quests, sync_quests};
 use journal::journal;
-use progress::count_kills;
+use progress::count_progress;
 use report::report;
 
 pub use def::Quests;
@@ -41,7 +41,7 @@ impl Plugin for QuestsPlugin {
             .init_resource::<Claims>()
             .init_resource::<Offers>()
             .add_systems(Startup, (load_quests, load_claims))
-            .add_systems(Update, (sync_quests, count_kills))
+            .add_systems(Update, (sync_quests, count_progress))
             .add_systems(Update, expire_claims.run_if(crate::time::heartbeat()))
             .add_command(
                 CommandSpec::new("board", Category::Interaction)
@@ -102,6 +102,7 @@ pub(super) mod testing {
                 objectives: vec![Objective::Kill(MobMatch::Mob("rat".into()), 3)],
             }],
             report_to: None,
+            gives: Vec::new(),
             rewards: vec![Reward::Coin(250)],
         }
     }
