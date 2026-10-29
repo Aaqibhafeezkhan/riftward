@@ -237,8 +237,8 @@ Collection (kill so many, bring so many) is the simplest kind, and the first con
 
 **What that asks of a quest file,** beyond the collection example above:
 
-- **Steps by name, not only in order.** A list of stages runs in order, as before; a stage can instead say where it leads (`next: "alley"`), or offer **choices**, each its own set of objectives and its own next stage: whichever is done first is the way taken, and the other closes. A quest can end in more than one way (`End("returned")`, `End("sold")`), each with its own rewards and its own line in the journal.
-- **Actions when a stage begins or ends,** in one small vocabulary, shared with the [effects](effects.md) where the meaning is the same: `Give(item)` and `Take(item)`, `Spawn(mob, room)` (a mob that exists for the quest), `Set`, `Add` and `Clear` on [facts](facts.md) (`char.sold_out_the_guild`, `world.courier_caught`, `quest.warned`), `Say(mob, text)` (someone speaks to the holder), `Fail`. They're the actions of [rules](facts.md#rules), and a stage can carry rules of its own besides its objectives.
+- **Steps by name, not only in order.** A list of stages runs in order, as before; a stage can instead say where it leads (`next: "alley"`), or offer **choices**, each its own set of objectives and its own next stage: whichever is done first is the way taken, and the other closes. A quest can end in more than one way (`End("returned")`, `End("sold")`), each with its own rewards and its own line in the journal. (*Built*, 2026-10-28: a stage's `id`, and `next` naming the stage it leads to, past any between; choices and endings are still to come.)
+- **Actions when a stage begins or ends,** in one small vocabulary, shared with the [effects](effects.md) where the meaning is the same: `Give(item)` and `Take(item)`, `Spawn(mob, room)` (a mob that exists for the quest), `Set`, `Add` and `Clear` on [facts](facts.md) (`char.sold_out_the_guild`, `world.courier_caught`, `quest.warned`), `Say(mob, text)` (someone speaks to the holder), `Fail`. They're the actions of [rules](facts.md#rules), and a stage can carry rules of its own besides its objectives. (*Built*, 2026-10-28: `on_begin` and `on_end` with `Give(item)`, `Take(item)`, `Set`, `Add` and `Clear` on `char.`, `world.` and `quest.` facts, and `Say(mob, text)` ("Marin Harrow says, \"Take this letter back with you.\""). They run for each holder as their own stage begins or ends: the first begins on taking the quest; one ends as its objectives are done and the next begins; the last ends when it's reported. `Spawn` and `Fail` come with quest mobs and `fails_if`.)
 - **Ways to fail,** besides a claim running out: `fails_if: [Dies("narina"), Lost("letter")]`, an escort killed or a carried item gone.
 - **The journal follows the story:** each stage has its own `journal` text, so your journal says what's happening now ("Talla Mirk says the crystals go down the culvert at night."), not a list of counters. Hidden objectives stay hidden until their stage.
 - **Quest mobs are real.** No instancing: a mob spawned for a quest is in the world for anyone to see, and anyone can fight it; only its holder's side gets the quest's credit for it. It's tagged to the quest, so `Kill(Quest("courier"))` means *that* courier, and it's cleared away if the quest ends without it.
@@ -350,7 +350,7 @@ A group on a quest moves through it together, **as long as they're together:** w
 
 ### Saved
 
-- **`character_quests`:** character, quest id, its state (held, done with which ending, failed, abandoned), the stage **by its id**, when it was taken and when it's due, and when it was last finished (for `repeat`). (*Built*, without the ending, which comes with endings; the stage is its number until stages have ids.) Objectives' counts and the quest's own facts are `quest.` [facts](facts.md).
+- **`character_quests`:** character, quest id, its state (held, done with which ending, failed, abandoned), the stage **by its id**, when it was taken and when it's due, and when it was last finished (for `repeat`). (*Built*, without the ending, which comes with endings; the stage is kept by its id, or its number for a stage without one.) Objectives' counts and the quest's own facts are `quest.` [facts](facts.md).
 - **Editing a quest someone is partway through** is safe as long as their stage still exists: progress is kept by stage id, never by position. If an edit removes the stage they're on, the quest is marked broken in their journal and GMs are told, rather than guessing.
 - **`guild_record`:** Marin's ledger: character, quest, what happened (accepted, completed, failed, given up) and when. Only ever added to. (*Built.*)
 - **`quest_claims`:** which claimed quests are out, held by whom, until when, so a restart doesn't put a taken notice back on the board or forget a deadline. (*Built* as the `character_quests` rows held with a deadline, read into `Claims` at startup, rather than a table of its own that could disagree with them.)
@@ -442,7 +442,7 @@ In the smallest pull requests that each leave the game working, every one with i
 
 **Steps, choices and consequences**
 
-19. **Stages by id, `next`, and actions** (`Give`, `Take`, `Set`, `Say`) when a stage begins or ends.
+19. *Built.* **Stages by id, `next`, and actions** (`Give`, `Take`, `Set`, `Say`) when a stage begins or ends.
 20. **`ask <mob> about <topic>`** and the `Ask` objective: topics given by quest stages.
 21. **Choices and endings,** each with its own rewards and journal line.
 22. **Quest mobs:** `Spawn` for a quest, tied to it, counted by `Kill(Quest(...))`, cleared when it ends. *Crystals Gone Missing* can be written in full.

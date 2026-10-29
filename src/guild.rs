@@ -300,7 +300,7 @@ fn give_tag(
     };
     let key = ItemKey::parse(&def.tag, "");
     let mut held = crate::items::hands_full(actor.entity, items);
-    crate::items::hand_new(actor, key, &mut held, commands, templates, rooms, db)
+    crate::items::hand_new(actor.into(), key, &mut held, commands, templates, rooms, db)
 }
 
 /// Take away every guild tag `who` has on them.

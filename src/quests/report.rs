@@ -4,18 +4,18 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
+use super::actions::{Holder, Stagehand};
 use super::claims::Claims;
 use super::def::{Objective, QuestDef, Quests, Reward};
-use super::journal::{DONE, HELD, Lookup, OVER, QuestLog, stage_number};
+use super::journal::{DONE, HELD, Lookup, OVER, QuestLog};
 use crate::attributes::Attributes;
 use crate::command::Invocation;
-use crate::db::{Database, QuestRecord};
-use crate::facts::{Facts, Owner};
+use crate::db::QuestRecord;
+use crate::facts::Owner;
 use crate::guild::{Membership, guild};
-use crate::items::{ItemLocation, ItemTemplates};
-use crate::mobs::MobTemplates;
+use crate::items::ItemLocation;
 use crate::money;
-use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
+use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
 use crate::requirements::{ItemMatch, Requirement, Subject, Who};
 use crate::skills::Skills;
 use crate::time::unix_now;
@@ -32,15 +32,13 @@ fn readiness(
     meets: &dyn Fn(&Requirement) -> bool,
     lookup: &Lookup,
 ) -> Result<Vec<Entity>, Vec<String>> {
-    let Some(n) = stage_number(record) else {
+    let Some((i, stage)) = quest.stage_at(&record.stage) else {
         return Err(vec!["its place in it is lost".into()]);
     };
-    let Some(stage) = quest.stages.get(n - 1) else {
-        return Err(vec!["its place in it is lost".into()]);
-    };
-    if n < quest.stages.len() {
+    if quest.next_after(i).is_some() {
         return Err(vec![stage.text.clone()]);
     }
+    let place = quest.stage_key(i);
     let owner = Owner::Quest(character_id, quest.id.clone());
     let zone = quest.zone();
     let (mut missing, mut taken) = (Vec::new(), Vec::new());
@@ -48,7 +46,7 @@ fn readiness(
         match objective {
             Objective::Kill(..) | Objective::Obtain(..) | Objective::Reach(_) => {
                 let need = objective.count();
-                let key = objective.key(n, zone);
+                let key = objective.key(&place, zone);
                 let have = key.map(|key| lookup.story.number(&owner, &key, lookup.now));
                 if have.unwrap_or(0) < i64::from(need) {
                     missing.push(objective.progress(zone, have, lookup));
@@ -94,20 +92,15 @@ fn readiness(
 /// What `report` reads and changes.
 #[derive(SystemParam)]
 pub(super) struct Desk<'w, 's> {
-    commands: Commands<'w, 's>,
+    /// Items, rooms, templates, facts and the database, shared with stage actions.
+    hand: Stagehand<'w, 's>,
     players: Characters<'w, 's>,
     mobs: crate::mobs::MobQuery<'w, 's>,
     logs: Query<'w, 's, &'static mut QuestLog>,
     memberships: Query<'w, 's, &'static mut Membership>,
     purses: Query<'w, 's, &'static mut crate::money::Purse>,
-    items: crate::items::ItemQuery<'w, 's>,
-    item_templates: Res<'w, ItemTemplates>,
-    mob_templates: Res<'w, MobTemplates>,
-    rooms: RoomQuery<'w, 's>,
     quests: Res<'w, Quests>,
     claims: ResMut<'w, Claims>,
-    story: ResMut<'w, Facts>,
-    db: Res<'w, Database>,
     outbox: ResMut<'w, Outbox>,
     groups: crate::groups::Groups<'w, 's>,
     index: Res<'w, crate::world::RoomIndex>,
@@ -121,8 +114,13 @@ fn meets(d: &Desk, who: &Actor, requirement: &Requirement) -> bool {
     let Ok((attributes, skills)) = d.sheets.get(who.entity) else {
         return false;
     };
-    let room = d.rooms.get(who.room).ok().map(|(_, key, _)| key.clone());
-    let carrying = crate::items::carried(who.entity, &d.items, &d.item_templates);
+    let room = d
+        .hand
+        .rooms
+        .get(who.room)
+        .ok()
+        .map(|(_, key, _)| key.clone());
+    let carrying = crate::items::carried(who.entity, &d.hand.items, &d.hand.item_templates);
     let subject = Subject::of(
         Who {
             attributes,
@@ -134,7 +132,7 @@ fn meets(d: &Desk, who: &Actor, requirement: &Requirement) -> bool {
             room: room.as_ref(),
             carrying: Some(&carrying),
         },
-        Some(&d.story),
+        Some(&d.hand.story),
     );
     requirement.met(&subject)
 }
@@ -191,21 +189,26 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
             )
         });
     }
-    let mut carried = crate::items::carried_items(actor.entity, &d.items, &d.item_templates);
-    let mut held = crate::items::hands_full(actor.entity, &d.items);
+    let mut carried =
+        crate::items::carried_items(actor.entity, &d.hand.items, &d.hand.item_templates);
+    let mut held = crate::items::hands_full(actor.entity, &d.hand.items);
     for (record, to) in due {
         let Some(quest) = d.quests.0.get(&record.quest).cloned() else {
             continue;
         };
         let places = |key: &RoomKey| {
             let room = d.index.0.get(key)?;
-            d.rooms.get(*room).ok().map(|(room, ..)| room.name.clone())
+            d.hand
+                .rooms
+                .get(*room)
+                .ok()
+                .map(|(room, ..)| room.name.clone())
         };
         let lookup = Lookup {
             quests: &d.quests,
-            story: &d.story,
-            mobs: &d.mob_templates,
-            items: &d.item_templates,
+            story: &d.hand.story,
+            mobs: &d.hand.mob_templates,
+            items: &d.hand.item_templates,
             places: &places,
             now,
         };
@@ -253,7 +256,7 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
         // What it asked to be brought, handed over.
         let mut handed: Vec<(String, usize)> = Vec::new();
         for entity in &taken {
-            let Ok((_, item, location)) = d.items.get(*entity) else {
+            let Ok((_, item, location)) = d.hand.items.get(*entity) else {
                 continue;
             };
             match handed.iter_mut().find(|(name, _)| *name == item.name) {
@@ -264,7 +267,7 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
             if *location == ItemLocation::Held(actor.entity) {
                 held = held.saturating_sub(1);
             }
-            crate::healing::used_up(&mut d.commands, &d.db, *entity, item);
+            crate::healing::used_up(&mut d.hand.commands, &d.hand.db, *entity, item);
         }
         carried.retain(|(entity, ..)| !taken.contains(entity));
         if !handed.is_empty() {
@@ -303,7 +306,7 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
                 "{} reports {} to {to}, for you too: it's done.",
                 actor.name, quest.name
             )];
-            let mut hands = crate::items::hands_full(mate.entity, &d.items);
+            let mut hands = crate::items::hands_full(mate.entity, &d.hand.items);
             theirs.extend(pay(&mut d, &mate, record, &quest, share, &mut hands, now));
             out.push(Outgoing::line(mate.entity, theirs.join("\r\n")));
         }
@@ -318,11 +321,12 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
                     .map(|(e, ..)| e);
                 let record = match entity.and_then(|e| d.logs.get(e).ok()) {
                     Some(log) => log.get(&quest.id).cloned(),
-                    None => {
-                        d.db.character_quests(id)
-                            .ok()
-                            .and_then(|rs| rs.into_iter().find(|r| r.quest == quest.id))
-                    }
+                    None => d
+                        .hand
+                        .db
+                        .character_quests(id)
+                        .ok()
+                        .and_then(|rs| rs.into_iter().find(|r| r.quest == quest.id)),
                 };
                 let Some(mut record) = record.filter(|r| r.state == HELD) else {
                     continue;
@@ -330,9 +334,9 @@ pub(super) fn report(In(inv): In<Invocation>, mut d: Desk) {
                 record.state = OVER.into();
                 record.due_at = None;
                 match entity.and_then(|e| d.logs.get_mut(e).ok()) {
-                    Some(mut log) => log.put(record, id, &d.db),
+                    Some(mut log) => log.put(record, id, &d.hand.db),
                     None => {
-                        if let Err(err) = d.db.save_character_quest(id, &record) {
+                        if let Err(err) = d.hand.db.save_character_quest(id, &record) {
                             error!("failed to save quest {} for {id}: {err}", quest.id);
                         }
                     }
@@ -373,20 +377,20 @@ fn pay(
         && let Ok(mut purse) = d.purses.get_mut(who.entity)
     {
         purse.0 += copper;
-        purse.save(Some(character_id), &d.db);
+        purse.save(Some(character_id), &d.hand.db);
         lines.push(format!("You're paid {}.", money::coins(copper)));
     }
     for reward in &quest.rewards {
         match reward {
             Reward::Item(id) => {
                 let given = crate::items::hand_new(
-                    who,
+                    who.into(),
                     ItemKey::parse(id, quest.zone()),
                     held,
-                    &mut d.commands,
-                    &d.item_templates,
-                    &d.rooms,
-                    &d.db,
+                    &mut d.hand.commands,
+                    &d.hand.item_templates,
+                    &d.hand.rooms,
+                    &d.hand.db,
                 );
                 lines.push(format!("You're given {given}."));
             }
@@ -396,7 +400,9 @@ fn pay(
                     Some(("world", rest)) => (Owner::World, rest),
                     _ => continue,
                 };
-                d.story.set(&owner, key, value.clone(), None, &d.db);
+                d.hand
+                    .story
+                    .set(&owner, key, value.clone(), None, &d.hand.db);
             }
             Reward::Coin(_) => {}
         }
@@ -407,12 +413,14 @@ fn pay(
         {
             m.contracts += 1;
             let promoted = m.earn(contract.merit);
-            m.save(Some(character_id), &d.db);
+            m.save(Some(character_id), &d.hand.db);
             lines.push(format!("You earn {} merit.", contract.merit));
             lines.extend(promoted);
         }
-        if let Err(err) =
-            d.db.add_guild_record(character_id, &quest.id, "completed", now)
+        if let Err(err) = d
+            .hand
+            .db
+            .add_guild_record(character_id, &quest.id, "completed", now)
         {
             error!(
                 "failed to write {} into the guild's record: {err}",
@@ -420,11 +428,20 @@ fn pay(
             );
         }
     }
+    // Its last stage ends with it.
+    if let Some((i, _)) = quest.stage_at(&record.stage) {
+        let holder = Holder {
+            entity: who.entity,
+            character_id,
+            room: who.room,
+        };
+        lines.extend(d.hand.act(&quest.stages[i].on_end, quest, holder));
+    }
     record.state = DONE.into();
     record.finished_at = Some(now);
     record.due_at = None;
     if let Ok(mut log) = d.logs.get_mut(who.entity) {
-        log.put(record, character_id, &d.db);
+        log.put(record, character_id, &d.hand.db);
     }
     lines
 }
@@ -432,6 +449,9 @@ fn pay(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::facts::Facts;
+    use crate::items::ItemTemplates;
+    use crate::mobs::MobTemplates;
     use crate::quests::def::{MobMatch, Stage};
     use crate::quests::testing::rats;
 
@@ -445,6 +465,7 @@ mod tests {
                 Stage {
                     text: "Find the nest.".into(),
                     objectives: vec![Objective::Kill(MobMatch::Mob("rat".into()), 1)],
+                    ..Default::default()
                 },
                 Stage {
                     text: "Clear it.".into(),
@@ -456,6 +477,7 @@ mod tests {
                             "rats_broke_out".into(),
                         )),
                     ],
+                    ..Default::default()
                 },
             ],
             ..rats()

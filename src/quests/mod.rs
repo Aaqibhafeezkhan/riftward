@@ -13,6 +13,7 @@
 //! - `loot`: what a boss drops for those on its quest.
 //! - `why`: GMs' account of where someone stands in a quest, and why.
 
+mod actions;
 mod board;
 mod claims;
 mod def;
@@ -122,6 +123,7 @@ pub(super) mod testing {
             stages: vec![Stage {
                 text: "Kill rats.".into(),
                 objectives: vec![Objective::Kill(MobMatch::Mob("rat".into()), 3)],
+                ..Default::default()
             }],
             report_to: None,
             gives: Vec::new(),

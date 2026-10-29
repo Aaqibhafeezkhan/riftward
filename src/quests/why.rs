@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use super::claims::Claims;
 use super::def::{Objective, QuestDef, Quests};
-use super::journal::{HELD, Lookup, QuestLog, room_name, stage_number, time_left};
+use super::journal::{HELD, Lookup, QuestLog, room_name, time_left};
 use crate::attributes::Attributes;
 use crate::command::Invocation;
 use crate::db::{Database, QuestRecord};
@@ -168,28 +168,31 @@ fn explain(
     }
     let owner = Owner::Quest(id, quest.id.clone());
     if record.state == HELD {
-        match stage_number(record).and_then(|n| Some((n, quest.stages.get(n - 1)?))) {
+        match quest.stage_at(&record.stage) {
             None => lines.push(format!(
                 "On stage '{}', which the quest doesn't have: broken.",
                 record.stage
             )),
-            Some((n, stage)) => {
+            Some((i, stage)) => {
+                let place = quest.stage_key(i);
+                let last = quest.next_after(i).is_none();
                 lines.push(format!(
-                    "On stage {n} of {}: {}",
+                    "On stage {place} ({} of {}): {}",
+                    i + 1,
                     quest.stages.len(),
                     stage.text
                 ));
-                let mut ready = n == quest.stages.len();
+                let mut ready = last;
                 for objective in &stage.objectives {
                     let (line, done) =
-                        objective_line(objective, n, zone, &owner, subject, carried, lookup);
+                        objective_line(objective, &place, zone, &owner, subject, carried, lookup);
                     ready &= done.unwrap_or(false);
                     lines.push(format!("  {line}"));
                     if let (Objective::Meet(requirement), Some(subject)) = (objective, subject) {
                         terms(requirement, subject, 2, &mut lines);
                     }
                 }
-                lines.push(if n < quest.stages.len() {
+                lines.push(if !last {
                     "Not the last stage: it moves on when every objective here is done.".into()
                 } else if ready {
                     format!("Ready to report to {}.", quest.reported_to(lookup.mobs))
@@ -214,7 +217,7 @@ fn explain(
 /// while they're away).
 fn objective_line(
     objective: &Objective,
-    n: usize,
+    place: &str,
     zone: &str,
     owner: &Owner,
     subject: Option<&Subject>,
@@ -226,7 +229,7 @@ fn objective_line(
     let state = |done: bool| if done { "done" } else { "not yet" };
     match objective {
         Objective::Kill(..) | Objective::Obtain(..) | Objective::Reach(_) => {
-            let key = objective.key(n, zone).unwrap_or_default();
+            let key = objective.key(place, zone).unwrap_or_default();
             let have = lookup.story.number(owner, &key, lookup.now);
             let done = have >= i64::from(need);
             let verb = match objective {
@@ -329,6 +332,7 @@ mod tests {
                 Stage {
                     text: "Find the nest.".into(),
                     objectives: vec![Objective::Reach("nest".into())],
+                    ..Default::default()
                 },
                 Stage {
                     text: "Clear it.".into(),
@@ -337,6 +341,7 @@ mod tests {
                         Objective::Bring(ItemMatch::Item("tail".into()), 1),
                         Objective::Meet(flag()),
                     ],
+                    ..Default::default()
                 },
             ],
             ..rats()
@@ -389,7 +394,7 @@ mod tests {
         for line in [
             "Ada (not in the game), Rats (riftwatch:rats): held.",
             "Posted when:\r\n  rats broke out: no",
-            "On stage 2 of 2: Clear it.",
+            "On stage 2 (2 of 2): Clear it.",
             "Kill rat: quest.2.kill.riftwatch:rat = 2, needs 2: done",
             "Bring tail x1: what they carry can't be told while they're away",
             "Meet rats broke out: can't tell while they're away",

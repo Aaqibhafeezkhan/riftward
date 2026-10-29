@@ -3,6 +3,7 @@
 
 use bevy::prelude::*;
 
+use super::actions::{Holder, Stagehand};
 use super::claims::{Claim, Claims};
 use super::def::{Availability, QuestDef, Quests, Repeat, Reward};
 use super::journal::{DONE, HELD, QuestLog, time_left};
@@ -235,9 +236,7 @@ pub(super) fn accept(
     sheets: Query<(&Attributes, &Skills)>,
     (quests, mut claims, mut offers): (Res<Quests>, ResMut<Claims>, ResMut<Offers>),
     // What they are and carry for `requires`, and the facts to clear a quest taken afresh.
-    mut both: ParamSet<(Surroundings, ResMut<Facts>)>,
-    // What it gives whoever takes it.
-    (mut commands, items, item_templates): (Commands, crate::items::ItemQuery, Res<ItemTemplates>),
+    mut both: ParamSet<(Surroundings, Stagehand)>,
     db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
@@ -337,7 +336,7 @@ pub(super) fn accept(
             let record = QuestRecord {
                 quest: quest.id.clone(),
                 state: HELD.into(),
-                stage: "1".into(),
+                stage: quest.stage_key(0),
                 taken_at: now,
                 due_at,
                 finished_at: log_finished(logs.get(actor.entity).ok(), &quest.id),
@@ -358,20 +357,21 @@ pub(super) fn accept(
                 .retain(|o| !(o.to == actor.entity && o.quest == quest.id));
             // What it gives to carry goes to whoever took it from the board, not to every
             // member who shares it.
+            let mut hand = both.p1();
             if offered.is_none() && !quest.gives.is_empty() {
-                let mut held = crate::items::hands_full(actor.entity, &items);
+                let mut held = crate::items::hands_full(actor.entity, &hand.items);
                 let given: Vec<String> = quest
                     .gives
                     .iter()
                     .map(|id| {
                         crate::items::hand_new(
-                            &actor,
+                            (&actor).into(),
                             ItemKey::parse(id, quest.zone()),
                             &mut held,
-                            &mut commands,
-                            &item_templates,
-                            &rooms,
-                            &db,
+                            &mut hand.commands,
+                            &hand.item_templates,
+                            &hand.rooms,
+                            &hand.db,
                         )
                     })
                     .collect();
@@ -412,9 +412,17 @@ pub(super) fn accept(
                 Ok(mut log) => log.put(record, character_id, &db),
                 Err(_) => error!("{} has no quest log", actor.name),
             }
-            // Taken again, it starts from nothing.
-            both.p1()
+            // Taken again, it starts from nothing; then its first stage begins.
+            hand.story
                 .forget(&Owner::Quest(character_id, quest.id.clone()), &db);
+            let holder = Holder {
+                entity: actor.entity,
+                character_id,
+                room: actor.room,
+            };
+            for line in hand.act(&quest.stages[0].on_begin, quest, holder) {
+                handed += &format!("\r\n{line}");
+            }
             if quest.contract.is_some() {
                 if let Err(err) = db.add_guild_record(character_id, &quest.id, "accepted", now) {
                     error!(

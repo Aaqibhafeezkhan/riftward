@@ -71,7 +71,7 @@ A **rule** is: when an event happens, if a condition holds, do these actions.
 
 **Actions:** `Set(key, value)`, `Add(key, n)`, `Clear(key)`; `Give(item)`, `Take(item)`; `Spawn(mob, room)`; `Say(mob, text)`; `Announce(scope, text)`; and within a quest, `Advance(stage)`, `End(ending)`, `Fail`. Where an action means what an [effect](effects.md) means, it's the same word.
 
-Rules live in quests (active only while the quest is on that stage), and later in world events and on mobs. Quests' objectives are the first (*built* for `Kill`: a kill adds to the holder's `quest.` fact for the stage they're on); rules written out in full come with stage actions. A [script](effects.md#scripting) can be a rule's action, as the last resort it already is.
+Rules live in quests (active only while the quest is on that stage), and later in world events and on mobs. Quests' objectives are the first (*built*: kills, finds and places reached add to the holder's `quest.` fact for the stage they're on), and a stage's `on_begin` and `on_end` actions the second (*built*: `Set`, `Add`, `Clear`, `Give`, `Take`, `Say`). A [script](effects.md#scripting) can be a rule's action, as the last resort it already is.
 
 ## How it gets built
 

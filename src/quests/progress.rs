@@ -3,8 +3,9 @@
 
 use bevy::prelude::*;
 
+use super::actions::{Holder, Stagehand};
 use super::def::{Objective, QuestDef, Quests, Stage};
-use super::journal::{HELD, QuestLog, stage_number};
+use super::journal::{HELD, QuestLog};
 use crate::db::{Database, QuestRecord};
 use crate::events::GameEvent;
 use crate::facts::{Facts, Owner};
@@ -64,19 +65,19 @@ impl Deed<'_> {
 
 /// What holders do counts for the quests they hold, for them and every member of their group in
 /// the room who holds the same quest: a kill (by whoever struck it), an item come by (picked
-/// up, given, bought), or a room walked into. Each objective the deed answers on the stage that holder is on goes up by
-/// one, to what it asks; a stage whose objectives are all counted and done moves on to the next,
-/// and the last says it's time to report.
+/// up, given, bought), or a room walked into. Each objective the deed answers on the stage that
+/// holder is on goes up by one, to what it asks; a stage whose objectives are all counted and
+/// done ends (its `on_end`) and leads to its `next` (whose `on_begin` follows), and the last says
+/// it's time to report.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn count_progress(
     mut events: MessageReader<GameEvent>,
     mut logs: Query<(&mut QuestLog, &Player, &InRoom)>,
     groups: crate::groups::Groups,
     quests: Res<Quests>,
-    mut story: ResMut<Facts>,
+    mut hand: Stagehand,
     (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
     places: Query<(&Room, &RoomKey)>,
-    db: Res<Database>,
     mut outbox: ResMut<Outbox>,
 ) {
     let now = unix_now();
@@ -142,58 +143,74 @@ pub(super) fn count_progress(
             let Some(quest) = quests.0.get(&quest_id) else {
                 continue;
             };
-            for holder in &there {
-                let Ok((mut log, player, _)) = logs.get_mut(*holder) else {
+            for entity in &there {
+                let Ok((mut log, player, at)) = logs.get_mut(*entity) else {
                     continue;
                 };
-                let Some(record) = log.get(&quest_id).filter(|r| r.state == HELD).cloned() else {
+                let Some(mut record) = log.get(&quest_id).filter(|r| r.state == HELD).cloned()
+                else {
                     continue;
                 };
-                let character_id = player.character_id;
-                let (lines, moved) = tally(
+                let holder = Holder {
+                    entity: *entity,
+                    character_id: player.character_id,
+                    room: at.0,
+                };
+                let (mut lines, finished) = tally(
                     &record,
                     quest,
-                    character_id,
+                    holder.character_id,
                     deed,
-                    &mut story,
-                    &mobs,
-                    &db,
+                    &mut hand.story,
+                    &hand.db,
                     now,
                 );
-                if let Some(record) = moved {
-                    log.put(record, character_id, &db);
+                // All counted and done: it ends, and on to the next stage, or back to report.
+                // The last stage ends when it's reported.
+                if let Some(i) = finished {
+                    match quest.next_after(i) {
+                        Some(next) => {
+                            lines.extend(hand.act(&quest.stages[i].on_end, quest, holder));
+                            let stage = &quest.stages[next];
+                            lines.push(format!("\x1b[1;33m{}:\x1b[0m {}", quest.name, stage.text));
+                            record.stage = quest.stage_key(next);
+                            log.put(record, holder.character_id, &hand.db);
+                            lines.extend(hand.act(&stage.on_begin, quest, holder));
+                        }
+                        None => lines.push(format!(
+                            "\x1b[1;33m{}:\x1b[0m that's all it asks. Report to {}.",
+                            quest.name,
+                            quest.reported_to(&mobs)
+                        )),
+                    }
                 }
-                out.extend(lines.into_iter().map(|line| Outgoing::line(*holder, line)));
+                out.extend(lines.into_iter().map(|line| Outgoing::line(*entity, line)));
             }
         }
     }
     deliver(out, &mut outbox);
 }
 
-/// Count `deed` toward one holder's `record`: what to tell them, and the record moved on to the
-/// next stage if this finished the one they were on.
-#[allow(clippy::too_many_arguments)]
+/// Count `deed` toward one holder's `record`: what to tell them, and the stage (where it stands)
+/// if this finished the one they were on and every objective on it is counted and done.
 fn tally(
     record: &QuestRecord,
     quest: &QuestDef,
     character_id: i64,
     deed: Deed,
     story: &mut Facts,
-    mobs: &MobTemplates,
     db: &Database,
     now: i64,
-) -> (Vec<String>, Option<QuestRecord>) {
+) -> (Vec<String>, Option<usize>) {
     let mut lines = Vec::new();
-    let Some(n) = stage_number(record) else {
+    let Some((i, stage)) = quest.stage_at(&record.stage) else {
         return (lines, None);
     };
-    let Some(stage) = quest.stages.get(n - 1) else {
-        return (lines, None);
-    };
+    let place = quest.stage_key(i);
     let owner = Owner::Quest(character_id, quest.id.clone());
     let mut counted = false;
     for objective in &stage.objectives {
-        let Some(key) = objective.key(n, quest.zone()) else {
+        let Some(key) = objective.key(&place, quest.zone()) else {
             continue;
         };
         if !deed.counts_for(objective, quest.zone()) {
@@ -212,32 +229,14 @@ fn tally(
             deed.told()
         ));
     }
-    if !counted || !stage_done(stage, n, quest, &owner, story, now) {
-        return (lines, None);
-    }
-    // All counted and done: on to the next stage, or back to report.
-    match quest.stages.get(n) {
-        Some(next) => {
-            lines.push(format!("\x1b[1;33m{}:\x1b[0m {}", quest.name, next.text));
-            let mut record = record.clone();
-            record.stage = (n + 1).to_string();
-            (lines, Some(record))
-        }
-        None => {
-            lines.push(format!(
-                "\x1b[1;33m{}:\x1b[0m that's all it asks. Report to {}.",
-                quest.name,
-                quest.reported_to(mobs)
-            ));
-            (lines, None)
-        }
-    }
+    let finished = counted && stage_done(stage, &place, quest, &owner, story, now);
+    (lines, finished.then_some(i))
 }
 
-/// Whether every objective on stage `n` is counted as it happens, and done.
+/// Whether every objective on the stage kept as `place` is counted as it happens, and done.
 fn stage_done(
     stage: &Stage,
-    n: usize,
+    place: &str,
     quest: &QuestDef,
     owner: &Owner,
     story: &Facts,
@@ -245,7 +244,7 @@ fn stage_done(
 ) -> bool {
     stage.objectives.iter().all(|objective| {
         objective
-            .key(n, quest.zone())
+            .key(place, quest.zone())
             .is_some_and(|key| story.number(owner, &key, now) >= i64::from(objective.count()))
     })
 }
@@ -384,10 +383,12 @@ mod tests {
                 Stage {
                     text: "Find the letter.".into(),
                     objectives: vec![Objective::Obtain(ItemMatch::Item("letter".into()), 1)],
+                    ..Default::default()
                 },
                 Stage {
                     text: "Now take it down the ravine.".into(),
                     objectives: vec![Objective::Reach("ravine".into())],
+                    ..Default::default()
                 },
             ],
             ..rats()
@@ -481,6 +482,142 @@ mod tests {
     }
 
     #[test]
+    fn a_stage_ends_leads_where_it_says_and_the_next_begins() {
+        use crate::quests::def::Action;
+        use crate::world::{ItemDef, ItemKey};
+        use bevy::ecs::system::RunSystemOnce;
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let id = db.create_character(account.id, "Ada").unwrap().id;
+        let mut world = World::new();
+        world.insert_resource(db);
+        world.init_resource::<Facts>();
+        world.init_resource::<Outbox>();
+        world.init_resource::<Messages<GameEvent>>();
+        let letter = ItemKey::parse("riftwatch:letter", "");
+        world.insert_resource(ItemTemplates(HashMap::from([(
+            letter.clone(),
+            ItemDef::named("a sealed letter"),
+        )])));
+        let rat = MobKey::parse("riftwatch:rat", "");
+        world.insert_resource(MobTemplates(HashMap::from([
+            (rat.clone(), MobDef::named("a rat")),
+            (
+                MobKey::parse("riftwatch:clerk", ""),
+                MobDef::named("Marin Harrow"),
+            ),
+        ])));
+        let kill_rat = || vec![Objective::Kill(MobMatch::Mob("rat".into()), 1)];
+        let quest = QuestDef {
+            stages: vec![
+                Stage {
+                    id: Some("nest".into()),
+                    text: "Find the nest.".into(),
+                    objectives: kill_rat(),
+                    next: Some("king".into()),
+                    on_end: vec![
+                        Action::Set("quest.found_nest".into(), crate::facts::Value::Bool(true)),
+                        Action::Say("clerk".into(), "Now the king.".into()),
+                    ],
+                    ..Default::default()
+                },
+                Stage {
+                    id: Some("skipped".into()),
+                    text: "Never reached.".into(),
+                    objectives: kill_rat(),
+                    ..Default::default()
+                },
+                Stage {
+                    id: Some("king".into()),
+                    text: "Kill the king.".into(),
+                    objectives: kill_rat(),
+                    on_begin: vec![
+                        Action::Give("letter".into()),
+                        Action::Add("char.nests_found".into(), 1),
+                    ],
+                    ..Default::default()
+                },
+            ],
+            ..rats()
+        };
+        world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
+        let room = world.spawn_empty().id();
+        let ada = world
+            .spawn((
+                InRoom(room),
+                Player {
+                    name: "Ada".into(),
+                    character_id: id,
+                    account: "ada".into(),
+                    role: crate::db::Role::Player,
+                    race: "human".into(),
+                    background: String::new(),
+                    description: String::new(),
+                },
+                QuestLog(vec![QuestRecord {
+                    quest: "riftwatch:rats".into(),
+                    state: HELD.into(),
+                    stage: "nest".into(),
+                    taken_at: 0,
+                    due_at: None,
+                    finished_at: None,
+                }]),
+            ))
+            .id();
+        world.write_message(GameEvent::Died {
+            who: room,
+            name: "a rat".into(),
+            room,
+            mob: Some(rat),
+            killer: Some(ada),
+        });
+        world.run_system_once(count_progress).unwrap();
+        world.flush();
+
+        assert_eq!(
+            world.get::<QuestLog>(ada).unwrap().0[0].stage,
+            "king",
+            "past 'skipped'"
+        );
+        let story = world.resource::<Facts>();
+        let quest_owner = Owner::Quest(id, "riftwatch:rats".into());
+        assert!(
+            story.get(&quest_owner, "found_nest", 0).is_some(),
+            "the nest's end"
+        );
+        assert_eq!(
+            story.number(&Owner::Character(id), "nests_found", 0),
+            1,
+            "the king's beginning"
+        );
+        assert!(
+            world
+                .query::<&crate::items::Item>()
+                .iter(&world)
+                .any(|item| item.key == letter),
+            "the letter given"
+        );
+        let said: Vec<String> = world
+            .resource::<Outbox>()
+            .0
+            .iter()
+            .filter_map(|o| match o {
+                Outgoing::To(_, text) => Some(text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            said.iter()
+                .any(|t| t.contains("Marin Harrow says, \"Now the king.\""))
+        );
+        assert!(said.iter().any(|t| t.contains("Kill the king.")));
+        assert!(
+            said.iter()
+                .any(|t| t.contains("You're given a sealed letter"))
+        );
+    }
+
+    #[test]
     fn kills_count_stage_by_stage() {
         use bevy::ecs::system::RunSystemOnce;
         let db = crate::db::Database::open(":memory:").unwrap();
@@ -507,10 +644,12 @@ mod tests {
                 Stage {
                     text: "Kill two rats.".into(),
                     objectives: vec![Objective::Kill(MobMatch::Mob("rat".into()), 2)],
+                    ..Default::default()
                 },
                 Stage {
                     text: "Kill a vermin.".into(),
                     objectives: vec![Objective::Kill(MobMatch::Tag("vermin".into()), 1)],
+                    ..Default::default()
                 },
             ],
             ..rats()

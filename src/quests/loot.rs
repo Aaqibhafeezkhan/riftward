@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 
 use super::def::{Objective, Quests};
-use super::journal::{HELD, QuestLog, stage_number};
+use super::journal::{HELD, QuestLog};
 use crate::combat::{Dead, WantedLoot};
 use crate::facts::{Facts, Owner};
 use crate::items::{ItemQuery, ItemTemplates};
@@ -37,12 +37,10 @@ pub(super) fn want_loot(
             let Some(quest) = quests.0.get(&record.quest) else {
                 continue;
             };
-            let Some(n) = stage_number(record) else {
+            let Some((i, stage)) = quest.stage_at(&record.stage) else {
                 continue;
             };
-            let Some(stage) = quest.stages.get(n - 1) else {
-                continue;
-            };
+            let place = quest.stage_key(i);
             let owner = Owner::Quest(player.character_id, quest.id.clone());
             for objective in &stage.objectives {
                 let still = match objective {
@@ -58,7 +56,7 @@ pub(super) fn want_loot(
                         (have < *need as usize).then_some(key)
                     }
                     Objective::Obtain(ItemMatch::Item(id), need) => objective
-                        .key(n, quest.zone())
+                        .key(&place, quest.zone())
                         .filter(|key| story.number(&owner, key, now) < i64::from(*need))
                         .map(|_| ItemKey::parse(id, quest.zone())),
                     _ => None,
@@ -100,6 +98,7 @@ mod tests {
                     ItemMatch::Item("sewers:rat_tail".into()),
                     2,
                 )],
+                ..Default::default()
             }],
             ..rats()
         };

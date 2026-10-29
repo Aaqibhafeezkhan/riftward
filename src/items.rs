@@ -538,11 +538,30 @@ pub fn carried_items(
         .collect()
 }
 
+/// Whoever is handed something: the character, their saved id if they're a player, and the room
+/// they're in, for setting it at their feet.
+#[derive(Clone, Copy, Debug)]
+pub struct Recipient {
+    pub entity: Entity,
+    pub character_id: Option<i64>,
+    pub room: Entity,
+}
+
+impl From<&Actor> for Recipient {
+    fn from(actor: &Actor) -> Self {
+        Self {
+            entity: actor.entity,
+            character_id: actor.character_id,
+            room: actor.room,
+        }
+    }
+}
+
 /// Hand `actor` a new item of template `key`: into a free hand, or at their feet if `held` (how
 /// many hands are full, counted on as it fills them) says there's none. Real at once, as
 /// anything a player is given is. What they're told they got: its name, and where if not in hand.
 pub fn hand_new(
-    actor: &Actor,
+    actor: Recipient,
     key: ItemKey,
     held: &mut usize,
     commands: &mut Commands,

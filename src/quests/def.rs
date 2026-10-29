@@ -97,11 +97,53 @@ pub enum Repeat {
 }
 
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct Stage {
+    /// Its name, for `next` to lead to and to keep someone's place by: `"alley"`. Without one,
+    /// it goes by its number.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     /// What the journal says while it's the stage they're on.
+    #[serde(alias = "journal")]
     pub text: String,
     pub objectives: Vec<Objective>,
+    /// The stage it leads to once done, by id. Without one, the stage after it; after the last,
+    /// it's time to report.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+    /// What happens as a holder comes to it (on taking the quest, for the first).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub on_begin: Vec<Action>,
+    /// What happens as a holder finishes it (on reporting, for the last).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub on_end: Vec<Action>,
+}
+
+/// Something a stage does as it begins or ends, for the holder it's begun or ended for.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Action {
+    /// Hand them one of this item: `Give("guild_letter")`.
+    Give(String),
+    /// Take one of this item from them, if they have it.
+    Take(String),
+    /// Set a fact: `char.`, `world.` or `quest.` (this quest's own).
+    Set(String, crate::facts::Value),
+    /// Add to a number fact.
+    Add(String, i64),
+    /// Clear a fact.
+    Clear(String),
+    /// A mob says something to them: `Say("contract_clerk", "Mind the culvert.")`.
+    Say(String, String),
+}
+
+impl Action {
+    /// The fact it changes, if it changes one.
+    fn fact(&self) -> Option<&str> {
+        match self {
+            Action::Set(key, _) | Action::Add(key, _) | Action::Clear(key) => Some(key),
+            _ => None,
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -150,6 +192,30 @@ impl QuestDef {
         }
         if self.stages.is_empty() {
             return Err("has no stages".into());
+        }
+        let ids: Vec<&str> = self.stages.iter().filter_map(|s| s.id.as_deref()).collect();
+        for (n, id) in ids.iter().enumerate() {
+            if ids[..n].contains(id) {
+                return Err(format!("has two stages called {id}"));
+            }
+        }
+        for stage in &self.stages {
+            if let Some(next) = &stage.next
+                && !ids.contains(&next.as_str())
+            {
+                return Err(format!("leads to a stage it doesn't have: {next}"));
+            }
+            for action in stage.on_begin.iter().chain(&stage.on_end) {
+                if let Some(key) = action.fact()
+                    && !["char.", "world.", "quest."]
+                        .iter()
+                        .any(|s| key.starts_with(s))
+                {
+                    return Err(format!(
+                        "changes {key}: actions change char., world. or quest. facts"
+                    ));
+                }
+            }
         }
         for (n, stage) in self.stages.iter().enumerate() {
             if blank(&stage.text) {
@@ -234,6 +300,17 @@ impl QuestDef {
                 | Objective::Meet(_) => {}
             }
         }
+        for action in self
+            .stages
+            .iter()
+            .flat_map(|s| s.on_begin.iter().chain(&s.on_end))
+        {
+            match action {
+                Action::Give(item) | Action::Take(item) => names.items.push(full(item)),
+                Action::Say(mob, _) => names.mobs.push(full(mob)),
+                Action::Set(..) | Action::Add(..) | Action::Clear(_) => {}
+            }
+        }
         names
     }
 }
@@ -278,11 +355,43 @@ impl MobMatch {
     }
 }
 
+impl QuestDef {
+    /// The stage someone's place says they're on (`record.stage`): by its id, or by number for
+    /// a stage without one. With where it stands among the stages, from 0.
+    pub(super) fn stage_at(&self, place: &str) -> Option<(usize, &Stage)> {
+        self.stages
+            .iter()
+            .position(|s| s.id.as_deref() == Some(place))
+            .or_else(|| place.parse::<usize>().ok()?.checked_sub(1))
+            .and_then(|i| Some((i, self.stages.get(i)?)))
+    }
+
+    /// The place to keep for the stage at `i`: its id, or its number.
+    pub(super) fn stage_key(&self, i: usize) -> String {
+        match self.stages.get(i).and_then(|s| s.id.clone()) {
+            Some(id) => id,
+            None => (i + 1).to_string(),
+        }
+    }
+
+    /// The stage the one at `i` leads to: its `next`, or the one after it. None after the last:
+    /// it's time to report.
+    pub(super) fn next_after(&self, i: usize) -> Option<usize> {
+        match &self.stages.get(i)?.next {
+            Some(next) => self
+                .stages
+                .iter()
+                .position(|s| s.id.as_deref() == Some(next)),
+            None => (i + 1 < self.stages.len()).then_some(i + 1),
+        }
+    }
+}
+
 impl Objective {
     /// The quest fact that counts it on stage `stage`, if it's counted as it happens:
     /// `1.kill.sewers:sewer_rat`, `1.obtain.riftwatch:guild_letter`, `1.obtain.tag.herb`.
     /// `Bring` is checked when reporting.
-    pub(super) fn key(&self, stage: usize, zone: &str) -> Option<String> {
+    pub(super) fn key(&self, stage: &str, zone: &str) -> Option<String> {
         match self {
             Objective::Kill(which, _) => Some(format!("{stage}.kill.{}", which.label(zone))),
             Objective::Obtain(ItemMatch::Item(id), _) => {
@@ -449,6 +558,7 @@ fn quest_id(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::quests::testing::rats;
 
     /// Every quest file parses, passes its check, and names only rooms, mobs and items that
     /// exist.
@@ -520,6 +630,65 @@ mod tests {
     }
 
     #[test]
+    fn stages_go_by_id_or_number_and_lead_where_they_say() {
+        let stage = |id: Option<&str>, next: Option<&str>| Stage {
+            id: id.map(String::from),
+            next: next.map(String::from),
+            text: "Do it.".into(),
+            objectives: vec![Objective::Reach("hall".into())],
+            ..Default::default()
+        };
+        let quest = QuestDef {
+            stages: vec![
+                stage(Some("start"), Some("end")),
+                stage(None, None),
+                stage(Some("end"), None),
+            ],
+            ..rats()
+        };
+        assert!(quest.check().is_ok());
+        assert_eq!(quest.stage_at("start").map(|(i, _)| i), Some(0));
+        assert_eq!(
+            quest.stage_at("2").map(|(i, _)| i),
+            Some(1),
+            "no id: its number"
+        );
+        assert_eq!(
+            quest.stage_at("1").map(|(i, _)| i),
+            Some(0),
+            "a place kept by number"
+        );
+        assert!(quest.stage_at("gone").is_none());
+        assert_eq!(
+            (0..3).map(|i| quest.stage_key(i)).collect::<Vec<_>>(),
+            ["start", "2", "end"]
+        );
+        assert_eq!(
+            quest.next_after(0),
+            Some(2),
+            "its next, past the one after it"
+        );
+        assert_eq!(quest.next_after(1), Some(2), "the one after it");
+        assert_eq!(quest.next_after(2), None, "the last: time to report");
+
+        let broken = |stages| QuestDef { stages, ..rats() }.check().is_err();
+        assert!(
+            broken(vec![stage(Some("a"), Some("nowhere"))]),
+            "leads nowhere"
+        );
+        assert!(
+            broken(vec![stage(Some("a"), None), stage(Some("a"), None)]),
+            "two called a"
+        );
+        let mut sets = stage(None, None);
+        sets.on_end = vec![Action::Set("npc.mood".into(), crate::facts::Value::Int(1))];
+        assert!(
+            broken(vec![sets]),
+            "actions change char., world. or quest. facts"
+        );
+    }
+
+    #[test]
     fn a_quest_with_nothing_to_do_is_refused() {
         let quest = |stages: Vec<Stage>, contract: Option<Contract>| QuestDef {
             id: "test:quest".into(),
@@ -540,6 +709,7 @@ mod tests {
         let stage = |objectives| Stage {
             text: "Do it.".into(),
             objectives,
+            ..Default::default()
         };
         let kill = |n| Objective::Kill(MobMatch::Mob("rat".into()), n);
         assert!(quest(vec![stage(vec![kill(3)])], None).check().is_ok());

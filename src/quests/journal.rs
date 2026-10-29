@@ -102,12 +102,16 @@ fn journal_text(log: &QuestLog, character_id: i64, lookup: &Lookup) -> String {
         .iter()
         .filter(|r| r.state == HELD)
         .map(|r| {
-            let Some((quest, n, stage)) = quests.0.get(&r.quest).and_then(|q| {
-                let n = stage_number(r)?;
-                Some((q, n, q.stages.get(n - 1)?))
-            }) else {
+            let Some(quest) = quests.0.get(&r.quest) else {
                 return format!("  {}", name(&r.quest));
             };
+            let Some((i, stage)) = quest.stage_at(&r.stage) else {
+                return format!(
+                    "  {}\r\n    Its stage is gone from the quest: tell a GM.",
+                    quest.name
+                );
+            };
+            let place = quest.stage_key(i);
             let owner = Owner::Quest(character_id, quest.id.clone());
             let due = r
                 .due_at
@@ -116,7 +120,7 @@ fn journal_text(log: &QuestLog, character_id: i64, lookup: &Lookup) -> String {
             let mut text = format!("  {}{due}\r\n    {}", quest.name, stage.text);
             for objective in &stage.objectives {
                 let have = objective
-                    .key(n, quest.zone())
+                    .key(&place, quest.zone())
                     .map(|key| lookup.story.number(&owner, &key, lookup.now));
                 text += &format!(
                     "\r\n      {}",
@@ -158,11 +162,6 @@ pub(super) fn time_left(secs: i64) -> String {
 pub(super) fn room_name(key: &RoomKey, index: &RoomIndex, rooms: &Query<&Room>) -> Option<String> {
     let entity = index.0.get(key)?;
     rooms.get(*entity).ok().map(|room| room.name.clone())
-}
-
-/// The stage someone is on, counted from 1.
-pub(super) fn stage_number(record: &QuestRecord) -> Option<usize> {
-    record.stage.parse().ok().filter(|n| *n > 0)
 }
 
 #[cfg(test)]
