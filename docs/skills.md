@@ -118,7 +118,7 @@ Skills are either active, triggered by the player, or passive, applying automati
 - **Amount triggers scale with the amount.** `ManaSpent(per: 10)` counts one use per 10 mana, so one large spell counts for more than a trivial one.
 - **Two separate cooldowns.** An active skill's use cooldown (Riposte every 8 seconds) is combat balance. The gain cooldown limits how often any skill can level, active or passive.
 - **Spells are not skills.** They're known, not levelled, and cast through a magic school, which is a skill (see [Spells](magic.md#spells)). Everything else a character can do, including weapon techniques like Riposte and Cleave, is a skill.
-- **What a skill does** (damage, bonuses, applied conditions) needs an effect system, designed together with combat.
+- **What a skill does** (damage, bonuses, applied conditions) is said in the [effect vocabulary](effects.md) and passive `bonuses`, like Dodge's `Defence`.
 - **Combat is made of skills.** There is no attack outside the skill system: everyone starts with a basic attack skill, and weapon trees begin with their own. Mobs fight with skills from their templates, by the same rules as players.
 - **Racial abilities are skills too,** usually passive, requiring the race (see [Races](characters.md#races)).
 - **Some passives grow with other skills:** `UsedSkill(id)` counts one use whenever that skill is used, `UsedTree` whenever any other skill in the passive's own tree is, and `UsedAttack` whenever any attack skill is (a sword's swing, a punch). The Adept's Inner Discipline has `UsedTree` and `UsedAttack` (see [Magic](magic.md)).
@@ -277,7 +277,7 @@ flowchart LR
 
 The skill core, without combat, proved on non-combat skills first:
 
-- **Trees** in `assets/skills/<tree>.skill.ron`, hot-reloaded: `thievery` (Lockpicking, Pickpocketing) and `athletics` (Endurance) so far. Fields built: `name`, `kind`, `max_level`, `attribute`, `rarity` (shown, not yet enforced), `difficulty`, `requires` (recorded for teaching).
+- **Trees** in `assets/skills/<tree>.skill.ron`, hot-reloaded: one file per tree, from `adept` to `trade`. Fields built: `name`, `kind`, `max_level`, `attribute`, `rarity` (shown, not yet enforced), `difficulty`, `requires` (recorded for teaching).
 - **Kinds as built:**
 
   ```ron

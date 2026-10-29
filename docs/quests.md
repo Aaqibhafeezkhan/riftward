@@ -129,7 +129,7 @@ A `character_guild` table holds rank, merit, and the number of contracts complet
 
 ## Quests
 
-One engine runs every quest: a guild contract is a quest the guild posts, with a rank and merit. **Designed 2026-10-28, not built.** The examples below are written as real data on purpose: [what they need](#what-the-first-contracts-need) that the code can't do yet is listed at the end.
+One engine runs every quest: a guild contract is a quest the guild posts, with a rank and merit. **Designed and built 2026-10-28.** The examples below are written as real data on purpose: [what they need](#what-the-first-contracts-need) that the code can't do yet is listed at the end.
 
 ### Quest files
 
@@ -407,7 +407,7 @@ These pair with [puppeting](architecture.md#game-masters-and-puppeting): a GM ca
 
 ## How it gets built
 
-In the smallest pull requests that each leave the game working, every one with its tests and its docs (planned 2026-10-28). Each line is one pull request; the first contracts arrive as soon as the engine can carry them, so content tests the engine as it grows. [Facts](facts.md) come first, since quests are built on them.
+In the smallest pull requests that each leave the game working, every one with its tests and its docs (planned and built 2026-10-28). Each line is one pull request; the first contracts arrive as soon as the engine can carry them, so content tests the engine as it grows. [Facts](facts.md) come first, since quests are built on them.
 
 **Facts**
 

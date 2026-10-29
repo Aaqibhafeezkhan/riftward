@@ -96,7 +96,7 @@ Each character has **current** health and stamina, below or at the maximums abov
 - **A maximum that goes down** (should one ever) clamps the current value to it.
 - **Seen in** `score` (`Health 7/10`) and the status prompt, `<7/10hp 9/9st>`. `prompt <format>` changes it, with `%h`/`%H` for current and maximum health, `%s`/`%S` for stamina and `%%` for a percent sign; `prompt` alone goes back to the default.
 - **Admins** can set someone's current vitals with `setvitals <player> <health> [<stamina>]`, for testing until combat can do it.
-- **Not yet:** what spends stamina (active skills, running, carrying too much) and what happens at 0 health; both arrive with combat.
+- **Built:** techniques, active skills and fleeing spend stamina, and 0 health is death (see [Combat](architecture.md#combat)). **Not yet:** running, and carrying too much.
 
 ## Data
 

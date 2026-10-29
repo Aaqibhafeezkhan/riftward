@@ -144,6 +144,8 @@ Mobs fight by the same rules as players (see [Combat](architecture.md#combat)), 
 
 Mobs use equipment as players do: a mob holding a sword fights with it (and its Swordplay), its weapon techniques work, and `look` shows what it holds and wears. When it dies, its gear falls into its corpse, with one find from each of its **loot tables**: weighted, ordered worst to best, rolled with the Luck of whoever struck the killing blow, `None` for nothing. Sewer rats sometimes leave a tail; the Rat King leaves a tail or his tooth, and sometimes a healing draught.
 
+Mobs take, carry and give items as players do (`get`, `give`, `put`; *built* 2026-10-28, [#55](https://github.com/Foxworks-Studios/riftward/issues/55)), when a builder puppets them or a quest has them hand something over. What a mob holds isn't saved: it resets with the mob and falls in its corpse ([Items](items.md#what-survives-a-restart)). Mobs choosing for themselves to pick things up or use them is still to come.
+
 Mobs share players' vitals and recover by the same rules, at their own maximums: out of a fight, a hurt or winded mob gets its health and stamina back. Mobs use their skills the way players do. Besides its auto-attack, a mob uses the other combat skills it knows (technique skills like Cleave or Guard, spells, and active skills made of effects, like First Aid): each turn, with its `tactics` chance, it uses one it can right then and that would do some good, picked at random, in place of its auto-attack. A technique needs its attack ready and the stamina; a heal, being below half health; a condition, a target that doesn't have it yet; an active skill, being ready and anything it uses up to hand (a bandage). Openers like Backstab are for starting fights, so a mob already in one never picks them, nor what makes no sense mid-fight: hiding, stealing, finding or reading things.
 
 ### Rift-touched mutations (planned)
@@ -250,8 +252,10 @@ Separately from its footing, every room has an **environment**: what kind of pla
 | Environment | Rooms today |
 | --- | --- |
 | `Town` (the default) | Riftwatch: nothing to gather |
-| `Field`, `Water`, `Cave` | None yet |
 | `Forest` | The Darkwood |
+| `Field` | The west woods' stump field and meadows |
+| `Water` | The west woods' brook ford and reed pool |
+| `Cave` | None yet |
 | `Sewer` | The sewers |
 
 - **A zone says what each environment yields** in its `finds`, and a room can have its own instead. Each is weighted tables by kind, ordered worst to best: `"forage"` for Foraging, `"herbs"` for Herbalism, and any other kind a skill `Find`s ([Every skill as data](effects.md#every-skill-as-data)). `None` is nothing at all. The zone test checks every item in them exists.
@@ -274,7 +278,7 @@ Weather, with the time system, will change the ground. A room can say what it be
 
 ## Doors
 
-Status: built, except hidden doors, keys and resets. Doors are open, close, lock, unlock and bash-able today.
+Status: built, except hidden doors and resets. Doors open, close, lock and unlock (with their key), and can be picked and bashed.
 
 Exits keep their short form, `"west": "square"`. A longer form adds a door, defined once in the zone and named by both sides, so opening it from one room opens it from the other:
 
@@ -470,7 +474,7 @@ The first rat to reach the city (through a grate someone left open, or one the r
 
 1. **With items and mobs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering. *Built.*
 2. **With the time system:** `Breed` and `reseed`, crowding, `TimeOfDay`. *Built, except `TimeOfDay` spawns.*
-3. **With combat:** world flags, counters and events, starting with `Count`, `Event(Died(...))` and the actions above.
+3. **With combat:** world flags, counters and events, starting with `Count`, `Event(Died(...))` and the actions above. *Partly built:* flags (as facts), `Event(Entered)`, `Event(Died)`, `SetWorldFlag`, `ClearWorldFlag` and `Announce`; counters, `Count` and the other actions wait.
 
 ## Open questions
 

@@ -274,6 +274,6 @@ trap: Some((on: Opened, find: 5, disarm: 7, effect: Damage(6))),
 - [ ] **Unique items and deleted characters:** if a character carrying a unique item is deleted, where does it go? For example, dropped where the character last stood.
 - [ ] **Default litter decay time:** about 30 minutes on the ground? Should items spawned by a reset decay at all, since the next reset replaces them?
 - [ ] **Preserving perishables:** salting, a preserving spell, or cold storage that slows or pauses decay. A good hook for skills; templates only need to allow it.
-- [ ] **Does a mob picking up an item make it real?** Proposed: no, only players.
+- [x] **Does a mob picking up an item make it real?** No: what a mob holds is forgotten, and real again once a player has it (2026-10-28, see above).
 - [ ] **Corpses:** are player corpses real (they survive a restart) while mob corpses stay temporary until looted?
 - [ ] **Starting equipment:** which clothes, pouch and keyring new characters start with, likely set by background.

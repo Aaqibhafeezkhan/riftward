@@ -27,7 +27,7 @@ Each document below covers one area and can be read on its own. This page is the
 | [Magic and Awakening](magic.md) | Magic, the four traditions, and how characters Awaken | Awakening and the first spells built |
 | [Items, containers and locks](items.md) | Templates, Bulk, hands and wear slots, containers and automatic placement, encumbrance, persistence, decay, unique items, locks and keys, traps | Mostly built |
 | [The living world](world.md) | Mob templates, spawns and resets, breeding, wandering and crowding, doors and hidden doors, world flags and events | Mob spawns, breeding, wandering and crowding built |
-| [Facts, requirements and rules](facts.md) | One store for what the game remembers (world, character, quest and mob facts), one requirement language, and rules that react to events | Designed |
+| [Facts, requirements and rules](facts.md) | One store for what the game remembers (world, character, quest and mob facts), one requirement language, and rules that react to events | The fact store, requirements and `facts` built; rules designed |
 | [Groups](groups.md) | Following, groups formed the ROM way, shared experience and coin, assisting, taunting a pack | Built, but taunting and group contracts |
 | [Quests and the Adventurers' Guild](quests.md) | Quests as data, goals and rewards, guild contracts and metal ranks (Bone to Platinum), GM quest tools | Membership and ranks built; the quest engine built (2026-10-28): quest files, the board, the journal and Marin's record, objectives counted from what players do, stages, choices and endings, claims, groups, quest mobs, escorts, failing, `ask`, and the GMs' tools for running and writing quests; perks and lodging designed |
 | [Effects, conditions and scripting](effects.md) | How designers add skills, spells, conditions and items without code: conditions as data, one effect vocabulary, abilities, formulas, triggers, and Rhai scripting | Conditions, effects, damage types, resisting, item conditions, formulas and reactions in a fight and out of one built (steps 1 to 4); active skills through `use` next |
@@ -98,9 +98,8 @@ Designed, waiting on other work:
 | --- | --- | --- |
 | Scripting for behaviour data can't express; language to decide (Steel, Rhai or Lua) | The effect system, mobs and game events | [Architecture](architecture.md#scripting) |
 | Bots: programs that play mobs through puppeting, reading GMCP; later several mobs at once, leashed movement and shops within bounds | GMCP, a bot role | [Architecture](architecture.md#bots), [#14](https://github.com/Foxworks-Studios/riftward/issues/14) |
-| Quests and guild contracts, with guild ranks that gate trainers and rooms | Mobs, game events, combat | [Quests](quests.md) |
 | Dialogue: conversation trees for mobs, likely [Yarn Spinner](https://www.yarnspinner.dev)'s Rust port, keeping the core independent of Bevy | Mobs | To design |
-| Mob behaviour: data-driven first (wander, flee, assist, aggressive), behaviour trees ([bonsai-bt](https://github.com/Sollimann/bonsai)) only for mobs that need more | Mobs, combat | To design |
+| Mob behaviour beyond data: behaviour trees ([bonsai-bt](https://github.com/Sollimann/bonsai)) for mobs that need more than wandering, fleeing, helping allies, avoiding and aggression (built as data); mobs using items as fits them ([#55](https://github.com/Foxworks-Studios/riftward/issues/55)) | Mobs, combat | To design |
 
 ## Decisions so far
 

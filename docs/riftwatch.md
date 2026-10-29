@@ -61,6 +61,7 @@ flowchart TB
     gtunnel --- west[Western Tunnel]
     west --- cistern[Old Cistern]
     cistern -- down --- stair[Drowned Stair]
+    stair -- down --- sunken[Sunken Hall]
     west --- ossuary[Ossuary]
     mdrain --- culvert[Stalls Culvert]
     culvert --- outfall[Sewer Outfall]
@@ -88,7 +89,7 @@ flowchart TB
 | --- | --- |
 | North Gate | Outflow Arch, North Trunk, Smugglers' Nook |
 | Market | Market Drain, Stalls Culvert, Sewer Outfall |
-| Guild | Guild Tunnel, Guild Drain, Western Tunnel, Old Cistern, Drowned Stair |
+| Guild | Guild Tunnel, Guild Drain, Western Tunnel, Old Cistern, Drowned Stair, Sunken Hall |
 | High Street and shrine | Great Drain, Ossuary |
 | Keep | Keep Drain, Sluice |
 | Garrison | Garrison Drain, Flooded Tunnel |
@@ -120,7 +121,7 @@ From any room, `look <direction>` shows what lies that way and who's there, incl
 | High Street | High Street, Wayside Shrine |
 | Garrison | Garrison Yard, Training Yard, Barracks, Armory |
 | Keep | Keep Gatehouse, Keep Courtyard, Watchtower, Great Hall, Lord's Solar, Keep Dungeon |
-| Sewers | 22 rooms; see [The sewers](#the-sewers) |
+| Sewers | 23 rooms; see [The sewers](#the-sewers) |
 
 ## Doors
 
@@ -129,14 +130,14 @@ From any room, `look <direction>` shows what lies that way and who's there, incl
 | A pair of iron-banded doors | Guild Row, Guildhall | Open | None |
 | Five street grates | See [The sewers](#the-sewers) | Closed | None |
 | A rusted sewer grate | Back Alley, Sewer Outfall | Closed | None |
-| A reinforced armory door | Garrison Yard, Armory | Locked | Pick 8, bash 20 |
-| An iron-studded gate | Keep Gatehouse, Keep Courtyard | Open | Bash 40, can't be picked |
-| A carved oak door | Great Hall, Lord's Solar | Locked | Pick 10, bash 25 |
-| An iron hatch | Guild Cellar, sewers' Guild Drain | Locked | Pick 6, bash 15 |
-| A barred drain grate | Garrison Yard, sewers' Garrison Drain | Locked | Pick 6, bash 20 |
-| A rusted iron door | Keep Dungeon, sewers' Sluice | Locked | Pick 12, bash 40 |
+| A reinforced armory door | Garrison Yard, Armory | Locked | The armory key; pick 6, bash 6 |
+| An iron-studded gate | Keep Gatehouse, Keep Courtyard | Open | Bash 12, can't be picked |
+| A carved oak door | Great Hall, Lord's Solar | Locked | The solar key; pick 8, bash 8 |
+| An iron hatch | Guild Cellar, sewers' Guild Drain | Locked | The cellar key; pick 4, bash 5 |
+| A barred drain grate | Garrison Yard, sewers' Garrison Drain | Locked | The armory key; pick 4, bash 6 |
+| A rusted iron door | Keep Dungeon, sewers' Sluice | Locked | The dungeon key; pick 10, bash 12 |
 
-None of the locks have keys yet; keys arrive with items.
+The keys are item templates in the zone, but none is spawned or carried yet; an admin can `create` one.
 
 ## Who's about
 
@@ -159,21 +160,23 @@ Item spawns keep a few things in place:
 | A weathered signpost (fixed) | Market Square | 1 | Every hour |
 | An old oak chest (fixed, locked), with two loaves of bread, a waterskin and a torch | Guild Cellar | 1 | Every hour, topping up its contents |
 | Wooden practice swords | Training Yard | 2 | Every 30 minutes |
+| A padded jack, a leather cap and a buckler | Training Yard | 1 each | Every 30 minutes |
+| A mail shirt, an iron helm, a round shield, gauntlets and greaves | Armory | 1 each | Every hour |
 | A rolled parchment | Guild Archive | 1 | Every 2 hours |
 
-The chest's key isn't spawned anywhere yet; it's meant for a mob to carry once mobs carry things.
+The chest's key isn't spawned anywhere yet either; a mob could carry it now that mobs carry things.
 
 ## Where trainers go
 
 Each basic skill has a home in town. Trainers teach Common and Uncommon skills (see [Acquiring skills](skills.md#acquiring-skills)).
 
-| Room | Trainers (planned) |
+| Room | Trainers |
 | --- | --- |
 | Training Yard | Sergeant Alina Greaves: the basics of every weapon (Swordplay, Knife, Axe, Hammer and Staff Fighting), Toughness, Climbing, Swimming, Heavy Armour and Block. *Built* |
 | Archery Butts | Archery |
 | Guild Archive | The magister, who Awakens Hermetic students (*built*); later Lore, and the self-taught **Study** path |
 | Herbalist's Stall | Narina Greenthorn: Herbalism, Foraging and First Aid (*built*) |
-| Wayside Shrine | The keeper of the shrine, who Awakens Divine students (*built*); later Healing, and the **Devotion** path |
+| Wayside Shrine | The keeper of the shrine, who Awakens Divine students and teaches Mend and Bless (*built*); later Healing, and the **Devotion** path |
 | Back Alley | A hooded figure (Talla Mirk): Stealth, Lockpicking and Pickpocketing (*built*) |
 | Tinkers' Corner | Crafting and repair |
 | Market stalls | Harwin Colm, the provisioner: Haggling and Appraisal (*built*) |

@@ -54,6 +54,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `formula.rs` | Formulas: amounts in data (`"roll(2, 5) + floor(power / 3)"`), parsed at load and worked out through `Dice` with their inputs |
 | `effects.rs` | The one effect vocabulary spells and techniques share (`Damage`, `Heal`, `Apply`, `Remove`, `Cure`, …), whom each is on, how long conditions last, and what fits where |
 | `quests/` | Quests ([Quests](quests.md)): `def.rs`, quest files (`assets/quests/<zone>/*.quest.ron`, one quest each, `zone:quest`), checked as they load and hot-reloaded into `Quests`; `board.rs`, the `board` that lists them where they're posted, `accept` (handing over what a quest `gives`), and offers to a group; `journal.rs`, each character's `QuestLog` (`character_quests`) and `journal`; `progress.rs`, objectives counted from game events as `quest.` facts (`Kill` from `Died`, `Obtain` from `Obtained`, `Reach` from `Entered`, for every holder of the group there) and stages moving on; `report.rs`, `report`, testing `Meet`, handing over what `Bring` asks and paying coin, items, merit and facts; `claims.rs`, `Claims` that run out, and `abandon` (taking back what a quest gave); `ask.rs`, `ask <someone> about <topic>`, answered from the topics quest stages give; `actions.rs`, what a stage does as it begins or ends (`Give`, `Take`, `Set`, `Add`, `Clear`, `Say`, `Spawn`, `Fail`); `escort.rs`, mobs following a holder on a quest's say-so (`Escort`), and going home after; `failures.rs`, a quest's `fails_if` (a death, a lost item) failing it; `spawned.rs`, the mobs a quest brings in (`QuestMobs`), counted only for those they came for and cleared away when no one holds the quest; `loot.rs`, what holders still need, so a boss always drops it; `gm.rs`, the GMs' `quest grant|advance|reward|release`; `authoring.rs`, `quest create|edit|show`, writing quest files in the game; `why.rs`, the GMs' `why <player> <quest>` |
+| `trainers.rs` | Trainers: mobs whose template `teaches` skills; `learn` lists their lessons and takes one, and teaching a tradition's foundation Awakens a student |
 | `spells.rs` | Spell books (`.spells.ron` assets), each character's `Spells`, power and Drain, choosing a spell's target, `spells` and `cast` |
 | `db.rs` | SQLite: accounts, characters, roles, aliases, attributes, skills, spells, character and item conditions, real items, spawn timers, guild membership and record, quests taken, facts |
 | `aliases.rs` | Per-character aliases |
@@ -148,7 +149,7 @@ Started.
 - **Parts of the day:** dawn from 5, day from 7, dusk from 19, night from 21. Each begins with a message to everyone outdoors; rooms flagged `indoors` (the sewers, the guildhall, the keep's halls) don't see it. `time` shows the hour, read from the sky or guessed indoors.
 - **One heartbeat, once a second,** for systems that don't need every frame: spawns, wandering and the clock today; regeneration and cooldowns later. Heartbeat systems work from elapsed time and timestamps, never by counting beats, so the rate is a performance setting rather than a game rule, and a stalled server doesn't change the game. There's no old-style global tick to wait for.
 - **Recovery** of health and stamina runs on the heartbeat (see [Vitals](attributes.md#vitals)).
-- **Still to come:** combat rounds (2-3 seconds, with combat), and actions that take time to finish (lessons, rituals, casting).
+- **Still to come:** actions that take time to finish (lessons, rituals); combat rounds are built (see [Combat](#combat)).
 - **Open:** a calendar (days, months, seasons) for [the setting](setting.md), and whether night changes anything beyond the messages, such as needing light outdoors.
 
 ### Combat
@@ -172,7 +173,7 @@ Built (`src/combat/`). The round loop, initiative, damage, death and respawn: in
 - **A mob's death** leaves a corpse that rots in 5 minutes, and counts for its spawn like any death, so `AfterDeath` timers and breeding reseeds now matter.
 - **Leaving a fight is fatal.** `quit` refuses while a player is in a fight that can hurt them; one who disconnects anyway is cut down as they go ("tries to slip away from the fight, and is cut down!"), and dies like anyone else, so logging out is never an escape. Hacking at a training dummy, or anything else inanimate, with nothing attacking them, isn't such a fight (`combat::in_danger`).
 - **A player's death** leaves a real corpse where they fell, holding everything they carried and wore; it survives restarts and rots in 30 minutes, spilling what's left on the ground. They wake at the Wayside Shrine with a quarter of their health and stamina.
-- **Not yet:** expert and master techniques (Disarm, Whirlwind and the rest), smarter mob tactics than a chance per turn, a death penalty beyond the walk back, PvP, and grouping. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
+- **Not yet:** expert and master techniques (Disarm, Whirlwind and the rest), smarter mob tactics than a chance per turn, a death penalty beyond the walk back, and PvP. Tuning: see [the rat problem](riftwatch.md#the-rat-problem).
 
 ## Planned features
 

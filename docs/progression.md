@@ -1,6 +1,6 @@
 # Progression
 
-[Design summary](README.md) · Status: built as designed (tuning values are constants in `src/skills.rs` for now, not yet a config file)
+[Design summary](README.md) · Status: built as designed. Practice fading and pacing, Karma and experience are in `assets/progression.ron`; the gain numbers are still constants in `src/skills.rs`
 
 Skills level up only through use: each use may roll a chance to gain a level. The chance grows with recent practice, fades with time away, and each gain puts that skill on a cooldown that lengthens with level. All numbers below are starting points for tuning, and will live in `assets/config/progression.ron`.
 
