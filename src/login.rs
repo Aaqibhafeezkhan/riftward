@@ -915,6 +915,15 @@ fn enter_game(
             .into_iter()
             .collect(),
     );
+    let recipes = crate::crafting::KnownRecipes(
+        db.recipes(character.id)
+            .unwrap_or_else(|err| {
+                error!("failed to load recipes for {}: {err}", character.name);
+                Vec::new()
+            })
+            .into_iter()
+            .collect(),
+    );
     // What was on them when they left and still lasts.
     let saved = db.conditions(character.id).unwrap_or_else(|err| {
         error!("failed to load conditions for {}: {err}", character.name);
@@ -983,6 +992,7 @@ fn enter_game(
         prompt,
         skills,
         spells,
+        recipes,
         conditions,
         Purse(character.coins),
         ActionQueue::default(),

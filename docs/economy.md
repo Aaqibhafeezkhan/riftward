@@ -1,6 +1,6 @@
 # Money and shops
 
-[Design summary](README.md) · Status: built: the purse, coins from kills and pickpocketing, shops that sell, buy and resell, spell lessons that cost money, and Haggling and Appraisal. The crafts are still to come.
+[Design summary](README.md) · Status: built: the purse, coins from kills and pickpocketing, shops that sell, buy and resell, spell lessons that cost money, and Haggling and Appraisal. The crafts have begun: see [Crafting](crafting.md).
 
 Money is the first thing in Riftward that isn't a skill, an attribute or an item: a number in each character's purse, earned by fighting and selling, and spent on goods and spells.
 

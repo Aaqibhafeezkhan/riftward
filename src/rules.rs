@@ -44,6 +44,18 @@ pub struct Rules {
     pub finds: FindRules,
     /// Shops' terms, and what Haggling wins.
     pub trade: TradeRules,
+    /// How much harder fine and rare ingredients are to craft with.
+    pub crafting: CraftingRules,
+}
+
+/// How much harder fine and rare ingredients make crafting.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct CraftingRules {
+    /// The difficulty is multiplied by this for each step the makings' average quality is above
+    /// standard.
+    pub fine_makings: f64,
+    /// And by this for each step the rarest of them is above common.
+    pub rare_makings: f64,
 }
 
 /// How long rooms remember tracks, and how they read.

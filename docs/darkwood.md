@@ -55,7 +55,7 @@ Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the br
 | --- | --- |
 | Woodcutters' Track, Old Track | The way in, off the Bend; crows overhead |
 | Stump Field | An open clearing; rabbits |
-| Charcoal Burners' Camp | **The hunter**: teaches Foraging, Tracking, Skinning and Butchering, sells a hunting knife, waterskins and torches, buys trophies, pelts and meat |
+| Charcoal Burners' Camp | **The hunter**: teaches Foraging, Tracking, Skinning, Butchering and Cooking (and her hunter's stew), keeps a campfire to cook at, sells a hunting knife, waterskins and torches, buys trophies, pelts and meat |
 | Birch Wood, Hazel Copse | Foxes; young boars root in the copse |
 | Meadow's Edge, Deer Meadow | Rabbits (a breeding spawn, max 12) and the red deer (a breeding herd, max 6), all skittish |
 | High Meadow | The **red stag**, who stands and fights (antlers 2–5, health 25), and **adders** basking (venomous) |

@@ -113,6 +113,11 @@ pub enum Rarity {
 }
 
 impl Rarity {
+    /// How many steps above common it is: uncommon 1, legendary 4.
+    pub fn steps(self) -> i32 {
+        self as i32
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             Rarity::Common => "common",

@@ -16,6 +16,7 @@ There are no classes in Riftward. A character is what they've learned: sword and
 - **Quests:** a contract board in the Contract Hall, quests in stages with choices, escorts, items to find and hand over, deadlines and failures, kept in a journal; game masters can run them by hand and write new ones in the game.
 - **A living world:** mobs that wander, breed, flee, help their allies and fight each other; creatures and races with traits; resets; day and night; world events (let the sewer rats break out and the Rat King rises).
 - **Items:** weapons, armour, containers that pack themselves, quality and rarity, keys and locks, money, shops and haggling, and food and potions that are just items with effects.
+- **Harvesting and crafting:** skin and butcher what you hunt, and cook it at a fire from recipes, some taught and rare; every craft is a recipe book in data.
 - **Stealth, tracking, gathering and healing:** hide and backstab, read who walked through, forage and gather herbs, bandage wounds and drink draughts.
 - **Building in game:** builders dig rooms, write descriptions and make items and doors, all saved straight to zone files; game masters can puppet mobs and run live events.
 - **Designer-friendly data:** zones, skills, spells, conditions, traits, quests, damage types, races, backgrounds and the guild are RON files; most reload while the server runs.
@@ -56,7 +57,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run
 | --- | --- |
 | `src/` | The server: one Bevy plugin per module ([architecture](docs/architecture.md)) |
 | `assets/zones/` | The world: rooms, doors, item and mob templates, spawns, world events |
-| `assets/skills/`, `assets/spells/` | Skill trees and spell books |
+| `assets/skills/`, `assets/spells/`, `assets/recipes/` | Skill trees, spell books and crafts' recipe books |
 | `assets/conditions/`, `assets/traits/` | Conditions (staggered, poisoned, nourished) and traits (what a creature or race is) |
 | `assets/quests/` | Quests, one file each, by zone |
 | `assets/*.ron` | Races, backgrounds, damage types, the guild, progression and rules numbers, and the world's givens (`world.ron`: start room, starting kit, death) |

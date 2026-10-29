@@ -1,0 +1,65 @@
+// Cooking's recipes: everything here is made with `survival:cooking`. A recipe's key is
+// `cooking:<id>`. See docs/crafting.md.
+//
+// `ingredients` are (Item("zone:item") or Tag("tag"), how many); `produces` is ("zone:item", how
+// many). `station` is a tag something in the room must have ("fire": a campfire, a hearth);
+// `against` the difficulty. Most come with the skill at their `level`; `learned: Taught` ones are
+// taught by a trainer for their `price`, and `rarity` marks the ones worth seeking out.
+// `quality: (worst: .., best: ..)` bounds how well it can be made (crude to masterwork, by
+// default): how surely the work went sets it, and the ingredients' quality moves it.
+(
+    skill: "survival:cooking",
+    recipes: {
+        "roast_rabbit": (
+            name: "roast rabbit",
+            ingredients: [(Item("forest:rabbit_meat"), 1)],
+            produces: ("forest:roast_rabbit", 1),
+            station: "fire",
+            against: "2",
+            // Simple fare: never better than fine.
+            quality: (best: Fine),
+        ),
+        "fried_frog_legs": (
+            name: "fried frog legs",
+            ingredients: [(Item("forest:frog_legs"), 1)],
+            produces: ("forest:fried_frog_legs", 1),
+            station: "fire",
+            against: "2",
+            // Simple fare: never better than fine.
+            quality: (best: Fine),
+        ),
+        "roast_venison": (
+            name: "roast venison",
+            ingredients: [(Item("forest:venison"), 1)],
+            produces: ("forest:roast_venison", 1),
+            station: "fire",
+            against: "3",
+        ),
+        "boar_stew": (
+            name: "boar stew",
+            level: 3,
+            ingredients: [(Item("forest:boar_meat"), 1), (Item("forest:wild_garlic"), 1)],
+            produces: ("forest:boar_stew", 1),
+            station: "fire",
+            against: "4",
+        ),
+        // The hunter's own, taught to those who can already cook.
+        "hunters_stew": (
+            name: "hunter's stew",
+            level: 5,
+            learned: Taught,
+            price: 25,
+            rarity: Uncommon,
+            ingredients: [
+                (Item("forest:venison"), 1),
+                (Item("forest:mushrooms"), 1),
+                (Tag("herb"), 2),
+            ],
+            produces: ("forest:hunters_stew", 1),
+            station: "fire",
+            against: "5",
+            // The hunter's way never makes a poor stew.
+            quality: (worst: Standard),
+        ),
+    },
+)

@@ -54,4 +54,10 @@
         strong: (share: 0.15, words: "a good way"),
         crushing: (share: 0.20, words: "a fifth"),
     ),
+    // Crafting (docs/crafting.md): fine and rare ingredients are harder to work. A recipe's
+    // difficulty is multiplied by fine_makings for each step their average quality is above
+    // standard, and by rare_makings for each step the rarest is above common (uncommon 1 up to
+    // legendary 4). Contests go by the ratio rule, so doubling the difficulty wants about twice
+    // the skill for the same chance: legendary meat (×16) wants a master cook.
+    crafting: (fine_makings: 1.5, rare_makings: 2.0),
 )

@@ -55,6 +55,23 @@
                 ),
             ),
         ),
+        // Cooking makes food from its recipes (assets/recipes/cooking.recipes.ron) with `craft`:
+        // {item} is what's made, or what would have been.
+        "cooking": (
+            name: "Cooking",
+            description: "Turning what you hunt and gather into a meal, at a fire, with 'craft <recipe>' (or 'use cooking <recipe>'). Cooked food keeps you going longer than raw. 'recipes' lists what you can make; more come as you improve, and some are taught.",
+            kind: Active(command: "craft", cooldown: 2),
+            text: (
+                hit: (
+                    actor: "You cook, and make {item}.",
+                    room: "{actor} cooks, and makes {item}.",
+                ),
+                miss: (
+                    actor: "Your cooking goes wrong, and the makings of {item} are ruined.",
+                    room: "{actor} burns something over the fire.",
+                ),
+            ),
+        ),
         // `track` lists what was read after the actor's line.
         "tracking": (
             name: "Tracking",

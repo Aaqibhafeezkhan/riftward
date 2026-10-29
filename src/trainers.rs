@@ -5,12 +5,15 @@
 //! its foundation skill.
 //!
 //! Skill lessons are free, so no one is locked out of a way to play. Spells cost money, as each
-//! spell says (`price`), except each tradition's starter spell.
+//! spell says (`price`), except each tradition's starter spell. Trainers teach recipes too, those
+//! learned rather than known with a skill (`crafting.rs`), for their `price`, to students who know
+//! the recipe's skill at its level.
 
 use bevy::prelude::*;
 
 use crate::attributes::Attributes;
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
+use crate::crafting::{KnownRecipes, Recipe, Recipes};
 use crate::db::Database;
 use crate::items::capitalized;
 use crate::mobs::{MobQuery, MobTemplates};
@@ -64,8 +67,14 @@ fn learn_cmd(
     mut outbox: ResMut<Outbox>,
     mobs: MobQuery,
     templates: Res<MobTemplates>,
-    (defs, spell_defs): (Res<SkillDefs>, Res<SpellDefs>),
-    mut sheets: Query<(&mut Skills, &mut Attributes, &mut Spells, &mut Purse)>,
+    (defs, spell_defs, recipe_defs): (Res<SkillDefs>, Res<SpellDefs>, Res<Recipes>),
+    mut sheets: Query<(
+        &mut Skills,
+        &mut Attributes,
+        &mut Spells,
+        &mut Purse,
+        &mut KnownRecipes,
+    )>,
     db: Res<Database>,
     around: crate::requirements::Surroundings,
 ) {
@@ -79,7 +88,9 @@ fn learn_cmd(
         player.name.clone(),
         player.character_id,
     );
-    let Ok((mut skills, mut attributes, mut spells, mut purse)) = sheets.get_mut(inv.entity) else {
+    let Ok((mut skills, mut attributes, mut spells, mut purse, mut recipes)) =
+        sheets.get_mut(inv.entity)
+    else {
         return;
     };
 
@@ -91,10 +102,17 @@ fn learn_cmd(
             let teaches = &templates.0.get(&mob.key)?.teaches;
             let lessons: Vec<Lesson> = teaches
                 .iter()
-                .filter_map(|key| match (defs.skills.get(key), spell_defs.0.get(key)) {
-                    (Some(skill), _) => Some(Lesson::Skill(skill)),
-                    (None, Some(spell)) => Some(Lesson::Spell(spell)),
-                    (None, None) => None,
+                .filter_map(|key| {
+                    match (
+                        defs.skills.get(key),
+                        spell_defs.0.get(key),
+                        recipe_defs.0.get(key),
+                    ) {
+                        (Some(skill), ..) => Some(Lesson::Skill(skill)),
+                        (None, Some(spell), _) => Some(Lesson::Spell(spell)),
+                        (None, None, Some(recipe)) => Some(Lesson::Recipe(recipe)),
+                        (None, None, None) => None,
+                    }
                 })
                 .collect();
             (!lessons.is_empty()).then(|| (entity, mob.name.clone(), lessons))
@@ -135,10 +153,23 @@ fn learn_cmd(
                 (_, min) => Some(format!("{school} {min}")),
             }
         }
+        // A recipe needs its craft, at its level.
+        Lesson::Recipe(recipe) => {
+            let craft = defs
+                .skills
+                .get(&recipe.skill)
+                .map_or(recipe.skill.as_str(), |s| s.def.name.as_str());
+            match (skills.0.get(&recipe.skill), recipe.def.level) {
+                (Some(state), min) if state.level >= min => None,
+                (_, 0) => Some(craft.to_string()),
+                (_, min) => Some(format!("{craft} {min}")),
+            }
+        }
     };
     let known = |lesson: &Lesson| match lesson {
         Lesson::Skill(skill) => skills.0.contains_key(&skill.key),
         Lesson::Spell(spell) => spells.0.contains(&spell.key),
+        Lesson::Recipe(recipe) => recipes.0.contains(&recipe.key),
     };
 
     let mut out = Vec::new();
@@ -155,6 +186,9 @@ fn learn_cmd(
                 .map(|lesson| match (known(lesson), needs(lesson)) {
                     (true, _) => match lesson {
                         Lesson::Spell(spell) => format!("the spell {} (known)", spell.def.name),
+                        Lesson::Recipe(recipe) => {
+                            format!("the recipe for {} (known)", recipe.def.name)
+                        }
                         Lesson::Skill(skill) => format!("{} (known)", skill.def.name),
                     },
                     (false, Some(req)) => format!("{} (requires {req})", lesson.title()),
@@ -235,6 +269,39 @@ fn learn_cmd(
                         spell.def.name
                     )
                 }
+                (None, Lesson::Recipe(recipe)) if !purse.pay(u64::from(recipe.def.price)) => {
+                    format!(
+                        "{} asks {} to teach you to make {}, and you have {}.",
+                        capitalized(&trainer),
+                        money::coins(u64::from(recipe.def.price)),
+                        recipe.def.name,
+                        money::coins(purse.0)
+                    )
+                }
+                (None, Lesson::Recipe(recipe)) => {
+                    if recipe.def.price > 0 {
+                        purse.save(Some(character_id), &db);
+                    }
+                    recipes.0.insert(recipe.key.clone());
+                    if let Err(err) = db.save_recipe(character_id, &recipe.key, "Taught") {
+                        error!("failed to save {name}'s new recipe {}: {err}", recipe.key);
+                    }
+                    out.push(Outgoing::Room {
+                        room,
+                        except: inv.entity,
+                        text: format!(
+                            "{} shows {name} how to make {}.\r\n",
+                            capitalized(&trainer),
+                            recipe.def.name
+                        ),
+                    });
+                    format!(
+                        "{} shows you how {} is made.\r\n\x1b[1;32mYou have learned to make {}.\x1b[0m Type 'recipes' to see what you can make.",
+                        capitalized(&trainer),
+                        recipe.def.name,
+                        recipe.def.name
+                    )
+                }
                 (None, Lesson::Skill(skill)) => {
                     let key = skill.key.clone();
                     learn(&mut skills, &key, "Taught", Some(character_id), &db);
@@ -277,11 +344,12 @@ fn learn_cmd(
     deliver(out, &mut outbox);
 }
 
-/// Something a trainer teaches: a skill, or a spell.
+/// Something a trainer teaches: a skill, a spell, or a recipe.
 #[derive(Clone, Copy)]
 enum Lesson<'a> {
     Skill(&'a Skill),
     Spell(&'a Spell),
+    Recipe(&'a Recipe),
 }
 
 impl Lesson<'_> {
@@ -289,6 +357,7 @@ impl Lesson<'_> {
         match self {
             Lesson::Skill(skill) => &skill.def.name,
             Lesson::Spell(spell) => &spell.def.name,
+            Lesson::Recipe(recipe) => &recipe.def.name,
         }
     }
 
@@ -302,6 +371,12 @@ impl Lesson<'_> {
                 money::coins(u64::from(spell.def.price))
             ),
             Lesson::Spell(spell) => format!("the spell {} (free)", spell.def.name),
+            Lesson::Recipe(recipe) if recipe.def.price > 0 => format!(
+                "the recipe for {} for {}",
+                recipe.def.name,
+                money::coins(u64::from(recipe.def.price))
+            ),
+            Lesson::Recipe(recipe) => format!("the recipe for {} (free)", recipe.def.name),
         }
     }
 
@@ -310,6 +385,9 @@ impl Lesson<'_> {
             Lesson::Skill(skill) => matches_name(skill, wanted),
             Lesson::Spell(spell) => {
                 spell.key == wanted || spells::matches_name(&spell.def.name, wanted)
+            }
+            Lesson::Recipe(recipe) => {
+                recipe.key == wanted || spells::matches_name(&recipe.def.name, wanted)
             }
         }
     }

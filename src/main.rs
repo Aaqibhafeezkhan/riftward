@@ -9,6 +9,7 @@ mod characters;
 mod combat;
 mod command;
 mod commands;
+mod crafting;
 mod db;
 mod dice;
 mod effects;
@@ -118,6 +119,7 @@ fn add_game(app: &mut App, path: String, address: String) {
         spells::SpellsPlugin,
         shops::ShopsPlugin,
         trade::TradePlugin,
+        crafting::CraftingPlugin,
         puppet::PuppetPlugin,
         guild::GuildPlugin,
         quests::QuestsPlugin,

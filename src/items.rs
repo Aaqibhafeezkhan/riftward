@@ -183,6 +183,16 @@ impl Quality {
         Quality::Masterwork,
     ];
 
+    /// How many steps above standard it is: crude is -2, masterwork 2.
+    pub fn steps(self) -> i32 {
+        Self::ALL.iter().position(|q| *q == self).unwrap_or(2) as i32 - 2
+    }
+
+    /// This quality moved `steps` better (or worse), within crude and masterwork.
+    pub fn shifted(self, steps: i32) -> Quality {
+        Self::ALL[(self.steps() + steps + 2).clamp(0, 4) as usize]
+    }
+
     /// The word in an item's name; standard has none.
     pub fn word(self) -> Option<&'static str> {
         match self {
@@ -460,7 +470,7 @@ fn plural(tag: &str) -> String {
 }
 
 /// "a", "a and b", "a, b and c".
-fn list(words: &[String]) -> String {
+pub fn list(words: &[String]) -> String {
     match words {
         [] => String::new(),
         [one] => one.clone(),

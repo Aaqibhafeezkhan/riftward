@@ -139,6 +139,15 @@ const SCHEMA: &str = "
         PRIMARY KEY (character_id, spell)
     );
 
+    -- The recipes each character has been taught (those that come with a skill aren't here).
+    CREATE TABLE IF NOT EXISTS character_recipes (
+        character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        recipe       TEXT NOT NULL,        -- book:recipe
+        learned_via  TEXT NOT NULL,
+        learned_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (character_id, recipe)
+    );
+
     -- Spawns waiting to return after their last mob died (`AfterDeath`, or a wiped-out
     -- breeding spawn's reseed), so a restart doesn't bring the dragon back early.
     CREATE TABLE IF NOT EXISTS spawn_state (
@@ -1258,6 +1267,24 @@ impl Database {
             "INSERT OR IGNORE INTO character_spells (character_id, spell, learned_via)
              VALUES (?1, ?2, ?3)",
             params![character_id, spell, learned_via],
+        )?;
+        Ok(())
+    }
+
+    /// The recipes a character has been taught, by `book:recipe`.
+    pub fn recipes(&self, character_id: i64) -> DbResult<Vec<String>> {
+        let conn = self.conn();
+        let mut stmt =
+            conn.prepare("SELECT recipe FROM character_recipes WHERE character_id = ?1")?;
+        let rows = stmt.query_map([character_id], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn save_recipe(&self, character_id: i64, recipe: &str, learned_via: &str) -> DbResult<()> {
+        self.conn().execute(
+            "INSERT OR IGNORE INTO character_recipes (character_id, recipe, learned_via)
+             VALUES (?1, ?2, ?3)",
+            params![character_id, recipe, learned_via],
         )?;
         Ok(())
     }
