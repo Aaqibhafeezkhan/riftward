@@ -40,6 +40,8 @@ pub struct Rules {
     pub search_bonus: f64,
     /// About how many real minutes between ambient lines in a room with a player in it.
     pub chatter_minutes: f64,
+    /// Real seconds a mob born hidden stays in sight, out of a fight, before it hides again.
+    pub rehide_seconds: f64,
     /// Tracks rooms keep, for Tracking.
     pub tracks: TrackRules,
     /// Finds rooms hold, for Foraging and Herbalism.

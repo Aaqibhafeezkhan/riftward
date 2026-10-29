@@ -168,7 +168,9 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 let contest = self
                     .dice
                     .opposed(u.rating.max(1.0), a_luck, theirs, their_luck);
-                let ambush = u.opener && self.ambushers.contains(&user);
+                // From hiding, unseen, the first blow can't be avoided: a Backstab, or a spider
+                // springing from its web.
+                let ambush = self.ambushers.contains(&user) && (u.opener || u.blow.is_some());
                 match (ambush, contest.won) {
                     (true, false) => (true, Blow::Solid, contest.margin),
                     (_, won) => (won, Blow::of(contest.margin), contest.margin),

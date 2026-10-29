@@ -32,6 +32,9 @@
     // About how many real minutes between ambient lines (`chatter` on mobs and rooms) in a room
     // with a player in it: a crow cawing, water dripping. See docs/world.md#ambient-lines.
     chatter_minutes: 1.5,
+    // Real seconds a mob born hidden (a spider in its web) stays in sight, out of a fight,
+    // before it hides again. See docs/world.md, under mob templates.
+    rehide_seconds: 60.0,
     // Tracks (docs/world.md#tracking): rooms remember who walked in or out for this many real
     // minutes, the most recent `most` of them. Reading one is Tracking against how hard its
     // ground is, a formula in survival.skill.ron; wading water holds none. Ages read as the

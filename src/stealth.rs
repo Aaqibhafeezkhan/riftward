@@ -8,8 +8,12 @@
 //! player it hasn't noticed. Acting openly or walking away shows a hidden character again (see
 //! `reveal`), unless they're sneaking: `sneak` keeps them hidden as they move, rolling afresh in
 //! every room.
+//!
+//! A mob born hidden (a spider in its web) springs from hiding at whoever comes near unaware, a
+//! blow that can't be avoided (`combat`), and once its fight is over and some time has passed
+//! (`rehide_seconds`, `rules.ron`), it hides again, as well as it was born.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -19,7 +23,7 @@ use crate::command::{AddCommand, Category, CommandRegistry, CommandSpec, Invocat
 use crate::db::Role;
 use crate::dice::Dice;
 use crate::events::GameEvent;
-use crate::mobs::Mob;
+use crate::mobs::{Mob, MobTemplates};
 use crate::output::{Actor, Characters, Outbox, Outgoing, deliver};
 use crate::skills::Skills;
 use crate::targeting::Keywords;
@@ -33,6 +37,7 @@ pub struct StealthPlugin;
 impl Plugin for StealthPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, notice_newcomers)
+            .add_systems(Update, rehide.run_if(crate::time::heartbeat()))
             .add_command(
                 CommandSpec::new("hide", Category::Interaction)
                     .summary("slip out of sight, if you know Stealth")
@@ -128,6 +133,59 @@ pub fn unhide(commands: &mut Commands, who: Entity) {
             conditions.remove(HIDDEN);
         }
     });
+}
+
+/// Mobs alive and out of a fight: those that might hide again.
+type Idle<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Mob, &'static Conditions, &'static InRoom),
+    (
+        Without<crate::combat::Fighting>,
+        Without<crate::combat::Dead>,
+    ),
+>;
+
+/// Mobs born hidden that have been in sight, out of a fight, for `rehide_seconds` hide again, as
+/// well as they were born, unseen by all: the spider back in its web.
+pub(crate) fn rehide(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut since: Local<HashMap<Entity, f64>>,
+    mobs: Idle,
+    templates: Res<MobTemplates>,
+    mut outbox: ResMut<Outbox>,
+) {
+    let now = time.elapsed_secs_f64();
+    let wait = crate::rules::rules().rehide_seconds;
+    let mut seen = HashSet::new();
+    for (entity, mob, conditions, at) in &mobs {
+        let Some(born) = templates
+            .0
+            .get(&mob.key)
+            .and_then(|def| def.conditions.iter().find(|c| c.condition == HIDDEN))
+        else {
+            continue;
+        };
+        if conditions.hidden().is_some() {
+            continue;
+        }
+        seen.insert(entity);
+        let out_since = *since.entry(entity).or_insert(now);
+        if now - out_since >= wait {
+            hide_as(&mut commands, entity, born.strength, HashSet::new());
+            outbox.0.push(Outgoing::Room {
+                room: at.0,
+                except: entity,
+                text: format!(
+                    "{} slips back out of sight.\r\n",
+                    crate::items::capitalized(&the(&mob.name))
+                ),
+            });
+            seen.remove(&entity);
+        }
+    }
+    since.retain(|entity, _| seen.contains(entity));
 }
 
 /// Hide someone, as well as `stealth`, seen through by `seen_by` already: it replaces how they

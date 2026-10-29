@@ -602,7 +602,7 @@ fn combat_round(
         };
     }
 
-    // Attackers their targets haven't noticed: an opener from hiding can't be avoided.
+    // Attackers their targets haven't noticed: their first blow from hiding can't be avoided.
     let ambushers: HashSet<Entity> = targets
         .iter()
         .filter(|(a, t)| {
@@ -983,12 +983,17 @@ fn aggression(
         };
         let foe_fighting = on.iter().any(|(a, _)| *a == foe.entity);
         on.push((mob, foe.entity));
+        // Unseen by them, it strikes from hiding: an ambush.
+        let from_hiding = hidden
+            .get(mob)
+            .is_ok_and(|c| c.hidden().is_some() && !c.seen_by(foe.entity));
         attack(
             &mut commands,
             &characters,
             &attacker,
             &foe,
             foe_fighting,
+            from_hiding,
             &mut out,
         );
     }
@@ -1052,6 +1057,7 @@ fn assist(
             &me,
             &foe,
             foe_fighting,
+            false,
             &mut out,
         );
     }
@@ -1077,7 +1083,7 @@ pub fn calm(commands: &mut Commands, beast: Entity, targets: &HashMap<Entity, En
     }
 }
 
-/// Once blows are struck, no one in a fight stays hidden.
+/// Once blows are struck, no one in a fight stays hidden; the dead are past being seen.
 fn reveal_fighters(
     commands: &mut Commands,
     events: &mut MessageWriter<GameEvent>,
@@ -1088,6 +1094,8 @@ fn reveal_fighters(
     for who in fighting {
         if let Ok(f) = fighters.get(who)
             && f.conditions.hidden().is_some()
+            && !f.dead
+            && f.vitals.health > 0.0
         {
             let name = capitalized(&name_of(f.player, f.mob));
             reveal(commands, events, who, &name, f.in_room.0);
@@ -1611,6 +1619,7 @@ fn kill(
                     &actor,
                     &foe,
                     foe_fighting,
+                    false,
                     &mut out,
                 );
             }
@@ -1627,6 +1636,7 @@ fn attack(
     attacker: &Actor,
     foe: &Actor,
     foe_fighting: bool,
+    from_hiding: bool,
     out: &mut Vec<Outgoing>,
 ) {
     commands
@@ -1642,12 +1652,14 @@ fn attack(
         attacker.entity,
         format!("\x1b[1mYou attack {}!\x1b[0m", foe.name),
     ));
-    // The one attacked is told so; everyone else sees it.
+    // The one attacked is told so; everyone else sees it. From hiding, it springs out of nowhere.
+    let them = capitalized(&attacker.name);
     for (other, _, _, in_room) in players {
-        let line = if other == foe.entity {
-            format!("\x1b[1;31m{} attacks you!\x1b[0m", attacker.name)
-        } else {
-            format!("{} attacks {}!", attacker.name, foe.name)
+        let line = match (other == foe.entity, from_hiding) {
+            (true, false) => format!("\x1b[1;31m{them} attacks you!\x1b[0m"),
+            (true, true) => format!("\x1b[1;31m{them} springs at you from hiding!\x1b[0m"),
+            (false, false) => format!("{them} attacks {}!", foe.name),
+            (false, true) => format!("{them} springs from hiding at {}!", foe.name),
         };
         if in_room.0 == attacker.room && other != attacker.entity {
             out.push(Outgoing::line(other, line));
@@ -2932,6 +2944,60 @@ mod tests {
                 .hidden()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn a_mob_springing_from_hiding_cant_be_avoided() {
+        let (mut world, room) = world();
+        let spider = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let prey = fighter(&mut world, room, 1, 100_000, &[BASIC_ATTACK]);
+        hide(&mut world, spider);
+        world.entity_mut(spider).insert(Fighting(prey));
+        world.entity_mut(prey).insert(Fighting(spider));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        assert!(
+            world.get::<Vitals>(prey).unwrap().health < 100.0,
+            "however quick, it lands"
+        );
+        // And then it's seen: no more blows like that.
+        assert!(world.get::<Conditions>(spider).unwrap().hidden().is_none());
+    }
+
+    #[test]
+    fn a_mob_born_hidden_hides_again_after_a_while_out_of_a_fight() {
+        let (mut world, room) = world();
+        let mut def = crate::world::MobDef::named("a forest spider");
+        def.conditions = vec![crate::world::BornWith {
+            condition: HIDDEN.into(),
+            strength: 8,
+        }];
+        world.insert_resource(MobTemplates(HashMap::from([(
+            MobKey::parse("test:mob", ""),
+            def,
+        )])));
+        let spider = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let wait = crate::rules::rules().rehide_seconds;
+        // One system, run again and again, so it remembers how long it's been in sight.
+        let rehide = world.register_system(crate::stealth::rehide);
+        let step = |world: &mut World, secs: f64| {
+            world
+                .resource_mut::<Time>()
+                .advance_by(std::time::Duration::from_secs_f64(secs));
+            world.run_system(rehide).unwrap();
+            world.flush();
+        };
+        step(&mut world, 1.0);
+        assert!(world.get::<Conditions>(spider).unwrap().hidden().is_none());
+        // Not while it fights.
+        world.entity_mut(spider).insert(Fighting(spider));
+        step(&mut world, wait * 2.0);
+        assert!(world.get::<Conditions>(spider).unwrap().hidden().is_none());
+        world.entity_mut(spider).remove::<Fighting>();
+        step(&mut world, 1.0);
+        step(&mut world, wait);
+        let hidden = world.get::<Conditions>(spider).unwrap().hidden().cloned();
+        assert_eq!(hidden.map(|h| (h.strength, h.seen_by.len())), Some((8, 0)));
     }
 
     #[test]

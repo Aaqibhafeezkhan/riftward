@@ -201,7 +201,7 @@ Built.
 - **Acting openly shows you** ("Grok steps out of the shadows."): any interaction or communication, unless it's quiet (whispering, searching, hiding, tracking), and walking away. Looking, checking your inventory and other character commands don't. **Sneaking** keeps you hidden as you move: those who noticed you see you go, and in each new room everyone rolls again.
 - **Quiet things done from hiding are seen only by those who've noticed you:** reading tracks or weighing an item's worth in the shadows doesn't tell the rest of the room "Grok studies the ground." (2026-10-27; the rule is in `output.rs`, for every room message about a hidden character.)
 - **From hiding, an opener can't be avoided:** a Backstab on someone who hasn't noticed you can't be dodged or blocked. Once blows are struck, everyone in the fight is seen.
-- **Later:** skills that add to Backstab, such as more damage from hiding or an easier crushing blow; mobs that hide and ambush; hidden doors found with `search`.
+- **Later:** skills that add to Backstab, such as more damage from hiding or an easier crushing blow; hidden doors found with `search`. Mobs that hide and ambush are built ([world.md](world.md#mob-templates)).
 
 ## Healing
 
