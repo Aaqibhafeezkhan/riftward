@@ -707,6 +707,17 @@ impl Database {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
+    /// The claims that are out: each quest held with a deadline, by whom, until when.
+    pub fn claims(&self) -> DbResult<Vec<(i64, String, i64)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT character_id, quest, due_at FROM character_quests
+             WHERE state = 'held' AND due_at IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     pub fn save_character_quest(&self, character_id: i64, record: &QuestRecord) -> DbResult<()> {
         self.conn().execute(
             "INSERT INTO character_quests

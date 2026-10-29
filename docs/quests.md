@@ -1,6 +1,6 @@
 # Quests and the Adventurers' Guild
 
-[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, the board can be read, and open quests taken, kept in the journal and in Marin's record, with kills counted, stages moving on, and quests reported and paid (2026-10-28: `src/quests.rs`, `assets/quests/`); claims, perks and lodging are designed, not built.
+[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, the board can be read, and open quests taken, kept in the journal and in Marin's record, with kills counted, stages moving on, quests reported and paid, and claims that run out (2026-10-28: `src/quests.rs`, `assets/quests/`); groups on quests, perks and lodging are designed, not built.
 
 Quests are data, written by builders and GMs, and tracked per character. Most of them come from the **Adventurers' Guild**, whose contracts raise a **guild rank** that is entirely separate from a character's power. A character can ignore quests completely, hunt monsters from the first day and grow just as strong; what they give up is the guild's trust, and the doors it opens.
 
@@ -181,7 +181,7 @@ A quest is one of two kinds, by its `availability`:
 | Example | Narina always needs herbs; the kitchen always needs meat | Clear the sewers; the Rat King's bounty |
 | Time limit | None, unless `within` sets one | `for`: not reported in time, it **fails** and goes back on the board |
 
-- **A claim that runs out fails:** the holder is told, Marin's record marks it failed, a contract costs some merit, and the notice is back on the board for someone else.
+- **A claim that runs out fails:** the holder is told, Marin's record marks it failed, a contract costs some merit, and the notice is back on the board for someone else. (*Built*, 2026-10-28: checked every second, for holders in the game or not, so a deadline that passes while the server is down fails as it comes back. The journal says how long is left: "(due in 23 hours)".)
 - **A character can't hold the same quest twice;** `repeat` says how soon they can take it again once it's done (`Once`, `Every(Days(1))`, `Always`).
 
 ### The board, Marin's record and your journal
@@ -190,11 +190,11 @@ A quest is one of two kinds, by its `availability`:
 
 - **`board`** (or `contracts`) in the Contract Hall lists what's posted and not claimed, at the reader's rank and one above: the number, the rank, the name and the one-line summary. Non-members (and the expelled) see it too, Bone work only, but can't take guild contracts. Quests that aren't contracts, posted on a board, are listed for everyone. (*Built*, 2026-10-28, numbered by rank and then name; a board is wherever a quest is `posted: Board(room)`, and `posted_when` is tested as a world condition. Nothing is claimed yet, so nothing comes off it.)
 - **`board <n>`** reads a notice in full: its description, what it asks, what it pays, how long a claim lasts. (*Built.*)
-- **`accept <n>`**, with Marin at her counter: "You take the notice down and hand it to Marin Harrow, who writes it into the guild's record against your name." A claimed notice comes off the board. Without the clerk there, nothing can be taken. (*Built*, 2026-10-28: "Marin Harrow writes Roaches in the Cellar into the guild's record against your name." Contracts need membership; a quest's `requires` is tested; a quest already held, done `Once`, or done too lately for its `repeat` is refused. Until claims are built, a claimed quest is taken like an open one.)
+- **`accept <n>`**, with Marin at her counter: "You take the notice down and hand it to Marin Harrow, who writes it into the guild's record against your name." A claimed notice comes off the board. Without the clerk there, nothing can be taken. (*Built*, 2026-10-28: "Marin Harrow writes Roaches in the Cellar into the guild's record against your name." Contracts need membership; a quest's `requires` is tested; a quest already held, done `Once`, or done too lately for its `repeat` is refused. A claimed one is theirs alone, off the board, with a deadline: "You have a day to finish it.")
 - **Marin's record** is the guild's ledger, and holds only what the guild needs to know: each contract **accepted, completed or failed** (or given up), with the date. It never says how far along you are, only that you took it and how it came out. **`guild record`** shows your entries, and GMs see anyone's (`guild record <player>`, online or not). (*Built*: "Accepted Herbs Wanted, today.")
 - **`journal`** (or `quests`) is your own account, anywhere: each quest you're on, where you are in it in its own words (the stage's journal text), each objective's progress, how long a claim has left; and below, what you've finished. Quests from outside the guild are kept in it too, and in no ledger. (*Built*: each quest you're on with its stage's text and each objective's progress, "Kill sewer rat: 3 of 20", then what you've done; time left comes with claims.)
 - **`report`** to whoever the quest is reported to (Marin, unless it names someone else, like Narina for her herbs): if every objective is done, any items it asks to be brought are handed over, and the rewards are paid. (*Built*, 2026-10-28: `report [<quest>]` reports each quest held that's for someone here; one that isn't done says what's left, "Kill sewer rat: 3 of 20; Bring rat's tail: 4 of 10". A contract's merit raises rank as `guild merit` does, counts a contract done, and is written into Marin's record as completed.)
-- **`abandon <quest>`** gives one up, anywhere: it's written off in Marin's record as given up (a contract costs some merit) and a claimed notice goes back on the board.
+- **`abandon <quest>`** gives one up, anywhere: it's written off in Marin's record as given up (a contract costs some merit) and a claimed notice goes back on the board. (*Built*: "You give up Roaches in the Cellar. It costs you 4 merit.")
 
 This replaces the earlier plan of a physical token (2026-10-28): the record is the proof of who took what.
 
@@ -353,7 +353,7 @@ A group on a quest moves through it together, **as long as they're together:** w
 - **`character_quests`:** character, quest id, its state (held, done with which ending, failed, abandoned), the stage **by its id**, when it was taken and when it's due, and when it was last finished (for `repeat`). (*Built*, without the ending, which comes with endings; the stage is its number until stages have ids.) Objectives' counts and the quest's own facts are `quest.` [facts](facts.md).
 - **Editing a quest someone is partway through** is safe as long as their stage still exists: progress is kept by stage id, never by position. If an edit removes the stage they're on, the quest is marked broken in their journal and GMs are told, rather than guessing.
 - **`guild_record`:** Marin's ledger: character, quest, what happened (accepted, completed, failed, given up) and when. Only ever added to. (*Built.*)
-- **`quest_claims`:** which claimed quests are out, held by whom, until when, so a restart doesn't put a taken notice back on the board or forget a deadline.
+- **`quest_claims`:** which claimed quests are out, held by whom, until when, so a restart doesn't put a taken notice back on the board or forget a deadline. (*Built* as the `character_quests` rows held with a deadline, read into `Claims` at startup, rather than a table of its own that could disagree with them.)
 
 ### The first contracts
 
@@ -433,8 +433,8 @@ In the smallest pull requests that each leave the game working, every one with i
 10. *Built.* **The board:** `board` and `board <n>` in the Contract Hall, read-only: what's posted, at your rank and one above.
 11. *Built.* **Taking a quest:** `accept <n>` with Marin, the `character_quests` table, Marin's record (`guild record`: accepted, completed, failed), and `journal`. Open quests only; nothing counts yet.
 12. *Built.* **Rules and `Kill`:** objectives as rules over `quest.` facts, `Kill` by template and tag, progress in the journal, and moving from stage to stage. The killer's kills count; the rest of their group's come with step 15.
-13. *Built.* **`report` and rewards:** coin, merit and `Set`, paid to whoever the quest is reported to. *Rats in the Drains* can be done start to finish. Plus `Bring`, so it asks for the tails. Adds *Roaches in the Cellar*. Until claims (14), a claimed quest is taken like an open one: anyone may hold it, with no deadline.
-14. **Claimed quests:** `quest_claims`, off the board while held, deadlines run out and fail on their own (across restarts), `abandon`, and what failing costs.
+13. *Built.* **`report` and rewards:** coin, merit and `Set`, paid to whoever the quest is reported to. *Rats in the Drains* can be done start to finish. Plus `Bring`, so it asks for the tails. Adds *Roaches in the Cellar*.
+14. *Built.* **Claimed quests:** `quest_claims`, off the board while held, deadlines run out and fail on their own (across restarts), `abandon`, and what failing costs.
 15. **Progress in a group:** offering to the group, one claim and timer, and the progress of every holder in the room moving together.
 16. **`report_to`, `Obtain`, and items given on taking a quest:** adds *Herbs for the Herbalist* and *Word to the Hunter*.
 17. **`Reach`, `Meet` and `posted_when`:** adds *The Ravine*, *The Rat King* and *What Feeds the Slimes*.
@@ -458,6 +458,6 @@ Meat for the Kitchen waits on harvesting; it can be written with step 13 and wor
 - [ ] **Is the Guild Archive members-only?** It holds the public Hermetic Study path to Awakening ([Magic](magic.md#which-paths-are-known)). Members-only would make the public path to magic "join the guild": free and fitting, but a choice to make deliberately.
 - [x] **Do contracts pay coin at all?** Yes, and items too (2026-10-28): a contract's rewards are coin, items (potions, gear, anything with a template) or both, besides its merit. How much is first guesses, to tune in play.
 - [ ] **Theft in the Guild Quarters:** expulsion with paid reinstatement is the guild's answer (2026-10-27); still open: whether a first offence is only a fine or lost merit, and how much reinstatement costs.
-- [ ] **How much a failed or abandoned contract costs:** a share of its merit (half?), or a set amount by rank?
+- [x] **How much a failed or abandoned contract costs:** half its merit, rounded up, for now (2026-10-28, a first guess to tune); rank never drops. A set amount by rank is still a choice if half feels wrong in play.
 - [ ] **Board refresh:** are some contracts posted only at certain times or for a while (a bounty that's up for three days), beyond `posted_when`?
 - [x] **Group contracts:** every member who holds the contract earns its full merit, and the coin is split (2026-10-27): see [Progress in a group](#progress-in-a-group): what any holder does counts for every holder in the same room (2026-10-28).
