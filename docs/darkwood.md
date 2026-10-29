@@ -207,7 +207,7 @@ Planned 2026-10-29: the gaps left, each a small pull request with its issue, so 
 
 1. **Spawns by time of day** ([#26](https://github.com/Foxworks-Studios/riftward/issues/26), *built* 2026-10-29): `TimeOfDay([Dusk, Night])` in the requirement language, for spawns' `when` and anywhere else. Mobs already out when it turns false stay until they're gone; they just aren't replaced.
 2. **Territorial aggression** ([#25](https://github.com/Foxworks-Studios/riftward/issues/25), *built* 2026-10-29): `aggressive: Always` or `Home` (only in its spawn's room: the bear), replacing `true` (decided 2026-10-29: no one plays yet, so zone files needn't keep loading unchanged).
-3. **Fleeing avoids what a mob avoids** ([#23](https://github.com/Foxworks-Studios/riftward/issues/23)): a deer fleeing a fight doesn't run into the wolf den while another way is open.
+3. **Fleeing avoids what a mob avoids** ([#23](https://github.com/Foxworks-Studios/riftward/issues/23), *built* 2026-10-29): a deer fleeing a fight doesn't run into the wolf den while another way is open.
 4. **Ambient lines** ([#24](https://github.com/Foxworks-Studios/riftward/issues/24)): `chatter` on mobs and rooms, a line now and then to players there, its rate in `rules.ron`.
 5. **A pack bonus** ([#29](https://github.com/Foxworks-Studios/riftward/issues/29)): an `allies` formula input, how many of its allies fight beside it; *Pack Hunter* is then a trait applying a per-turn `Attack` bonus at that strength.
 6. **Mobs that hide and ambush** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), first half): a hidden aggressive mob strikes first from hiding, unavoidably, then is seen; out of a fight it hides again. The spider in its web.

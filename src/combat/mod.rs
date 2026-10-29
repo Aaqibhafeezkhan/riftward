@@ -1667,11 +1667,27 @@ fn flee(
     mut practice: Practice,
     db: Res<Database>,
     (conditions, condition_defs): (Query<&Conditions>, Res<ConditionDefs>),
+    mob_templates: Res<MobTemplates>,
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
     let reply = |text: &str| vec![Outgoing::line(inv.entity, text)];
+    // A mob keeps out of rooms holding what it avoids, while it has anywhere else to run.
+    let me = view
+        .mobs
+        .get(inv.entity)
+        .ok()
+        .map(|(_, m, _)| m.key.clone());
+    let shunned = |room: Entity| {
+        fleeing::shuns(
+            me.as_ref(),
+            room,
+            view.rooms.get(room).is_ok_and(|(r, _, _)| r.no_wander),
+            view.mobs.iter().map(|(_, m, at)| (m, at.0)),
+            &mob_templates,
+        )
+    };
     // Where they run, once they've paid for it and broken away.
     let mut escape = None;
     let mut out = if fighting.get(inv.entity).is_err() {
@@ -1692,7 +1708,7 @@ fn flee(
                 who: inv.entity,
                 amount: flee_cost,
             });
-            let exits: Vec<String> = view
+            let mut ways: Vec<(String, Entity)> = view
                 .rooms
                 .get(actor.room)
                 .map(|(_, _, exits)| {
@@ -1707,10 +1723,14 @@ fn flee(
                                     .and_then(|d| view.doors.get(d).ok())
                                     .is_none_or(|d| d.is_open())
                         })
-                        .map(|(dir, _)| dir.clone())
+                        .map(|(dir, exit)| (dir.clone(), exit.to))
                         .collect()
                 })
                 .unwrap_or_default();
+            if ways.iter().any(|(_, to)| !shunned(*to)) {
+                ways.retain(|(_, to)| !shunned(*to));
+            }
+            let exits: Vec<String> = ways.into_iter().map(|(dir, _)| dir).collect();
             if exits.is_empty() {
                 reply("There's nowhere to run!")
             } else if !practice.chance(luck, crate::rules::rules().flee_chance) {
@@ -2955,6 +2975,70 @@ mod tests {
         world.run_system_once(aggression).unwrap();
         world.flush();
         assert_eq!(world.get::<Fighting>(bear).map(|f| f.0), Some(player));
+    }
+
+    #[test]
+    fn fleeing_a_fight_keeps_away_from_what_a_mob_avoids() {
+        let (mut world, room) = world();
+        world.init_resource::<crate::light::LitRooms>();
+        let side = |world: &mut World, id: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: id.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(id, ""),
+                    Exits::default(),
+                ))
+                .id()
+        };
+        let (den, glade) = (side(&mut world, "test:den"), side(&mut world, "test:glade"));
+        let exit = |to| crate::world::Exit {
+            to,
+            door: None,
+            needs: None,
+        };
+        world.entity_mut(room).insert(Exits(
+            [
+                ("east".to_string(), exit(den)),
+                ("west".to_string(), exit(glade)),
+            ]
+            .into(),
+        ));
+        // The fighters' template avoids wolves, and a wolf waits in the den.
+        let mut shy = crate::world::MobDef::named("a brawler");
+        shy.avoids = vec!["wolf".into()];
+        let wolf_key = MobKey::parse("test:wolf", "");
+        world.insert_resource(MobTemplates(HashMap::from([
+            (MobKey::parse("test:mob", ""), shy),
+            (wolf_key.clone(), crate::world::MobDef::named("a wolf")),
+        ])));
+        let wolf = fighter(&mut world, den, 1, 1, &[BASIC_ATTACK]);
+        world.get_mut::<Mob>(wolf).unwrap().key = wolf_key;
+        let foe = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let runner = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        let mut escaped = 0;
+        for _ in 0..12 {
+            world.get_mut::<InRoom>(runner).unwrap().0 = room;
+            world.entity_mut(runner).insert(Fighting(foe));
+            world.get_mut::<Vitals>(runner).unwrap().stamina = 100.0;
+            let inv = Invocation {
+                entity: runner,
+                command: "flee",
+                usage: "",
+                args: String::new(),
+            };
+            world.run_system_once_with(flee, inv).unwrap();
+            world.flush();
+            let at = world.get::<InRoom>(runner).unwrap().0;
+            assert_ne!(at, den, "into the den");
+            escaped += usize::from(at == glade);
+        }
+        assert!(escaped > 0, "it gets away, the other way");
     }
 
     #[test]

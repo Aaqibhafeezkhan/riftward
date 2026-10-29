@@ -1,7 +1,8 @@
 //! Running by an effect (`Flee`): a startled deer bolting, a beaten wolf breaking off. In a fight
 //! the runner tries `flee`, as a player would, with its stamina, its chance and `CantFlee`; out
-//! of one they bolt with `go`, through a random way anyone could walk, and a mob keeps out of
-//! rooms it may not wander into or that hold what it `avoids`, while it has anywhere else to go.
+//! of one they bolt with `go`, through a random way anyone could walk. Either way a mob keeps out
+//! of rooms it may not wander into or that hold what it `avoids`, while it has anywhere else to
+//! go ([`shuns`], which `flee` asks too).
 
 use std::collections::HashSet;
 
@@ -14,7 +15,30 @@ use crate::dice::Dice;
 use crate::events::GameEvent;
 use crate::mobs::{Mob, MobTemplates};
 use crate::output::RoomQuery;
-use crate::world::{Door, InRoom};
+use crate::world::{Door, InRoom, MobKey};
+
+/// Whether a mob of template `key` would rather not run into `room`: one it may not wander into
+/// (`no_wander`), or one holding a mob of a kind it `avoids`, of `others` (each mob, and where it
+/// is). Players avoid nothing.
+pub(super) fn shuns<'a>(
+    key: Option<&MobKey>,
+    room: Entity,
+    no_wander: bool,
+    mut others: impl Iterator<Item = (&'a Mob, Entity)>,
+    templates: &MobTemplates,
+) -> bool {
+    let Some((own, def)) = key.and_then(|k| Some((k, templates.0.get(k)?))) else {
+        return false;
+    };
+    no_wander
+        || others.any(|(other, there)| {
+            there == room
+                && templates
+                    .0
+                    .get(&other.key)
+                    .is_some_and(|o| def.avoids_mob(own, &other.key, o))
+        })
+}
 
 /// Those who might run: where they are, their template if they're a mob, and whether they're
 /// fighting.
@@ -51,21 +75,14 @@ pub(super) fn flee_from_effects(
             let Ok((_, _, exits)) = rooms.get(at.0) else {
                 continue;
             };
-            let def = mob.and_then(|m| Some((&m.key, templates.0.get(&m.key)?)));
-            // Somewhere a mob would rather not be: a room it may not wander into, or one holding
-            // what it avoids.
             let shunned = |room: Entity| {
-                let Some((own, def)) = def else {
-                    return false;
-                };
-                rooms.get(room).is_ok_and(|(r, _, _)| r.no_wander)
-                    || everyone.iter().any(|(other, there)| {
-                        there.0 == room
-                            && templates
-                                .0
-                                .get(&other.key)
-                                .is_some_and(|o| def.avoids_mob(own, &other.key, o))
-                    })
+                shuns(
+                    mob.map(|m| &m.key),
+                    room,
+                    rooms.get(room).is_ok_and(|(r, _, _)| r.no_wander),
+                    everyone.iter().map(|(m, at)| (m, at.0)),
+                    &templates,
+                )
             };
             // No one bolts up a cliff, into deep water or through a closed door.
             let mut ways: Vec<(&String, Entity)> = exits
