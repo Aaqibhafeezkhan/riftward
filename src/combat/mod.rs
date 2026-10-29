@@ -1978,6 +1978,7 @@ mod tests {
                         strike: StrikeKind::Hit,
                         effects: vec![Effect::Cleave],
                         opener: false,
+                        allies: 0,
                     }),
                 ),
                 // Leaves the target down and the user open, without hurting.
@@ -2006,6 +2007,7 @@ mod tests {
                             },
                         ],
                         opener: false,
+                        allies: 0,
                     }),
                 ),
             ]),
@@ -2906,6 +2908,7 @@ mod tests {
                 strike: StrikeKind::Hit,
                 effects: Vec::new(),
                 opener: true,
+                allies: 0,
             }),
         )]);
         // A defender who dodges everything, against a weak attacker hiding in the shadows.
@@ -3042,6 +3045,50 @@ mod tests {
     }
 
     #[test]
+    fn pack_hunters_grow_bolder_with_their_pack_beside_them() {
+        let (mut world, room) = world();
+        let prey_key = MobKey::parse("test:prey", "");
+        world.insert_resource(MobTemplates(HashMap::from([
+            (
+                MobKey::parse("test:mob", ""),
+                crate::world::MobDef::named("a wolf"),
+            ),
+            (prey_key.clone(), crate::world::MobDef::named("a deer")),
+        ])));
+        let prey = fighter(&mut world, room, 1, 1000, &[BASIC_ATTACK]);
+        world.get_mut::<Mob>(prey).unwrap().key = prey_key;
+        let pack: Vec<Entity> = (0..3)
+            .map(|_| {
+                let wolf = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+                let hunter = Conditions::default().with_traits(["pack_hunter".to_string()].iter());
+                world.entity_mut(wolf).insert((hunter, Fighting(prey)));
+                wolf
+            })
+            .collect();
+        world.entity_mut(prey).insert(Fighting(pack[0]));
+        world.run_system_once(combat_round).unwrap();
+        world.flush();
+        let fury = |world: &World, wolf: Entity| {
+            world
+                .get::<Conditions>(wolf)
+                .unwrap()
+                .0
+                .iter()
+                .find(|a| a.key == "pack_fury")
+                .map(|a| a.strength)
+        };
+        for wolf in &pack {
+            assert_eq!(fury(&world, *wolf), Some(2), "two of its pack beside it");
+        }
+        // The prey counts no allies: the wolves aren't its kind.
+        assert_eq!(fury(&world, prey), None);
+        assert!(
+            !said(&world, pack[0], "pack"),
+            "a pack hunter's boldness is silent"
+        );
+    }
+
+    #[test]
     fn armour_counts_where_it_belongs() {
         let (mut world, room) = world();
         let who = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
@@ -3110,6 +3157,7 @@ mod tests {
                 strike: StrikeKind::Hit,
                 effects: vec![Effect::Pierce(3)],
                 opener: false,
+                allies: 0,
             }),
         )]);
         // Fists do 2, doubled by the crushing blows of an attacker who can't miss: 4. A breastplate
@@ -3225,6 +3273,55 @@ mod tests {
         assert!(world.get::<Conditions>(tripper).unwrap().has("exposed"));
         assert!(said(&world, foe, "You go down!"), "told in its words");
         assert_eq!(world.get::<Vitals>(foe).unwrap().health, 100.0, "harmless");
+    }
+
+    #[test]
+    fn a_technique_can_want_an_ally_fighting_beside_the_user() {
+        let (mut world, room) = world();
+        let prey_key = MobKey::parse("test:prey", "");
+        world.insert_resource(MobTemplates(HashMap::from([
+            (
+                MobKey::parse("test:mob", ""),
+                crate::world::MobDef::named("a wolf"),
+            ),
+            (prey_key.clone(), crate::world::MobDef::named("a deer")),
+        ])));
+        if let Some(SkillKind::Technique(t)) = world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .get_mut("brawling:trip")
+            .map(|s| &mut s.def.kind)
+        {
+            t.allies = 1;
+        }
+        // Strong enough to trip a deer, not to fell it with the blow it makes instead.
+        let wolf = fighter(&mut world, room, 40, 1, &[BASIC_ATTACK, "brawling:trip"]);
+        let deer = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.get_mut::<Mob>(deer).unwrap().key = prey_key;
+        let trip = |world: &mut World| {
+            world.entity_mut(wolf).insert((
+                Fighting(deer),
+                Readied {
+                    skill: "brawling:trip".into(),
+                    ready_at: 0.0,
+                },
+            ));
+            world.run_system_once(combat_round).unwrap();
+            world.flush();
+        };
+        // Alone, it can't.
+        trip(&mut world);
+        assert!(!world.get::<Conditions>(deer).unwrap().has("down"));
+        assert!(said(
+            &world,
+            wolf,
+            "You need an ally fighting beside you to"
+        ));
+        // With another of its pack on the deer, it can.
+        let other = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(other).insert(Fighting(deer));
+        trip(&mut world);
+        assert!(world.get::<Conditions>(deer).unwrap().has("down"));
     }
 
     #[test]

@@ -430,7 +430,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
 
     /// Whether `who` counts `other` an ally: for a mob, its own kind and those its `allies` name;
     /// for a player, other players.
-    fn allied(&self, who: Entity, other: Entity) -> bool {
+    pub(super) fn allied(&self, who: Entity, other: Entity) -> bool {
         // A player, or a mob's template key.
         let kind = |e: Entity| {
             self.fighters.get(e).ok().map(|f| match f.player {

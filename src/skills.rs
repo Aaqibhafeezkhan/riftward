@@ -633,6 +633,10 @@ pub struct Technique {
     /// start a fight.
     #[serde(default)]
     pub opener: bool,
+    /// How many allies must be fighting beside the user (the `allies` formula input counts them):
+    /// a wolf's trip wants another wolf in the fight.
+    #[serde(default)]
+    pub allies: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]

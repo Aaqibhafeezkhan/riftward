@@ -38,7 +38,7 @@ enum Expr {
 }
 
 /// The names a formula can use besides attributes.
-const INPUTS: &[&str] = &["power", "strength", "margin", "level", "age"];
+const INPUTS: &[&str] = &["power", "strength", "margin", "level", "age", "allies"];
 /// What `user.` and `target.` can name besides attributes.
 const VITALS: &[&str] = &["health", "most_health", "coins"];
 /// What `target.` can name besides a character's: on a lock (a door or container), how hard it is
@@ -65,6 +65,8 @@ pub struct Inputs {
     pub level: f64,
     /// How old what's being read is, in real minutes: a track's age.
     pub age: f64,
+    /// How many of the user's allies are fighting in the room with them: a wolf's pack.
+    pub allies: f64,
     pub user: Side,
     pub target: Side,
 }
@@ -115,6 +117,7 @@ impl Inputs {
                 "margin" => self.margin,
                 "level" => self.level,
                 "age" => self.age,
+                "allies" => self.allies,
                 _ => 0.0,
             },
         }

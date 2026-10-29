@@ -118,6 +118,18 @@
             ),
         )],
     ),
+    // Hunting as a pack (docs/darkwood.md, Pack Hunter): at the start of each of its turns, it
+    // fights a point better for each ally fighting beside it. Silent: the text is empty.
+    "pack_hunter": (
+        name: "pack hunter",
+        description: "a hunter that grows bolder for every one of its pack fighting beside it",
+        modifiers: [],
+        reactions: [(
+            on: TurnStarts,
+            effects: [Apply(condition: "pack_fury", strength: "allies", lasts: Turns(1), on: User)],
+            text: (actor: "", room: ""),
+        )],
+    ),
     "thick_hide": (
         name: "thick hide",
         description: "a hide so thick that blows have to work to get through it",

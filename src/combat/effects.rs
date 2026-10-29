@@ -80,10 +80,27 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 .fighters
                 .get(user)
                 .map_or(0.0, |f| f64::from(f.attributes.level())),
+            allies: self.allies_fighting(user) as f64,
             user: side(user),
             target: side(target),
             ..Inputs::default()
         }
+    }
+
+    /// How many of `who`'s allies are fighting in the room with them, alive: as `allied` counts
+    /// them, a mob's own kind and those it names, or for a player, other players.
+    pub(super) fn allies_fighting(&self, who: Entity) -> usize {
+        let Ok(me) = self.fighters.get(who) else {
+            return 0;
+        };
+        let room = me.in_room.0;
+        let others: Vec<Entity> = self
+            .fighters
+            .iter()
+            .filter(|f| f.entity != who && f.in_room.0 == room && !f.dead && f.fighting.is_some())
+            .map(|f| f.entity)
+            .collect();
+        others.into_iter().filter(|o| self.allied(who, *o)).count()
     }
 
     /// The weapon `who` holds, if any.

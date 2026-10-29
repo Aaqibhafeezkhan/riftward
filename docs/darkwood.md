@@ -131,7 +131,7 @@ Decided 2026-10-27. Deer and rabbits bolt, but not the instant someone walks in:
 
 **New natural attacks** (data, `beast.skill.ron`): a wolf's bite (2–4), a boar's gore (2–5, with a knock-down technique, *Charge*: `Apply(down)`), a bear's maul (3–6), a stag's antlers (2–5), a spider's fangs (1–3).
 
-**New passives** (data): *Boar's Fury*, *Venomous Bite* and *Thick Hide* (built as traits: `furious`, `venomous`, `thick_hide`), *Howl*, and *Pack Hunter* (wolves get an attack bonus with more of the pack in the fight **(gap: a bonus that counts allies present)**).
+**New passives** (data): *Boar's Fury*, *Venomous Bite* and *Thick Hide* (built as traits: `furious`, `venomous`, `thick_hide`), *Howl*, and *Pack Hunter* (*built* as the `pack_hunter` trait: at the start of each turn, `pack_fury` at strength `allies`, a point of attack for each of the pack fighting beside it); and techniques that want the pack there, with `allies: 1` (a wolf's trip, only with another wolf on the prey).
 
 ## Flora
 
@@ -181,7 +181,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Territorial aggression** (*built* 2026-10-29) | The bear | `aggressive: Home`: only in the room it was made in | Small |
 | **Room conditions and reactions** (*built* 2026-10-29) | Thickets, webs, darkness, the Rift-Scar's hum | Rooms carry conditions as characters do; their reactions fire on `Enters` and `Every` for whoever is there | Medium |
 | **Mobs hiding and ambushing** | The spider in its web | Issue #9: mobs use Stealth out of a fight, and open from hiding | Medium |
-| **A bonus that counts allies present** | *Pack Hunter* | A passive bonus `per` ally in the fight, or a formula input `allies` | Small to medium |
+| **A bonus that counts allies present** (*built* 2026-10-29) | *Pack Hunter* | A passive bonus `per` ally in the fight, or a formula input `allies` | Small to medium |
 | **`avoids` on templates** (*built* 2026-10-27) | Rats kept from draining into the slimes ([the sewers](riftwatch.md#the-sewers-ecology)); deer keeping out of the wolf den | `avoids: ["slime"]`, by tag or template as `allies` are: wandering and crowding never take a mob into a room holding what it avoids. Only what's named, so rats still go for guards and players. Later, fleeing prefers exits away from it | Small |
 | **Things, not creatures** (*built* 2026-10-27) | Training dummies | The `inanimate` trait on a template: it takes blows and never acts in a fight, never wanders or picks one, is worth no experience nor a tough-fight boost, and leaves no corpse; it's battered and knocked to pieces, not hurt and killed | Small |
 | **Spawning from an effect** (*built* 2026-10-27) | Slimes splitting, the Slime Lord shedding slimes | A `Spawn(mob, count)` effect, in a reaction on `Hurt` or on the dying one's own `Dies` (`Kills` is the killer's). They appear where the user is and fight its foe; they belong to no spawn, so they don't come back. To keep a split from splitting for ever, the halves are a template of their own without the reaction | Small to medium |
@@ -209,7 +209,7 @@ Planned 2026-10-29: the gaps left, each a small pull request with its issue, so 
 2. **Territorial aggression** ([#25](https://github.com/Foxworks-Studios/riftward/issues/25), *built* 2026-10-29): `aggressive: Always` or `Home` (only in its spawn's room: the bear), replacing `true` (decided 2026-10-29: no one plays yet, so zone files needn't keep loading unchanged).
 3. **Fleeing avoids what a mob avoids** ([#23](https://github.com/Foxworks-Studios/riftward/issues/23), *built* 2026-10-29): a deer fleeing a fight doesn't run into the wolf den while another way is open.
 4. **Ambient lines** ([#24](https://github.com/Foxworks-Studios/riftward/issues/24), *built* 2026-10-29): `chatter` on mobs and rooms, a line now and then to players there, its rate in `rules.ron`.
-5. **A pack bonus** ([#29](https://github.com/Foxworks-Studios/riftward/issues/29)): an `allies` formula input, how many of its allies fight beside it; *Pack Hunter* is then a trait applying a per-turn `Attack` bonus at that strength.
+5. **A pack bonus** ([#29](https://github.com/Foxworks-Studios/riftward/issues/29), *built* 2026-10-29): an `allies` formula input, how many of its allies fight beside it; *Pack Hunter* is then a trait applying a per-turn `Attack` bonus at that strength.
 6. **Mobs that hide and ambush** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), first half): a hidden aggressive mob strikes first from hiding, unavoidably, then is seen; out of a fight it hides again. The spider in its web.
 7. **A find with a consequence:** a `Finds` trigger, so a room's condition answers someone gathering there: the bee tree's angry bees.
 8. **Hidden doors** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), second half): found with `search`, remembered per character.

@@ -501,8 +501,12 @@ pub(super) struct Telling {
 }
 
 impl Round<'_, '_, '_, '_, '_, '_> {
+    /// Tell `who` a line; an empty one, as a silent reaction's, says nothing.
     pub(super) fn say(&mut self, who: Entity, line: impl Into<String>) {
-        self.log.0.push(Outgoing::line(who, line.into()));
+        let line = line.into();
+        if !line.trim().is_empty() {
+            self.log.0.push(Outgoing::line(who, line));
+        }
     }
 
     /// Tell each their lines, and the room (but `a` and `b`) the rest, together.
@@ -510,8 +514,13 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         for (who, line) in tell.lines {
             self.say(who, line);
         }
-        if !tell.room.is_empty() {
-            self.tell_room(room, a, b, &tell.room.join(" "));
+        let seen: Vec<String> = tell
+            .room
+            .into_iter()
+            .filter(|line| !line.trim().is_empty())
+            .collect();
+        if !seen.is_empty() {
+            self.tell_room(room, a, b, &seen.join(" "));
         }
     }
 
@@ -613,6 +622,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 };
                 !t.opener
                     && stamina >= needs
+                    && self.allies_fighting(attacker) >= t.allies as usize
                     && choose_attack(
                         attacker,
                         Some(&t.with),
@@ -805,6 +815,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 ))
             } else if stamina < needs {
                 Some(format!("You're too exhausted to {tech_name}."))
+            } else if self.allies_fighting(attacker) < t.allies as usize {
+                Some(match t.allies {
+                    1 => format!("You need an ally fighting beside you to {tech_name}."),
+                    n => format!("You need {n} allies fighting beside you to {tech_name}."),
+                })
             } else if t.opener && !self.unaware(attacker, target) {
                 Some(format!(
                     "{} sees you coming; there's no opening.",
