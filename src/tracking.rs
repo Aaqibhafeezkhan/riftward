@@ -24,10 +24,15 @@ use crate::world::{Player, Room, Terrain};
 
 /// The skill `track` uses.
 const TRACKING: &str = "survival:tracking";
-/// How long tracks last, in seconds.
-const TRACK_SECS: f64 = 30.0 * 60.0;
-/// The most tracks a room remembers; the oldest go first.
-const MAX_TRACKS: usize = 20;
+/// How long tracks last, in seconds (`rules.ron`).
+fn track_secs() -> f64 {
+    crate::rules::rules().tracks.minutes * 60.0
+}
+
+/// The most tracks a room remembers; the oldest go first (`rules.ron`).
+fn max_tracks() -> usize {
+    crate::rules::rules().tracks.most
+}
 
 pub struct TrackingPlugin;
 
@@ -85,7 +90,7 @@ impl Tracks {
     fn lay(&mut self, room: Entity, track: Track) {
         let tracks = self.0.entry(room).or_default();
         tracks.push_back(track);
-        while tracks.len() > MAX_TRACKS {
+        while tracks.len() > max_tracks() {
             tracks.pop_front();
         }
     }
@@ -95,30 +100,33 @@ impl Tracks {
         let Some(tracks) = self.0.get_mut(&room) else {
             return Vec::new();
         };
-        tracks.retain(|t| now - t.at < TRACK_SECS);
+        let last = track_secs();
+        tracks.retain(|t| now - t.at < last);
         tracks.iter().rev().cloned().collect()
     }
 }
 
-/// How hard a room's ground is to read a fresh track on; `None` where it holds none.
+/// How hard a room's ground is to read a fresh track on (`rules.ron`); `None` where it holds none.
 fn ground(terrain: Terrain) -> Option<f64> {
+    let ground = crate::rules::rules().tracks.ground;
     match terrain {
-        Terrain::Mud => Some(1.0),
-        Terrain::Uneven => Some(3.0),
-        Terrain::Rough => Some(5.0),
-        Terrain::Road => Some(6.0),
-        Terrain::Paved => Some(8.0),
+        Terrain::Mud => Some(ground.mud),
+        Terrain::Uneven => Some(ground.uneven),
+        Terrain::Rough => Some(ground.rough),
+        Terrain::Road => Some(ground.road),
+        Terrain::Paved => Some(ground.paved),
         Terrain::Wading => None,
     }
 }
 
-/// How a track's age reads: "fresh", "recent", "old".
+/// How a track's age reads: "fresh", "recent", "old" (`rules.ron`).
 fn age(secs: f64) -> &'static str {
-    match secs / 60.0 {
-        m if m < 5.0 => "fresh",
-        m if m < 15.0 => "recent",
-        _ => "old",
-    }
+    let tracks = &crate::rules::rules().tracks;
+    tracks
+        .ages
+        .iter()
+        .find(|(under, _)| secs / 60.0 < *under)
+        .map_or(&tracks.older, |(_, words)| words)
 }
 
 /// Leave tracks wherever someone walks in or out.
@@ -460,18 +468,18 @@ mod tests {
     fn tracks_fade_and_the_oldest_go_first() {
         let mut tracks = Tracks::default();
         let room = Entity::PLACEHOLDER;
-        for i in 0..MAX_TRACKS + 5 {
+        for i in 0..max_tracks() + 5 {
             tracks.lay(room, track(i as f64));
         }
         let seen = tracks.in_room(room, 30.0);
-        assert_eq!(seen.len(), MAX_TRACKS);
-        assert_eq!(seen[0].at, (MAX_TRACKS + 4) as f64, "newest first");
+        assert_eq!(seen.len(), max_tracks());
+        assert_eq!(seen[0].at, (max_tracks() + 4) as f64, "newest first");
         // Half an hour on, the early ones are gone.
         assert_eq!(
-            tracks.in_room(room, TRACK_SECS + 10.0).len(),
-            MAX_TRACKS - 6
+            tracks.in_room(room, track_secs() + 10.0).len(),
+            max_tracks() - 6
         );
-        assert!(tracks.in_room(room, TRACK_SECS * 2.0).is_empty());
+        assert!(tracks.in_room(room, track_secs() * 2.0).is_empty());
     }
 
     #[test]

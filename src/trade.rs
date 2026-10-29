@@ -3,7 +3,7 @@
 //! **Haggling** works on its own whenever its holder deals with a shopkeeper (see `shops.rs`).
 //! The first dealing strikes a deal: their Haggling and Charisma against the shopkeeper's, by
 //! opposed roll, and how surely they win sets how far prices move their way (a twentieth to a
-//! fifth), for `DEAL_SECS`. Buying prices come down by that share of an item's value, and selling
+//! fifth, by `rules.ron`), for its `deal_minutes`. Buying prices come down by that share of an item's value, and selling
 //! prices go up by it, so the two never cross. Without Haggling, a character pays list price.
 //!
 //! **Appraisal** is `appraise <item>` (or `use appraisal <item>`): what something is worth, judged
@@ -29,10 +29,6 @@ use crate::targeting::Keywords;
 pub const HAGGLING: &str = "trade:haggling";
 /// The skill `appraise` uses.
 const APPRAISAL: &str = "trade:appraisal";
-/// How long a deal with a shopkeeper lasts, in seconds.
-const DEAL_SECS: f64 = 10.0 * 60.0;
-/// What a shop pays for an item, before haggling: this share of its value.
-const BUYING_SHARE: f64 = 1.0 / 3.0;
 
 pub struct TradePlugin;
 
@@ -63,28 +59,33 @@ impl Plugin for TradePlugin {
 #[derive(Component, Debug, Default)]
 pub struct Bargains(pub HashMap<Entity, (f64, f64)>);
 
-/// How far a haggle moves prices, from how surely it was won: nothing if lost, then a twentieth,
-/// a tenth, three twentieths or a fifth of an item's value.
+/// The deal a won haggle strikes, from how surely it was won (`rules.ron`).
+fn deal_for(blow: Blow) -> &'static crate::rules::Deal {
+    let trade = &crate::rules::rules().trade;
+    match blow {
+        Blow::Glancing => &trade.glancing,
+        Blow::Solid => &trade.solid,
+        Blow::Strong => &trade.strong,
+        Blow::Crushing => &trade.crushing,
+    }
+}
+
+/// How far a haggle moves prices, as a share of an item's value: nothing if lost, and the surer
+/// the win, the more (a twentieth to a fifth, by `rules.ron`).
 pub fn deal(contest: Contest) -> f64 {
     if !contest.won {
         return 0.0;
     }
-    match Blow::of(contest.margin) {
-        Blow::Glancing => 0.05,
-        Blow::Solid => 0.10,
-        Blow::Strong => 0.15,
-        Blow::Crushing => 0.20,
-    }
+    deal_for(Blow::of(contest.margin)).share
 }
 
-/// How a deal reads: "a little", "a tenth".
+/// How a deal of `share` reads: "a little", "a tenth"; the words of the nearest deal.
 fn deal_words(share: f64) -> &'static str {
-    match share {
-        s if s < 0.075 => "a little",
-        s if s < 0.125 => "a tenth",
-        s if s < 0.175 => "a good way",
-        _ => "a fifth",
-    }
+    [Blow::Glancing, Blow::Solid, Blow::Strong, Blow::Crushing]
+        .into_iter()
+        .map(deal_for)
+        .min_by(|a, b| (a.share - share).abs().total_cmp(&(b.share - share).abs()))
+        .map_or("", |deal| deal.words.as_str())
 }
 
 /// What a shop asks for something worth `value`, with a deal of `share`: at least a copper.
@@ -95,7 +96,7 @@ pub fn asking_price(value: u64, share: f64) -> u64 {
 /// What a shop pays for something worth `value`, with a deal of `share`: a third of its value,
 /// plus the deal, and at least a copper.
 pub fn offer(value: u64, share: f64) -> u64 {
-    ((value as f64 * (BUYING_SHARE + share)).floor() as u64).max(1)
+    ((value as f64 * (crate::rules::rules().trade.buying_share + share)).floor() as u64).max(1)
 }
 
 /// The deal `actor` has with the shopkeeper `keeper` at `now`: one struck already, or, if they
@@ -165,7 +166,7 @@ pub fn bargain(
             text: fill(&lines.room, &with) + "\r\n",
         });
     }
-    let struck = (share, now + DEAL_SECS);
+    let struck = (share, now + crate::rules::rules().trade.deal_minutes * 60.0);
     match bargains.get_mut(actor.entity) {
         Ok(mut bargains) => {
             bargains.0.insert(keeper, struck);
@@ -296,6 +297,8 @@ mod tests {
         let won = |margin| deal(Contest { won: true, margin });
         assert!(won(1.05) < won(1.3) && won(1.3) < won(2.0) && won(2.0) < won(3.0));
         assert_eq!(won(3.0), 0.20);
+        assert_eq!(deal_words(won(3.0)), "a fifth");
+        assert_eq!(deal_words(0.10), "a tenth");
     }
 
     #[test]

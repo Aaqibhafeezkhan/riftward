@@ -29,4 +29,29 @@
     drain_difficulty: 2.0,
     // How much better a deliberate `search` is than a passing glance: Intuition times this.
     search_bonus: 2.0,
+    // Tracks (docs/world.md#tracking): rooms remember who walked in or out for this many real
+    // minutes, the most recent `most` of them. Reading one is Tracking against how hard its
+    // ground is, a formula in survival.skill.ron; wading water holds none. Ages read as the
+    // words of the first band they're under, youngest first, else `older`.
+    tracks: (
+        minutes: 30.0,
+        most: 20,
+        ground: (mud: 1.0, uneven: 3.0, rough: 5.0, road: 6.0, paved: 8.0),
+        ages: [(5.0, "fresh"), (15.0, "recent")],
+        older: "old",
+    ),
+    // Foraging and Herbalism (docs/world.md#environment-and-finds): each room holds this many
+    // finds of each kind, and grows one back every so many real minutes.
+    finds: (patch: 3, regrow_minutes: 10.0),
+    // Shops (docs/economy.md): they pay this share of an item's value before haggling. A won
+    // haggle moves prices that share of its value your way, for so many real minutes, by how
+    // surely it was won (as blows are graded), and reads as its words.
+    trade: (
+        buying_share: 0.3333333333,
+        deal_minutes: 10.0,
+        glancing: (share: 0.05, words: "a little"),
+        solid: (share: 0.10, words: "a tenth"),
+        strong: (share: 0.15, words: "a good way"),
+        crushing: (share: 0.20, words: "a fifth"),
+    ),
 )

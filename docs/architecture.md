@@ -92,7 +92,7 @@ flowchart LR
 | Kind | Where | Reloads |
 | --- | --- | --- |
 | World | `assets/zones/<zone>.zone.ron`, one file per zone; builder commands write back to them | Live, on file change |
-| The game's rules in numbers | `assets/rules.ron` (`src/rules.rs`): round and action times, fleeing and riposte costs, mob tactics, how vitals are made and recover, Drain's difficulty, searching | At startup |
+| The game's rules in numbers | `assets/rules.ron` (`src/rules.rs`): round and action times, fleeing and riposte costs, mob tactics, how vitals are made and recover, Drain's difficulty, searching, how long tracks last and how ground reads, how finds regrow, and shops' terms and haggled deals | At startup |
 | The world's givens | `assets/world.ron`: the start and respawn rooms, every character's starting items and skills, the corpse and how long corpses last, and the words for dying | At startup |
 | Accounts, characters, roles | `accounts`, `characters` tables | n/a |
 | Aliases | `character_aliases` table | n/a |

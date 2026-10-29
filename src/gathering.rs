@@ -26,10 +26,15 @@ use crate::world::{Finds, ItemKey, RoomKey};
 const FORAGING: &str = "survival:foraging";
 /// The skill `gather` uses.
 const HERBALISM: &str = "nature:herbalism";
-/// How many finds of each kind a room holds when fully grown.
-const PATCH_SIZE: u32 = 3;
-/// Seconds for one find to grow back.
-const REGROW_SECS: f64 = 600.0;
+/// How many finds of each kind a room holds when fully grown (`rules.ron`).
+fn patch_size() -> u32 {
+    crate::rules::rules().finds.patch
+}
+
+/// Seconds for one find to grow back (`rules.ron`).
+fn regrow_secs() -> f64 {
+    crate::rules::rules().finds.regrow_minutes * 60.0
+}
 
 pub struct GatheringPlugin;
 
@@ -72,13 +77,14 @@ struct Patch {
 }
 
 impl Patch {
-    /// Grow back one find for every `REGROW_SECS` since `since`, up to full. A full patch doesn't
+    /// Grow back one find for every `regrow_secs()` since `since`, up to full. A full patch doesn't
     /// bank growth: its clock starts when something is next taken.
     fn regrow(&mut self, now: f64) {
-        let grown = ((now - self.since) / REGROW_SECS).floor().max(0.0) as u32;
-        self.left = (self.left + grown).min(PATCH_SIZE);
-        self.since += f64::from(grown) * REGROW_SECS;
-        if self.left == PATCH_SIZE {
+        let (full, regrow) = (patch_size(), regrow_secs());
+        let grown = ((now - self.since) / regrow).floor().max(0.0) as u32;
+        self.left = (self.left + grown).min(full);
+        self.since += f64::from(grown) * regrow;
+        if self.left == full {
             self.since = now;
         }
     }
@@ -87,7 +93,7 @@ impl Patch {
 impl Patches {
     fn patch(&mut self, room: Entity, kind: &str, now: f64) -> &mut Patch {
         let patch = self.0.entry((room, kind.to_string())).or_insert(Patch {
-            left: PATCH_SIZE,
+            left: patch_size(),
             since: now,
         });
         patch.regrow(now);
@@ -415,7 +421,7 @@ mod tests {
             .resource_mut::<Patches>()
             .patch(room, "forage", now)
             .left;
-        assert_eq!(left, PATCH_SIZE);
+        assert_eq!(left, patch_size());
     }
 
     #[test]
@@ -432,20 +438,20 @@ mod tests {
         let mut patches = Patches::default();
         let room = Entity::from_raw_u32(1).unwrap();
         // Full at first; take all three.
-        for _ in 0..PATCH_SIZE {
+        for _ in 0..patch_size() {
             let patch = patches.patch(room, "forage", 0.0);
             assert!(patch.left > 0);
             patch.left -= 1;
         }
         assert_eq!(patches.patch(room, "forage", 1.0).left, 0);
         // Herbs are a separate patch.
-        assert_eq!(patches.patch(room, "herbs", 1.0).left, PATCH_SIZE);
-        // One grows back per REGROW_SECS, never past full.
-        assert_eq!(patches.patch(room, "forage", REGROW_SECS).left, 1);
-        assert_eq!(patches.patch(room, "forage", REGROW_SECS * 2.5).left, 2);
+        assert_eq!(patches.patch(room, "herbs", 1.0).left, patch_size());
+        // One grows back per regrow_secs(), never past full.
+        assert_eq!(patches.patch(room, "forage", regrow_secs()).left, 1);
+        assert_eq!(patches.patch(room, "forage", regrow_secs() * 2.5).left, 2);
         assert_eq!(
-            patches.patch(room, "forage", REGROW_SECS * 100.0).left,
-            PATCH_SIZE
+            patches.patch(room, "forage", regrow_secs() * 100.0).left,
+            patch_size()
         );
     }
 }

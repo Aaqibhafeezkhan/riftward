@@ -240,7 +240,7 @@ An exit can need a climb or a swim, written in its long form: `"down": (to: "rav
 
 ### Tracking
 
-Every room remembers the tracks of whoever walks in or out, player or mob, for 30 minutes, up to 20 of them, the oldest going first. A teleport leaves none, wading water holds none, and they aren't saved.
+Every room remembers the tracks of whoever walks in or out, player or mob, for 30 minutes, up to 20 of them (`tracks` in `assets/rules.ron`, with the ground difficulties and age words below), the oldest going first. A teleport leaves none, wading water holds none, and they aren't saved.
 
 - **`track [<who>]`** reads them with Tracking (Intuition): each track is found by your skill against the ground's difficulty (mud 1, uneven 3, rough 5, road 6, paved 8), which doubles every ten minutes of the track's age. `track rat` reads only tracks whose maker matches.
 - **Tracks show what made them, not who:** "a sewer rat headed west (fresh)", "a human came in from the south (old)". Your own tracks aren't shown. Ages read as fresh (under 5 minutes), recent (under 15) and old.
@@ -269,7 +269,7 @@ Separately from its footing, every room has an **environment**: what kind of pla
   },
   ```
 
-- **`forage` and `gather`** (shortcuts to `use foraging` and `use herbalism`) search the room (see [Gathering](trees.md#gathering)). Each room holds three finds of each kind, and grows one back every 10 minutes, so no one strips one bush forever. Finds aren't saved: a restart lets everything grow back.
+- **`forage` and `gather`** (shortcuts to `use foraging` and `use herbalism`) search the room (see [Gathering](trees.md#gathering)). Each room holds three finds of each kind, and grows one back every 10 minutes (`finds` in `assets/rules.ron`), so no one strips one bush forever. Finds aren't saved: a restart lets everything grow back.
 - **Builders** set a room's environment with `environment <kind>`, or in the zone file; a room dug out of another takes its environment.
 
 ### Weather (planned)

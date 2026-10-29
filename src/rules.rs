@@ -38,6 +38,68 @@ pub struct Rules {
     pub drain_difficulty: f64,
     /// How much better a deliberate search is than a passing glance: Intuition times this.
     pub search_bonus: f64,
+    /// Tracks rooms keep, for Tracking.
+    pub tracks: TrackRules,
+    /// Finds rooms hold, for Foraging and Herbalism.
+    pub finds: FindRules,
+    /// Shops' terms, and what Haggling wins.
+    pub trade: TradeRules,
+}
+
+/// How long rooms remember tracks, and how they read.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct TrackRules {
+    /// Real minutes tracks last.
+    pub minutes: f64,
+    /// The most a room remembers; the oldest go first.
+    pub most: usize,
+    /// How hard each ground is to read a fresh track on; wading water holds none.
+    pub ground: Ground,
+    /// How a track's age reads, youngest first: under so many minutes, these words.
+    pub ages: Vec<(f64, String)>,
+    /// How an older track reads.
+    pub older: String,
+}
+
+/// A number for each kind of ground that holds tracks.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct Ground {
+    pub mud: f64,
+    pub uneven: f64,
+    pub rough: f64,
+    pub road: f64,
+    pub paved: f64,
+}
+
+/// How many finds a room holds, and how fast they grow back.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct FindRules {
+    /// Finds of each kind a room holds when fully grown.
+    pub patch: u32,
+    /// Real minutes for one find to grow back.
+    pub regrow_minutes: f64,
+}
+
+/// What shops pay, and what a won haggle moves prices by.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct TradeRules {
+    /// What a shop pays for an item before haggling: this share of its value.
+    pub buying_share: f64,
+    /// Real minutes a deal with a shopkeeper lasts.
+    pub deal_minutes: f64,
+    /// The share of an item's value a won haggle moves prices by, and how it reads, by how surely
+    /// it was won.
+    pub glancing: Deal,
+    pub solid: Deal,
+    pub strong: Deal,
+    pub crushing: Deal,
+}
+
+/// How far a haggle moved prices, and how that reads ("a tenth").
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct Deal {
+    pub share: f64,
+    pub words: String,
 }
 
 static RULES: std::sync::OnceLock<Rules> = std::sync::OnceLock::new();
