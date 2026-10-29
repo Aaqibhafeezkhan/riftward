@@ -15,8 +15,8 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 use crate::command::{AddCommand, Category, CommandSpec, Invocation};
-use crate::db::{Database, ItemPlace, MembershipRecord, Permission};
-use crate::items::{HANDS, Item, ItemLocation, ItemQuery, ItemTemplates, Quality};
+use crate::db::{Database, MembershipRecord, Permission};
+use crate::items::{Item, ItemLocation, ItemQuery, ItemTemplates};
 use crate::mobs::{MobQuery, MobTemplates};
 use crate::money::{self, Purse};
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
@@ -116,7 +116,7 @@ impl Membership {
         })
     }
 
-    fn save(&self, character_id: Option<i64>, db: &Database) {
+    pub fn save(&self, character_id: Option<i64>, db: &Database) {
         let (Some(id), Some(rank)) = (character_id, guild().ranks.get(self.rank)) else {
             return;
         };
@@ -299,42 +299,8 @@ fn give_tag(
         return String::new();
     };
     let key = ItemKey::parse(&def.tag, "");
-    let hands = items
-        .iter()
-        .filter(|(_, _, l)| **l == ItemLocation::Held(actor.entity))
-        .count();
-    let (location, place, at_feet) = if hands < HANDS {
-        (
-            ItemLocation::Held(actor.entity),
-            actor.character_id.map(ItemPlace::Held),
-            false,
-        )
-    } else {
-        let room = rooms
-            .get(actor.room)
-            .map(|(_, key, _)| key.to_string())
-            .unwrap_or_default();
-        (
-            ItemLocation::Room(actor.room),
-            Some(ItemPlace::Room(room)),
-            true,
-        )
-    };
-    let id = place.and_then(|place| {
-        db.create_item(&key.to_string(), &place, Quality::Standard)
-            .map_err(|err| error!("failed to save a guild tag [{key}]: {err}"))
-            .ok()
-    });
-    let name = templates
-        .0
-        .get(&key)
-        .map_or_else(|| "a guild tag".to_string(), |d| d.name.clone());
-    crate::items::spawn_item(commands, templates, key, id, location, Quality::Standard);
-    if at_feet {
-        format!("{name}, set down at your feet since your hands are full")
-    } else {
-        name
-    }
+    let mut held = crate::items::hands_full(actor.entity, items);
+    crate::items::hand_new(actor, key, &mut held, commands, templates, rooms, db)
 }
 
 /// Take away every guild tag `who` has on them.
@@ -539,11 +505,12 @@ fn standing(actor: &Actor, l: &Ledger) -> String {
         );
     }
     let mut text = format!(
-        "You're a {} member of {}, with {} merit and {} contracts done.",
+        "You're a {} member of {}, with {} merit and {} contract{} done.",
         m.rank_name(),
         guild().name,
         m.merit,
-        m.contracts
+        m.contracts,
+        if m.contracts == 1 { "" } else { "s" }
     );
     if let Some(next) = guild().ranks.get(m.rank + 1) {
         text += &if m.merit < next.merit {

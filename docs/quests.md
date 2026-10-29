@@ -1,6 +1,6 @@
 # Quests and the Adventurers' Guild
 
-[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, the board can be read, and open quests taken, kept in the journal and in Marin's record, with kills counted and stages moving on (2026-10-28: `src/quests.rs`, `assets/quests/`); reporting, rewards, claims, perks and lodging are designed, not built.
+[Design summary](README.md) · Status: guild membership is built (2026-10-28: joining, ranks and merit, rank tags, `GuildRank` conditions, expulsion and reinstatement, and the GMs' `guild` tools; `src/guild.rs`, the ranks in `assets/guild.ron`). Quest files are loaded and checked, the board can be read, and open quests taken, kept in the journal and in Marin's record, with kills counted, stages moving on, and quests reported and paid (2026-10-28: `src/quests.rs`, `assets/quests/`); claims, perks and lodging are designed, not built.
 
 Quests are data, written by builders and GMs, and tracked per character. Most of them come from the **Adventurers' Guild**, whose contracts raise a **guild rank** that is entirely separate from a character's power. A character can ignore quests completely, hunt monsters from the first day and grow just as strong; what they give up is the guild's trust, and the doors it opens.
 
@@ -190,10 +190,10 @@ A quest is one of two kinds, by its `availability`:
 
 - **`board`** (or `contracts`) in the Contract Hall lists what's posted and not claimed, at the reader's rank and one above: the number, the rank, the name and the one-line summary. Non-members (and the expelled) see it too, Bone work only, but can't take guild contracts. Quests that aren't contracts, posted on a board, are listed for everyone. (*Built*, 2026-10-28, numbered by rank and then name; a board is wherever a quest is `posted: Board(room)`, and `posted_when` is tested as a world condition. Nothing is claimed yet, so nothing comes off it.)
 - **`board <n>`** reads a notice in full: its description, what it asks, what it pays, how long a claim lasts. (*Built.*)
-- **`accept <n>`**, with Marin at her counter: "You take the notice down and hand it to Marin Harrow, who writes it into the guild's record against your name." A claimed notice comes off the board. Without the clerk there, nothing can be taken. (*Built* for open quests, 2026-10-28: "Marin Harrow writes Herbs Wanted into the guild's record against your name." Contracts need membership; a quest's `requires` is tested; a quest already held, done `Once`, or done too lately for its `repeat` is refused. Claimed quests wait on claims.)
+- **`accept <n>`**, with Marin at her counter: "You take the notice down and hand it to Marin Harrow, who writes it into the guild's record against your name." A claimed notice comes off the board. Without the clerk there, nothing can be taken. (*Built*, 2026-10-28: "Marin Harrow writes Roaches in the Cellar into the guild's record against your name." Contracts need membership; a quest's `requires` is tested; a quest already held, done `Once`, or done too lately for its `repeat` is refused. Until claims are built, a claimed quest is taken like an open one.)
 - **Marin's record** is the guild's ledger, and holds only what the guild needs to know: each contract **accepted, completed or failed** (or given up), with the date. It never says how far along you are, only that you took it and how it came out. **`guild record`** shows your entries, and GMs see anyone's (`guild record <player>`, online or not). (*Built*: "Accepted Herbs Wanted, today.")
 - **`journal`** (or `quests`) is your own account, anywhere: each quest you're on, where you are in it in its own words (the stage's journal text), each objective's progress, how long a claim has left; and below, what you've finished. Quests from outside the guild are kept in it too, and in no ledger. (*Built*: each quest you're on with its stage's text and each objective's progress, "Kill sewer rat: 3 of 20", then what you've done; time left comes with claims.)
-- **`report`** to whoever the quest is reported to (Marin, unless it names someone else, like Narina for her herbs): if every objective is done, any items it asks to be brought are handed over, and the rewards are paid.
+- **`report`** to whoever the quest is reported to (Marin, unless it names someone else, like Narina for her herbs): if every objective is done, any items it asks to be brought are handed over, and the rewards are paid. (*Built*, 2026-10-28: `report [<quest>]` reports each quest held that's for someone here; one that isn't done says what's left, "Kill sewer rat: 3 of 20; Bring rat's tail: 4 of 10". A contract's merit raises rank as `guild merit` does, counts a contract done, and is written into Marin's record as completed.)
 - **`abandon <quest>`** gives one up, anywhere: it's written off in Marin's record as given up (a contract costs some merit) and a claimed notice goes back on the board.
 
 This replaces the earlier plan of a physical token (2026-10-28): the record is the proof of who took what.
@@ -346,7 +346,7 @@ A group on a quest moves through it together, **as long as they're together:** w
 
 ### Rewards
 
-`Coin(n)`, `Item(id)`, `Set(fact, value)` (which hidden skills, world events, doors and other quests can test; a title is `char.title.<id>`), and for contracts the guild merit. Never experience, skill levels or Karma. Contracts pay coin, items, or both, besides their merit (2026-10-28): a potion or a piece of gear is as good a reward as money. `Coin` and `Item` can be written now (*built*: checked, and shown on the notice, `Item` once per item); they're paid when reporting is built.
+`Coin(n)`, `Item(id)`, `Set(fact, value)` (which hidden skills, world events, doors and other quests can test; a title is `char.title.<id>`), and for contracts the guild merit. Never experience, skill levels or Karma. Contracts pay coin, items, or both, besides their merit (2026-10-28): a potion or a piece of gear is as good a reward as money. *Built:* `Coin(n)`, `Item(id)` (once per item, into a free hand or at their feet) and `Set("char.title.rat_catcher", true)` (a `char.` or `world.` fact; the notice doesn't mention it), paid on `report`, with the contract's merit.
 
 ### Saved
 
@@ -361,9 +361,9 @@ Written as data, to find what the engine needs. Rank and merit are first guesses
 
 | Quest | Kind | Asks | Report to | Pays |
 | --- | --- | --- | --- | --- |
-| **Rats in the Drains** (Bone) | Claimed, a day | Kill 20 sewer rats, bring 10 rat tails | Marin | Coin, 10 merit |
+| **Rats in the Drains** (Bone) | Claimed, a day | Kill 20 sewer rats, bring 10 rat tails | Marin | Coin, 10 merit (*written*: 2 gold) |
 | **Herbs for the Herbalist** (Bone) | Open, always | Bring 5 herbs (any with the `herb` tag) | Narina Greenthorn | Coin, 2 merit |
-| **Roaches in the Cellar** (Bone) | Claimed, a day | Kill 6 giant cockroaches | Marin | Coin, 8 merit |
+| **Roaches in the Cellar** (Bone) | Claimed, a day | Kill 6 giant cockroaches | Marin | Coin, 8 merit (*written*: 1 gold 6 silver) |
 | **The Rat King** (Copper) | Claimed, two days; posted only while the rats have broken out | Kill the Rat King, bring his tooth | Marin | Coin, 25 merit, a title |
 | **What Feeds the Slimes** (Copper) | Claimed, two days | Kill the Slime Lord, bring the heart of the deep | Marin | Coin, 25 merit |
 | **Word to the Hunter** (Bone) | Claimed, a day | Carry a letter to the hunter in the woods (handed over on taking it) | The hunter | Coin, 5 merit |
@@ -433,7 +433,7 @@ In the smallest pull requests that each leave the game working, every one with i
 10. *Built.* **The board:** `board` and `board <n>` in the Contract Hall, read-only: what's posted, at your rank and one above.
 11. *Built.* **Taking a quest:** `accept <n>` with Marin, the `character_quests` table, Marin's record (`guild record`: accepted, completed, failed), and `journal`. Open quests only; nothing counts yet.
 12. *Built.* **Rules and `Kill`:** objectives as rules over `quest.` facts, `Kill` by template and tag, progress in the journal, and moving from stage to stage. The killer's kills count; the rest of their group's come with step 15.
-13. **`report` and rewards:** coin, merit and `Set`, paid to whoever the quest is reported to. *Rats in the Drains* can be done start to finish. Plus `Bring`, so it asks for the tails. Adds *Roaches in the Cellar*.
+13. *Built.* **`report` and rewards:** coin, merit and `Set`, paid to whoever the quest is reported to. *Rats in the Drains* can be done start to finish. Plus `Bring`, so it asks for the tails. Adds *Roaches in the Cellar*. Until claims (14), a claimed quest is taken like an open one: anyone may hold it, with no deadline.
 14. **Claimed quests:** `quest_claims`, off the board while held, deadlines run out and fail on their own (across restarts), `abandon`, and what failing costs.
 15. **Progress in a group:** offering to the group, one claim and timer, and the progress of every holder in the room moving together.
 16. **`report_to`, `Obtain`, and items given on taking a quest:** adds *Herbs for the Herbalist* and *Word to the Hunter*.

@@ -1,0 +1,17 @@
+// Roaches in the Cellar: the guild's own stores, under threat from below.
+(
+    name: "Roaches in the Cellar",
+    summary: "Something from the sewers is eating the guild's stores.",
+    description: "Sacks in the guild cellar have been chewed through, and the cook swears she saw cockroaches as long as her hand squeezing up past the hatch. Go down into the sewers and kill six of the giant cockroaches before they eat the guild out of house and home.",
+    posted: Board("contract_hall"),
+    contract: Some((rank: "bone", merit: 8)),
+    availability: Claimed(for: Days(1)),
+    repeat: Every(Days(1)),
+    stages: [
+        (
+            text: "Kill six giant cockroaches in the sewers.",
+            objectives: [Kill(Mob("sewers:giant_cockroach"), 6)],
+        ),
+    ],
+    rewards: [Coin(160)],
+)

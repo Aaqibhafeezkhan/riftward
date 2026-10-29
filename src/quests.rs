@@ -11,6 +11,7 @@ use std::path::Path;
 
 use bevy::asset::io::Reader;
 use bevy::asset::{AssetLoader, LoadContext, LoadedFolder};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -21,7 +22,7 @@ use crate::db::{Database, QuestRecord};
 use crate::events::GameEvent;
 use crate::facts::{Facts, Owner};
 use crate::guild::{Membership, guild};
-use crate::items::ItemTemplates;
+use crate::items::{ItemLocation, ItemTemplates};
 use crate::mobs::MobTemplates;
 use crate::money;
 use crate::output::{Actor, Characters, Outbox, Outgoing, RoomQuery, deliver};
@@ -56,6 +57,12 @@ impl Plugin for QuestsPlugin {
                     .usage("accept <n>")
                     .summary("take a notice from the board, with the guild's clerk here"),
                 accept,
+            )
+            .add_command(
+                CommandSpec::new("report", Category::Interaction)
+                    .usage("report [<quest>]")
+                    .summary("report a finished quest to whoever it's for, here, and be paid"),
+                report,
             )
             .add_command(
                 CommandSpec::new("journal", Category::Character)
@@ -198,6 +205,9 @@ pub enum Reward {
     Coin(u64),
     /// One of this item: `Item("healing_draught")`. Say it twice for two.
     Item(String),
+    /// A fact about the character or the world, for others to test: `Set("char.title.
+    /// rat_catcher", true)`, `Set("world.drains_cleared", true)`.
+    Set(String, crate::facts::Value),
 }
 
 impl QuestDef {
@@ -239,6 +249,13 @@ impl QuestDef {
         {
             return Err("can't wait for a death; give it minutes, hours or days".into());
         }
+        for reward in &self.rewards {
+            if let Reward::Set(key, _) = reward
+                && !(key.starts_with("char.") || key.starts_with("world."))
+            {
+                return Err(format!("sets {key}: a reward sets char. or world. facts"));
+            }
+        }
         if let Some(contract) = &self.contract
             && !crate::guild::guild()
                 .ranks
@@ -272,7 +289,7 @@ impl QuestDef {
             .items
             .extend(self.rewards.iter().filter_map(|reward| match reward {
                 Reward::Item(id) => Some(full(id)),
-                Reward::Coin(_) => None,
+                Reward::Coin(_) | Reward::Set(..) => None,
             }));
         for objective in self.stages.iter().flat_map(|s| &s.objectives) {
             match objective {
@@ -320,7 +337,7 @@ impl QuestDef {
             .iter()
             .map(|reward| match reward {
                 Reward::Coin(copper) => *copper,
-                Reward::Item(_) => 0,
+                Reward::Item(_) | Reward::Set(..) => 0,
             })
             .sum();
         let mut pays: Vec<String> = (copper > 0)
@@ -335,7 +352,8 @@ impl QuestDef {
                         .get(&ItemKey::parse(id, self.zone()))
                         .map_or_else(|| id.clone(), |def| def.name.clone()),
                 ),
-                Reward::Coin(_) => None,
+                // What a quest sets is for the world to notice, not the notice to say.
+                Reward::Coin(_) | Reward::Set(..) => None,
             }
         }));
         pays.extend(self.contract.as_ref().map(|c| format!("{} merit", c.merit)));
@@ -471,8 +489,8 @@ fn refusal(quest: &QuestDef, log: &QuestLog, now: i64) -> Option<String> {
 }
 
 /// `accept <n>`: take notice `n` from the board here, in front of the guild's clerk, who writes
-/// a contract into the guild's record. Only open quests for now: one held by one member at a
-/// time waits on claims.
+/// a contract into the guild's record. A claimed quest is taken like an open one until claims
+/// are built: anyone may hold it, with no deadline.
 #[allow(clippy::too_many_arguments)]
 fn accept(
     In(inv): In<Invocation>,
@@ -516,12 +534,6 @@ fn accept(
             .ok_or("There's no one here to take it to.")?;
         if quest.contract.is_some() && member.is_none() {
             return Err("Only guild members can take contracts ('join guild').".into());
-        }
-        if matches!(quest.availability, Availability::Claimed { .. }) {
-            return Err(format!(
-                "{} is held by one member at a time, and {clerk} isn't handing those out yet.",
-                quest.name
-            ));
         }
         let log = logs.get(actor.entity).ok();
         if let Some(refused) = log.and_then(|log| refusal(quest, log, now)) {
@@ -799,6 +811,265 @@ fn count_kills(
     deliver(out, &mut outbox);
 }
 
+/// What's still wanted before `record` can be reported: Err with each thing missing, in the
+/// journal's words; or Ok with the items it takes from `carried`, `Bring`'s due.
+fn readiness(
+    quest: &QuestDef,
+    record: &QuestRecord,
+    character_id: i64,
+    carried: &[(Entity, ItemKey, Vec<String>)],
+    lookup: &Lookup,
+) -> Result<Vec<Entity>, Vec<String>> {
+    let Some(n) = stage_number(record) else {
+        return Err(vec!["its place in it is lost".into()]);
+    };
+    let Some(stage) = quest.stages.get(n - 1) else {
+        return Err(vec!["its place in it is lost".into()]);
+    };
+    if n < quest.stages.len() {
+        return Err(vec![stage.text.clone()]);
+    }
+    let owner = Owner::Quest(character_id, quest.id.clone());
+    let zone = quest.zone();
+    let (mut missing, mut taken) = (Vec::new(), Vec::new());
+    for objective in &stage.objectives {
+        match objective {
+            Objective::Kill(_, need) => {
+                let key = objective.key(n, zone);
+                let have = key.map(|key| lookup.story.number(&owner, &key, lookup.now));
+                if have.unwrap_or(0) < i64::from(*need) {
+                    missing.push(objective.progress(zone, have, lookup));
+                }
+            }
+            Objective::Bring(which, need) => {
+                let found: Vec<Entity> = carried
+                    .iter()
+                    .filter(|(entity, key, tags)| {
+                        !taken.contains(entity)
+                            && match which {
+                                ItemMatch::Item(id) => ItemKey::parse(id, zone) == *key,
+                                ItemMatch::Tag(tag) => tags.contains(tag),
+                            }
+                    })
+                    .map(|(entity, ..)| *entity)
+                    .take(*need as usize)
+                    .collect();
+                if found.len() < *need as usize {
+                    let what = objective.what(zone, lookup);
+                    missing.push(format!("Bring {what}: {} of {need}", found.len()));
+                }
+                taken.extend(found);
+            }
+        }
+    }
+    if missing.is_empty() {
+        Ok(taken)
+    } else {
+        Err(missing)
+    }
+}
+
+/// What `report` reads and changes.
+#[derive(SystemParam)]
+struct Desk<'w, 's> {
+    commands: Commands<'w, 's>,
+    players: Characters<'w, 's>,
+    mobs: crate::mobs::MobQuery<'w, 's>,
+    logs: Query<'w, 's, &'static mut QuestLog>,
+    memberships: Query<'w, 's, &'static mut Membership>,
+    purses: Query<'w, 's, &'static mut crate::money::Purse>,
+    items: crate::items::ItemQuery<'w, 's>,
+    item_templates: Res<'w, ItemTemplates>,
+    mob_templates: Res<'w, MobTemplates>,
+    rooms: RoomQuery<'w, 's>,
+    quests: Res<'w, Quests>,
+    story: ResMut<'w, Facts>,
+    db: Res<'w, Database>,
+    outbox: ResMut<'w, Outbox>,
+}
+
+/// `report [<quest>]`: report the quests you hold to whoever here they're for (a quest's
+/// `report_to`, or the guild's clerk). One that's done hands over what it asks to be brought and
+/// pays: coin, items, a contract's merit, and the facts it sets. One that isn't says what's left.
+fn report(In(inv): In<Invocation>, mut d: Desk) {
+    let Some(actor) = Actor::get(&d.players, inv.entity) else {
+        return;
+    };
+    let Some(character_id) = actor.character_id else {
+        return;
+    };
+    let now = unix_now();
+    let here: Vec<(MobKey, String)> = d
+        .mobs
+        .iter()
+        .filter(|(_, _, at)| at.0 == actor.room)
+        .map(|(_, mob, _)| (mob.key.clone(), crate::combat::the(&mob.name)))
+        .collect();
+    let wanted = inv.args.trim().to_lowercase();
+    let Ok(log) = d.logs.get(actor.entity) else {
+        return;
+    };
+    // The quests held that are reported to someone here, with whom.
+    let due: Vec<(QuestRecord, String)> = log
+        .0
+        .iter()
+        .filter(|r| r.state == HELD)
+        .filter_map(|r| {
+            let quest = d.quests.0.get(&r.quest)?;
+            let to = match &quest.report_to {
+                Some(mob) => MobKey::parse(mob, quest.zone()),
+                None => MobKey::parse(&guild().clerk, ""),
+            };
+            let (_, name) = here.iter().find(|(key, _)| *key == to)?;
+            (wanted.is_empty() || quest.name.to_lowercase().contains(&wanted))
+                .then(|| (r.clone(), name.clone()))
+        })
+        .collect();
+    let mut lines = Vec::new();
+    let mut out = Vec::new();
+    if due.is_empty() {
+        lines.push(if wanted.is_empty() {
+            "You have nothing to report to anyone here.".to_string()
+        } else {
+            format!(
+                "You have no quest like '{}' to report here.",
+                inv.args.trim()
+            )
+        });
+    }
+    let mut carried = crate::items::carried_items(actor.entity, &d.items, &d.item_templates);
+    let mut held = crate::items::hands_full(actor.entity, &d.items);
+    for (mut record, to) in due {
+        let Some(quest) = d.quests.0.get(&record.quest) else {
+            continue;
+        };
+        let lookup = Lookup {
+            quests: &d.quests,
+            story: &d.story,
+            mobs: &d.mob_templates,
+            items: &d.item_templates,
+            now,
+        };
+        let taken = match readiness(quest, &record, character_id, &carried, &lookup) {
+            Ok(taken) => taken,
+            Err(missing) => {
+                lines.push(format!(
+                    "{}: not done yet. {}.",
+                    quest.name,
+                    missing.join("; ")
+                ));
+                continue;
+            }
+        };
+        let quest = quest.clone();
+        let to = crate::items::capitalized(&to);
+        lines.push(format!("You report to {to}: {} is done.", quest.name));
+        out.push(Outgoing::Room {
+            room: actor.room,
+            except: actor.entity,
+            text: format!("{} reports to {to}.\r\n", actor.name),
+        });
+
+        // What it asked to be brought, handed over.
+        let mut handed: Vec<(String, usize)> = Vec::new();
+        for entity in &taken {
+            let Ok((_, item, _)) = d.items.get(*entity) else {
+                continue;
+            };
+            match handed.iter_mut().find(|(name, _)| *name == item.name) {
+                Some((_, n)) => *n += 1,
+                None => handed.push((item.name.clone(), 1)),
+            }
+            // Out of their hands, it leaves one free for what they're given.
+            if matches!(d.items.get(*entity), Ok((_, _, ItemLocation::Held(who))) if *who == actor.entity)
+            {
+                held = held.saturating_sub(1);
+            }
+            crate::healing::used_up(&mut d.commands, &d.db, *entity, item);
+        }
+        carried.retain(|(entity, ..)| !taken.contains(entity));
+        if !handed.is_empty() {
+            let shown: Vec<String> = handed
+                .iter()
+                .map(|(name, n)| match n {
+                    1 => name.clone(),
+                    n => format!("{name} (x{n})"),
+                })
+                .collect();
+            lines.push(format!("You hand over {}.", shown.join(", ")));
+        }
+
+        // What it pays.
+        let copper: u64 = quest
+            .rewards
+            .iter()
+            .map(|reward| match reward {
+                Reward::Coin(copper) => *copper,
+                _ => 0,
+            })
+            .sum();
+        if copper > 0
+            && let Ok(mut purse) = d.purses.get_mut(actor.entity)
+        {
+            purse.0 += copper;
+            purse.save(Some(character_id), &d.db);
+            lines.push(format!("You're paid {}.", money::coins(copper)));
+        }
+        for reward in &quest.rewards {
+            match reward {
+                Reward::Item(id) => {
+                    let given = crate::items::hand_new(
+                        &actor,
+                        ItemKey::parse(id, quest.zone()),
+                        &mut held,
+                        &mut d.commands,
+                        &d.item_templates,
+                        &d.rooms,
+                        &d.db,
+                    );
+                    lines.push(format!("You're given {given}."));
+                }
+                Reward::Set(key, value) => {
+                    let (owner, key) = match key.split_once('.') {
+                        Some(("char", rest)) => (Owner::Character(character_id), rest),
+                        Some(("world", rest)) => (Owner::World, rest),
+                        _ => continue,
+                    };
+                    d.story.set(&owner, key, value.clone(), None, &d.db);
+                }
+                Reward::Coin(_) => {}
+            }
+        }
+        if let Some(contract) = &quest.contract {
+            if let Ok(mut m) = d.memberships.get_mut(actor.entity)
+                && !m.expelled
+            {
+                m.contracts += 1;
+                let promoted = m.earn(contract.merit);
+                m.save(Some(character_id), &d.db);
+                lines.push(format!("You earn {} merit.", contract.merit));
+                lines.extend(promoted);
+            }
+            if let Err(err) =
+                d.db.add_guild_record(character_id, &quest.id, "completed", now)
+            {
+                error!(
+                    "failed to write {} into the guild's record: {err}",
+                    quest.id
+                );
+            }
+        }
+
+        record.state = DONE.into();
+        record.finished_at = Some(now);
+        if let Ok(mut log) = d.logs.get_mut(actor.entity) {
+            log.put(record, character_id, &d.db);
+        }
+    }
+    out.insert(0, Outgoing::line(actor.entity, lines.join("\r\n")));
+    deliver(out, &mut d.outbox);
+}
+
 /// Whether every objective on stage `n` is counted as it happens, and done.
 fn stage_done(
     stage: &Stage,
@@ -867,19 +1138,32 @@ impl Objective {
         }
     }
 
+    /// What it's after, as the journal names it: "sewer rat", "anything vermin".
+    fn what(&self, zone: &str, lookup: &Lookup) -> String {
+        match self {
+            Objective::Kill(MobMatch::Mob(id), _) => lookup
+                .mobs
+                .0
+                .get(&MobKey::parse(id, zone))
+                .map_or(id.as_str(), |def| without_article(&def.name))
+                .to_string(),
+            Objective::Bring(ItemMatch::Item(id), _) => lookup
+                .items
+                .0
+                .get(&ItemKey::parse(id, zone))
+                .map_or(id.as_str(), |def| without_article(&def.name))
+                .to_string(),
+            Objective::Kill(MobMatch::Tag(tag), _) | Objective::Bring(ItemMatch::Tag(tag), _) => {
+                format!("anything {tag}")
+            }
+        }
+    }
+
     /// How the journal shows it: what, and how far along (`have`, if it's counted).
     fn progress(&self, zone: &str, have: Option<i64>, lookup: &Lookup) -> String {
+        let what = self.what(zone, lookup);
         match self {
-            Objective::Kill(which, need) => {
-                let what = match which {
-                    MobMatch::Mob(id) => lookup
-                        .mobs
-                        .0
-                        .get(&MobKey::parse(id, zone))
-                        .map_or(id.as_str(), |def| without_article(&def.name))
-                        .to_string(),
-                    MobMatch::Tag(tag) => format!("anything {tag}"),
-                };
+            Objective::Kill(_, need) => {
                 let have = have.unwrap_or(0).min(i64::from(*need));
                 let done = if have >= i64::from(*need) {
                     " (done)"
@@ -888,18 +1172,7 @@ impl Objective {
                 };
                 format!("Kill {what}: {have} of {need}{done}")
             }
-            Objective::Bring(which, need) => {
-                let what = match which {
-                    ItemMatch::Item(id) => lookup
-                        .items
-                        .0
-                        .get(&ItemKey::parse(id, zone))
-                        .map_or(id.as_str(), |def| without_article(&def.name))
-                        .to_string(),
-                    ItemMatch::Tag(tag) => format!("anything {tag}"),
-                };
-                format!("Bring {what}: {need}, counted when you report")
-            }
+            Objective::Bring(_, need) => format!("Bring {what}: {need}, counted when you report"),
         }
     }
 
@@ -1373,6 +1646,94 @@ mod tests {
             said.iter()
                 .any(|t| t.contains("that's all it asks. Report to"))
         );
+    }
+
+    #[test]
+    fn a_quest_is_ready_to_report_when_all_it_asks_is_done() {
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let id = db.create_character(account.id, "Ada").unwrap().id;
+        let quest = QuestDef {
+            stages: vec![
+                Stage {
+                    text: "Find the nest.".into(),
+                    objectives: vec![Objective::Kill(MobMatch::Mob("rat".into()), 1)],
+                },
+                Stage {
+                    text: "Clear it.".into(),
+                    objectives: vec![
+                        Objective::Kill(MobMatch::Mob("rat".into()), 2),
+                        Objective::Bring(ItemMatch::Item("sewers:rat_tail".into()), 2),
+                        Objective::Bring(ItemMatch::Tag("herb".into()), 1),
+                    ],
+                },
+            ],
+            ..rats()
+        };
+        let mut story = Facts::default();
+        let (mobs, items) = (MobTemplates::default(), ItemTemplates::default());
+        let record = |stage: &str| QuestRecord {
+            quest: quest.id.clone(),
+            state: HELD.into(),
+            stage: stage.into(),
+            taken_at: 0,
+            due_at: None,
+            finished_at: None,
+        };
+        let mut world = World::new();
+        let (tail, tail2, yarrow, knife) = (
+            world.spawn_empty().id(),
+            world.spawn_empty().id(),
+            world.spawn_empty().id(),
+            world.spawn_empty().id(),
+        );
+        let tail_key = ItemKey::parse("sewers:rat_tail", "");
+        let carried = vec![
+            (knife, ItemKey::parse("riftwatch:knife", ""), Vec::new()),
+            (tail, tail_key.clone(), vec!["trophy".to_string()]),
+            (
+                yarrow,
+                ItemKey::parse("forest:yarrow", ""),
+                vec!["herb".into()],
+            ),
+        ];
+        let ready = |record: &QuestRecord, story: &Facts, carried: &[_]| {
+            let lookup = Lookup {
+                quests: &Quests::default(),
+                story,
+                mobs: &mobs,
+                items: &items,
+                now: 0,
+            };
+            readiness(&quest, record, id, carried, &lookup)
+        };
+        assert_eq!(
+            ready(&record("1"), &story, &carried),
+            Err(vec!["Find the nest.".to_string()]),
+            "not on the last stage"
+        );
+        assert_eq!(
+            ready(&record("2"), &story, &carried),
+            Err(vec![
+                "Kill rat: 0 of 2".to_string(),
+                "Bring sewers:rat_tail: 1 of 2".to_string()
+            ])
+        );
+        let owner = Owner::Quest(id, quest.id.clone());
+        story.set(
+            &owner,
+            "2.kill.riftwatch:rat",
+            crate::facts::Value::Int(2),
+            None,
+            &db,
+        );
+        let mut carried = carried;
+        carried.push((tail2, tail_key, Vec::new()));
+        let mut taken = ready(&record("2"), &story, &carried).unwrap();
+        taken.sort();
+        let mut wanted = vec![tail, tail2, yarrow];
+        wanted.sort();
+        assert_eq!(taken, wanted, "the tails and the herb, not the knife");
     }
 
     #[test]

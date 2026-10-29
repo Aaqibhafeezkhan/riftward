@@ -502,6 +502,18 @@ pub fn carried(
     items: &ItemQuery,
     templates: &ItemTemplates,
 ) -> Vec<(ItemKey, Vec<String>)> {
+    carried_items(who, items, templates)
+        .into_iter()
+        .map(|(_, key, tags)| (key, tags))
+        .collect()
+}
+
+/// `carried`, with each item's entity: what to take when something is handed over.
+pub fn carried_items(
+    who: Entity,
+    items: &ItemQuery,
+    templates: &ItemTemplates,
+) -> Vec<(Entity, ItemKey, Vec<String>)> {
     let on_them = |mut entity: Entity| {
         for _ in 0..32 {
             match items.get(entity).map(|(_, _, location)| *location) {
@@ -515,15 +527,70 @@ pub fn carried(
     items
         .iter()
         .filter(|(entity, ..)| on_them(*entity))
-        .map(|(_, item, _)| {
+        .map(|(entity, item, _)| {
             let tags = templates
                 .0
                 .get(&item.key)
                 .map(|def| def.tags.clone())
                 .unwrap_or_default();
-            (item.key.clone(), tags)
+            (entity, item.key.clone(), tags)
         })
         .collect()
+}
+
+/// Hand `actor` a new item of template `key`: into a free hand, or at their feet if `held` (how
+/// many hands are full, counted on as it fills them) says there's none. Real at once, as
+/// anything a player is given is. What they're told they got: its name, and where if not in hand.
+pub fn hand_new(
+    actor: &Actor,
+    key: ItemKey,
+    held: &mut usize,
+    commands: &mut Commands,
+    templates: &ItemTemplates,
+    rooms: &RoomQuery,
+    db: &Database,
+) -> String {
+    let (location, place, at_feet) = if *held < HANDS {
+        *held += 1;
+        (
+            ItemLocation::Held(actor.entity),
+            actor.character_id.map(ItemPlace::Held),
+            false,
+        )
+    } else {
+        let room = rooms
+            .get(actor.room)
+            .map(|(_, key, _)| key.to_string())
+            .unwrap_or_default();
+        (
+            ItemLocation::Room(actor.room),
+            Some(ItemPlace::Room(room)),
+            true,
+        )
+    };
+    let id = place.and_then(|place| {
+        db.create_item(&key.to_string(), &place, Quality::Standard)
+            .map_err(|err| error!("failed to save a new item [{key}]: {err}"))
+            .ok()
+    });
+    let name = templates
+        .0
+        .get(&key)
+        .map_or_else(|| key.to_string(), |d| d.name.clone());
+    spawn_item(commands, templates, key, id, location, Quality::Standard);
+    if at_feet {
+        format!("{name}, set down at your feet since your hands are full")
+    } else {
+        name
+    }
+}
+
+/// How many of `who`'s hands are full.
+pub fn hands_full(who: Entity, items: &ItemQuery) -> usize {
+    items
+        .iter()
+        .filter(|(_, _, l)| **l == ItemLocation::Held(who))
+        .count()
 }
 
 /// One item, as the rules see it.
