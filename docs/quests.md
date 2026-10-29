@@ -251,7 +251,7 @@ Collection (kill so many, bring so many) is the simplest kind, and the first con
 | `Give(item, to: mob)` | You give someone an item (`give` exists) |
 | `Examine(thing)` | You look closely at an item or a room's feature |
 | `Search(room)` | You search the room (`search` exists), finding what the quest has put there |
-| `Escort(mob, to: room)` | A mob following you reaches the room alive |
+| `Escort(mob, to: room)` | A mob following you reaches the room alive (*built*, 2026-10-28, written `Escort(mob: "herbalist", to: "forest:ravine")`: a holder in the game on that stage finds the mob, which falls in behind them and follows as anyone follows a leader; its walking into the room counts for every holder of the group there; once it isn't wanted (done, failed, given up, its holder gone) it stops following and heads home. An escort's death fails the quest with `fails_if: [Dies(...)]`.) |
 | `Last(minutes)` | You hold out for so long: in a defence, while a world event runs |
 
 #### Dialogue
@@ -327,7 +327,7 @@ The `sold` ending pays no merit and sets a flag the guild can learn of later (a 
 | `ask <mob> about <topic>` | Yes (2026-10-28): answers from quest stages' topics |
 | Events for asking, giving, examining and searching | `give`, `examine` and `search` exist; none writes a game event yet |
 | Quest mobs: spawned for a quest, tagged to it, cleared when it ends | Built (2026-10-28) |
-| Escort: a mob following the holder | Following is built; mobs following a player on a quest's say-so is new |
+| Escort: a mob following the holder | Built (2026-10-28) |
 | `Quest(id)` and character flags in the requirement language | Conditions exist; neither term does yet |
 | Failing on a death or a lost item | Yes (2026-10-28): `fails_if` |
 
@@ -447,7 +447,7 @@ In the smallest pull requests that each leave the game working, every one with i
 21. *Built.* **Choices and endings,** each with its own rewards and journal line.
 22. *Built.* **Quest mobs:** `Spawn` for a quest, tied to it, counted by `Kill(Quest(...))`, cleared when it ends. *Crystals Gone Missing* can be written in full. (It is, in `assets/quests/riftwatch/crystals_gone_missing.quest.ron`: both ways `Bring` the crystals, one reported to Marin and the other, by the way's own `report_to`, to the hooded figure, since giving to a mob waits on [#55](https://github.com/Foxworks-Studios/riftward/issues/55).)
 23. *Built.* **`fails_if`:** a death, a lost item.
-24. **Escort:** a mob following the holder on the quest's say-so, `Escort(mob, to: room)`. *Narina's Secret*.
+24. *Built.* **Escort:** a mob following the holder on the quest's say-so, `Escort(mob, to: room)`. *Narina's Secret* waits on the Rift-Scar, which isn't built yet (it's beyond the deep wood in [the Darkwood](darkwood.md)): it's written once that exists (decided 2026-10-28).
 25. **GM quest tools:** `quest grant`, `advance`, `reward`, `release`; writing quests in game (`quest create`, `quest edit`) last.
 
 Meat for the Kitchen waits on harvesting; it can be written with step 13 and works once Butchering exists.

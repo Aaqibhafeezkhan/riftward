@@ -5,6 +5,7 @@ use bevy::prelude::*;
 
 use super::actions::{Holder, Stagehand};
 use super::def::{Lead, MobMatch, Objective, QuestDef, Quests, chose_key};
+use super::escort::Escort;
 use super::journal::{HELD, QuestLog};
 use super::spawned::QuestMobs;
 use crate::db::{Database, QuestRecord};
@@ -41,6 +42,12 @@ pub(super) enum Deed<'a> {
         topic: &'a str,
         name: &'a str,
     },
+    /// A mob they're escorting walked into a room.
+    Escorted {
+        mob: &'a MobKey,
+        room: &'a RoomKey,
+        name: &'a str,
+    },
 }
 
 impl Deed<'_> {
@@ -69,6 +76,9 @@ impl Deed<'_> {
             (Deed::Reached { room, .. }, Objective::Reach(id)) => {
                 RoomKey::parse(id, zone) == **room
             }
+            (Deed::Escorted { mob, room, .. }, Objective::Escort { mob: id, to }) => {
+                MobKey::parse(id, zone) == **mob && RoomKey::parse(to, zone) == **room
+            }
             (Deed::Asked { mob, topic, .. }, Objective::Ask(id, about)) => {
                 MobKey::parse(id, zone) == **mob && about.eq_ignore_ascii_case(topic)
             }
@@ -82,12 +92,18 @@ impl Deed<'_> {
             Deed::Killed { name, .. } => format!("{} killed", without_article(name)),
             Deed::Obtained { name, .. } => format!("{} found", without_article(name)),
             Deed::Reached { name, .. } => format!("{name} reached"),
+            Deed::Escorted { name, .. } => format!("{} brought safely", crate::combat::the(name)),
             Deed::Asked { name, topic, .. } => {
                 format!("{} asked about {topic}", crate::combat::the(name))
             }
         }
     }
 }
+
+/// Rooms, by their keys and names.
+type Places<'w, 's> = Query<'w, 's, (&'static Room, &'static RoomKey)>;
+/// Mobs escorting someone.
+type Escorts<'w, 's> = Query<'w, 's, (&'static Escort, &'static crate::mobs::Mob)>;
 
 /// What holders do counts for the quests they hold, for them and every member of their group in
 /// the room who holds the same quest: a kill (by whoever struck it), an item come by (picked
@@ -103,7 +119,7 @@ pub(super) fn count_progress(
     quests: Res<Quests>,
     mut hand: Stagehand,
     (mobs, items): (Res<MobTemplates>, Res<ItemTemplates>),
-    places: Query<(&Room, &RoomKey)>,
+    (places, escorts): (Places, Escorts),
     mut outbox: ResMut<Outbox>,
 ) {
     let now = unix_now();
@@ -125,6 +141,21 @@ pub(super) fn count_progress(
                     name,
                 },
             ),
+            // An escort walking in is its holder's deed.
+            GameEvent::Entered { who, room, .. } if escorts.get(*who).is_ok() => {
+                let (Ok((escort, mob)), Ok((_, key))) = (escorts.get(*who), places.get(*room))
+                else {
+                    continue;
+                };
+                (
+                    escort.holder,
+                    Deed::Escorted {
+                        mob: &mob.key,
+                        room: key,
+                        name: &mob.name,
+                    },
+                )
+            }
             GameEvent::Entered { who, room, .. } => {
                 let Ok((place, key)) = places.get(*room) else {
                     continue;
@@ -931,6 +962,113 @@ mod tests {
         assert_eq!(count(&world, bob_id), 0, "it didn't come for Bob");
         kill(&mut world, hers, ada);
         assert_eq!(count(&world, ada_id), 1, "hers");
+    }
+
+    #[test]
+    fn an_escort_walking_in_counts_for_its_holder() {
+        use crate::quests::escort::Escort;
+        use bevy::ecs::system::RunSystemOnce;
+        let db = crate::db::Database::open(":memory:").unwrap();
+        let account = db.create_account("ada", "password123").unwrap();
+        let id = db.create_character(account.id, "Ada").unwrap().id;
+        let mut world = World::new();
+        world.insert_resource(db);
+        world.init_resource::<Facts>();
+        world.init_resource::<Outbox>();
+        world.init_resource::<Messages<GameEvent>>();
+        stagehand(&mut world);
+        world.init_resource::<ItemTemplates>();
+        world.init_resource::<MobTemplates>();
+        let quest = QuestDef {
+            stages: vec![Stage {
+                text: "Take Narina to the ravine.".into(),
+                objectives: vec![Objective::Escort {
+                    mob: "herbalist".into(),
+                    to: "forest:ravine".into(),
+                }],
+                ..Default::default()
+            }],
+            ..rats()
+        };
+        world.insert_resource(Quests(HashMap::from([(quest.id.clone(), quest)])));
+        let place = |world: &mut World, id: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: id.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: false,
+                        terrain: Default::default(),
+                    },
+                    RoomKey::parse(id, ""),
+                ))
+                .id()
+        };
+        let (road, ravine) = (
+            place(&mut world, "forest:road"),
+            place(&mut world, "forest:ravine"),
+        );
+        let ada = world
+            .spawn((
+                InRoom(ravine),
+                Player {
+                    name: "Ada".into(),
+                    character_id: id,
+                    account: "ada".into(),
+                    role: crate::db::Role::Player,
+                    race: "human".into(),
+                    background: String::new(),
+                    description: String::new(),
+                },
+                QuestLog(vec![QuestRecord {
+                    quest: "riftwatch:rats".into(),
+                    state: HELD.into(),
+                    stage: "1".into(),
+                    taken_at: 0,
+                    due_at: None,
+                    finished_at: None,
+                }]),
+            ))
+            .id();
+        let narina = world
+            .spawn((
+                crate::mobs::Mob {
+                    key: MobKey::parse("riftwatch:herbalist", ""),
+                    name: "Narina Greenthorn".into(),
+                    here: String::new(),
+                    description: String::new(),
+                    race: None,
+                },
+                Escort {
+                    holder: ada,
+                    quest: "riftwatch:rats".into(),
+                    home: road,
+                },
+            ))
+            .id();
+        let walk = |world: &mut World, room: Entity| {
+            world.write_message(GameEvent::Entered {
+                who: narina,
+                name: "Narina Greenthorn".into(),
+                room,
+                way: crate::events::Way::Walked(None),
+                witnesses: None,
+            });
+            world.run_system_once(count_progress).unwrap();
+            world.resource_mut::<Messages<GameEvent>>().clear();
+        };
+        let count = |world: &World| {
+            world.resource::<Facts>().number(
+                &Owner::Quest(id, "riftwatch:rats".into()),
+                "1.escort.riftwatch:herbalist.forest:ravine",
+                0,
+            )
+        };
+        walk(&mut world, road);
+        assert_eq!(count(&world), 0, "not there yet");
+        walk(&mut world, ravine);
+        assert_eq!(count(&world), 1, "brought safely");
     }
 
     #[test]

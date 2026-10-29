@@ -247,6 +247,9 @@ pub enum Objective {
     /// Someone asked about something, of a topic the stage gives them: `Ask("contract_clerk",
     /// "crystals")`.
     Ask(String, String),
+    /// A mob of this template, following them on the quest's say-so, walks into the room:
+    /// `Escort(mob: "herbalist", to: "forest:ravine")`.
+    Escort { mob: String, to: String },
 }
 
 /// Which mobs: a template, any with a tag, or the one a quest spawned (`Quest("courier")`, by
@@ -468,6 +471,10 @@ impl QuestDef {
                 | Objective::Obtain(ItemMatch::Item(item), _) => names.items.push(full(item)),
                 Objective::Reach(room) => names.rooms.push(full(room)),
                 Objective::Ask(mob, _) => names.mobs.push(full(mob)),
+                Objective::Escort { mob, to } => {
+                    names.mobs.push(full(mob));
+                    names.rooms.push(full(to));
+                }
                 Objective::Kill(MobMatch::Tag(_), _)
                 | Objective::Bring(ItemMatch::Tag(_), _)
                 | Objective::Obtain(ItemMatch::Tag(_), _)
@@ -704,6 +711,11 @@ impl Objective {
                 MobKey::parse(mob, zone),
                 topic.to_lowercase()
             )),
+            Objective::Escort { mob, to } => Some(format!(
+                "{stage}.escort.{}.{}",
+                MobKey::parse(mob, zone),
+                RoomKey::parse(to, zone)
+            )),
             Objective::Bring(..) | Objective::Meet(_) => None,
         }
     }
@@ -732,6 +744,16 @@ impl Objective {
                 (lookup.places)(&key).unwrap_or_else(|| key.to_string())
             }
             Objective::Meet(requirement) => requirement.describe(&|id| id.to_string()),
+            Objective::Escort { mob, to } => {
+                let name = lookup
+                    .mobs
+                    .0
+                    .get(&MobKey::parse(mob, zone))
+                    .map_or_else(|| mob.clone(), |def| crate::combat::the(&def.name));
+                let to = RoomKey::parse(to, zone);
+                let place = (lookup.places)(&to).unwrap_or_else(|| to.to_string());
+                format!("{name} to {place}")
+            }
             Objective::Ask(mob, topic) => {
                 let name = lookup
                     .mobs
@@ -770,13 +792,20 @@ impl Objective {
                 0 => format!("Ask {what}"),
                 _ => format!("Ask {what} (done)"),
             },
+            Objective::Escort { .. } => match have.unwrap_or(0) {
+                0 => format!("Escort {what}"),
+                _ => format!("Escort {what} (done)"),
+            },
         }
     }
 
     pub(super) fn count(&self) -> u32 {
         match self {
             Objective::Kill(_, n) | Objective::Bring(_, n) | Objective::Obtain(_, n) => *n,
-            Objective::Reach(_) | Objective::Meet(_) | Objective::Ask(..) => 1,
+            Objective::Reach(_)
+            | Objective::Meet(_)
+            | Objective::Ask(..)
+            | Objective::Escort { .. } => 1,
         }
     }
 }

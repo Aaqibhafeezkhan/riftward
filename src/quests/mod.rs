@@ -10,6 +10,7 @@
 //! - `progress`: counting kills, and moving through stages.
 //! - `report`: `report`, and paying out.
 //! - `claims`: deadlines, and `abandon`.
+//! - `escort`: mobs following a holder on a quest's say-so.
 //! - `failures`: what a quest's `fails_if` fails it on.
 //! - `loot`: what a boss drops for those on its quest.
 //! - `ask`: asking mobs about the topics a quest gives them.
@@ -21,6 +22,7 @@ mod ask;
 mod board;
 mod claims;
 mod def;
+mod escort;
 mod failures;
 mod journal;
 mod loot;
@@ -37,6 +39,7 @@ use ask::ask;
 use board::{Offers, accept, board};
 use claims::{Claims, abandon, expire_claims, load_claims};
 use def::{QuestDef, QuestLoader, load_quests, sync_quests};
+use escort::{end_escorts, start_escorts};
 use failures::{fail_on_deaths, fail_on_losses, fail_pending};
 use journal::journal;
 use loot::{deaths, want_loot};
@@ -74,6 +77,7 @@ impl Plugin for QuestsPlugin {
                     expire_claims,
                     fail_on_losses,
                     clear_quest_mobs.after(count_progress),
+                    (end_escorts, start_escorts).chain().after(count_progress),
                 )
                     .run_if(crate::time::heartbeat()),
             )
