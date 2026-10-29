@@ -256,6 +256,11 @@ pub struct RoomDef {
     /// `Dark` is never lit but by what's brought in: caves, the deep wood.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub light: Option<crate::light::Light>,
+    /// Conditions the place itself has, for good: brambles that tear at whoever pushes through,
+    /// webs, a rift's hum. Their reactions answer whoever comes in (`Enters`) and everyone there
+    /// every so often (`Every`). `[(condition: "brambles", strength: 1)]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<BornWith>,
     /// What the ground is like, and so how tiring it is to walk into.
     #[serde(default, skip_serializing_if = "Terrain::is_paved")]
     pub terrain: Terrain,
@@ -1295,6 +1300,7 @@ impl ZoneDef {
             no_wander: false,
             indoors: false,
             light: None,
+            conditions: Vec::new(),
             terrain: Terrain::Paved,
             environment: Environment::Town,
             finds: None,
@@ -1431,6 +1437,25 @@ pub struct Room {
     /// The sky can't be seen from here.
     pub indoors: bool,
     pub terrain: Terrain,
+}
+
+/// The conditions a room has, by key and strength (`RoomDef::conditions`): brambles, webs, a
+/// rift's hum. Their reactions answer whoever is in it (`combat/triggers.rs`).
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct RoomConditions(pub Vec<(String, i32)>);
+
+impl RoomConditions {
+    /// A room's own conditions, if it has any.
+    pub fn of(def: &RoomDef) -> Option<Self> {
+        (!def.conditions.is_empty()).then(|| {
+            Self(
+                def.conditions
+                    .iter()
+                    .map(|c| (c.condition.clone(), c.strength))
+                    .collect(),
+            )
+        })
+    }
 }
 
 /// What can be found in a room, from its own finds or its zone's for its environment. Item ids
@@ -1705,6 +1730,10 @@ fn sync_world(
                         .insert(crate::light::RoomLight(light)),
                     None => commands.entity(entity).remove::<crate::light::RoomLight>(),
                 };
+                match RoomConditions::of(def) {
+                    Some(own) => commands.entity(entity).insert(own),
+                    None => commands.entity(entity).remove::<RoomConditions>(),
+                };
             }
             None => {
                 let entity = commands
@@ -1724,6 +1753,9 @@ fn sync_world(
                     commands
                         .entity(entity)
                         .insert(crate::light::RoomLight(light));
+                }
+                if let Some(own) = RoomConditions::of(def) {
+                    commands.entity(entity).insert(own);
                 }
                 index.0.insert(key.clone(), entity);
             }
@@ -2050,6 +2082,17 @@ mod tests {
                 }
             }
             // A mob's race must be one of the races.
+            // Each condition a room has is a real one.
+            for (room_id, room) in &zone.rooms {
+                for own in &room.conditions {
+                    if conditions.condition(&own.condition).is_none() {
+                        problems.push(format!(
+                            "room {}:{room_id}: no condition '{}'",
+                            zone.id, own.condition
+                        ));
+                    }
+                }
+            }
             for (mob_id, mob) in &zone.mobs {
                 if let Some(race) = &mob.race
                     && !races.contains(race)

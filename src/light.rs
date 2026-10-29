@@ -14,10 +14,11 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::combat::Modifier;
 use crate::combat::{ConditionDefs, Conditions, Lasts};
 use crate::items::{ItemLocation, ItemQuery, ItemTemplates};
 use crate::time::{GameTime, Phase};
-use crate::world::{InRoom, Room};
+use crate::world::{InRoom, Room, RoomConditions};
 
 /// The condition on someone who can't see for the dark.
 pub const IN_THE_DARK: &str = "in_the_dark";
@@ -107,6 +108,36 @@ fn room_of(mut entity: Entity, items: &ItemQuery, places: &Query<&InRoom>) -> Op
     None
 }
 
+/// Whether a room's own conditions (`RoomConditions`) have this modifier: `Lights`, `Darkens`.
+pub fn room_has(own: Option<&RoomConditions>, defs: &ConditionDefs, modifier: &Modifier) -> bool {
+    own.is_some_and(|own| {
+        own.0.iter().any(|(key, _)| {
+            defs.get(key)
+                .is_some_and(|def| def.modifiers.contains(modifier))
+        })
+    })
+}
+
+/// How dark a room is right now: `None` if lit, `Some(true)` if no light can pierce it (a room
+/// condition that `Darkens` it), `Some(false)` if it's only unlit, so a light someone brings in
+/// would do.
+pub fn darkness(
+    room: Entity,
+    info: &Room,
+    light: Option<&RoomLight>,
+    own: Option<&RoomConditions>,
+    defs: &ConditionDefs,
+    lit: &LitRooms,
+) -> Option<bool> {
+    if room_has(own, defs, &Modifier::Darkens) {
+        return Some(true);
+    }
+    let unlit = Light::of(info, light).needs_light(GameTime::now().phase())
+        && !lit.0.contains(&room)
+        && !room_has(own, defs, &Modifier::Lights);
+    unlit.then_some(false)
+}
+
 /// Whether `who` holds or carries something that gives light.
 pub fn carries_light(who: Entity, items: &ItemQuery, templates: &ItemTemplates) -> bool {
     crate::items::carried(who, items, templates)
@@ -118,14 +149,13 @@ pub fn carries_light(who: Entity, items: &ItemQuery, templates: &ItemTemplates) 
 /// else.
 fn darken(
     mut people: Query<(&InRoom, &mut Conditions)>,
-    rooms: Query<(&Room, Option<&RoomLight>)>,
+    rooms: Query<(&Room, Option<&RoomLight>, Option<&RoomConditions>)>,
     lit: Res<LitRooms>,
     defs: Res<ConditionDefs>,
 ) {
-    let phase = GameTime::now().phase();
     for (in_room, mut conditions) in &mut people {
-        let dark = rooms.get(in_room.0).is_ok_and(|(room, own)| {
-            Light::of(room, own).needs_light(phase) && !lit.0.contains(&in_room.0)
+        let dark = rooms.get(in_room.0).is_ok_and(|(room, light, own)| {
+            darkness(in_room.0, room, light, own, &defs, &lit).is_some()
         }) && !conditions.sees_in_dark(&defs);
         match (dark, conditions.has(IN_THE_DARK)) {
             (true, false) => {
@@ -213,5 +243,40 @@ mod tests {
         *world.get_mut::<ItemLocation>(lit).unwrap() = ItemLocation::Held(bearer);
         run(&mut world);
         assert!(dark(&world, walker));
+    }
+
+    #[test]
+    fn a_places_own_conditions_can_light_it_or_darken_it_past_any_light() {
+        let mut defs = crate::combat::defs_on_disk();
+        for (key, modifier) in [("glow", "Lights"), ("gloom", "Darkens")] {
+            let def = crate::world::ron_options()
+                .from_str(&format!(
+                    "(name: \"{key}\", description: \"\", modifiers: [{modifier}])"
+                ))
+                .unwrap();
+            defs.0.insert(key.into(), def);
+        }
+        let room = Entity::from_raw_u32(1).unwrap();
+        let cave = Room {
+            name: "A cave".into(),
+            description: String::new(),
+            no_wander: false,
+            indoors: true,
+            terrain: Terrain::Paved,
+        };
+        let dark = Some(&RoomLight(Light::Dark));
+        let own = |key: &str| RoomConditions(vec![(key.to_string(), 1)]);
+        let none = LitRooms::default();
+        let torchlit = LitRooms(HashSet::from([room]));
+        assert_eq!(darkness(room, &cave, dark, None, &defs, &none), Some(false));
+        assert_eq!(darkness(room, &cave, dark, None, &defs, &torchlit), None);
+        let glow = own("glow");
+        assert_eq!(darkness(room, &cave, dark, Some(&glow), &defs, &none), None);
+        let gloom = own("gloom");
+        assert_eq!(
+            darkness(room, &cave, dark, Some(&gloom), &defs, &torchlit),
+            Some(true),
+            "no torch pierces it"
+        );
     }
 }

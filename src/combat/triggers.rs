@@ -6,7 +6,8 @@
 //!
 //! Systems that make something happen write a `GameEvent`; `triggers` turns the events into the
 //! reactions they set off, and `react` resolves them as a round of fighting would, out of a fight
-//! or in one.
+//! or in one. A room's own conditions (`RoomConditions`) react too, to whoever comes in and,
+//! every so often, to everyone there: the brambles, a web, a rift's hum.
 
 use std::collections::{HashMap, HashSet};
 
@@ -28,19 +29,21 @@ use crate::output::Outbox;
 use crate::skills::SkillDefs;
 use crate::spells::SpellDefs;
 use crate::vitals::Resting;
-use crate::world::InRoom;
+use crate::world::{InRoom, RoomConditions};
 
 /// How often the heartbeat looks for reactions that come round every so often, in real seconds.
 const EVERY_CHECK_SECS: f64 = 1.0;
 
 /// A reaction waiting to be set off: `bearer`'s, at `other`, or for a condition's own (taking
-/// hold, running out), that condition's at the strength it had.
+/// hold, running out), that condition's at the strength it had, or a room's conditions' on
+/// `bearer`, who is in it.
 #[derive(Message, Clone, Debug)]
 pub struct Trigger {
     pub bearer: Entity,
     pub other: Entity,
     pub when: When,
     pub condition: Option<(String, i32)>,
+    pub room: Option<Entity>,
 }
 
 impl Trigger {
@@ -50,6 +53,7 @@ impl Trigger {
             other,
             when,
             condition: None,
+            room: None,
         }
     }
 }
@@ -62,6 +66,7 @@ pub(super) fn triggers(
     mut events: MessageReader<GameEvent>,
     mut triggers: MessageWriter<Trigger>,
     present: Present,
+    rooms: Query<(), With<RoomConditions>>,
 ) {
     for event in events.read() {
         match event {
@@ -72,6 +77,13 @@ pub(super) fn triggers(
                 ..
             } => {
                 triggers.write(Trigger::new(*who, *who, When::Enters));
+                // And the place itself, if it has conditions of its own.
+                if rooms.contains(*room) {
+                    triggers.write(Trigger {
+                        room: Some(*room),
+                        ..Trigger::new(*who, *who, When::Enters)
+                    });
+                }
                 // Those already there who see them come: not someone sneaking past unnoticed.
                 for (bearer, at) in &present {
                     let saw = witnesses.as_ref().is_none_or(|w| w.contains(&bearer));
@@ -134,6 +146,7 @@ pub(super) struct Reacting<'w, 's> {
     resting: Query<'w, 's, Entity, With<Resting>>,
     time: Res<'w, Time>,
     item_conditions: Query<'w, 's, (Entity, &'static mut ItemConditions)>,
+    rooms: Query<'w, 's, (Entity, &'static RoomConditions)>,
 }
 
 /// Set off the reactions waiting, and on the heartbeat those that come round every so often.
@@ -149,6 +162,13 @@ pub(super) fn react(
     if now - last >= EVERY_CHECK_SECS {
         *checked = Some(now);
         pending.extend(every(&p.fighters, &p.conditions, &p.defs, last, now));
+        pending.extend(every_in_rooms(
+            &p.fighters,
+            &p.rooms,
+            &p.conditions,
+            last,
+            now,
+        ));
     }
     if pending.is_empty() {
         return;
@@ -193,9 +213,15 @@ pub(super) fn react(
     };
     let mut fallen = Vec::new();
     for t in pending {
-        let died = match &t.condition {
-            Some((key, strength)) => round.react_as(t.bearer, t.other, (key, *strength), t.when),
-            None => round.react(t.bearer, t.other, t.when),
+        let died = match (&t.condition, t.room) {
+            (_, Some(room)) => match p.rooms.get(room) {
+                Ok((_, own)) => round.react_to_room(t.bearer, t.when, &own.0),
+                Err(_) => Vec::new(),
+            },
+            (Some((key, strength)), None) => {
+                round.react_as(t.bearer, t.other, (key, *strength), t.when)
+            }
+            (None, None) => round.react(t.bearer, t.other, t.when),
         };
         fallen.extend(died.into_iter().map(|died| (died, t.bearer)));
     }
@@ -232,6 +258,45 @@ fn every(
                 .into_iter()
                 .map(|period| Trigger::new(f.entity, f.entity, When::Every(period))),
         );
+    }
+    due
+}
+
+/// A room's conditions' reactions that come round every so often and have since `last`: on
+/// everyone living in it, at the same game times as everyone's own.
+fn every_in_rooms(
+    fighters: &Fighters,
+    rooms: &Query<(Entity, &RoomConditions)>,
+    conditions: &ConditionDefs,
+    last: f64,
+    now: f64,
+) -> Vec<Trigger> {
+    let mut due = Vec::new();
+    for (room, own) in rooms {
+        let mut periods = Vec::new();
+        for (key, _) in &own.0 {
+            for reaction in conditions.get(key).map_or(&[][..], |d| &d.reactions) {
+                if let When::Every(period) = reaction.on
+                    && !periods.contains(&period)
+                {
+                    let secs = period.real_secs();
+                    if (now / secs).floor() > (last / secs).floor() {
+                        periods.push(period);
+                    }
+                }
+            }
+        }
+        for period in periods {
+            due.extend(
+                fighters
+                    .iter()
+                    .filter(|f| !f.dead && f.in_room.0 == room)
+                    .map(|f| Trigger {
+                        room: Some(room),
+                        ..Trigger::new(f.entity, f.entity, When::Every(period))
+                    }),
+            );
+        }
     }
     due
 }

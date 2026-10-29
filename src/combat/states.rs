@@ -275,6 +275,10 @@ pub enum Modifier {
     AttackTimes(f64),
     /// Sees in the dark: a dwarf's Heat Sight, a wolf's eyes. Never `in_the_dark`.
     SeesInDark,
+    /// On a room: lights it, whatever the hour: a rift's glow.
+    Lights,
+    /// On a room: darkens it past any light: a torch shows nothing in magical dark.
+    Darkens,
 }
 
 /// What a condition says. Bearer lines are the bearer's own; room lines are what everyone else

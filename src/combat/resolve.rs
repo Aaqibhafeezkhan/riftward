@@ -473,6 +473,27 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         )
     }
 
+    /// Set off a room's conditions' reactions to `when` on `who`, there: brambles tearing at
+    /// whoever comes in. The place has no hands, so it's resolved as `who`'s own, told in the
+    /// reaction's `actor` line to them and its `room` line to everyone else. Returns who died.
+    pub(super) fn react_to_room(
+        &mut self,
+        who: Entity,
+        when: When,
+        room: &[(String, i32)],
+    ) -> Vec<Entity> {
+        let found = room
+            .iter()
+            .filter_map(|(key, strength)| self.conditions.get(key).map(|def| (def, *strength)))
+            .flat_map(|(def, strength)| {
+                def.reactions
+                    .iter()
+                    .map(move |r| (r.clone(), strength, 0, None))
+            })
+            .collect();
+        self.set_off(who, who, when, found)
+    }
+
     /// Set off `bearer`'s reactions to `when`, at `other`. Returns who they killed.
     pub(super) fn react(&mut self, bearer: Entity, other: Entity, when: When) -> Vec<Entity> {
         let found = self.reactions_of(bearer);

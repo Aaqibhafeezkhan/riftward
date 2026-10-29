@@ -1055,18 +1055,22 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             });
             true
         } else {
-            tell.lines.push((
-                attacker,
-                format!(
-                    "{} is {}.",
-                    capitalized(name),
-                    if thing {
-                        battered(health, max)
-                    } else {
-                        condition(health, max)
-                    }
-                ),
-            ));
+            // The one who did it sees how hurt they look; hurt by their own (a room's brambles,
+            // told as theirs), they know.
+            if attacker != who {
+                tell.lines.push((
+                    attacker,
+                    format!(
+                        "{} is {}.",
+                        capitalized(name),
+                        if thing {
+                            battered(health, max)
+                        } else {
+                            condition(health, max)
+                        }
+                    ),
+                ));
+            }
             false
         }
     }

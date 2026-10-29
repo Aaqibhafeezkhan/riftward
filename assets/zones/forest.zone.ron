@@ -636,6 +636,7 @@
         "bramble_thicket": (
             name: "Bramble Thicket",
             description: "Brambles grow higher than your head, a tangle of thorny arches you have to push and duck through. Tufts of coarse dark hair hang on the thorns, and the ground is trampled into narrow runs.",
+            conditions: [(condition: "brambles", strength: 1)],
             terrain: Rough,
             exits: {
                 "north": "meadow_edge",

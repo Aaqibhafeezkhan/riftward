@@ -44,6 +44,8 @@ pub struct View<'w, 's> {
     /// How rooms are lit, and which something lights now.
     pub room_light: Query<'w, 's, &'static crate::light::RoomLight>,
     pub lit: Res<'w, crate::light::LitRooms>,
+    /// The conditions rooms have of their own: brambles, webs.
+    pub room_conditions: Query<'w, 's, &'static crate::world::RoomConditions>,
 }
 
 impl View<'_, '_> {
@@ -54,14 +56,24 @@ impl View<'_, '_> {
         let Ok((info, _, _)) = self.rooms.get(room) else {
             return false;
         };
-        crate::light::Light::of(info, self.room_light.get(room).ok())
-            .needs_light(crate::time::GameTime::now().phase())
-            && !self.lit.0.contains(&room)
-            && !crate::light::carries_light(viewer, &self.items, &self.templates)
-            && !self
-                .conditions
-                .get(viewer)
-                .is_ok_and(|c| c.sees_in_dark(&self.condition_defs))
+        let darkness = crate::light::darkness(
+            room,
+            info,
+            self.room_light.get(room).ok(),
+            self.room_conditions.get(room).ok(),
+            &self.condition_defs,
+            &self.lit,
+        );
+        // A light they carry pierces plain dark, not a darkness no light can.
+        let dark = match darkness {
+            None => false,
+            Some(true) => true,
+            Some(false) => !crate::light::carries_light(viewer, &self.items, &self.templates),
+        };
+        dark && !self
+            .conditions
+            .get(viewer)
+            .is_ok_and(|c| c.sees_in_dark(&self.condition_defs))
     }
 
     /// What others see of `who`'s conditions, one hint a line: "A faint shimmer surrounds Grok."
@@ -654,6 +666,16 @@ pub fn describe_room(
         text += "\r\nIt's too dark to see. You can feel your way to the exits.\r\n";
     } else {
         text += &format!("\r\n{}\r\n", info.description);
+        // What the place's own conditions look like: "Brambles snag at everything here."
+        for (key, _) in view.room_conditions.get(room).map_or(&[][..], |own| &own.0) {
+            if let Some(looks) = view
+                .condition_defs
+                .get(key)
+                .and_then(|def| def.text.looks.first())
+            {
+                text += &format!("{looks}\r\n");
+            }
+        }
     }
 
     let exit_list: Vec<_> = exits

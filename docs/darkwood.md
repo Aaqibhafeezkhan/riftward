@@ -152,11 +152,11 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 
 ## Hazards and atmosphere
 
-- **Bramble Thicket:** pushing through scratches **(gap: room reactions: `Enters` → `Damage`)**, and it's rough going.
-- **Spider Hollow's webs:** walking in, you may be caught (`held`) **(gap: room reactions)**.
+- **Bramble Thicket:** pushing through scratches (*built*: the `brambles` [room condition](world.md#room-conditions), `Enters` → `Damage`), and it's rough going.
+- **Spider Hollow's webs:** walking in, you may be caught (`held`): a [room condition](world.md#room-conditions) with `Enters` → `Apply(held)` and a `chance` (the machinery is *built*; the hollow isn't yet).
 - **The deep wood is dark:** its rooms will be `light: Dark`, and the west woods are dark at night; torches light the way, and the beasts have night eyes ([Light and darkness](world.md#light-and-darkness), *built*).
 - **Getting lost** in the deep wood without Navigation **(gap, later: a Navigation skill and lost-ness)**.
-- **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded **(gap: room conditions with `Every` reactions)**. It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
+- **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded: a [room condition](world.md#room-conditions) with `Every` reactions (*built*), whose glow can light it (`Lights`). It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
 - **Night** changes the forest: more wolves, fewer deer **(gap: time-of-day spawns)**.
 
 ## People and work
@@ -179,7 +179,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Time-of-day spawns** | Night wolves, day deer | The spawn `when` condition gains `TimeOfDay(Night)` (designed in [world.md](world.md)) | Small |
 | **Ambient lines** | Crows, the hum of the scar, birdsong | `chatter: ["The crow caws.", ...]` on a mob or room, one now and then on the heartbeat | Small |
 | **Territorial aggression** | The bear | `aggressive` only in its spawn's room: `aggressive: Home` | Small |
-| **Room conditions and reactions** | Thickets, webs, darkness, the Rift-Scar's hum | Rooms carry conditions as characters do; their reactions fire on `Enters` and `Every` for whoever is there | Medium |
+| **Room conditions and reactions** (*built* 2026-10-29) | Thickets, webs, darkness, the Rift-Scar's hum | Rooms carry conditions as characters do; their reactions fire on `Enters` and `Every` for whoever is there | Medium |
 | **Mobs hiding and ambushing** | The spider in its web | Issue #9: mobs use Stealth out of a fight, and open from hiding | Medium |
 | **A bonus that counts allies present** | *Pack Hunter* | A passive bonus `per` ally in the fight, or a formula input `allies` | Small to medium |
 | **`avoids` on templates** (*built* 2026-10-27) | Rats kept from draining into the slimes ([the sewers](riftwatch.md#the-sewers-ecology)); deer keeping out of the wolf den | `avoids: ["slime"]`, by tag or template as `allies` are: wandering and crowding never take a mob into a room holding what it avoids. Only what's named, so rats still go for guards and players. Later, fleeing prefers exits away from it | Small |
@@ -199,7 +199,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 5. **Fleeing** (*built*), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
 6. **Mob starting conditions and traits** (*built*), for the rift-touched stag; **consumables with effects** (*built*) for deathcaps.
 7. **Time-of-day spawns** and **ambient lines** (code, small).
-8. **Room conditions and reactions** (code, medium), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.
+8. **Room conditions and reactions** (*built* 2026-10-29), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.
 
 ## Open questions
 

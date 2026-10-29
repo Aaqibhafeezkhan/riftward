@@ -288,6 +288,19 @@ Separately from its footing, every room has an **environment**: what kind of pla
 - **Seeing in the dark** is a `SeesInDark` modifier: the dwarves' and trolls' Heat Sight (a racial trait), and night eyes on the west woods' beasts, so at night the woods belong to them and a traveller wants a torch.
 - **Riftwatch at night:** lampposts light the gate, the market and stalls, the herbalist's and tinkers', Guild Row, High Street, the garrison and training yards, and the keep's gate and courtyard. The back alley, the archery butts and the watchtower go dark. Indoor rooms stay lit. **The sewers are dark** (decided 2026-10-29): every room is `light: Dark`, and everything living down there has night eyes, so going down without a torch means fighting rats you can't see, at half. Harwin sells torches, and the Guild Cellar chest holds one.
 
+### Room conditions
+
+*Built* (2026-10-29). A place can have conditions of its own, for good, as a mob is born with them: brambles, webs, a rift's hum. They're the same [conditions](effects.md#conditions) as on characters, in `assets/conditions/places.conditions.ron`, listed on the room in its zone file:
+
+```ron
+"bramble_thicket": (..., conditions: [(condition: "brambles", strength: 1)]),
+```
+
+- **Their reactions answer whoever is there:** `Enters`, whoever comes in (the brambles: `Damage`, "A bramble grazes you as you push through."), and `Every(Minutes(n))`, everyone there every so often (the Rift-Scar's hum, later). A `chance` makes it a maybe (webs catching you). The place has no hands, so a reaction is resolved as the one it happens to's own: its `actor` line to them, its `room` line to the rest, through armour and resistances like any reaction. A ward or an immunity is what keeps it off.
+- **`look` shows them,** by their `looks` line: "Brambles snag at everything here, thick and thorny."
+- **Light:** a place's condition can light it whatever the hour (`Lights`: a rift's glow) or darken it past any light (`Darkens`: magical dark no torch pierces, though Heat Sight still sees). See [Light and darkness](#light-and-darkness).
+- **The zone test** checks each is a real condition. There's no builder command for them yet: they're set in the zone file. Effects that put a condition on a room (a fog, a ward on a doorway) come later.
+
 ### Weather (planned)
 
 Weather, with the time system, will change the ground. A room can say what it becomes when wet, `when_wet: Mud`, so a dirt road turns to mud in the rain and is exhausting to trudge through until it dries. Rain would come and go by zone, announced to everyone outdoors like dawn and dusk, and dry out over some game hours afterwards.

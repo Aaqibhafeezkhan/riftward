@@ -1,0 +1,28 @@
+// Conditions on places: what a room is like, for good, rather than what's happening to someone.
+// A room lists them in its zone file (`conditions: [(condition: "brambles", strength: 1)]`), and
+// their reactions answer whoever comes in (`Enters`) and everyone there every so often (`Every`).
+// The place has no hands, so a reaction is told as the one it happens to's own: its `actor` line
+// to them, its `room` line to everyone else there. `looks` is what `look` shows of it.
+// A place's condition can light it (`Lights`: a rift's glow) or darken it past any torch
+// (`Darkens`). See docs/world.md#room-conditions.
+{
+    // The west woods' Bramble Thicket (docs/darkwood.md).
+    "brambles": (
+        name: "brambles",
+        description: "thorny brambles that tear at whoever pushes through",
+        tags: ["nature"],
+        modifiers: [],
+        reactions: [(
+            on: Enters,
+            effects: [Damage(amount: "roll(1, strength + 1)", type: "physical")],
+            text: (
+                actor: "A bramble {harm} you as you push through.",
+                target: "A bramble {harm} you as you push through.",
+                room: "A bramble {harm} {actor} as they push through.",
+            ),
+        )],
+        text: (
+            looks: ["Brambles snag at everything here, thick and thorny."],
+        ),
+    ),
+}

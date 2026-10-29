@@ -66,7 +66,7 @@ pub use rounds::takes_in;
 pub use states::defs_on_disk;
 pub use states::{
     ConditionDefs, Conditions, FORMLESS, HIDDEN, INANIMATE, Imbued, ItemCondition, ItemConditions,
-    Lasts,
+    Lasts, Modifier,
 };
 pub use strike::{Blow, Fighters, Move, Round, name_of};
 
@@ -3435,6 +3435,28 @@ mod tests {
         assert!(!has(sneak, "exposed"), "unseen");
         assert!(!has(watcher, "exposed"));
         assert!(has(walker, "guarding"), "their own coming in");
+    }
+
+    #[test]
+    fn a_rooms_own_conditions_answer_whoever_comes_in() {
+        // The brambles (`places.conditions.ron`) tear at whoever pushes in.
+        let (mut world, room) = world();
+        world.init_resource::<Messages<triggers::Trigger>>();
+        world
+            .entity_mut(room)
+            .insert(crate::world::RoomConditions(vec![("brambles".into(), 1)]));
+        let walker = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.write_message(GameEvent::Entered {
+            who: walker,
+            name: "a brawler".into(),
+            room,
+            way: crate::events::Way::Walked(None),
+            witnesses: None,
+        });
+        react_to_events(&mut world);
+        let health = world.get::<Vitals>(walker).unwrap().health;
+        assert!((98.0..100.0).contains(&health), "scratched: {health}");
+        assert!(said(&world, walker, "as you push through."));
     }
 
     #[test]

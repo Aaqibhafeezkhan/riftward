@@ -116,6 +116,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 | `SeesHidden` / `SeesInvisible` | | |
 | `SeesInDark` | Never `in_the_dark` ([Light and darkness](world.md#light-and-darkness)) | ✓ Heat Sight (dwarves, trolls), night eyes (the woods' beasts) |
 | `SensesMagic` | Sees magic conditions on people and things | |
+| `Lights` / `Darkens` | On a room: lights it whatever the hour, or darkens it past any light ([Room conditions](world.md#room-conditions)) | ✓ (no content uses them yet) |
 | `Hidden` | Out of sight to those who haven't noticed | ✓ Hidden |
 | `Invisible` | Unseen by all but those who see invisible | |
 | `Resist(type, x)` / `Weakness(type, x)` / `Immune(tag)` | Stops a share `x` of a damage type (0.8 = 80%); takes `x` more of one (1 = double); can't get a tag's conditions | |
