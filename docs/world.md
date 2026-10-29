@@ -400,7 +400,7 @@ A spawn can set `pack: n`: the most of its mobs that will fight **any one target
 
 ## Gated spawns
 
-A spawn with `when` only fills while its requirement holds, in the shared [requirement language](facts.md#one-requirement-language): `when: WorldFlag("rats_broke_out")`. While it's false the spawn is left alone entirely. This is how the Rat King appears only after a breakout.
+A spawn with `when` only fills while its requirement holds, in the shared [requirement language](facts.md#one-requirement-language): `when: WorldFlag("rats_broke_out")`. While it's false the spawn is left alone entirely. This is how the Rat King appears only after a breakout. With `when: TimeOfDay([Dusk, Night])` a spawn fills only after dark: wolves that come out at night. Mobs already out when it turns false stay until they're gone; they just aren't replaced.
 
 ## World state
 
@@ -420,7 +420,7 @@ An event has a trigger and a list of actions. Triggers are [requirements](facts.
 | `WorldFlag(id)` | A world flag is set: the same as `Flag("world.id")` (*built*) |
 | `WorldCounter(id, op, n)` | A world counter compares to `n` |
 | `Event(game_event)` | A [game event](architecture.md#game-events) happens, such as `Died("goblin_king")`: true only while it's being handled (*built*: `Entered(mob, zone)` and `Died(mob)`) |
-| `TimeOfDay(...)` | The game clock is in a range (with the time system) |
+| `TimeOfDay([...])` | The game clock is in one of these parts of the day: `TimeOfDay([Dusk, Night])` (*built*) |
 | `All`, `Any`, `Not` | Combinations, as everywhere |
 
 Actions are a small fixed set:
@@ -502,7 +502,7 @@ The first rat to reach the city (through a grate someone left open, or one the r
 ## Build order
 
 1. **With items and mobs:** spawns with `Keep`, `every` timers, counting by origin, `spawn_state`, and wandering. *Built.*
-2. **With the time system:** `Breed` and `reseed`, crowding, `TimeOfDay`. *Built, except `TimeOfDay` spawns.*
+2. **With the time system:** `Breed` and `reseed`, crowding, `TimeOfDay`. *Built* (`TimeOfDay` 2026-10-29).
 3. **With combat:** world flags, counters and events, starting with `Count`, `Event(Died(...))` and the actions above. *Partly built:* flags (as facts), `Event(Entered)`, `Event(Died)`, `SetWorldFlag`, `ClearWorldFlag` and `Announce`; counters, `Count` and the other actions wait.
 
 ## Open questions

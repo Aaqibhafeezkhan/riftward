@@ -40,6 +40,9 @@ pub enum Requirement {
     InZone(String),
     /// A world flag is set: `WorldFlag("rats_broke_out")` is `Flag("world.rats_broke_out")`.
     WorldFlag(String),
+    /// The game clock is in one of these parts of the day: `TimeOfDay([Dusk, Night])`, for
+    /// wolves that come out after dark.
+    TimeOfDay(Vec<crate::time::Phase>),
     /// Something just happened: only true while that happening is being handled, as world
     /// events are. Mob ids are `mob` or `zone:mob`, relative to where it's written.
     Event(Happening),
@@ -144,6 +147,8 @@ pub struct Subject<'a> {
     pub story: Option<&'a Facts>,
     pub zone: &'a str,
     pub happened: Option<&'a Occurred>,
+    /// The part of the day, for `TimeOfDay`: now, unless a test says otherwise.
+    pub phase: crate::time::Phase,
 }
 
 impl<'a> Subject<'a> {
@@ -154,6 +159,7 @@ impl<'a> Subject<'a> {
             story,
             zone: "",
             happened: None,
+            phase: crate::time::GameTime::now().phase(),
         }
     }
 
@@ -164,6 +170,7 @@ impl<'a> Subject<'a> {
             story: Some(story),
             zone,
             happened,
+            phase: crate::time::GameTime::now().phase(),
         }
     }
 
@@ -251,6 +258,7 @@ impl Requirement {
                 who.and_then(|w| w.room).is_some_and(|at| at.zone == *zone)
             }
             Requirement::WorldFlag(flag) => facts.fact(&format!("world.{flag}")).is_some(),
+            Requirement::TimeOfDay(phases) => phases.contains(&facts.phase),
             Requirement::Event(happening) => match (happening, facts.happened) {
                 (
                     Happening::Entered { mob, zone },
@@ -309,6 +317,10 @@ impl Requirement {
                 format!("{mob} coming into {zone}")
             }
             Requirement::Event(Happening::Died(mob)) => format!("{mob} dying"),
+            Requirement::TimeOfDay(phases) => {
+                let names: Vec<&str> = phases.iter().map(|p| p.name()).collect();
+                format!("it being {}", names.join(" or "))
+            }
             Requirement::All(all) => join(all, "and"),
             Requirement::Any(any) => join(any, "or"),
             Requirement::Not(not) => format!("not {}", not.describe(race_name)),
@@ -319,6 +331,26 @@ impl Requirement {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn time_of_day_is_met_in_the_parts_of_the_day_it_names() {
+        use crate::time::Phase;
+        let story = Facts::default();
+        let after_dark: Requirement = crate::world::ron_options()
+            .from_str("TimeOfDay([Dusk, Night])")
+            .unwrap();
+        let at = |phase| Subject {
+            phase,
+            ..Subject::world(&story, "forest", None)
+        };
+        assert!(after_dark.met(&at(Phase::Night)));
+        assert!(after_dark.met(&at(Phase::Dusk)));
+        assert!(!after_dark.met(&at(Phase::Day)));
+        assert_eq!(
+            after_dark.describe(&|r| r.to_string()),
+            "it being dusk or night"
+        );
+    }
 
     #[test]
     fn requirements_test_and_read_naturally() {

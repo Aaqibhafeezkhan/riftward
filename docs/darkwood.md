@@ -176,7 +176,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Harvesting corpses** (*built* 2026-10-29) | Pelts, meat, fangs, antlers | `harvest` tables on mob templates, carried onto the corpse; `Find` aimed at a corpse (`aim: Item`) finding a kind from it, once per kind; Skinning and Butchering as data | Small to medium |
 | **Mob conditions from the start, and traits** (*built* 2026-10-27) | The rift-touched stag, the grey slimes, the Slime Lord; any template that "is" something | What a mob *is* is a [trait](effects.md#traits): `traits: ["rift_touched"]`, kept through cures and death. What's merely happening to it from the start is a condition: `conditions: [(condition: "hidden", strength: 8)]`, so a mob born `hidden` lurks unseen until noticed, the start of [#9](https://github.com/Foxworks-Studios/riftward/issues/9)'s ambushers | Small |
 | **Consumables that apply conditions** (*built*) | Deathcap poisoning, later potions of strength | `effects: [...]` on a `consumable`, resolved on the eater | Small |
-| **Time-of-day spawns** | Night wolves, day deer | The spawn `when` condition gains `TimeOfDay(Night)` (designed in [world.md](world.md)) | Small |
+| **Time-of-day spawns** (*built* 2026-10-29) | Night wolves, day deer | `when: TimeOfDay([Dusk, Night])`, a term in the shared [requirement language](facts.md#one-requirement-language) | Small |
 | **Ambient lines** | Crows, the hum of the scar, birdsong | `chatter: ["The crow caws.", ...]` on a mob or room, one now and then on the heartbeat | Small |
 | **Territorial aggression** | The bear | `aggressive` only in its spawn's room: `aggressive: Home` | Small |
 | **Room conditions and reactions** (*built* 2026-10-29) | Thickets, webs, darkness, the Rift-Scar's hum | Rooms carry conditions as characters do; their reactions fire on `Enters` and `Every` for whoever is there | Medium |
@@ -198,8 +198,23 @@ The gaps above, each with the smallest shape that would close it, in the order t
 4. **Harvesting** (*built* 2026-10-29): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
 5. **Fleeing** (*built*), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
 6. **Mob starting conditions and traits** (*built*), for the rift-touched stag; **consumables with effects** (*built*) for deathcaps.
-7. **Time-of-day spawns** and **ambient lines** (code, small).
+7. **Time-of-day spawns** (*built* 2026-10-29) and **ambient lines** (code, small).
 8. **Room conditions and reactions** (*built* 2026-10-29), for the thicket, the webs and the scar; mobs hiding (#9) for the spider's ambush.
+
+### The engine pieces, in order
+
+Planned 2026-10-29: the gaps left, each a small pull request with its issue, so the deep wood can then be built as data.
+
+1. **Spawns by time of day** ([#26](https://github.com/Foxworks-Studios/riftward/issues/26), *built* 2026-10-29): `TimeOfDay([Dusk, Night])` in the requirement language, for spawns' `when` and anywhere else. Mobs already out when it turns false stay until they're gone; they just aren't replaced.
+2. **Territorial aggression** ([#25](https://github.com/Foxworks-Studios/riftward/issues/25)): `aggressive: Always` or `Home` (only in its spawn's room: the bear), replacing `true` (decided 2026-10-29: no one plays yet, so zone files needn't keep loading unchanged).
+3. **Fleeing avoids what a mob avoids** ([#23](https://github.com/Foxworks-Studios/riftward/issues/23)): a deer fleeing a fight doesn't run into the wolf den while another way is open.
+4. **Ambient lines** ([#24](https://github.com/Foxworks-Studios/riftward/issues/24)): `chatter` on mobs and rooms, a line now and then to players there, its rate in `rules.ron`.
+5. **A pack bonus** ([#29](https://github.com/Foxworks-Studios/riftward/issues/29)): an `allies` formula input, how many of its allies fight beside it; *Pack Hunter* is then a trait applying a per-turn `Attack` bonus at that strength.
+6. **Mobs that hide and ambush** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), first half): a hidden aggressive mob strikes first from hiding, unavoidably, then is seen; out of a fight it hides again. The spider in its web.
+7. **A find with a consequence:** a `Finds` trigger, so a room's condition answers someone gathering there: the bee tree's angry bees.
+8. **Hidden doors** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), second half): found with `search`, remembered per character.
+
+Later, once the deep wood exists: Navigation and getting lost, ranged combat, Rift-touched mutations. Then the deep wood itself, as data.
 
 ## Open questions
 

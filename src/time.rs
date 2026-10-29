@@ -62,7 +62,7 @@ impl Plugin for TimePlugin {
 }
 
 /// The part of the day, which changes what the world is like.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Phase {
     Dawn,
     Day,
@@ -78,6 +78,16 @@ impl Phase {
             7..19 => Phase::Day,
             19..21 => Phase::Dusk,
             _ => Phase::Night,
+        }
+    }
+
+    /// Its name in a sentence: "it being night".
+    pub fn name(self) -> &'static str {
+        match self {
+            Phase::Dawn => "dawn",
+            Phase::Day => "day",
+            Phase::Dusk => "dusk",
+            Phase::Night => "night",
         }
     }
 

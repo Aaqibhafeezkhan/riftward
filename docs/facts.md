@@ -32,6 +32,7 @@ There are two today: `Condition` (attributes, race, skills, guild rank; backgrou
 | `Fact(key, op, value)` | A fact compares (`Eq`, `Ne`, `Gt`, `Gte`, `Lt`, `Lte`): `Fact("char.trust.marin", Gte, 3)`, `Fact("npc.riftwatch:contract_clerk.mood", Eq, "cold")`. Numbers compare as numbers; yes and words only for being equal or not (*built*) |
 | `Flag(key)` | A fact is set at all: `Flag("world.rats_broke_out")`, `Not(Flag("char.sold_out_the_guild"))` (*built*) |
 | `WorldFlag(id)` | A world flag is set: `Flag("world.id")` by its old name, as zone files write it (*built*) |
+| `TimeOfDay([...])` | The game clock is in one of these parts of the day (`Dawn`, `Day`, `Dusk`, `Night`): `TimeOfDay([Dusk, Night])` (*built* 2026-10-29) |
 | `Event(happening)` | Something is happening right now: `Entered(mob, zone)`, `Died(mob)`; only true while a world event is handling it (*built*) |
 | `Quest(id, state)` | A character's quest is held, done (with a given ending, or any), or failed: `Quest("riftwatch:crystals_gone_missing", Ended("sold"))` |
 | `HasItem(Item(id) or Tag(tag), n)` | They carry at least that many, anywhere on them: `HasItem(Item("sewers:rat_tail"), 3)`, `HasItem(Tag("herb"), 5)` (*built*) |
