@@ -55,7 +55,7 @@ Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the br
 | --- | --- |
 | Woodcutters' Track, Old Track | The way in, off the Bend; crows overhead |
 | Stump Field | An open clearing; rabbits |
-| Charcoal Burners' Camp | **The hunter**: teaches Foraging and Tracking (Skinning and Butchering once harvesting is built), sells a hunting knife, waterskins and torches, buys trophies, pelts and meat |
+| Charcoal Burners' Camp | **The hunter**: teaches Foraging, Tracking, Skinning and Butchering, sells a hunting knife, waterskins and torches, buys trophies, pelts and meat |
 | Birch Wood, Hazel Copse | Foxes; young boars root in the copse |
 | Meadow's Edge, Deer Meadow | Rabbits (a breeding spawn, max 12) and the red deer (a breeding herd, max 6), all skittish |
 | High Meadow | The **red stag**, who stands and fights (antlers 2–5, health 25), and **adders** basking (venomous) |
@@ -70,7 +70,7 @@ Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the br
 - **New natural attacks** (`beast.skill.ron`): peck, hooves (1–2), antlers (2–5), gore (2–5), and the techniques *Charge* (gore, knocks down) and *Tongue* (holds).
 - **Who fights whom:** boars attack anything not a boar; deer, rabbits and foxes avoid rooms with a boar in them; adders and frogs strike only at people; the stag and badger only fight back.
 - **Flora:** wild garlic in the woods; sorrel and chamomile in the meadows (`Field`); watercress at the brook and the pool (`Water`), which also has kingsfoil and moonpetal.
-- **No pelts or meat yet:** they wait for harvesting, which comes next.
+- **Pelts, meat and trophies** are harvested from the beasts' corpses (2026-10-29): rabbits, foxes, deer, the stag (venison or his antlers), boars (meat or tusks), the frogs and the badger. The adder's skin and venom sac wait. The hunter buys them all.
 
 ## The ladder: from the sewers to the deep wood
 
@@ -121,12 +121,13 @@ Decided 2026-10-27. Deer and rabbits bolt, but not the instant someone walks in:
 
 ### Harvest what's cut, loot what's left
 
-Decided 2026-10-27. **What has to be cut from a carcass is harvested; what a creature leaves behind just by dying falls as loot.** A beast's pelt, meat, fangs and antlers are worked out of its corpse with a skill, while it lasts (a mob's corpse rots in 5 minutes). But a slime *is* jelly, so the jelly is simply there when it's gone; a rift-touched creature leaves its vitae crystal; and loot tables stay for what a creature carries, a bandit's knife, a guard's coins. Something with no body to leave (the `formless` trait: slimes) leaves no corpse at all, and its loot lies where it died.
+*Built* 2026-10-29 (decided 2026-10-27). **What has to be cut from a carcass is harvested; what a creature leaves behind just by dying falls as loot.** A beast's pelt, meat, fangs and antlers are worked out of its corpse with a skill, while it lasts (a mob's corpse rots in 5 minutes). But a slime *is* jelly, so the jelly is simply there when it's gone; a rift-touched creature leaves its vitae crystal; and loot tables stay for what a creature carries, a bandit's knife, a guard's coins. Something with no body to leave (the `formless` trait: slimes) leaves no corpse at all, and its loot lies where it died.
 
 - **Two new Survival skills,** made of effects: **Skinning** (hides, pelts, silk) and **Butchering** (meat, and trophies: fangs, tusks, antlers, claws, a venom sac). Each is `Find` aimed at a corpse, the user's skill against its difficulty, the better made the more surely it went, as foraging is.
 - **In data,** a creature's template says what its corpse yields, by kind: `harvest: {"hide": [("wolf_pelt", 1)], "meat": [(None, 20), ("wolf_meat", 80)]}`, and Skinning finds `"hide"`, Butchering `"meat"`. Each kind can be taken from a corpse once; a fumble spoils it.
 - **The corpse's rot timer is the window** for harvesting, and a corpse taken whole could be carried home to work later (it's an item).
-- **The sewers too:** sewer rats drop a rat's tail as loot today, and the Rat King his tooth. Both are cut from an animal, so they move to harvesting once it's built. The slimes' jelly and the Slime Lord's heart of the deep stay loot.
+- **The sewers stay loot** (decided 2026-10-29): sewer rats drop a rat's tail and the Rat King his tooth as loot, though both are cut from an animal. Some things can be had without a skill, and the first rat contract shouldn't need Butchering.
+- **As built:** a beast's corpse remembers what it was, and its template's `harvest` says what each kind yields. `skin [<corpse>]` and `butcher [<corpse>]` (or `use skinning` / `use butchering`) look for a corpse first, so `butcher boar` doesn't find the hide in your hand. The cut is the skill (Agility) against 3; won, the find is picked with Luck, better made the surer the cut; lost, that kind is spoiled.
 
 **New natural attacks** (data, `beast.skill.ron`): a wolf's bite (2–4), a boar's gore (2–5, with a knock-down technique, *Charge*: `Apply(down)`), a bear's maul (3–6), a stag's antlers (2–5), a spider's fangs (1–3).
 
@@ -172,7 +173,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | Gap | Needed for | Proposed shape | Size |
 | --- | --- | --- | --- |
 | **Fleeing** (*built* 2026-10-27) | Deer and rabbits, a hurt wolf breaking off | A `Flee` effect, as the `flee` command: out of a fight, the bearer leaves by a random walkable exit, away from what it avoids; in one, a chance to break away. Data does the rest: the *skittish* trait puts `startled` on at `Arrives`, `only: Foes` (so other deer don't startle it), for `Rounds(2)`, and `startled` `Fades` → `Flee`, which makes the window ([Prey](#prey-a-window-then-gone)); in a fight it tries to break away half its turns, and on `Hurt(0.5)` | Small to medium |
-| **Harvesting corpses** | Pelts, meat, fangs, antlers | `harvest` tables on mob templates, carried onto the corpse; `Find` aimed at a corpse (`aim: Item`) finding a kind from it, once per kind; Skinning and Butchering as data | Small to medium |
+| **Harvesting corpses** (*built* 2026-10-29) | Pelts, meat, fangs, antlers | `harvest` tables on mob templates, carried onto the corpse; `Find` aimed at a corpse (`aim: Item`) finding a kind from it, once per kind; Skinning and Butchering as data | Small to medium |
 | **Mob conditions from the start, and traits** (*built* 2026-10-27) | The rift-touched stag, the grey slimes, the Slime Lord; any template that "is" something | What a mob *is* is a [trait](effects.md#traits): `traits: ["rift_touched"]`, kept through cures and death. What's merely happening to it from the start is a condition: `conditions: [(condition: "hidden", strength: 8)]`, so a mob born `hidden` lurks unseen until noticed, the start of [#9](https://github.com/Foxworks-Studios/riftward/issues/9)'s ambushers | Small |
 | **Consumables that apply conditions** (*built*) | Deathcap poisoning, later potions of strength | `effects: [...]` on a `consumable`, resolved on the eater | Small |
 | **Time-of-day spawns** | Night wolves, day deer | The spawn `when` condition gains `TimeOfDay(Night)` (designed in [world.md](world.md)) | Small |
@@ -193,8 +194,8 @@ The gaps above, each with the smallest shape that would close it, in the order t
 
 1. **The low rungs first** (decided 2026-10-27): training dummies in town (*built*), the sewers' new ecology ([riftwatch.md](riftwatch.md#the-sewers-ecology)), and the west woods with their rung-2 and rung-3 creatures and flora, before the deep wood.
 2. **Rooms and flora** (data): the rest of the forest: the ravine's falls, the deep wood, the stones and the scar, with their finds and the new herb and food items.
-3. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. No material loot: what they yield waits for harvesting.
-4. **Harvesting** (code, small to medium): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
+3. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. What they yield is harvested (step 4).
+4. **Harvesting** (*built* 2026-10-29): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
 5. **Fleeing** (*built*), with the startled window, then deer and rabbits bolt and a beaten wolf runs.
 6. **Mob starting conditions and traits** (*built*), for the rift-touched stag; **consumables with effects** (*built*) for deathcaps.
 7. **Time-of-day spawns** and **ambient lines** (code, small).

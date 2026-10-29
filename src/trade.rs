@@ -227,7 +227,9 @@ fn itemwork(
         }
         let entity = items::find_item(words, &actor, &items, &keywords, &templates)?;
         let (_, item, _) = items.get(entity).map_err(|_| String::new())?;
-        let ready = practice.begin(actor.entity, key)?;
+        let ready = practice.begin(actor.entity, key, |tool| {
+            crate::skills::has_tool(actor.entity, tool, &items, &templates)
+        })?;
         let value = templates
             .0
             .get(&item.key)

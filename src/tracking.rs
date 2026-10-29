@@ -215,7 +215,11 @@ fn trackwork(
     rooms: Query<&Room>,
     mut tracks: ResMut<Tracks>,
     mut practice: Practice,
-    time: Res<Time>,
+    (time, items, templates): (
+        Res<Time>,
+        crate::items::ItemQuery,
+        Res<crate::items::ItemTemplates>,
+    ),
 ) {
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
@@ -231,7 +235,9 @@ fn trackwork(
     let reply = (|| {
         let room = rooms.get(actor.room).map_err(|_| String::new())?;
         let ground = ground(room.terrain).ok_or("The water holds no tracks.")?;
-        let ready = practice.begin(actor.entity, key)?;
+        let ready = practice.begin(actor.entity, key, |tool| {
+            crate::skills::has_tool(actor.entity, tool, &items, &templates)
+        })?;
         let now = time.elapsed_secs_f64();
         let wanted = words.trim().to_lowercase();
         let skill_rating = f64::from(ready.effectiveness.max(1));
@@ -341,6 +347,7 @@ mod tests {
                     cooldown: 0.0,
                     aim: Aim::Room,
                     uses: None,
+                    tool: None,
                     resist: None,
                     against: Some(Formula::parse("target.ground * (1 + age / 10)").unwrap()),
                     tags: Vec::new(),
@@ -364,6 +371,7 @@ mod tests {
         });
         world.insert_resource(Dice::seeded(4));
         world.init_resource::<crate::facts::Facts>();
+        world.init_resource::<crate::items::ItemTemplates>();
         world.insert_resource(Database::open(":memory:").unwrap());
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Outbox::default());

@@ -238,7 +238,7 @@ A lock with no `key` has no keyhole: it can only be picked or bashed. Traps will
 | --- | --- |
 | `open`, `close` | It isn't locked |
 | `lock`, `unlock` | Its key in your inventory. Until items exist, players are told "You don't have the key", and builders can lock and unlock anything for testing |
-| `pick` | Lockpicking (level plus Agility) against `pick`, by [ratio contest](attributes.md#the-ratio-rule), with Luck. A shortcut to `use lockpicking`: Lockpicking is [data](effects.md#every-skill-as-data), taking the `locked` condition off. A lock with no `pick` can't be picked |
+| `pick` | Lockpicks (anything tagged `lockpick`) held or carried, then Lockpicking (level plus Agility) against `pick`, by [ratio contest](attributes.md#the-ratio-rule), with Luck. A shortcut to `use lockpicking`: Lockpicking is [data](effects.md#every-skill-as-data), taking the `locked` condition off. A lock with no `pick` can't be picked |
 | `bash` | Strength against `bash`, as a [ratio contest](attributes.md#the-ratio-rule), with Luck. Only forces it open; the lock still works afterwards. Others on both sides hear it |
 
 The target can be a **direction** for a door (`open north`), or a name (`open door`, `unlock 2.chest`); directions are checked first. Replies are short and specific:

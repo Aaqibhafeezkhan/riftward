@@ -768,6 +768,11 @@ pub struct MobDef {
     /// killer's Luck.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub loot: Vec<Table>,
+    /// What has to be cut from its corpse, by kind, one table each: `{"hide": [("wolf_pelt", 1)],
+    /// "meat": [(None, 20), ("wolf_meat", 80)]}`. A skill that `Find`s aimed at a corpse names
+    /// the kind it takes (Skinning `"hide"`, Butchering `"meat"`), once each.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub harvest: BTreeMap<String, Table>,
     /// Items it's made with (`item` or `zone:item` templates): wearable ones worn, the rest held,
     /// two at most. It fights with a weapon in hand, and its gear falls into its corpse.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -879,6 +884,7 @@ impl MobDef {
             skills: BTreeMap::new(),
             attack: None,
             loot: Vec::new(),
+            harvest: BTreeMap::new(),
             equipment: Vec::new(),
             health: None,
             tactics: None,
@@ -2118,6 +2124,19 @@ mod tests {
                         if !item_exists(&ItemKey::parse(item, &zone.id)) {
                             problems.push(format!(
                                 "zone {}: {whose}: no {kind} item '{item}'",
+                                zone.id
+                            ));
+                        }
+                    }
+                }
+            }
+            // And everything cut from a corpse.
+            for (mob_id, mob) in &zone.mobs {
+                for (kind, table) in &mob.harvest {
+                    for item in table.iter().filter_map(|(item, _)| item.as_ref()) {
+                        if !item_exists(&ItemKey::parse(item, &zone.id)) {
+                            problems.push(format!(
+                                "zone {}: mob {mob_id}'s {kind} harvest: no item '{item}'",
                                 zone.id
                             ));
                         }

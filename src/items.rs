@@ -392,6 +392,15 @@ pub fn player_corpse_secs() -> i64 {
     crate::world::world_def().player_corpse_minutes * 60
 }
 
+/// A beast's corpse, for harvesting: which mob it was, so its template's `harvest` says what can
+/// be cut from it, and the kinds already taken (or spoiled). Not saved: a mob's corpse rots in
+/// minutes.
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct Carcass {
+    pub mob: crate::world::MobKey,
+    pub taken: Vec<String>,
+}
+
 /// Lay a corpse in `room`, named for who it was. `id` makes it real, for a player's corpse.
 pub fn spawn_corpse(
     commands: &mut Commands,
@@ -1911,9 +1920,22 @@ pub fn find_item(
     keywords: &Query<&Keywords>,
     templates: &ItemTemplates,
 ) -> Result<Entity, String> {
+    find_item_where(arg, actor, items, keywords, templates, |_| true)
+}
+
+/// One item the player names, as [`find_item`], among those `keep` allows: a corpse to skin.
+pub fn find_item_where(
+    arg: &str,
+    actor: &Actor,
+    items: &ItemQuery,
+    keywords: &Query<&Keywords>,
+    templates: &ItemTemplates,
+    keep: impl Fn(Entity) -> bool,
+) -> Result<Entity, String> {
     let target = Target::parse(arg).ok_or_else(|| "Look at what?".to_string())?;
     let snapshot = Snapshot::new(items.iter().map(|(e, i, l)| (e, i, *l)), templates);
-    let candidates = with_keywords(snapshot.reachable(actor.entity, actor.room), keywords);
+    let reachable = snapshot.reachable(actor.entity, actor.room);
+    let candidates = with_keywords(reachable.into_iter().filter(|e| keep(*e)), keywords);
     target
         .find_one(actor.entity, candidates)
         .filter(|e| *e != actor.entity)

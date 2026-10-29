@@ -212,7 +212,7 @@ This replaces the earlier plan of a physical token (2026-10-28): the record is t
 
 - **Objectives are shorthand for [rules](facts.md#rules).** `Kill(Mob("sewer_rat"), 20)` is a rule (on `Killed("sewer_rat")`, `Add("quest.kill.sewer_rat", 1)`) and a condition (that fact at 20 or more); the stage ends when all its objectives' conditions hold. Designers write objectives for the common cases, and a rule of their own for anything odd, with no engine change. (*Built* for `Kill`, 2026-10-28: each kill the holder makes counts toward the stage they're on, in a `quest.` fact keyed by stage, `1.kill.sewers:sewer_rat` or `1.kill.tag.vermin`, up to what it asks, with a line saying so ("Rats in the Drains: sewer rat killed, 3 of 20."). A stage whose objectives are all counted and done moves on to the next and says what it asks; the last, or one with a `Bring`, waits for `report`. Taking a quest again starts its counts afresh. Rules a quest writes for itself come with stage actions.)
 - **What counts for whom in a group** is set out in [Progress in a group](#progress-in-a-group). A stranger's deeds never count.
-- **`Bring` is the proof,** and needs nothing new: rat tails and the Rat King's tooth drop as loot today; harvested parts will count the same way once harvesting exists. **A boss's drop is certain for those on its quest** (2026-10-28): there's only one Rat King, so a holder (or their group) who kills him while still lacking his tooth always gets one, once however many of them need it. An ordinary mob's drops are left to chance, quest or not: it's fine to have to hunt more rats for their tails.
+- **`Bring` is the proof,** and needs nothing new: rat tails and the Rat King's tooth drop as loot today; harvested parts count the same way (harvesting is built). **A boss's drop is certain for those on its quest** (2026-10-28): there's only one Rat King, so a holder (or their group) who kills him while still lacking his tooth always gets one, once however many of them need it. An ordinary mob's drops are left to chance, quest or not: it's fine to have to hunt more rats for their tails.
 - **Talking to someone** waits on dialogue; until then, `report` is the conversation.
 
 ### Beyond collecting: quests with steps, choices and consequences
@@ -384,7 +384,7 @@ What the engine itself is (quest files, the board, Marin's record, `accept`, `jo
 | **Posting only while a world condition holds** | The Rat King, posted only while the rats are out | Yes (2026-10-28): `posted_when: Some(WorldFlag("rats_broke_out"))` |
 | **A deadline that runs out on its own,** across restarts | Every claimed quest | A heartbeat system and `quest_claims` |
 | **A skill-use event** | `Use(skill, n)` | No: none of the first contracts needs it yet |
-| **Meat** | Meat for the Kitchen | No: [harvesting](darkwood.md#harvest-whats-cut-loot-whats-left) (Butchering). The contract can be written now and come into its own then |
+| **Meat** | Meat for the Kitchen | Yes, since 2026-10-29: [harvesting](darkwood.md#harvest-whats-cut-loot-whats-left) (Butchering) is built; the contract isn't written yet |
 | **Titles** | The Rat King's reward | A flag on the character for now: `Set("char.title.ratbane", true)`; showing titles is still to come |
 
 ## GM tools
@@ -452,7 +452,7 @@ In the smallest pull requests that each leave the game working, every one with i
     - *Built.* **25a.** `quest grant`, `advance`, `reward` and `release`.
     - *Built.* **25b.** `quest create` and `quest edit`, saved to the quest's file (and `quest show`).
 
-Meat for the Kitchen waits on harvesting; it can be written with step 13 and works once Butchering exists.
+Meat for the Kitchen could be written now that Butchering exists.
 
 ## Open questions
 

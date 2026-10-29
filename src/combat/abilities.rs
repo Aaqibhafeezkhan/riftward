@@ -60,6 +60,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
             cooldown,
             aim,
             uses,
+            tool,
             resist,
             against,
             tags,
@@ -89,6 +90,11 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         });
         if hiding.is_some() && self.fighters.get(user).is_ok_and(|f| f.fighting.is_some()) {
             return Err("You can't hide in the middle of a fight!".into());
+        }
+        if let Some(tool) = tool
+            && self.carried(user, tool).is_none()
+        {
+            return Err(format!("You need a {tool} for that."));
         }
         let item = match uses {
             Some(tag) => Some(
@@ -207,6 +213,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 aim,
                 cost,
                 uses,
+                tool,
                 effects,
                 ..
             }) = self.defs.skills.get(key).map(|s| &s.def.kind)
@@ -228,9 +235,10 @@ impl Round<'_, '_, '_, '_, '_, '_> {
                 Cost::Stamina(n) => *n as f32,
             };
             let ready = state.ready_at <= self.now && f.vitals.stamina >= needs;
-            let to_hand = uses
-                .as_ref()
-                .is_none_or(|tag| self.carried(mob, tag).is_some());
+            let to_hand = [uses, tool]
+                .into_iter()
+                .flatten()
+                .all(|tag| self.carried(mob, tag).is_some());
             if out_of_place || !ready || !to_hand || self.needed(mob, target, effects).is_err() {
                 continue;
             }

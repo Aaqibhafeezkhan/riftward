@@ -1297,6 +1297,13 @@ pub fn handle_deaths(
                 now + items::mob_corpse_secs(),
             )
         };
+        // What can be cut from it is harvested from the corpse, while it lasts.
+        if let Some(corpse) = corpse {
+            commands.entity(corpse).insert(items::Carcass {
+                mob: mob.key.clone(),
+                taken: Vec::new(),
+            });
+        }
         let place = match corpse {
             Some(corpse) => Some(ItemLocation::Inside(corpse)),
             None if formless => Some(ItemLocation::Room(in_room.0)),
@@ -3517,6 +3524,7 @@ mod tests {
                 cooldown: 5.0,
                 aim,
                 uses: uses.map(String::from),
+                tool: None,
                 resist: None,
                 against: against.map(|f| Formula::parse(f).unwrap()),
                 tags: Vec::new(),
@@ -3684,6 +3692,7 @@ mod tests {
                 cooldown: 0.0,
                 aim: Aim::Other,
                 uses: None,
+                tool: None,
                 resist: Some(Resist::Attribute(Attribute::Intuition)),
                 against: None,
                 tags: Vec::new(),
@@ -3770,6 +3779,7 @@ mod tests {
                 cooldown: 0.0,
                 aim: Aim::Me,
                 uses: None,
+                tool: None,
                 resist: None,
                 against: None,
                 tags: Vec::new(),

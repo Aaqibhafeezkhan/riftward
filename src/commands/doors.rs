@@ -455,6 +455,12 @@ pub fn lockwork(
         return;
     };
     let unlocks = effects.iter().any(|e| matches!(e, Effect::Remove { .. }));
+    // The tools they have, before the lock is looked at.
+    let tools: Vec<String> =
+        crate::items::carried(inv.entity, &world.items.as_readonly(), &world.templates)
+            .into_iter()
+            .flat_map(|(_, tags)| tags)
+            .collect();
     let on = Invocation {
         entity: inv.entity,
         command: inv.command,
@@ -484,7 +490,7 @@ pub fn lockwork(
                 return Err("It's far too sturdy to force.".into());
             }
         }
-        let ready = practice.begin(it.actor.entity, key)?;
+        let ready = practice.begin(it.actor.entity, key, |tool| tools.iter().any(|t| t == tool))?;
         let worked = match against {
             None => true,
             Some(against) => {
@@ -572,6 +578,7 @@ mod tests {
                     cooldown: 0.0,
                     aim: Aim::Lock,
                     uses: None,
+                    tool: None,
                     resist: None,
                     against: Some(Formula::parse("target.pick").unwrap()),
                     tags: Vec::new(),
@@ -699,6 +706,47 @@ mod tests {
         // Now there's nothing to pick.
         work(&mut world, thief, "door");
         assert!(told(&world, "It isn't locked."));
+    }
+
+    #[test]
+    fn picking_a_lock_needs_lockpicks() {
+        let (mut world, thief, door) = vault(1000, Some(4));
+        if let Some(skill) = world
+            .resource_mut::<SkillDefs>()
+            .skills
+            .get_mut(LOCKPICKING)
+            && let SkillKind::Active { tool, .. } = &mut skill.def.kind
+        {
+            *tool = Some("lockpick".into());
+        }
+        // Without them, nothing happens and nothing is spent.
+        work(&mut world, thief, "north");
+        assert!(told(&world, "You need a lockpick for that."));
+        assert_eq!(world.get::<Door>(door).unwrap().state, DoorState::Locked);
+        assert_eq!(world.get::<Vitals>(thief).unwrap().stamina, 10.0);
+        // With a set in a pouch on them, it works as before.
+        let picks = crate::world::ItemKey::parse("test:lockpicks", "");
+        world.resource_mut::<ItemTemplates>().0.insert(
+            picks.clone(),
+            crate::world::ItemDef {
+                tags: vec!["lockpick".into()],
+                ..crate::world::ItemDef::named("a set of lockpicks")
+            },
+        );
+        let item = |key: &crate::world::ItemKey| crate::items::Item {
+            key: key.clone(),
+            name: String::new(),
+            id: None,
+            state: DoorState::Open,
+            quality: crate::items::Quality::Standard,
+        };
+        let pouch_key = crate::world::ItemKey::parse("test:pouch", "");
+        let pouch = world
+            .spawn((item(&pouch_key), crate::items::ItemLocation::Held(thief)))
+            .id();
+        world.spawn((item(&picks), crate::items::ItemLocation::Inside(pouch)));
+        work(&mut world, thief, "north");
+        assert_eq!(world.get::<Door>(door).unwrap().state, DoorState::Closed);
     }
 
     #[test]

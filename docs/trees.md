@@ -68,7 +68,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 | --- | --- | --- |
 | **Thievery** ✓ | Agility | **Lockpicking** ✓, **Pickpocketing** ✓ (coins from mobs with `steal`; players later), **Disarm Traps**, **Fence** (with Trade: sell stolen goods) |
 | **Stealth** | Agility | **Sneak** (move without being announced), **Hide** (unseen while still), **Shadowing** (follow unseen), capstone **Vanish** (hide mid-fight) |
-| **Survival** | Intuition | **Foraging** (find food and herbs, by terrain), **Tracking** (see who passed and where they went), **Skinning** and **Butchering** (working a beast's corpse for its pelt, meat and trophies: see [Harvest what's cut, loot what's left](darkwood.md#harvest-whats-cut-loot-whats-left)), **Camping** (rest well outdoors), **Navigation** |
+| **Survival** | Intuition | **Foraging** (find food and herbs, by terrain), **Tracking** (see who passed and where they went), **Skinning** ✓ and **Butchering** ✓ (working a beast's corpse for its pelt, meat and trophies: see [Harvest what's cut, loot what's left](darkwood.md#harvest-whats-cut-loot-whats-left)), **Camping** (rest well outdoors), **Navigation** |
 | **Nature** | Intuition | **Herbalism** (know and gather herbs), **Brewing** (with Crafting: draughts and poultices) |
 | **Healing** | Intuition | **First Aid** (bind wounds out of a fight, with bandages), **Treat Poison**, **Surgery** (expert) |
 | **Animals** | Charisma | **Animal Handling** (calm an angry beast, so it won't attack you), **Riding**, **Taming** (a companion) |

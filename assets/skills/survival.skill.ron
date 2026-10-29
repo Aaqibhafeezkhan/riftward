@@ -20,6 +20,41 @@
                 ),
             ),
         ),
+        // Skinning and Butchering are aimed at a beast's corpse (`skin`, `butcher`): {target} is
+        // the corpse, {item} what was cut from it. What a beast yields is its template's
+        // `harvest`; each kind once per corpse, and a botched cut spoils it.
+        "skinning": (
+            name: "Skinning",
+            description: "Taking the hide or pelt from a beast's corpse before it rots, with 'skin [<corpse>]' (or 'use skinning <corpse>'), with a blade on you. A clumsy cut spoils it; a clean one is worth more.",
+            attribute: Agility,
+            kind: Active(aim: Item, tool: "blade", cooldown: 2, against: "3", effects: [Find(kind: "hide")]),
+            text: (
+                hit: (
+                    actor: "You work your blade under the skin of {target}, and take {item}.",
+                    room: "{actor} skins {target}, and takes {item}.",
+                ),
+                miss: (
+                    actor: "You hack at {target}, but the hide tears and is spoiled.",
+                    room: "{actor} hacks at {target}, spoiling the hide.",
+                ),
+            ),
+        ),
+        "butchering": (
+            name: "Butchering",
+            description: "Cutting meat and trophies (antlers, tusks, fangs) from a beast's corpse before it rots, with 'butcher [<corpse>]' (or 'use butchering <corpse>'), with a blade on you. A clumsy job wastes it; a clean one is worth more.",
+            attribute: Agility,
+            kind: Active(aim: Item, tool: "blade", cooldown: 2, against: "3", effects: [Find(kind: "meat")]),
+            text: (
+                hit: (
+                    actor: "You butcher {target}, and take {item}.",
+                    room: "{actor} butchers {target}, and takes {item}.",
+                ),
+                miss: (
+                    actor: "You butcher {target} badly, and nothing is worth keeping.",
+                    room: "{actor} makes a mess of butchering {target}.",
+                ),
+            ),
+        ),
         // `track` lists what was read after the actor's line.
         "tracking": (
             name: "Tracking",

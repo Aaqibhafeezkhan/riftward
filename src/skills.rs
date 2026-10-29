@@ -225,13 +225,20 @@ impl SkillDef {
                         Effect::Find { .. } | Effect::Reveal(effects::Revealed::Tracks)
                     )
                 }),
-                Aim::Item => only(|e| matches!(e, Effect::Reveal(effects::Revealed::Worth))),
+                Aim::Item => only(|e| {
+                    matches!(
+                        e,
+                        Effect::Find { .. } | Effect::Reveal(effects::Revealed::Worth)
+                    )
+                }),
                 _ => !effects::in_a_room(effects),
             };
             if !ok {
                 return Err(match aim {
                     Aim::Room => "is aimed at the room, so it does one Find or Reveal(Tracks)",
-                    Aim::Item => "is aimed at an item, so it does one Reveal(Worth)",
+                    Aim::Item => {
+                        "is aimed at an item, so it does one Find (from a corpse) or Reveal(Worth)"
+                    }
                     _ => "Finds or Reveals, so it must be aimed at the Room or an Item",
                 }
                 .into());
@@ -374,6 +381,10 @@ pub enum SkillKind {
         /// An item it uses up each try, by tag: First Aid's bandage.
         #[serde(default)]
         uses: Option<String>,
+        /// A tool it needs, by tag, held or carried but not used up: Lockpicking's `"lockpick"`,
+        /// Skinning's `"blade"`. Without one, it can't be tried.
+        #[serde(default)]
+        tool: Option<String>,
         /// What the target resists it with, by opposed roll against the user's skill (its level
         /// plus its attribute). Without, it always works, unless it's `against` a difficulty.
         #[serde(default)]
@@ -908,6 +919,18 @@ pub struct Practice<'w, 's> {
     story: Res<'w, Facts>,
 }
 
+/// Whether `who` holds or carries something tagged `tool`, for a skill that needs it.
+pub fn has_tool(
+    who: Entity,
+    tool: &str,
+    items: &crate::items::ItemQuery,
+    templates: &crate::items::ItemTemplates,
+) -> bool {
+    crate::items::carried(who, items, templates)
+        .iter()
+        .any(|(_, tags)| tags.iter().any(|t| t == tool))
+}
+
 /// A character ready to use an active skill.
 pub struct Ready {
     /// Level plus the skill's attribute: what the skill pits against a difficulty.
@@ -917,19 +940,36 @@ pub struct Ready {
 
 impl Practice<'_, '_> {
     /// Check that `who` can use the active skill `key` now (they know it, it's off cooldown, they
-    /// can pay), and pay for it.
-    pub fn begin(&mut self, who: Entity, key: &str) -> Result<Ready, String> {
+    /// can pay, and have the tool it needs), and pay for it. `has` says whether they hold or carry something with a tag, for the tool it needs
+    /// ([`has_tool`]).
+    pub fn begin(
+        &mut self,
+        who: Entity,
+        key: &str,
+        has: impl Fn(&str) -> bool,
+    ) -> Result<Ready, String> {
         let skill = self
             .defs
             .skills
             .get(key)
             .ok_or_else(|| "That skill isn't part of this world any more.".to_string())?;
-        let SkillKind::Active { cost, cooldown, .. } = skill.def.kind else {
+        let SkillKind::Active {
+            cost,
+            cooldown,
+            ref tool,
+            ..
+        } = skill.def.kind
+        else {
             return Err(format!(
                 "{} isn't something you use; it just works.",
                 skill.def.name
             ));
         };
+        if let Some(tool) = tool
+            && !has(tool)
+        {
+            return Err(format!("You need a {tool} for that."));
+        }
         let (mut skills, mut vitals, attributes) =
             self.sheets.get_mut(who).map_err(|_| String::new())?;
         let elapsed = self.time.elapsed_secs_f64();
@@ -1697,6 +1737,10 @@ fn use_cmd(
                             ("trackwork", format!("{} {}", skill.key, target.trim()))
                         }
                         (None, Aim::Room) => ("roomwork", skill.key.clone()),
+                        // What's cut from a corpse is `carcasswork`'s; an item's worth `itemwork`'s.
+                        (None, Aim::Item) if finds(effects) => {
+                            ("carcasswork", format!("{} {}", skill.key, target.trim()))
+                        }
                         (None, Aim::Item) => {
                             ("itemwork", format!("{} {}", skill.key, target.trim()))
                         }

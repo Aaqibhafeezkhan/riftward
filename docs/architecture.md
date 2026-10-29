@@ -42,7 +42,7 @@ nc localhost 4000               # or telnet, TinTin++, Mudlet
 | `skills.rs` | Skill trees (`.skill.ron` assets), each character's `Skills`, progression, `Practice` for commands that use skills, passive triggers, `skills`, `use` and `grantskill` |
 | `vitals.rs` | Current health and stamina for players and mobs alike, their maximums, recovery, saving them, the status prompt and `prompt`, and the admin `setvitals` |
 | `healing.rs` | `eat` and `drink` for consumables, and `bandage`, a shortcut for `use first aid` |
-| `gathering.rs` | Active skills aimed at the room that `Find` (`roomwork`; `forage` and `gather` are shortcuts), from a room's finds, and how finds deplete and grow back |
+| `gathering.rs` | Active skills that `Find`: aimed at the room (`roomwork`; `forage` and `gather` are shortcuts), from a room's finds, and how finds deplete and grow back; and aimed at a corpse (`carcasswork`; `skin` and `butcher`), from its beast's `harvest` |
 | `tracking.rs` | Tracks left in rooms by whoever walks through, and active skills that read them (`trackwork`; `track` is a shortcut to Tracking) |
 | `groups.rs` | Following and groups: `follow`, `nofollow`, `group`, `gtell`, `disband`, `autoassist`; followers walking after whoever they follow (a tick later, so they see them go), and groups tidying up when someone logs off. What a group shares in a fight is in `combat` |
 | `facts.rs` | The fact store: what the game remembers about its story, by owner (the world, a character, a character's quest, a mob template) and key, with values, lapsing, and saving as they change, and the GMs' `facts world\|<player>` ([Facts](facts.md)) |

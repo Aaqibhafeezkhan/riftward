@@ -8,8 +8,9 @@
         // the other side of a door.
         "lockpicking": (
             name: "Lockpicking",
-            description: "Opening locks without their keys, with 'use lockpicking <door or container>' or 'pick <door or container>'. Your Lockpicking (level plus Agility) against how hard the lock is to pick; some can't be picked at all.",
+            description: "Opening locks without their keys, with 'use lockpicking <door or container>' or 'pick <door or container>', if you have lockpicks. Your Lockpicking (level plus Agility) against how hard the lock is to pick; some can't be picked at all.",
             kind: Active(
+                tool: "lockpick",
                 aim: Lock,
                 cost: Stamina(1),
                 cooldown: 2,

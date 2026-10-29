@@ -98,6 +98,94 @@
             weapon: (skill: "knives:basics", damage: (1, 5)),
             value: 35,
         ),
+        "rabbit_pelt": (
+            name: "a rabbit pelt",
+            keywords: ["pelt", "rabbit", "fur"],
+            description: "A soft brown pelt, still a little damp on the skin side. Good for a glove lining, or a child's hat.",
+            bulk: Light,
+            tags: ["pelt"],
+            value: 4,
+        ),
+        "rabbit_meat": (
+            name: "a joint of rabbit",
+            keywords: ["rabbit", "joint", "meat"],
+            description: "A skinned, jointed rabbit, lean and dark. It wants a pot and some wild garlic.",
+            bulk: Light,
+            tags: ["meat"],
+            value: 2,
+        ),
+        "fox_pelt": (
+            name: "a fox pelt",
+            keywords: ["pelt", "fox", "fur"],
+            description: "A russet fox pelt with a white-tipped brush, thick and glossy. Furriers in town pay well for a clean one.",
+            bulk: Bulk(1),
+            tags: ["pelt"],
+            value: 10,
+        ),
+        "deer_hide": (
+            name: "a deer hide",
+            keywords: ["hide", "deer", "skin"],
+            description: "A large russet hide, heavy and stiff, waiting for a tanner.",
+            bulk: Bulk(3),
+            tags: ["pelt"],
+            value: 15,
+        ),
+        "venison": (
+            name: "a haunch of venison",
+            keywords: ["venison", "haunch", "meat"],
+            description: "A heavy haunch of dark red meat, wrapped in leaves. Enough to feed a table.",
+            bulk: Bulk(2),
+            tags: ["meat"],
+            value: 6,
+        ),
+        "stag_antlers": (
+            name: "a stag's antlers",
+            keywords: ["antlers", "stag", "trophy"],
+            description: "A great spread of twelve-pointed antlers, still joined at the skull. Someone will want them over a hearth.",
+            bulk: Bulk(3),
+            tags: ["trophy"],
+            value: 30,
+        ),
+        "boar_hide": (
+            name: "a boar hide",
+            keywords: ["hide", "boar", "skin"],
+            description: "A tough, bristly hide, thick enough to turn a careless blade.",
+            bulk: Bulk(2),
+            tags: ["pelt"],
+            value: 12,
+        ),
+        "boar_meat": (
+            name: "a side of boar",
+            keywords: ["boar", "side", "meat", "pork"],
+            description: "A fatty side of wild boar, gamier than any farm pig.",
+            bulk: Bulk(2),
+            tags: ["meat"],
+            value: 5,
+        ),
+        "boar_tusks": (
+            name: "a pair of boar tusks",
+            keywords: ["tusks", "boar", "trophy"],
+            description: "Two curved yellow tusks as long as your hand, their edges worn sharp.",
+            bulk: Light,
+            tags: ["trophy"],
+            value: 20,
+        ),
+        "frog_legs": (
+            name: "a pair of frog legs",
+            keywords: ["legs", "frog", "meat"],
+            description: "Two long, pale frog legs, each as big as a chicken's. The kitchen in town won't ask where they came from.",
+            bulk: Light,
+            tags: ["meat"],
+            value: 3,
+        ),
+        "badger_pelt": (
+            name: "a badger pelt",
+            keywords: ["pelt", "badger", "fur"],
+            description: "A coarse grey pelt with a striped face, the hair stiff enough for shaving brushes.",
+            bulk: Bulk(1),
+            tags: ["pelt"],
+            value: 12,
+        ),
     },
     mobs: {
         "hunter": (
@@ -110,7 +198,7 @@
             skills: {"survival:foraging": 25, "survival:tracking": 25, "knives:basics": 20},
             attack: "knives:basics",
             equipment: ["hunting_knife"],
-            teaches: ["survival:foraging", "survival:tracking"],
+            teaches: ["survival:foraging", "survival:tracking", "survival:skinning", "survival:butchering"],
             shop: (
                 sells: ["hunting_knife", "riftwatch:waterskin", "riftwatch:torch"],
                 buys: ["trophy", "pelt", "meat"],
@@ -138,6 +226,7 @@
             health: 3,
             avoids: ["boar"],
             traits: ["skittish"],
+            harvest: {"hide": [("rabbit_pelt", 1)], "meat": [("rabbit_meat", 1)]},
         ),
         "fox": (
             name: "a fox",
@@ -150,6 +239,7 @@
             health: 6,
             avoids: ["boar"],
             traits: ["skittish"],
+            harvest: {"hide": [("fox_pelt", 1)]},
         ),
         "adder": (
             name: "an adder",
@@ -178,6 +268,7 @@
             health: 10,
             avoids: ["boar"],
             traits: ["skittish"],
+            harvest: {"hide": [("deer_hide", 1)], "meat": [("venison", 1)]},
         ),
         "red_stag": (
             name: "a red stag",
@@ -191,6 +282,7 @@
             attack: "beast:antlers",
             health: 25,
             tactics: 20,
+            harvest: {"hide": [("deer_hide", 1)], "meat": [("venison", 60), ("stag_antlers", 40)]},
         ),
         "young_boar": (
             name: "a young boar",
@@ -204,6 +296,7 @@
             attack: "beast:gore",
             health: 10,
             aggressive: true,
+            harvest: {"hide": [(None, 50), ("boar_hide", 50)], "meat": [("boar_meat", 1)]},
         ),
         "wild_boar": (
             name: "a wild boar",
@@ -219,6 +312,7 @@
             tactics: 30,
             aggressive: true,
             traits: ["furious"],
+            harvest: {"hide": [("boar_hide", 1)], "meat": [("boar_meat", 70), ("boar_tusks", 30)]},
         ),
         "giant_frog": (
             name: "a giant frog",
@@ -232,6 +326,7 @@
             tactics: 30,
             // Leaps out at people who come near; leaves the beasts be.
             aggressive: true,
+            harvest: {"meat": [("frog_legs", 1)]},
         ),
         "badger": (
             name: "a badger",
@@ -243,6 +338,7 @@
             attack: "beast:bite",
             health: 14,
             traits: ["thick_hide"],
+            harvest: {"hide": [("badger_pelt", 1)]},
         ),
         "hedge_shaman": (
             name: "the hedge-shaman",
