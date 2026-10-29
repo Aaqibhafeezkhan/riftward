@@ -10,7 +10,8 @@
 //! - `progress`: counting kills, and moving through stages.
 //! - `report`: `report`, and paying out.
 //! - `claims`: deadlines, and `abandon`.
-//! - `loot`: quest items a holder still needs always drop for them.
+//! - `loot`: what a boss drops for those on its quest.
+//! - `why`: GMs' account of where someone stands in a quest, and why.
 
 mod board;
 mod claims;
@@ -19,10 +20,12 @@ mod journal;
 mod loot;
 mod progress;
 mod report;
+mod why;
 
 use bevy::prelude::*;
 
 use crate::command::{AddCommand, Category, CommandSpec};
+use crate::db::Permission;
 use board::{Offers, accept, board};
 use claims::{Claims, abandon, expire_claims, load_claims};
 use def::{QuestDef, QuestLoader, load_quests, sync_quests};
@@ -30,6 +33,7 @@ use journal::journal;
 use loot::{deaths, want_loot};
 use progress::count_progress;
 use report::report;
+use why::why;
 
 pub use def::Quests;
 pub use journal::QuestLog;
@@ -78,6 +82,13 @@ impl Plugin for QuestsPlugin {
                     .usage("abandon <quest>")
                     .summary("give up a quest you're on; a contract costs some merit"),
                 abandon,
+            )
+            .add_command(
+                CommandSpec::new("why", Category::Admin)
+                    .usage("why <player> <quest>")
+                    .summary("where a player stands in a quest, and why: every objective and test")
+                    .permission(Permission::Events),
+                why,
             )
             .add_command(
                 CommandSpec::new("journal", Category::Character)

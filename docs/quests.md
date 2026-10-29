@@ -398,7 +398,7 @@ GMs and admins make and run quests from inside the game, like builders do rooms:
 | `quest advance <player> <id>` | Push a player past a stage, for `Manual` goals or a broken one |
 | `quest reward <player> <id>` | Pay out the rewards by hand |
 | `quest release <id>` | Put a claimed notice back on the board, its holder's claim written off |
-| `why <player> <quest>` | Show the quest's stage, each objective and rule, each condition and whether it held, and the facts it read ([Facts](facts.md#why-did-or-didnt-it-happen)) |
+| `why <player> <quest>` | Show the quest's stage, each objective and rule, each condition and whether it held, and the facts it read ([Facts](facts.md#why-did-or-didnt-it-happen)) (*built*: online or not; what needs them in the game, like what they carry or a `Meet`, is said to be unknown while they're away) |
 | `facts <player>` / `facts world` | List the facts set: a player's own and their quests', online or not, or the world's (*built*) |
 | `guild promote <player>` / `guild merit <player> <n>` | Run a promotion trial live, or correct merit (*built*: merit raises rank through Iron by itself, and says when a trial rank is earned) |
 | `guild expel <player>` / `guild reinstate <player>` | Throw a member out, taking their tag, or take them back without the fee (*built*) |
@@ -438,7 +438,7 @@ In the smallest pull requests that each leave the game working, every one with i
 15. *Built.* **Progress in a group:** offering to the group, one claim and timer, and the progress of every holder in the room moving together. Finding, reaching and the rest count the same way as their objectives arrive.
 16. *Built.* **`report_to`, `Obtain`, and items given on taking a quest:** adds *Herbs for the Herbalist* and *Word to the Hunter*.
 17. *Built.* **`Reach`, `Meet` and `posted_when`:** adds *The Ravine*, *The Rat King* and *What Feeds the Slimes*.
-18. **`why`,** for GMs, once there are rules to explain.
+18. *Built.* **`why`,** for GMs, once there are rules to explain.
 
 **Steps, choices and consequences**
 

@@ -79,7 +79,7 @@ First, before the quest engine, in five small pull requests: the store, world fl
 
 ## Why did or didn't it happen
 
-Rule-driven content lives or dies on answering that. GMs and admins get **`why`**: `why <player> <quest>` shows the quest's stage, each objective and rule, each condition in it, and whether it held, with the facts it read; `facts <player>` and `facts world` list what's set (*built*: a player's own facts and their quests', online or not).
+Rule-driven content lives or dies on answering that. GMs and admins get **`why`**: `why <player> <quest>` shows the quest's stage, each objective and rule, each condition in it, and whether it held, with the facts it read (*built* 2026-10-28: `posted_when`, `requires` and `Meet` term by term, each objective with its `quest.` fact and what it needs, the claim and its time, and whether it's ready to report); `facts <player>` and `facts world` list what's set (*built*: a player's own facts and their quests', online or not).
 
 ## Open questions
 
