@@ -33,7 +33,6 @@ use crate::vitals::{BaseHealth, Maxima, Vitals};
 use crate::world::{ArmourDef, InRoom, Player, WeaponDef};
 
 /// The skill that helps avoid attacks.
-const DODGE: &str = "athletics:dodge";
 /// Stamina a riposte takes.
 const RIPOSTE_COST: f32 = 1.0;
 
@@ -113,19 +112,17 @@ fn attack_rating(
         + boosts.attack_with(&skill.key)
 }
 
-/// Defence before conditions: Reaction and Dodge, plus auras and passive bonuses.
+/// Defence before conditions: Reaction, plus auras and passive skills' `Defence` bonuses (Dodge's
+/// a point a level), less what armour takes off.
 pub(super) fn defence_rating(
     attributes: &Attributes,
-    skills: &Skills,
     aura: Bonus,
     boosts: &Boosts,
     gear: &ArmourDef,
 ) -> Defence {
-    let dodge = skills.0.get(DODGE).map_or(0, |s| s.level as i32);
     let penalty = (f64::from(gear.penalty) - boosts.armour_ease).max(0.0);
     Defence {
-        evasion: f64::from(attributes.get(Attribute::Reaction) + dodge + aura.defence)
-            + boosts.defence
+        evasion: f64::from(attributes.get(Attribute::Reaction) + aura.defence) + boosts.defence
             - penalty,
         block: if gear.block > 0 {
             f64::from(gear.block) + boosts.block
@@ -223,14 +220,8 @@ pub fn ratings(
     )?;
     let skill = defs.skills.get(&strike.skill)?;
     let attack = attack_rating(f.attributes, f.skills, skill, aura, &boosts);
-    let defence = defence_rating(
-        f.attributes,
-        f.skills,
-        aura,
-        &boosts,
-        &gear(entity, items, templates),
-    )
-    .total();
+    let defence =
+        defence_rating(f.attributes, aura, &boosts, &gear(entity, items, templates)).total();
     Some((attack.max(1.0), defence.max(1.0)))
 }
 

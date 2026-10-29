@@ -6,9 +6,9 @@
     skills: {
         "dodge": (
             name: "Dodge",
-            description: "Getting out of the way. It makes you harder to hit, and every attack you avoid trains it.",
+            description: "Getting out of the way. It makes you harder to hit, a point of defence with every level, and every attack you avoid trains it.",
             attribute: Reaction,
-            kind: Passive(triggers: [Dodged]),
+            kind: Passive(triggers: [Dodged], bonuses: [(stat: Defence, per: 1)]),
             // Shown instead of a miss when someone who knows it avoids an attack: {actor} is the
             // dodger, {target} the attacker.
             text: (

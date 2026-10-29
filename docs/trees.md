@@ -60,7 +60,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 
 | Tree | Attribute | Skills |
 | --- | --- | --- |
-| **Athletics** ✓ | Body (Reaction for Dodge, Willpower for Endurance) | **Dodge** ✓ (passive), **Endurance** ✓ (passive: practised by spending stamina; with passive bonuses, +1 max stamina per 5 levels), **Toughness** (passive: +max health), **Climbing** and **Swimming** (rooms that need them), **Running** (flee better, travel tires less) |
+| **Athletics** ✓ | Body (Reaction for Dodge, Willpower for Endurance) | **Dodge** ✓ (passive: +1 defence a level, a `Defence` bonus in its file), **Endurance** ✓ (passive: practised by spending stamina; with passive bonuses, +1 max stamina per 5 levels), **Toughness** (passive: +max health), **Climbing** and **Swimming** (rooms that need them), **Running** (flee better, travel tires less) |
 
 ### Getting by
 

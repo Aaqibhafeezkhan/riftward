@@ -141,7 +141,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let d_boosts = boosts(d.skills, self.defs);
         let aura = self.auras.get(&target).copied().unwrap_or_default();
         let d_gear = gear(target, self.items, self.templates);
-        let parts = defence_rating(d.attributes, d.skills, aura, &d_boosts, &d_gear);
+        let parts = defence_rating(d.attributes, aura, &d_boosts, &d_gear);
         // Someone sitting down, or caught unawares by an opener, is much easier to hit.
         let caught = self.resting.contains(&target) || u.opener;
         let halved = |n: f64| if caught { n / 2.0 } else { n };

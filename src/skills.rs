@@ -2457,6 +2457,17 @@ mod tests {
                     .from_str(&text)
                     .unwrap_or_else(|err| panic!("{} doesn't parse: {err}", path.display()));
                 let conditions = crate::combat::defs_on_disk();
+                // Dodge makes everyone who knows it harder to hit: a point of defence a level.
+                if let Some(SkillKind::Passive { bonuses, .. }) =
+                    tree.skills.get("dodge").map(|d| &d.kind)
+                {
+                    assert!(
+                        bonuses
+                            .iter()
+                            .any(|b| b.stat == Stat::Defence && b.per == 1),
+                        "Dodge gives no Defence"
+                    );
+                }
                 for (id, skill) in &tree.skills {
                     if let SkillKind::Active {
                         command: Some(command),
