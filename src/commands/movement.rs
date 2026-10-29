@@ -46,6 +46,8 @@ pub struct View<'w, 's> {
     pub lit: Res<'w, crate::light::LitRooms>,
     /// The conditions rooms have of their own: brambles, webs.
     pub room_conditions: Query<'w, 's, &'static crate::world::RoomConditions>,
+    /// Which hidden doors each character has found.
+    pub door_sight: crate::world::DoorSight<'w, 's>,
 }
 
 impl View<'_, '_> {
@@ -104,12 +106,16 @@ pub fn look(
     let Some(actor) = Actor::get(&players, inv.entity) else {
         return;
     };
-    let lookup = view
+    // The ways out they know of: a hidden door they haven't found isn't one.
+    let known = view
         .rooms
         .get(actor.room)
         .ok()
+        .map(|(_, _, exits)| view.door_sight.exits(exits, actor.character_id));
+    let lookup = known
+        .as_ref()
         .filter(|_| !inv.args.is_empty())
-        .map(|(_, _, exits)| {
+        .map(|exits| {
             let lookup = find_door(&inv.args, exits, |e| keywords.get(e).ok());
             (lookup, exits)
         });
@@ -280,6 +286,10 @@ pub fn travel(
         .get(actor.room)
         .ok()
         .and_then(|(_, _, exits)| exits.0.get(&dir))
+        .filter(|exit| {
+            exit.door
+                .is_none_or(|d| view.door_sight.knows(d, actor.character_id))
+        })
     else {
         out.push(Outgoing::line(entity, "You can't go that way."));
         return out;
@@ -678,17 +688,34 @@ pub fn describe_room(
         }
     }
 
+    // A hidden door they haven't found isn't a way out for them; builders see it, marked.
+    let character = players
+        .get(viewer)
+        .ok()
+        .and_then(|(_, player, _, _)| player.map(|p| p.character_id));
     let exit_list: Vec<_> = exits
         .0
         .iter()
+        .filter(|(_, exit)| {
+            show_id
+                || exit
+                    .door
+                    .is_none_or(|d| view.door_sight.knows(d, character))
+        })
         .map(|(dir, exit)| {
             let state = exit
                 .door
                 .and_then(|d| view.doors.get(d).ok())
                 .map(|d| d.state);
+            let hidden = show_id && exit.door.is_some_and(|d| view.door_sight.is_hidden(d));
+            let dir = if hidden {
+                format!("{dir} (hidden)")
+            } else {
+                dir.clone()
+            };
             match state {
                 Some(DoorState::Closed | DoorState::Locked) => format!("{dir} (closed)"),
-                _ => dir.clone(),
+                _ => dir,
             }
         })
         .collect();

@@ -1727,13 +1727,17 @@ fn flee(
                     exits
                         .0
                         .iter()
-                        // No one flees up a cliff or into deep water.
+                        // No one flees up a cliff, into deep water, or through a door they don't
+                        // know is there.
                         .filter(|(_, exit)| {
                             exit.needs.is_none()
                                 && exit
                                     .door
                                     .and_then(|d| view.doors.get(d).ok())
                                     .is_none_or(|d| d.is_open())
+                                && exit
+                                    .door
+                                    .is_none_or(|d| view.door_sight.knows(d, actor.character_id))
                         })
                         .map(|(dir, exit)| (dir.clone(), exit.to))
                         .collect()

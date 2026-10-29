@@ -212,7 +212,7 @@ Planned 2026-10-29: the gaps left, each a small pull request with its issue, so 
 5. **A pack bonus** ([#29](https://github.com/Foxworks-Studios/riftward/issues/29), *built* 2026-10-29): an `allies` formula input, how many of its allies fight beside it; *Pack Hunter* is then a trait applying a per-turn `Attack` bonus at that strength.
 6. **Mobs that hide and ambush** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), first half, *built* 2026-10-29): a hidden aggressive mob strikes first from hiding, unavoidably, then is seen; out of a fight it hides again. The spider in its web.
 7. **A find with a consequence** (*built* 2026-10-29): a `Finds` trigger, so a room's condition answers someone gathering there: the bee tree's angry bees.
-8. **Hidden doors** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), second half): found with `search`, remembered per character.
+8. **Hidden doors** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), second half, *built* 2026-10-29): found with `search`, remembered per character.
 
 Later, once the deep wood exists: Navigation and getting lost, ranged combat, Rift-touched mutations. Then the deep wood itself, as data.
 

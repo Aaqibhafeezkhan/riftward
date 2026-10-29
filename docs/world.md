@@ -322,7 +322,7 @@ Weather, with the time system, will change the ground. A room can say what it be
 
 ## Doors
 
-Status: built, except hidden doors and resets. Doors open, close, lock and unlock (with their key), and can be picked and bashed.
+Status: built, except door resets. Hidden doors are built (2026-10-29). Doors open, close, lock and unlock (with their key), and can be picked and bashed.
 
 Exits keep their short form, `"west": "square"`. A longer form adds a door, defined once in the zone and named by both sides, so opening it from one room opens it from the other:
 
@@ -356,6 +356,7 @@ rooms: {
 | `door <dir> lock` | Give it a lock (pick 5, bash 10, no key yet) that starts locked |
 | `door <dir> nolock` | Remove its lock |
 | `door <dir> open` / `closed` | Set whether it starts open or closed |
+| `door <dir> hidden <n>` / `visible` | Hide the door, found with `search` against `n`, or show it again |
 | `door <dir> remove` | Remove the door from both sides |
 | `door <dir>` | Show the door: id, how it starts, its lock |
 
@@ -363,10 +364,13 @@ The door's id comes from its name (`a heavy oak door` → `heavy_oak_door`). Cha
 
 ### Hidden doors
 
-A door with `hidden: true` isn't in a room's exits **for each character until that character finds it**. To someone who hasn't found it, the exit doesn't exist: "You can't go that way."
+*Built* (2026-10-29, [#9](https://github.com/Foxworks-Studios/riftward/issues/9)). A door with `hidden: <n>` (how hard it is to find) isn't in a room's exits **for each character until that character finds it**. To someone who hasn't found it, the exit doesn't exist: it isn't listed, "You can't go that way.", `look` that way sees nothing, it can't be opened, picked or bashed, and no one flees through it.
 
-- **Finding** uses a `search` command, rolled through `Dice` against Intuition and a searching skill, or happens when a condition is met (`reveal_when: WorldFlag("lever_pulled")`).
-- **Found doors are remembered per character,** as a [flag](skills.md#hidden-skills) on the character (`found_door:town:bookcase`), so they stay found across resets and restarts. Other players still have to find it themselves.
+- **Finding** is `search`: the searcher's Intuition, doubled for a deliberate search (`search_bonus`), against `n`, by opposed roll with Luck, for each hidden door out of the room they haven't found. "You find a pair of iron-banded doors, hidden to the north!" A search finds hidden people and doors at once.
+- **Found doors are remembered per character,** as a `char.` [fact](facts.md) (`found_door:riftwatch:bookcase`), so they stay found across resets and restarts, from both sides of the door. Other players still have to find it themselves.
+- **Mobs know every door,** hidden or not: a smuggler uses his own way out.
+- **Builders see them,** marked "(hidden)" in the exits, and hide or show one with `door <dir> hidden <n>` and `door <dir> visible`.
+- **Later:** finding one when a condition is met (`reveal_when: WorldFlag("lever_pulled")`), and a searching skill adding to the roll.
 
 ## Crowding
 

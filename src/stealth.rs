@@ -135,6 +135,63 @@ pub fn unhide(commands: &mut Commands, who: Entity) {
     });
 }
 
+/// What `search` needs to find hidden doors, and remember them found.
+#[derive(bevy::ecs::system::SystemParam)]
+struct HiddenDoors<'w, 's> {
+    exits: Query<'w, 's, &'static crate::world::Exits>,
+    doors: Query<
+        'w,
+        's,
+        (
+            &'static crate::world::Door,
+            &'static crate::world::DoorKey,
+            &'static crate::world::HiddenDoor,
+        ),
+    >,
+    story: ResMut<'w, crate::facts::Facts>,
+    db: Res<'w, crate::db::Database>,
+}
+
+/// Hidden doors out of `actor`'s room they find with this eye (Intuition, doubled for a search)
+/// and Luck, each against how hard it is to find; found, they're remembered found. What to tell
+/// them. A mob knows every door already.
+fn find_doors(
+    actor: &Actor,
+    eye: f64,
+    luck: i32,
+    dice: &mut Dice,
+    mut h: HiddenDoors,
+) -> Vec<String> {
+    let Some(id) = actor.character_id else {
+        return Vec::new();
+    };
+    let owner = crate::facts::Owner::Character(id);
+    let now = crate::time::unix_now();
+    let mut told = Vec::new();
+    let Ok(exits) = h.exits.get(actor.room) else {
+        return told;
+    };
+    for (dir, exit) in &exits.0 {
+        let Some((door, key, hard)) = exit.door.and_then(|d| h.doors.get(d).ok()) else {
+            continue;
+        };
+        let fact = crate::world::found_door(key);
+        if h.story.is_set(&owner, &fact, now) {
+            continue;
+        }
+        if dice.opposed(eye, luck, f64::from(hard.0.max(1)), 0).won {
+            h.story
+                .set(&owner, &fact, crate::facts::Value::Bool(true), None, &h.db);
+            told.push(format!(
+                "You find {}, hidden {}!",
+                door.name,
+                crate::commands::movement::toward(dir)
+            ));
+        }
+    }
+    told
+}
+
 /// Mobs alive and out of a fight: those that might hide again.
 type Idle<'w, 's> = Query<
     'w,
@@ -269,6 +326,7 @@ fn name_of(players: &Characters, mobs: &Query<&Mob>, who: Entity) -> String {
 }
 
 /// `search`: look hard for anyone hiding here, with double your Intuition.
+#[allow(clippy::too_many_arguments)]
 fn search(
     In(inv): In<Invocation>,
     mut both: ParamSet<(Characters, Hiders)>,
@@ -277,6 +335,7 @@ fn search(
     mobs: Query<&Mob>,
     mut dice: ResMut<Dice>,
     mut events: MessageWriter<GameEvent>,
+    hidden_doors: HiddenDoors,
 ) {
     let Some(actor) = Actor::get(&both.p0(), inv.entity) else {
         return;
@@ -308,7 +367,11 @@ fn search(
     }
     let players = both.p0();
     let mut out = Vec::new();
-    let told = if found.is_empty() {
+    // And any hidden way out they haven't found, by the same eye.
+    let doors = find_doors(&actor, intuition, luck, &mut dice, hidden_doors);
+    let told = if found.is_empty() && !doors.is_empty() {
+        doors.join("\r\n")
+    } else if found.is_empty() {
         "You search the shadows, but find no one.".to_string()
     } else {
         found
@@ -317,6 +380,7 @@ fn search(
                 let name = name_of(&players, &mobs, *who);
                 format!("You spot {name} hiding in the shadows!")
             })
+            .chain(doors)
             .collect::<Vec<_>>()
             .join("\r\n")
     };

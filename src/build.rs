@@ -131,8 +131,8 @@ impl Plugin for BuildPlugin {
             .add_command(
                 build(
                     "door",
-                    "door <dir> [<name> | lock | nolock | key <item> | open | closed | remove]",
-                    "show, add, rename or remove a door, give it a lock and key, or set how it starts",
+                    "door <dir> [<name> | lock | nolock | key <item> | open | closed | hidden <n> | visible | remove]",
+                    "show, add, rename or remove a door, give it a lock and key, set how it starts, or hide it (found with search, against n)",
                 ),
                 door_cmd,
             )
@@ -1008,7 +1008,7 @@ fn door(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply 
                 "There's no door {}. Add one with 'door {dir} <name>'.",
                 toward(&dir)
             )),
-            "lock" | "nolock" | "open" | "closed" | "remove" | "key" => Err(format!(
+            "lock" | "nolock" | "open" | "closed" | "remove" | "key" | "visible" => Err(format!(
                 "There's no door {}. Add one first with 'door {dir} <name>'.",
                 toward(&dir)
             )),
@@ -1054,6 +1054,20 @@ fn door(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply 
                 Ok(describe_door(&dir, &key, door))
             })
         }
+        _ if rest == "hidden" || rest.starts_with("hidden ") => {
+            let hard: u32 = rest["hidden".len()..]
+                .trim()
+                .parse()
+                .map_err(|_| format!("Usage: door {dir} hidden <how hard to find, 1 or more>"))?;
+            edit_door(&key, zones, |door| {
+                door.hidden = Some(hard.max(1));
+                Ok(describe_door(&dir, &key, door))
+            })
+        }
+        "visible" => edit_door(&key, zones, |door| {
+            door.hidden = None;
+            Ok(describe_door(&dir, &key, door))
+        }),
         "lock" | "nolock" | "open" | "closed" => edit_door(&key, zones, |door| {
             match rest {
                 "lock" => {
@@ -1105,8 +1119,11 @@ fn describe_door(dir: &str, key: &DoorKey, door: &DoorDef) -> String {
             )
         }
     };
+    let hidden = door
+        .hidden
+        .map_or(String::new(), |n| format!(", hidden (found against {n})"));
     format!(
-        "The {dir} door: {} [{key}], starts {starts}, {lock}.",
+        "The {dir} door: {} [{key}], starts {starts}, {lock}{hidden}.",
         door.name
     )
 }
@@ -1164,6 +1181,7 @@ fn add_door(
                 keywords: Vec::new(),
                 state: DoorState::Closed,
                 lock: None,
+                hidden: None,
             },
         );
         room_mut(zone, here)?

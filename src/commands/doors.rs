@@ -90,6 +90,7 @@ pub struct Lockables<'w, 's> {
     items: Query<'w, 's, (Entity, &'static mut Item, &'static ItemLocation)>,
     keywords: Query<'w, 's, &'static Keywords>,
     templates: Res<'w, ItemTemplates>,
+    door_sight: crate::world::DoorSight<'w, 's>,
 }
 
 /// The door or container a command acts on, as it is now.
@@ -148,6 +149,8 @@ fn find_lockable(
         return Err(inv.usage_error());
     }
     let (_, _, exits) = world.rooms.get(actor.room).map_err(|_| String::new())?;
+    // A hidden door they haven't found isn't there to open, pick or bash.
+    let exits = &world.door_sight.exits(exits, actor.character_id);
     match find_door(&inv.args, exits, |e| world.keywords.get(e).ok()) {
         DoorLookup::Door { door, dir } => {
             let (found, key) = world.doors.get(door).map_err(|_| String::new())?;

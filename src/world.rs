@@ -417,6 +417,10 @@ pub struct DoorDef {
     pub state: DoorState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lock: Option<LockDef>,
+    /// Hidden, and how hard to find: a bookcase that swings aside. Its exit isn't there for a
+    /// character until they find it with `search`, and found, it stays found for them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<u32>,
 }
 
 impl DoorDef {
@@ -1536,6 +1540,55 @@ pub struct Door {
     pub lock: Option<LockDef>,
 }
 
+/// A hidden door, and how hard it is to find (`DoorDef::hidden`).
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HiddenDoor(pub u32);
+
+/// The fact (a character's) that they've found a hidden door: `found_door:zone:door`.
+pub fn found_door(key: &DoorKey) -> String {
+    format!("found_door:{}:{}", key.zone, key.door)
+}
+
+/// Who knows of which hidden doors: everyone of a door not hidden, every mob of every door, and
+/// a character of one they've found.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct DoorSight<'w, 's> {
+    hidden: Query<'w, 's, &'static DoorKey, With<HiddenDoor>>,
+    story: Res<'w, crate::facts::Facts>,
+}
+
+impl DoorSight<'_, '_> {
+    /// Whether the character with this id (`None` for a mob) knows of `door`.
+    pub fn knows(&self, door: Entity, character: Option<i64>) -> bool {
+        match (self.hidden.get(door), character) {
+            (Err(_), _) | (_, None) => true,
+            (Ok(key), Some(id)) => self.story.is_set(
+                &crate::facts::Owner::Character(id),
+                &found_door(key),
+                crate::time::unix_now(),
+            ),
+        }
+    }
+
+    /// Whether `door` is hidden at all.
+    pub fn is_hidden(&self, door: Entity) -> bool {
+        self.hidden.contains(door)
+    }
+
+    /// `exits` as the character with this id knows them: without hidden doors they haven't
+    /// found.
+    pub fn exits(&self, exits: &Exits, character: Option<i64>) -> Exits {
+        Exits(
+            exits
+                .0
+                .iter()
+                .filter(|(_, exit)| exit.door.is_none_or(|d| self.knows(d, character)))
+                .map(|(dir, exit)| (dir.clone(), *exit))
+                .collect(),
+        )
+    }
+}
+
 impl Door {
     pub fn is_open(&self) -> bool {
         self.state == DoorState::Open
@@ -1660,6 +1713,10 @@ fn sync_doors(
                 }
                 door.state = fit(door.state);
                 commands.entity(entity).insert(def.keywords());
+                match def.hidden {
+                    Some(hard) => commands.entity(entity).insert(HiddenDoor(hard)),
+                    None => commands.entity(entity).remove::<HiddenDoor>(),
+                };
             }
             None => {
                 let entity = commands
@@ -1674,6 +1731,9 @@ fn sync_doors(
                         def.keywords(),
                     ))
                     .id();
+                if let Some(hard) = def.hidden {
+                    commands.entity(entity).insert(HiddenDoor(hard));
+                }
                 door_index.0.insert(key.clone(), entity);
             }
         }
@@ -2439,12 +2499,65 @@ mod tests {
     }
 
     #[test]
+    fn a_hidden_door_is_there_only_for_whoever_found_it() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        world.init_resource::<crate::facts::Facts>();
+        let key = DoorKey::parse("test:bookcase", "");
+        let (study, passage) = (world.spawn_empty().id(), world.spawn_empty().id());
+        let bookcase = world.spawn((key.clone(), HiddenDoor(6))).id();
+        let exits = Exits(BTreeMap::from([
+            (
+                "north".to_string(),
+                Exit {
+                    to: passage,
+                    door: Some(bookcase),
+                    needs: None,
+                },
+            ),
+            (
+                "south".to_string(),
+                Exit {
+                    to: study,
+                    door: None,
+                    needs: None,
+                },
+            ),
+        ]));
+        let ways = move |world: &mut World, who: Option<i64>| {
+            let exits = Exits(exits.0.clone());
+            world
+                .run_system_once(move |sight: DoorSight| {
+                    sight.exits(&exits, who).0.into_keys().collect::<Vec<_>>()
+                })
+                .unwrap()
+        };
+        assert_eq!(ways(&mut world, Some(1)), ["south"], "not found yet");
+        assert_eq!(
+            ways(&mut world, None),
+            ["north", "south"],
+            "a mob knows its way"
+        );
+        let db = crate::db::Database::open(":memory:").unwrap();
+        world.resource_mut::<crate::facts::Facts>().set(
+            &crate::facts::Owner::Character(1),
+            &found_door(&key),
+            crate::facts::Value::Bool(true),
+            None,
+            &db,
+        );
+        assert_eq!(ways(&mut world, Some(1)), ["north", "south"], "found");
+        assert_eq!(ways(&mut world, Some(2)), ["south"], "someone else hasn't");
+    }
+
+    #[test]
     fn door_keywords_skip_articles() {
         let def = DoorDef {
             name: "a heavy oak door".into(),
             keywords: Vec::new(),
             state: DoorState::Closed,
             lock: None,
+            hidden: None,
         };
         assert_eq!(def.keywords().0, ["heavy", "oak", "door"]);
     }

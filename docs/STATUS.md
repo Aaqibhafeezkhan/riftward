@@ -57,7 +57,7 @@ Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order
 - Puppeting is for GMs and admins (builders can't). `help` still lists GM commands under "Building" and "Admin" ([#4](https://github.com/Foxworks-Studios/riftward/issues/4)). While puppeting, the builder hears nothing of their own body, even if it's attacked. Lessons (`learn`) and account commands (`raise`, `alias`, `describe`) are for players only.
 - Conditions: Nourished and Hidden are data conditions now. Modifiers beyond the fifteen built (initiative, attributes, blind, fear, haste…) come when something needs them. Little content uses the newer conditions yet (envenomed blades poison, nothing casts sleep); designers can, with `Apply`, `Imbue` and `grants`.
 - Item conditions can't yet change an item's own stats (rust), make it impossible to remove (curses), or go on armour.
-- No mob hides yet, and `search` doesn't find hidden doors yet (they aren't built) ([#9](https://github.com/Foxworks-Studios/riftward/issues/9)).
+- Mobs hide and ambush, and `search` finds hidden doors (2026-10-29, [#9](https://github.com/Foxworks-Studios/riftward/issues/9)); no zone has a hidden door yet, and a searching skill doesn't add to the roll.
 - Hiding isn't saved: logging out shows you, and a restart forgets everyone's hiding.
 - Rat tails, herbs, the Rat King's tooth and the heart of the deep are all asked for by contracts now. Bosses (`boss: true`) always drop what someone on their quest still needs; rats' tails stay at their 30%.
 - Foraging's patch numbers are first guesses: three finds a room, one back every 10 minutes.
