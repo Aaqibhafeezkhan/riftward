@@ -207,6 +207,14 @@ pub(super) fn count_progress(
                     match quest.lead(i, way) {
                         Lead::Stage(next) => {
                             lines.extend(hand.act(&quest.stages[i].on_end, quest, holder));
+                            // A stage that failed it leads nowhere.
+                            let failed = (holder.character_id, quest.id.clone());
+                            if hand.failed.0.contains(&failed) {
+                                out.extend(
+                                    lines.drain(..).map(|line| Outgoing::line(*entity, line)),
+                                );
+                                continue;
+                            }
                             let stage = &quest.stages[next];
                             lines.push(format!("\x1b[1;33m{}:\x1b[0m {}", quest.name, stage.text));
                             record.stage = quest.stage_key(next);
@@ -315,6 +323,7 @@ mod tests {
     /// What stage actions need, besides what each test sets up.
     fn stagehand(world: &mut World) {
         world.init_resource::<QuestMobs>();
+        world.init_resource::<crate::quests::actions::PendingFailures>();
         world.init_resource::<crate::world::RoomIndex>();
         world.init_resource::<crate::skills::SkillDefs>();
         world.init_resource::<crate::characters::Races>();

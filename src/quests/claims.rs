@@ -57,7 +57,7 @@ fn forfeit(quest: &QuestDef) -> i64 {
 /// (`what`: "failed", "gave up"), merit forfeited from `membership`, the claim freed. What to
 /// tell them about it, beyond the news itself.
 #[allow(clippy::too_many_arguments)]
-fn write_off(
+pub(super) fn write_off(
     quest: Option<&QuestDef>,
     mut record: QuestRecord,
     state: &str,

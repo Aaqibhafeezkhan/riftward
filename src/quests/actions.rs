@@ -30,7 +30,13 @@ pub(super) struct Stagehand<'w, 's> {
     skill_defs: Res<'w, crate::skills::SkillDefs>,
     races: Res<'w, crate::characters::Races>,
     dice: ResMut<'w, crate::dice::Dice>,
+    /// Quests a `Fail` failed, for `failures::fail_pending` to write off.
+    pub(super) failed: ResMut<'w, PendingFailures>,
 }
+
+/// Quests a stage's `Fail` has failed, by character id and quest, waiting to be written off.
+#[derive(Resource, Default, Debug)]
+pub struct PendingFailures(pub Vec<(i64, String)>);
 
 /// One holder a stage begins or ends for: a player, by their saved id.
 #[derive(Clone, Copy, Debug)]
@@ -90,6 +96,12 @@ impl Stagehand<'_, '_> {
                     {
                         taken.push(entity);
                         lines.push(format!("You hand over {}.", item.name));
+                        // Handed over as asked, it isn't lost.
+                        self.story.clear(
+                            &Owner::Quest(holder.character_id, quest.id.clone()),
+                            &super::failures::had_key(&key),
+                            &self.db,
+                        );
                         crate::healing::used_up(&mut self.commands, &self.db, entity, item);
                     }
                 }
@@ -142,6 +154,10 @@ impl Stagehand<'_, '_> {
                             },
                         );
                     }
+                }
+                Action::Fail => {
+                    self.failed.0.push((holder.character_id, quest.id.clone()));
+                    break;
                 }
                 Action::Say(mob, text) => {
                     let name = self

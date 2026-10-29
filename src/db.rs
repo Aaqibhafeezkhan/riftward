@@ -717,6 +717,16 @@ impl Database {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
+    /// Everyone holding `quest`, by character id, in the game or not.
+    pub fn quest_holders(&self, quest: &str) -> DbResult<Vec<i64>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT character_id FROM character_quests WHERE quest = ?1 AND state = 'held'",
+        )?;
+        let rows = stmt.query_map([quest], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// The claims that are out: each quest held with a deadline, by whom, until when.
     pub fn claims(&self) -> DbResult<Vec<(i64, String, i64)>> {
         let conn = self.conn();

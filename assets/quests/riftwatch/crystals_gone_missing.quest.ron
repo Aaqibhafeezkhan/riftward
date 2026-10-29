@@ -47,4 +47,6 @@
         "returned": (journal: "You returned the crystals to the guild.", rewards: [Coin(300), Merit(30)]),
         "sold": (journal: "You sold the guild's crystals in the back alley.", rewards: [Coin(900), Set("char.sold_out_the_guild", true)]),
     },
+    // Lose the crystals once they're yours, and it's failed.
+    fails_if: [Lost("stolen_crystals")],
 )

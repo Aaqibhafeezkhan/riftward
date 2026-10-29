@@ -10,6 +10,7 @@
 //! - `progress`: counting kills, and moving through stages.
 //! - `report`: `report`, and paying out.
 //! - `claims`: deadlines, and `abandon`.
+//! - `failures`: what a quest's `fails_if` fails it on.
 //! - `loot`: what a boss drops for those on its quest.
 //! - `ask`: asking mobs about the topics a quest gives them.
 //! - `spawned`: mobs a quest brings into the world, and clearing them away.
@@ -20,6 +21,7 @@ mod ask;
 mod board;
 mod claims;
 mod def;
+mod failures;
 mod journal;
 mod loot;
 mod progress;
@@ -35,6 +37,7 @@ use ask::ask;
 use board::{Offers, accept, board};
 use claims::{Claims, abandon, expire_claims, load_claims};
 use def::{QuestDef, QuestLoader, load_quests, sync_quests};
+use failures::{fail_on_deaths, fail_on_losses, fail_pending};
 use journal::journal;
 use loot::{deaths, want_loot};
 use progress::count_progress;
@@ -55,11 +58,23 @@ impl Plugin for QuestsPlugin {
             .init_resource::<Claims>()
             .init_resource::<Offers>()
             .init_resource::<QuestMobs>()
+            .init_resource::<actions::PendingFailures>()
             .add_systems(Startup, (load_quests, load_claims))
-            .add_systems(Update, (sync_quests, count_progress))
+            .add_systems(Update, (sync_quests, count_progress, fail_on_deaths))
+            // What a stage's `Fail` failed, written off once whatever ran it is done.
             .add_systems(
                 Update,
-                (expire_claims, clear_quest_mobs.after(count_progress))
+                fail_pending
+                    .after(count_progress)
+                    .after(crate::command::dispatch),
+            )
+            .add_systems(
+                Update,
+                (
+                    expire_claims,
+                    fail_on_losses,
+                    clear_quest_mobs.after(count_progress),
+                )
                     .run_if(crate::time::heartbeat()),
             )
             // Just before loot is rolled for what died, what holders still need from it.
@@ -145,6 +160,7 @@ pub(super) mod testing {
             report_to: None,
             gives: Vec::new(),
             endings: Default::default(),
+            fails_if: Vec::new(),
             rewards: vec![Reward::Coin(250)],
         }
     }

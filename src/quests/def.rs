@@ -63,6 +63,20 @@ pub struct QuestDef {
     /// `rewards` (and of a contract's merit, which an ending pays only as `Merit`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub endings: BTreeMap<String, EndingDef>,
+    /// What fails it, for the holders it happens to, while they hold it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fails_if: Vec<Failure>,
+}
+
+/// Something that fails a quest.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Failure {
+    /// A mob of this template dies: the one the quest spawned, for those it came for; any
+    /// other (an escort, Narina), for everyone holding the quest.
+    Dies(String),
+    /// A holder who has had this item no longer has it on them. Handing it over as the quest
+    /// asks isn't losing it.
+    Lost(String),
 }
 
 /// One way a quest can end.
@@ -201,6 +215,9 @@ pub enum Action {
     /// it came for (`Kill(Quest("courier"))`), and it's cleared away once none of them holds the
     /// quest. One already there for the quest is shared, not doubled.
     Spawn(String, String),
+    /// The quest fails for them, as a claim running out does; nothing after it in the list
+    /// happens.
+    Fail,
 }
 
 impl Action {
@@ -411,6 +428,12 @@ impl QuestDef {
         let Posted::Board(room) = &self.posted;
         names.rooms.push(full(room));
         names.mobs.extend(self.report_to.as_deref().map(full));
+        for failure in &self.fails_if {
+            match failure {
+                Failure::Dies(mob) => names.mobs.push(full(mob)),
+                Failure::Lost(item) => names.items.push(full(item)),
+            }
+        }
         names.mobs.extend(
             self.stages
                 .iter()
@@ -468,7 +491,7 @@ impl QuestDef {
                     names.mobs.push(full(mob));
                     names.rooms.push(full(room));
                 }
-                Action::Set(..) | Action::Add(..) | Action::Clear(_) => {}
+                Action::Set(..) | Action::Add(..) | Action::Clear(_) | Action::Fail => {}
             }
         }
         names
@@ -1056,6 +1079,7 @@ mod tests {
             report_to: None,
             gives: Vec::new(),
             endings: Default::default(),
+            fails_if: Vec::new(),
             rewards: Vec::new(),
         };
         let stage = |objectives| Stage {
