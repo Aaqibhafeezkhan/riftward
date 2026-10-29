@@ -33,6 +33,11 @@ pub(super) enum Deed<'a> {
         room: &'a RoomKey,
         name: &'a str,
     },
+    Asked {
+        mob: &'a MobKey,
+        topic: &'a str,
+        name: &'a str,
+    },
 }
 
 impl Deed<'_> {
@@ -49,6 +54,9 @@ impl Deed<'_> {
             (Deed::Reached { room, .. }, Objective::Reach(id)) => {
                 RoomKey::parse(id, zone) == **room
             }
+            (Deed::Asked { mob, topic, .. }, Objective::Ask(id, about)) => {
+                MobKey::parse(id, zone) == **mob && about.eq_ignore_ascii_case(topic)
+            }
             _ => false,
         }
     }
@@ -59,6 +67,9 @@ impl Deed<'_> {
             Deed::Killed { name, .. } => format!("{} killed", without_article(name)),
             Deed::Obtained { name, .. } => format!("{} found", without_article(name)),
             Deed::Reached { name, .. } => format!("{name} reached"),
+            Deed::Asked { name, topic, .. } => {
+                format!("{} asked about {topic}", crate::combat::the(name))
+            }
         }
     }
 }
@@ -109,6 +120,14 @@ pub(super) fn count_progress(
                     },
                 )
             }
+            GameEvent::Asked { who, mob, topic } => (
+                *who,
+                Deed::Asked {
+                    mob,
+                    topic,
+                    name: mobs.0.get(mob).map_or("someone", |def| def.name.as_str()),
+                },
+            ),
             GameEvent::Obtained { who, key, .. } => {
                 let Some(def) = items.0.get(key) else {
                     continue;

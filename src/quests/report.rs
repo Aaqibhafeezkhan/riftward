@@ -44,7 +44,10 @@ fn readiness(
     let (mut missing, mut taken) = (Vec::new(), Vec::new());
     for objective in &stage.objectives {
         match objective {
-            Objective::Kill(..) | Objective::Obtain(..) | Objective::Reach(_) => {
+            Objective::Kill(..)
+            | Objective::Obtain(..)
+            | Objective::Reach(_)
+            | Objective::Ask(..) => {
                 let need = objective.count();
                 let key = objective.key(&place, zone);
                 let have = key.map(|key| lookup.story.number(&owner, &key, lookup.now));

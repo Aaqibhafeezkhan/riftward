@@ -1,7 +1,7 @@
 //! What a quest is, as written in its file: the format, checking it, and loading every quest
 //! into `Quests`, hot-reloaded.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use bevy::asset::io::Reader;
@@ -111,6 +111,10 @@ pub struct Stage {
     /// it's time to report.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<String>,
+    /// What mobs say while it's the stage a holder is on, when asked (`ask <mob> about <topic>`):
+    /// by mob, each topic and its answer, written as it's to be read.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub topics: BTreeMap<String, Vec<(String, String)>>,
     /// What happens as a holder comes to it (on taking the quest, for the first).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub on_begin: Vec<Action>,
@@ -160,6 +164,9 @@ pub enum Objective {
     Reach(String),
     /// A requirement that holds when reporting: a flag, a skill's level, a world flag.
     Meet(Requirement),
+    /// Someone asked about something, of a topic the stage gives them: `Ask("contract_clerk",
+    /// "crystals")`.
+    Ask(String, String),
 }
 
 /// Which mobs: a template, or any with a tag.
@@ -200,6 +207,18 @@ impl QuestDef {
             }
         }
         for stage in &self.stages {
+            // What it asks to be asked, it gives an answer to.
+            for objective in &stage.objectives {
+                if let Objective::Ask(mob, topic) = objective
+                    && !stage.topics.get(mob).is_some_and(|topics| {
+                        topics.iter().any(|(t, _)| t.eq_ignore_ascii_case(topic))
+                    })
+                {
+                    return Err(format!(
+                        "asks {mob} about {topic}, and gives them no answer"
+                    ));
+                }
+            }
             if let Some(next) = &stage.next
                 && !ids.contains(&next.as_str())
             {
@@ -294,12 +313,18 @@ impl QuestDef {
                 Objective::Bring(ItemMatch::Item(item), _)
                 | Objective::Obtain(ItemMatch::Item(item), _) => names.items.push(full(item)),
                 Objective::Reach(room) => names.rooms.push(full(room)),
+                Objective::Ask(mob, _) => names.mobs.push(full(mob)),
                 Objective::Kill(MobMatch::Tag(_), _)
                 | Objective::Bring(ItemMatch::Tag(_), _)
                 | Objective::Obtain(ItemMatch::Tag(_), _)
                 | Objective::Meet(_) => {}
             }
         }
+        names.mobs.extend(
+            self.stages
+                .iter()
+                .flat_map(|s| s.topics.keys().map(|mob| full(mob))),
+        );
         for action in self
             .stages
             .iter()
@@ -399,6 +424,11 @@ impl Objective {
             }
             Objective::Obtain(ItemMatch::Tag(tag), _) => Some(format!("{stage}.obtain.tag.{tag}")),
             Objective::Reach(room) => Some(format!("{stage}.reach.{}", RoomKey::parse(room, zone))),
+            Objective::Ask(mob, topic) => Some(format!(
+                "{stage}.ask.{}.{}",
+                MobKey::parse(mob, zone),
+                topic.to_lowercase()
+            )),
             Objective::Bring(..) | Objective::Meet(_) => None,
         }
     }
@@ -427,6 +457,14 @@ impl Objective {
                 (lookup.places)(&key).unwrap_or_else(|| key.to_string())
             }
             Objective::Meet(requirement) => requirement.describe(&|id| id.to_string()),
+            Objective::Ask(mob, topic) => {
+                let name = lookup
+                    .mobs
+                    .0
+                    .get(&MobKey::parse(mob, zone))
+                    .map_or_else(|| mob.clone(), |def| crate::combat::the(&def.name));
+                format!("{name} about {topic}")
+            }
         }
     }
 
@@ -453,13 +491,17 @@ impl Objective {
                 _ => format!("Reach {what} (done)"),
             },
             Objective::Meet(_) => format!("Needs {what}, checked when you report"),
+            Objective::Ask(..) => match have.unwrap_or(0) {
+                0 => format!("Ask {what}"),
+                _ => format!("Ask {what} (done)"),
+            },
         }
     }
 
     pub(super) fn count(&self) -> u32 {
         match self {
             Objective::Kill(_, n) | Objective::Bring(_, n) | Objective::Obtain(_, n) => *n,
-            Objective::Reach(_) | Objective::Meet(_) => 1,
+            Objective::Reach(_) | Objective::Meet(_) | Objective::Ask(..) => 1,
         }
     }
 }
@@ -686,6 +728,9 @@ mod tests {
             broken(vec![sets]),
             "actions change char., world. or quest. facts"
         );
+        let mut asks = stage(None, None);
+        asks.objectives = vec![Objective::Ask("clerk".into(), "crystals".into())];
+        assert!(broken(vec![asks]), "asks about what no one answers");
     }
 
     #[test]

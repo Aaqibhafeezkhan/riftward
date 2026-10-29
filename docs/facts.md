@@ -64,7 +64,7 @@ A **rule** is: when an event happens, if a condition holds, do these actions.
 | `Obtained(item or tag)` | Someone picks one up, is given one or buys one (the game event is *built*) |
 | `Gave(item, to: mob)` | Someone gives a mob an item (the game event is *built*) |
 | `Entered(room)` | Someone walks in |
-| `Asked(mob, topic)` | `ask <mob> about <topic>` |
+| `Asked(mob, topic)` | `ask <mob> about <topic>` (the game event is *built*) |
 | `Examined(thing)`, `Searched(room)` | `examine` (or `look` at an item), `search` (the game events are *built*; things are items for now) |
 | `Used(skill)` | Someone uses a skill |
 | `Every(minutes)`, `StageBegan`, `StageEnded` | Time passing; a quest moving |

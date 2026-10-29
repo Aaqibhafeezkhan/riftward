@@ -140,6 +140,13 @@ pub enum GameEvent {
     /// `who` searched `room`. Quests' `Search` will listen.
     #[allow(dead_code)]
     Searched { who: Entity, room: Entity },
+    /// `who` asked a mob of template `mob` about `topic` (`ask`), as the asker wrote it, in
+    /// lowercase. Quests' `Ask` listens.
+    Asked {
+        who: Entity,
+        mob: MobKey,
+        topic: String,
+    },
 }
 
 /// How someone came to have an item.
@@ -213,6 +220,7 @@ fn text(event: &GameEvent) -> Option<String> {
         | GameEvent::Gave { .. }
         | GameEvent::Examined { .. }
         | GameEvent::Searched { .. }
+        | GameEvent::Asked { .. }
         | GameEvent::Flees { .. } => return None,
     };
     Some(line + "\r\n")
@@ -271,6 +279,7 @@ fn announce(
             | GameEvent::Gave { .. }
             | GameEvent::Examined { .. }
             | GameEvent::Searched { .. }
+            | GameEvent::Asked { .. }
             | GameEvent::Flees { .. } => {}
             GameEvent::PhaseChanged(_) => {
                 for (entity, _, _, in_room) in &players {

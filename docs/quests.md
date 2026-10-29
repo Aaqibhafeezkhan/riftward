@@ -247,7 +247,7 @@ Collection (kill so many, bring so many) is the simplest kind, and the first con
 
 | Objective | Done when |
 | --- | --- |
-| `Ask(mob, topic)` | You ask someone about something: `ask talla about crystals`. While a stage is active it gives that mob that topic and what they say, so this is the first, small piece of [dialogue](#dialogue) |
+| `Ask(mob, topic)` | You ask someone about something: `ask talla about crystals`. While a stage is active it gives that mob that topic and what they say, so this is the first, small piece of [dialogue](#dialogue) (*built*, 2026-10-28: a stage's `topics`, by mob; counted for every holder of the group there; a quest that asks about a topic its stage doesn't answer is refused) |
 | `Give(item, to: mob)` | You give someone an item (`give` exists) |
 | `Examine(thing)` | You look closely at an item or a room's feature |
 | `Search(room)` | You search the room (`search` exists), finding what the quest has put there |
@@ -256,7 +256,7 @@ Collection (kill so many, bring so many) is the simplest kind, and the first con
 
 #### Dialogue
 
-There's no dialogue yet, and quests are what first need it. The smallest version that carries investigations: **`ask <someone> about <topic>`.** A mob answers from its own topics (data on its template, later) and from the topics any quest stage you're on gives it. An answer can move a quest on (`Ask`), and nothing else is needed for "Marin points you to the back alley". Branching conversation trees can come later, if ever.
+There's no dialogue yet, and quests are what first need it. The smallest version that carries investigations: **`ask <someone> about <topic>`.** A mob answers from its own topics (data on its template, later) and from the topics any quest stage you're on gives it. An answer can move a quest on (`Ask`), and nothing else is needed for "Marin points you to the back alley". Branching conversation trees can come later, if ever. (*Built*, 2026-10-28: `ask <someone> about <topic>`, or `ask <someone> <topic>`; the start of a topic will do, `ask marin about cryst`. Answers are shown as written, narration and all. A mob with no answer "has nothing to say about" it. Topics on mob templates themselves, outside quests, come later.)
 
 #### Worked example: Crystals Gone Missing
 
@@ -324,7 +324,7 @@ The `sold` ending pays no merit and sets a flag the guild can learn of later (a 
 | --- | --- |
 | Stages by id, `next`, choices and endings | The quest engine's own |
 | Actions on a stage's start and end (`Give`, `Take`, `Spawn`, `Flag`, `WorldFlag`, `Say`, `Fail`) | Some exist as effects (`Spawn`), world flags exist; the rest are the engine's |
-| `ask <mob> about <topic>` | No: the first piece of dialogue |
+| `ask <mob> about <topic>` | Yes (2026-10-28): answers from quest stages' topics |
 | Events for asking, giving, examining and searching | `give`, `examine` and `search` exist; none writes a game event yet |
 | Quest mobs: spawned for a quest, tagged to it, cleared when it ends | Spawning exists; tying a mob to a quest is new |
 | Escort: a mob following the holder | Following is built; mobs following a player on a quest's say-so is new |
@@ -443,7 +443,7 @@ In the smallest pull requests that each leave the game working, every one with i
 **Steps, choices and consequences**
 
 19. *Built.* **Stages by id, `next`, and actions** (`Give`, `Take`, `Set`, `Say`) when a stage begins or ends.
-20. **`ask <mob> about <topic>`** and the `Ask` objective: topics given by quest stages.
+20. *Built.* **`ask <mob> about <topic>`** and the `Ask` objective: topics given by quest stages.
 21. **Choices and endings,** each with its own rewards and journal line.
 22. **Quest mobs:** `Spawn` for a quest, tied to it, counted by `Kill(Quest(...))`, cleared when it ends. *Crystals Gone Missing* can be written in full.
 23. **`fails_if`:** a death, a lost item.

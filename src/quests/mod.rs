@@ -11,9 +11,11 @@
 //! - `report`: `report`, and paying out.
 //! - `claims`: deadlines, and `abandon`.
 //! - `loot`: what a boss drops for those on its quest.
+//! - `ask`: asking mobs about the topics a quest gives them.
 //! - `why`: GMs' account of where someone stands in a quest, and why.
 
 mod actions;
+mod ask;
 mod board;
 mod claims;
 mod def;
@@ -27,6 +29,7 @@ use bevy::prelude::*;
 
 use crate::command::{AddCommand, Category, CommandSpec};
 use crate::db::Permission;
+use ask::ask;
 use board::{Offers, accept, board};
 use claims::{Claims, abandon, expire_claims, load_claims};
 use def::{QuestDef, QuestLoader, load_quests, sync_quests};
@@ -77,6 +80,12 @@ impl Plugin for QuestsPlugin {
                     .usage("report [<quest>]")
                     .summary("report a finished quest to whoever it's for, here, and be paid"),
                 report,
+            )
+            .add_command(
+                CommandSpec::new("ask", Category::Communication)
+                    .usage("ask <someone> about <topic>")
+                    .summary("ask someone here about something, as a quest may want you to"),
+                ask,
             )
             .add_command(
                 CommandSpec::new("abandon", Category::Interaction)

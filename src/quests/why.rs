@@ -228,13 +228,14 @@ fn objective_line(
     let need = objective.count();
     let state = |done: bool| if done { "done" } else { "not yet" };
     match objective {
-        Objective::Kill(..) | Objective::Obtain(..) | Objective::Reach(_) => {
+        Objective::Kill(..) | Objective::Obtain(..) | Objective::Reach(_) | Objective::Ask(..) => {
             let key = objective.key(place, zone).unwrap_or_default();
             let have = lookup.story.number(owner, &key, lookup.now);
             let done = have >= i64::from(need);
             let verb = match objective {
                 Objective::Kill(..) => "Kill",
                 Objective::Obtain(..) => "Find",
+                Objective::Ask(..) => "Ask",
                 _ => "Reach",
             };
             (
