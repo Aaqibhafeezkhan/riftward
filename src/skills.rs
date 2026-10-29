@@ -65,11 +65,6 @@ const COOLDOWN_GROWTH: f64 = 1.1;
 const DISCOVERY_CHANCE: f64 = 0.001;
 /// The most a tough fight multiplies the chances of a gain or a discovery.
 const TOUGH_FIGHT_MAX_BOOST: f64 = 2.0;
-/// Skills every character starts with, whatever their race and background: a basic attack, and
-/// the passives everyone practises by living.
-pub const UNIVERSAL_SKILLS: &[&str] =
-    &["brawling:basics", "athletics:endurance", "athletics:dodge"];
-
 pub struct SkillsPlugin;
 
 impl Plugin for SkillsPlugin {
@@ -2449,6 +2444,7 @@ mod tests {
     fn skill_tree_files_parse() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/skills");
         let mut count = 0;
+        let mut known = Vec::new();
         for entry in std::fs::read_dir(&dir).unwrap() {
             let path = entry.unwrap().path();
             if path.to_string_lossy().ends_with(SKILL_EXTENSION) {
@@ -2456,6 +2452,11 @@ mod tests {
                 let tree: SkillTreeDef = ron_options()
                     .from_str(&text)
                     .unwrap_or_else(|err| panic!("{} doesn't parse: {err}", path.display()));
+                known.extend(
+                    tree.skills
+                        .keys()
+                        .map(|id| format!("{}:{id}", tree_id(&path))),
+                );
                 let conditions = crate::combat::defs_on_disk();
                 // Dodge makes everyone who knows it harder to hit: a point of defence a level.
                 if let Some(SkillKind::Passive { bonuses, .. }) =
@@ -2541,5 +2542,9 @@ mod tests {
             }
         }
         assert!(count > 0);
+        // Everyone starts with skills that exist (`world.ron`).
+        for key in &crate::world::world_def().starting_skills {
+            assert!(known.contains(key), "starting skill {key} doesn't exist");
+        }
     }
 }

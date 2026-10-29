@@ -14,7 +14,7 @@ use bevy::prelude::*;
 
 use crate::aliases::Aliases;
 use crate::attributes::{Attribute, Attributes, experience_for};
-use crate::characters::{self, Backgrounds, RaceDef, Races, STARTING_ITEMS};
+use crate::characters::{self, Backgrounds, RaceDef, Races};
 use crate::combat::{AutoAttack, Conditions, HideNumbers};
 use crate::command::{self, ActionQueue};
 use crate::commands::movement::{View, describe_room};
@@ -23,7 +23,7 @@ use crate::items::{HANDS, ItemTemplates, Quality};
 use crate::money::Purse;
 use crate::net::{self, Connection, JustConnected, PlayerInput};
 use crate::output::{Characters, Outbox, Outgoing, deliver};
-use crate::skills::{SkillDefs, Skills, UNIVERSAL_SKILLS, learn};
+use crate::skills::{SkillDefs, Skills, learn};
 use crate::spells::Spells;
 use crate::targeting::Keywords;
 use crate::vitals::{DEFAULT_PROMPT, Maxima, PromptFormat, Vitals};
@@ -778,10 +778,11 @@ fn give_kit(character_id: i64, kit: &[String], templates: &ItemTemplates, db: &D
     let mut worn: Vec<Slot> = Vec::new();
     let mut held = 0;
     let mut pouch: Option<i64> = None;
-    let all = STARTING_ITEMS
+    let all = crate::world::world_def()
+        .starting_items
         .iter()
-        .map(|s| s.to_string())
-        .chain(kit.iter().cloned());
+        .chain(kit)
+        .cloned();
     for template in all {
         let Some(def) = templates.0.get(&ItemKey::parse(&template, "")) else {
             warn!("starting item [{template}] doesn't exist");
@@ -939,7 +940,7 @@ fn enter_game(
                 .map(|b| b.skills.clone()),
         )
         .flatten()
-        .chain(UNIVERSAL_SKILLS.iter().map(|key| key.to_string()));
+        .chain(crate::world::world_def().starting_skills.iter().cloned());
     let mut learned = Vec::new();
     for key in starting {
         if let Some(skill) = choices.skills.skills.get(&key)

@@ -156,7 +156,7 @@ You can only eat or drink what you carry. Bandages are items tagged `bandage`, u
 
 ## Decay
 
-Status: built for corpses only. A mob's corpse rots in 5 minutes; a player's, holding everything they had, in 30, timed from when they fell so it survives restarts. A rotting container spills its contents where it lay. Litter, perishables and torches wait.
+Status: built for corpses only. A mob's corpse rots in 5 minutes; a player's, holding everything they had, in 30 (both in `assets/world.ron`, with the corpse itself), timed from when they fell so it survives restarts. A rotting container spills its contents where it lay. Litter, perishables and torches wait.
 
 Items rot away over time, which keeps rooms from filling with clutter and makes food, corpses and torches feel physical. It's also what keeps saved items from filling the world and the database. Each template picks one kind of decay:
 

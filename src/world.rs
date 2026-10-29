@@ -89,8 +89,56 @@ fn is_physical(kind: &String) -> bool {
     kind == PHYSICAL
 }
 
+/// Where the world's givens live, from where the server runs.
+const WORLD_FILE: &str = "assets/world.ron";
+
+/// The world's givens, from `assets/world.ron`: where characters begin and wake after dying, what
+/// everyone starts with, and what a corpse is.
+#[derive(Deserialize, Debug, Clone)]
+pub struct WorldDef {
+    /// Where new characters (and anyone whose room disappears) end up.
+    pub start_room: String,
+    /// Where players wake after they die.
+    pub respawn_room: String,
+    /// What every new character starts with, before their background's kit.
+    pub starting_items: Vec<String>,
+    /// Skills every character starts with, whatever their race and background.
+    pub starting_skills: Vec<String>,
+    /// The corpse template, `core:corpse`.
+    pub corpse: ItemDef,
+    /// Real minutes before a mob's corpse rots away.
+    pub mob_corpse_minutes: i64,
+    /// Real minutes before a player's corpse rots away.
+    pub player_corpse_minutes: i64,
+    /// What a player who died is told as they wake, and what the room sees.
+    pub death: DeathText,
+}
+
+/// What dying says: to the one who woke, and to the room they wake in (`{name}`).
+#[derive(Deserialize, Debug, Clone)]
+pub struct DeathText {
+    pub you: String,
+    pub room: String,
+}
+
+static WORLD: std::sync::OnceLock<WorldDef> = std::sync::OnceLock::new();
+
+/// The world's givens, read from `assets/world.ron` the first time they're needed. A file that's
+/// missing or wrong stops the server, as `progression.ron` does.
+pub fn world_def() -> &'static WorldDef {
+    WORLD.get_or_init(|| {
+        let text = std::fs::read_to_string(WORLD_FILE)
+            .unwrap_or_else(|err| panic!("can't read {WORLD_FILE}: {err}"));
+        ron_options()
+            .from_str(&text)
+            .unwrap_or_else(|err| panic!("{WORLD_FILE} doesn't parse: {err}"))
+    })
+}
+
 /// Where new characters (and anyone whose room disappears) end up.
-pub const START_ROOM: &str = "riftwatch:market";
+pub fn start_room() -> RoomKey {
+    RoomKey::parse(&world_def().start_room, "")
+}
 
 pub struct WorldPlugin;
 
@@ -1477,7 +1525,7 @@ pub struct RoomIndex(pub HashMap<RoomKey, Entity>);
 
 impl RoomIndex {
     pub fn start(&self) -> Option<Entity> {
-        self.0.get(&RoomKey::parse(START_ROOM, "")).copied()
+        self.0.get(&start_room()).copied()
     }
 }
 
@@ -1614,9 +1662,9 @@ fn sync_world(
         }
     }
 
-    let start_key = RoomKey::parse(START_ROOM, "");
+    let start_key = start_room();
     if !defs.contains_key(&start_key) {
-        error!("start room '{START_ROOM}' does not exist in any zone; keeping the current world");
+        error!("start room '{start_key}' does not exist in any zone; keeping the current world");
         return;
     }
 
@@ -2157,8 +2205,14 @@ mod tests {
                 }
             }
         }
-        if !room_exists(&RoomKey::parse(START_ROOM, "")) {
-            problems.push(format!("start room '{START_ROOM}' doesn't exist"));
+        let world = world_def();
+        for (what, room) in [
+            ("start", &world.start_room),
+            ("respawn", &world.respawn_room),
+        ] {
+            if !room_exists(&RoomKey::parse(room, "")) {
+                problems.push(format!("{what} room '{room}' doesn't exist"));
+            }
         }
         assert!(
             problems.is_empty(),

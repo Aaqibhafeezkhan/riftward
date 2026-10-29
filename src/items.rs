@@ -29,8 +29,8 @@ use crate::stealth::visible;
 use crate::targeting::{Keywords, Target};
 use crate::time::heartbeat;
 use crate::world::{
-    Capacity, DoorState, Having, ItemDef, ItemKey, Player, RoomIndex, RoomKey, START_ROOM, Slot,
-    ZoneDef, format_bulk, without_article,
+    Capacity, DoorState, Having, ItemDef, ItemKey, Player, RoomIndex, RoomKey, Slot, ZoneDef,
+    format_bulk, without_article,
 };
 
 pub struct ItemsPlugin;
@@ -382,25 +382,14 @@ pub fn corpse_key() -> ItemKey {
     }
 }
 
-/// How long a mob's corpse lasts, and a player's, which holds everything they had.
-pub const MOB_CORPSE_SECS: i64 = 5 * 60;
-pub const PLAYER_CORPSE_SECS: i64 = 30 * 60;
+/// How long a mob's corpse lasts, in seconds (`world.ron`).
+pub fn mob_corpse_secs() -> i64 {
+    crate::world::world_def().mob_corpse_minutes * 60
+}
 
-fn corpse_template() -> ItemDef {
-    ItemDef {
-        keywords: vec!["corpse".into(), "body".into()],
-        description: "A lifeless body, already beginning to stiffen.".into(),
-        bulk: crate::world::Bulk::Bulk(20),
-        fixed: true,
-        container: Some(crate::world::ContainerDef {
-            capacity: Capacity::Count(100),
-            accepts: Vec::new(),
-            max_item: None,
-            state: DoorState::Open,
-            lock: None,
-        }),
-        ..ItemDef::named("a corpse")
-    }
+/// How long a player's corpse lasts, holding everything they had, in seconds (`world.ron`).
+pub fn player_corpse_secs() -> i64 {
+    crate::world::world_def().player_corpse_minutes * 60
 }
 
 /// Lay a corpse in `room`, named for who it was. `id` makes it real, for a player's corpse.
@@ -1068,7 +1057,9 @@ fn sync_templates(
             templates.0.insert(key, def.clone());
         }
     }
-    templates.0.insert(corpse_key(), corpse_template());
+    templates
+        .0
+        .insert(corpse_key(), crate::world::world_def().corpse.clone());
     for (entity, mut item, own_name) in &mut items {
         if own_name {
             continue;
@@ -1359,7 +1350,9 @@ pub fn restore_room_items(
             Some(&room) => room,
             None => {
                 warn!("item {id} was in missing room '{room}'; moving it to the start room");
-                if let Err(err) = db.move_item(id, &ItemPlace::Room(START_ROOM.into())) {
+                if let Err(err) =
+                    db.move_item(id, &ItemPlace::Room(crate::world::start_room().to_string()))
+                {
                     error!("failed to move item {id}: {err}");
                 }
                 start
@@ -1392,7 +1385,7 @@ pub fn restore_room_items(
         }
         // A player's corpse goes on rotting from when it fell.
         if ItemKey::parse(&template, "") == corpse_key() {
-            let at = dropped_at.unwrap_or_default() + PLAYER_CORPSE_SECS;
+            let at = dropped_at.unwrap_or_default() + player_corpse_secs();
             commands.entity(entity).insert(Decays { at });
         }
     }

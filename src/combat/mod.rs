@@ -43,8 +43,7 @@ use crate::effects::When;
 use crate::events::GameEvent;
 use crate::groups::{self, Groups, InGroup, NoAssist};
 use crate::items::{
-    self, ItemLocation, ItemMutQuery, ItemQuery, ItemTemplates, MOB_CORPSE_SECS,
-    PLAYER_CORPSE_SECS, Quality, capitalized,
+    self, ItemLocation, ItemMutQuery, ItemQuery, ItemTemplates, Quality, capitalized,
 };
 use crate::mobs::{self, Mob, MobQuery, MobTemplates};
 use crate::money::{self, Purse};
@@ -75,8 +74,6 @@ pub use strike::{Blow, Fighters, Move, Round, name_of};
 pub const ROUND_SECS: f64 = 3.0;
 /// Everyone's most basic attack, used until they choose another.
 pub const BASIC_ATTACK: &str = "brawling:basics";
-/// Where players wake after they die.
-const RESPAWN_ROOM: &str = "riftwatch:shrine";
 /// Stamina it takes to flee.
 const FLEE_COST: f32 = 2.0;
 /// The chance of getting away, before Luck.
@@ -1305,7 +1302,7 @@ pub fn handle_deaths(
                 &mob.name,
                 None,
                 in_room.0,
-                now + MOB_CORPSE_SECS,
+                now + items::mob_corpse_secs(),
             )
         };
         let place = match corpse {
@@ -1469,7 +1466,7 @@ pub fn handle_deaths(
             &actor.name,
             corpse_id,
             actor.room,
-            now + PLAYER_CORPSE_SECS,
+            now + items::player_corpse_secs(),
         ) {
             for (_, mut item, mut location) in &mut items {
                 if location.holder() != Some(entity) {
@@ -1495,7 +1492,7 @@ pub fn handle_deaths(
         // They wake at the shrine, hurt and tired.
         let shrine = index
             .0
-            .get(&RoomKey::parse(RESPAWN_ROOM, ""))
+            .get(&RoomKey::parse(&crate::world::world_def().respawn_room, ""))
             .copied()
             .or_else(|| index.start())
             .unwrap_or(actor.room);
@@ -1517,19 +1514,12 @@ pub fn handle_deaths(
         }
         commands.entity(entity).remove::<(Dead, Fighting)>();
 
-        let mut out = vec![Outgoing::line(
-            entity,
-            "\x1b[1;31mYou have been killed!\x1b[0m\r\n\r\nDarkness takes you... and then candlelight. \
-             You wake on the cold stones of the Wayside Shrine, aching in every bone. Everything \
-             you carried lies with your body where you fell.",
-        )];
+        let death = &crate::world::world_def().death;
+        let mut out = vec![Outgoing::line(entity, death.you.clone())];
         out.push(Outgoing::Room {
             room: shrine,
             except: entity,
-            text: format!(
-                "{} stirs on the shrine's floor, pale and shaken.\r\n",
-                actor.name
-            ),
+            text: format!("{}\r\n", death.room.replace("{name}", &actor.name)),
         });
         deliver(out, &mut log);
         if let Some((spec, id)) = registry.find("look", actor.role) {

@@ -103,13 +103,10 @@ pub struct BackgroundDef {
     /// Starting skills.
     #[serde(default)]
     pub skills: Vec<String>,
-    /// Starting kit, as item templates (`zone:item`), on top of [`STARTING_ITEMS`].
+    /// Starting kit, as item templates (`zone:item`), on top of the `starting_items` in `world.ron`.
     #[serde(default)]
     pub items: Vec<String>,
 }
-
-/// What every new character starts with, whatever their background.
-pub const STARTING_ITEMS: &[&str] = &["riftwatch:plain_clothes", "riftwatch:belt_pouch"];
 
 /// Every race, in menu order.
 #[derive(Resource, Default)]
@@ -435,7 +432,7 @@ mod tests {
         }
         let backgrounds = read::<BackgroundDef>("backgrounds.ron");
         let mut problems = Vec::new();
-        for template in STARTING_ITEMS {
+        for template in &crate::world::world_def().starting_items {
             if !items.contains_key(&ItemKey::parse(template, "")) {
                 problems.push(format!("starting item {template} doesn't exist"));
             }

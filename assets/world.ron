@@ -1,0 +1,34 @@
+// The world's givens: where characters begin and wake after dying, what everyone starts with,
+// and what a corpse is. Read when the server starts, so restart it after a change.
+// See docs/architecture.md#data.
+(
+    // Where new characters begin, and where anyone whose room has gone ends up.
+    start_room: "riftwatch:market",
+    // Where players wake after they die.
+    respawn_room: "riftwatch:shrine",
+    // What every new character starts with, whatever their background (which adds its own kit).
+    starting_items: ["riftwatch:plain_clothes", "riftwatch:belt_pouch"],
+    // Skills every character starts with, whatever their race and background: a basic attack, and
+    // the passives everyone practises by living.
+    starting_skills: ["brawling:basics", "athletics:endurance", "athletics:dodge"],
+    // The corpse left where someone dies, `core:corpse`; it's named for who it was ("the corpse of
+    // a sewer rat") and answers to their name too.
+    corpse: (
+        name: "a corpse",
+        keywords: ["corpse", "body"],
+        description: "A lifeless body, already beginning to stiffen.",
+        bulk: Bulk(20),
+        fixed: true,
+        container: (capacity: Count(100)),
+    ),
+    // Real minutes before a corpse rots away, spilling what it holds: a mob's, and a player's,
+    // which holds everything they had.
+    mob_corpse_minutes: 5,
+    player_corpse_minutes: 30,
+    // What a player who died is told as they wake at the respawn room, and what those there see
+    // ({name} is who woke).
+    death: (
+        you: "\x1b[1;31mYou have been killed!\x1b[0m\r\n\r\nDarkness takes you... and then candlelight. You wake on the cold stones of the Wayside Shrine, aching in every bone. Everything you carried lies with your body where you fell.",
+        room: "{name} stirs on the shrine's floor, pale and shaken.",
+    ),
+)

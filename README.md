@@ -59,7 +59,7 @@ MUD_DB=/tmp/scratch.db MUD_ADDR=127.0.0.1:4001 cargo run
 | `assets/skills/`, `assets/spells/` | Skill trees and spell books |
 | `assets/conditions/`, `assets/traits/` | Conditions (staggered, poisoned, nourished) and traits (what a creature or race is) |
 | `assets/quests/` | Quests, one file each, by zone |
-| `assets/*.ron` | Races, backgrounds, damage types, the guild, progression numbers |
+| `assets/*.ron` | Races, backgrounds, damage types, the guild, progression numbers, and the world's givens (`world.ron`: start room, starting kit, death) |
 | `docs/` | The design, one document per area, and what's built |
 
 ## Learn more
