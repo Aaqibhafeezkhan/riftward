@@ -305,8 +305,16 @@
             wear: Neck,
             tags: ["guild_tag"],
         ),
+        "bronze_tag": (
+            name: "a bronze guild tag",
+            keywords: ["tag", "bronze", "guild"],
+            description: "A bronze disc on a leather cord, stamped with the guild's shield, quill and sword, and worn warm and brown by handling.",
+            bulk: Negligible,
+            wear: Neck,
+            tags: ["guild_tag"],
+        ),
         "iron_tag": (
-            name: "a iron guild tag",
+            name: "an iron guild tag",
             keywords: ["tag", "iron", "guild"],
             description: "An iron disc on a chain, stamped with the guild's shield, quill and sword, dark and heavy.",
             bulk: Negligible,

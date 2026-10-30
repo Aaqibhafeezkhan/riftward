@@ -503,6 +503,11 @@ pub(super) fn pay(
             && !m.expelled
         {
             m.contracts += 1;
+            // Work below their rank counts for less.
+            let merit = quest
+                .contract
+                .as_ref()
+                .map_or(merit, |c| m.credit(&c.rank, merit));
             let promoted = m.earn(merit);
             m.save(Some(character_id), &d.hand.db);
             if merit > 0 {

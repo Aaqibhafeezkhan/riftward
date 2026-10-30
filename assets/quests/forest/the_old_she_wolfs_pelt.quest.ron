@@ -1,0 +1,17 @@
+// The Old She-Wolf's Pelt: the pack's leader, and a pelt a lord wants on his floor.
+(
+    name: "The Old She-Wolf's Pelt",
+    summary: "A lord in the keep wants the pelt of the old she-wolf who leads the deep wood's packs.",
+    description: "The wolves of the deep wood follow an old she-wolf who denned there before anyone in Riftwatch was born, and a lord in the keep has heard of her and wants her pelt for his hall. She lies in the wolf den in the heart of the deep wood, among her pack. Kill her, skin her cleanly, and bring Marin Harrow her great grey pelt.",
+    posted: Board("riftwatch:contract_hall"),
+    contract: Some((rank: "bronze", merit: 40)),
+    availability: Claimed(for: Days(8)),
+    repeat: Every(Days(7)),
+    stages: [
+        (
+            text: "Kill the old she-wolf in the wolf den, and bring back her great grey pelt.",
+            objectives: [Kill(Mob("old_she_wolf"), 1), Bring(Item("great_wolf_pelt"), 1)],
+        ),
+    ],
+    rewards: [Coin(800)],
+)

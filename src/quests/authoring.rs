@@ -134,7 +134,10 @@ pub(super) fn edit(d: &mut Desk, gm: &Actor, args: &str) -> String {
                         rank: rank.to_string(),
                         merit,
                     });
-                    Ok(format!("a {rank} contract for {merit} merit"))
+                    Ok(format!(
+                        "{} {rank} contract for {merit} merit",
+                        crate::characters::article(rank)
+                    ))
                 }
                 Err(_) => Err("Merit is a number.".into()),
             },

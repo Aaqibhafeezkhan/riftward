@@ -40,6 +40,11 @@ pub struct GuildDef {
     pub clerk: String,
     /// Copper for a new tag, when one is lost.
     pub tag_fee: u64,
+    /// What a contract's merit is multiplied by for each rank it's below its taker's: killing
+    /// rats is a feat for a Bone member, and nothing much for a Gold one.
+    pub merit_below_rank: f64,
+    /// And for each rank it's above: work beyond your rank, done, is worth more.
+    pub merit_above_rank: f64,
     /// Lowest first.
     pub ranks: Vec<RankDef>,
 }
@@ -133,6 +138,24 @@ impl Membership {
 
     fn rank_name(&self) -> &'static str {
         guild().ranks.get(self.rank).map_or("", |r| r.name.as_str())
+    }
+
+    /// What a contract of rank `contract` that pays `merit` earns them: less for each rank it's
+    /// below theirs (`merit_below_rank`), more for each it's above (`merit_above_rank`), rounded
+    /// down. A loss counts as it is.
+    pub fn credit(&self, contract: &str, merit: i64) -> i64 {
+        let Some(rank) = guild().rank(contract).filter(|&r| r != self.rank) else {
+            return merit;
+        };
+        if merit <= 0 {
+            return merit;
+        }
+        let times = if rank < self.rank {
+            guild().merit_below_rank.powi((self.rank - rank) as i32)
+        } else {
+            guild().merit_above_rank.powi((rank - self.rank) as i32)
+        };
+        (merit as f64 * times).floor() as i64
     }
 
     /// Add `merit` (or take it, never below nothing), promoting them through ranks that need no
@@ -505,7 +528,8 @@ fn standing(actor: &Actor, l: &Ledger) -> String {
         );
     }
     let mut text = format!(
-        "You're a {} member of {}, with {} merit and {} contract{} done.",
+        "You're {} {} member of {}, with {} merit and {} contract{} done.",
+        crate::characters::article(m.rank_name()),
         m.rank_name(),
         guild().name,
         m.merit,
@@ -759,19 +783,39 @@ mod tests {
     #[test]
     fn merit_raises_rank_up_to_the_first_trial() {
         let mut m = Membership::new();
-        assert!(m.earn(49).is_empty());
+        assert!(m.earn(99).is_empty());
         assert_eq!(m.rank, 0);
         let lines = m.earn(1);
-        assert_eq!(m.rank, 1, "Copper at 50");
+        assert_eq!(m.rank, 1, "Copper at 100");
         assert!(lines[0].contains("Copper"));
-        // Enough for Iron and Silver at once: Iron comes by itself, Silver needs a trial.
-        let lines = m.earn(600);
-        assert_eq!(m.rank, 2);
+        // Enough for Bronze, Iron and Silver at once: Bronze and Iron come by themselves, Silver
+        // needs a trial.
+        let lines = m.earn(1500);
+        assert_eq!(m.rank, 3);
         assert!(lines.iter().any(|l| l.contains("Iron")));
         assert!(lines.iter().any(|l| l.contains("trial")));
         // Losing merit never loses rank.
         m.earn(-10_000);
-        assert_eq!((m.rank, m.merit), (2, 0));
+        assert_eq!((m.rank, m.merit), (3, 0));
+    }
+
+    #[test]
+    fn work_below_your_rank_earns_less_merit_and_above_it_more() {
+        let mut m = Membership::new();
+        assert_eq!(m.credit("bone", 10), 10, "Bone work, for Bone");
+        m.earn(100);
+        assert_eq!(m.rank_name(), "Copper");
+        assert_eq!(m.credit("bone", 10), 5, "a rank below: half");
+        assert_eq!(m.credit("bone", -5), -5, "a loss counts in full");
+        assert_eq!(m.credit("copper", 25), 25);
+        assert_eq!(
+            m.credit("bronze", 40),
+            60,
+            "a rank above: half as much again"
+        );
+        m.earn(600);
+        assert_eq!(m.rank_name(), "Iron");
+        assert_eq!(m.credit("bone", 10), 1, "three ranks below: an eighth");
     }
 
     #[test]
@@ -790,6 +834,6 @@ mod tests {
                 rank.tag
             );
         }
-        assert_eq!(guild().rank("silver"), Some(3));
+        assert_eq!(guild().rank("silver"), Some(4));
     }
 }

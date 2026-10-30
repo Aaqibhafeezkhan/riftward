@@ -1,6 +1,6 @@
 # The Darkwood
 
-[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, [the deep wood's edge](#the-deep-woods-edge-as-built) and [heart](#the-deep-woods-heart-as-built) beyond it, and [the standing stones and the Rift-Scar](#the-stones-and-the-rift-scar-as-built) (2026-10-29), and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
+[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, [the deep wood's edge](#the-deep-woods-edge-as-built) and [heart](#the-deep-woods-heart-as-built) beyond it, and [the standing stones and the Rift-Scar](#the-stones-and-the-rift-scar-as-built), with their contracts (2026-10-29), and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
 
 The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. It's where a new character goes once the sewers stop teaching them anything, and where foraging, herb-gathering, tracking and hunting come into their own. It grows more dangerous the further from the road you go: safe-ish near the gate, wild in the deep wood, and strange where the trees grow wrong around an old rift-scar.
 
@@ -239,7 +239,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 - **The hedge-shaman** ✓ in the Hermit's Clearing: Awakens Shamans, teaches Tracking.
 - **A hunter** at the Charcoal Burners' Camp, newly moved in (decided 2026-10-27: a new trainer and shop; *built*, teaching Foraging and Tracking until Skinning and Butchering exist): teaches Skinning, Butchering and Foraging, and later Bows **(gap: ranged combat)**; buys pelts, fangs, antlers and meat. A trainer and a shop are data.
 - **What sells:** the provisioner buys meat (food), the herbalist herbs; the hunter pelts, fangs and antlers, all of them harvested, not looted. The hunter teaches Skinning and Butchering. Item values and shop `buys` are data.
-- **Contracts** (when quests exist, [Quests](quests.md)): cull the wolves (Copper), bring the old she-wolf's pelt (Bronze), the rift-touched stag (Silver).
+- **Contracts** ([Quests](quests.md), *written* 2026-10-29, in `assets/quests/forest/`): Cull the Wolves (Copper: six grey wolves and three fangs, 4 gold), the Old She-Wolf's Pelt (Bronze: her great grey pelt, 8 gold), the Rift-Touched Stag (Silver: its vitae crystal, 15 gold), and Meat for the Kitchen (Bone, always open: four cuts of raw meat, 6 silver). Each reported to Marin.
 
 ## What needs code
 
@@ -300,7 +300,7 @@ Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull 
 3. **The deep wood's heart** (about 12 rooms, tier 5; *built* 2026-10-29 as [the heart](#the-deep-woods-heart-as-built)): the Wolf Den and the Bear's Cave. **Wolves are always in the den** (a `Keep` spawn that stays home), **and roam the woods after dark** (spawns with `when: TimeOfDay([Dusk, Night])` and `wander` through the deep wood, in packs: `pack: 3`, Pack Hunter, a howl calling the pack, a trip that wants a packmate) (decided 2026-10-29). The old she-wolf in the den, her aura over every wolf; the bear at home in its cave (`Cave`, `aggressive: Home`, thick hide, a maul). Wolf pelts and fangs, the bear's pelt, claws and meat, and recipes to cook the new meats. Wolves howling at night, the old wood creaking.
 4. **Navigation** (code, medium; *built* 2026-10-29 as [getting lost](world.md#getting-lost)): how tangled each room is, the Survival skill as data, and the roll when moving, tuned against the rooms now built. A compass at the hunter's, fairly dear, makes going astray rare.
 5. **The Old Standing Stones and the Rift-Scar** (about 6 rooms, beyond tier 5; *built* 2026-10-29 as [the stones and the scar](#the-stones-and-the-rift-scar-as-built)): a climb to the stones; the scar's hum wearing down whoever lingers unless warded, and its glow lighting it (room conditions); riftbloom; the rift-touched stag, whose hurts hurt back and who leaves a vitae crystal. The story stays a hint ([The setting](setting.md)).
-6. **Contracts:** cull the wolves (Copper), the old she-wolf's pelt (Bronze), the rift-touched stag (Silver), and Meat for the Kitchen.
+6. **Contracts** (*written* 2026-10-29): Cull the Wolves (Copper), the Old She-Wolf's Pelt (Bronze), the Rift-Touched Stag (Silver), and Meat for the Kitchen (Bone). Each was played through live, from the board to the reward and merit.
 
 ## Open questions
 

@@ -1,0 +1,17 @@
+// The Rift-Touched Stag: what the guild wants from the scar beyond the standing stones.
+(
+    name: "The Rift-Touched Stag",
+    summary: "Something that was once a stag walks the glade beyond the standing stones. The guild wants what it carries.",
+    description: "Past the old standing stones in the deep wood there's a scar in the ground that glows, and a stag that lives in it and isn't a stag any more. The guild believes there's a vitae crystal grown inside it, as there is in other things the rift has touched. Kill it and bring the crystal to Marin Harrow. Be warned: what wounds it wounds whoever struck the blow, and the scar itself wears at anyone who lingers.",
+    posted: Board("riftwatch:contract_hall"),
+    contract: Some((rank: "silver", merit: 80)),
+    availability: Claimed(for: Days(4)),
+    repeat: Every(Days(3)),
+    stages: [
+        (
+            text: "Kill the rift-touched stag in the Rift-Scar, and bring back the vitae crystal inside it.",
+            objectives: [Kill(Mob("rift_stag"), 1), Bring(Item("vitae_crystal"), 1)],
+        ),
+    ],
+    rewards: [Coin(1500)],
+)

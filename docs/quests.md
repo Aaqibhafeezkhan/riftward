@@ -23,17 +23,22 @@ The guild ranks its members by metal, and every member wears a **rank tag** stam
 | Rank | Merit | Typical work |
 | --- | --- | --- |
 | **Bone** | 0, on joining | Sewer rats, errands, lost cats |
-| **Copper** | 50 | Pests outside the walls, escort to the next village |
-| **Iron** | 200 | Bandits, wolves, clearing a cellar |
-| **Silver** | 600 | Rift-touched beasts, expeditions |
-| **Gold** | 1,500 | Dungeons, named monsters |
-| **Platinum** | 4,000 | What the guild can't send anyone else to do |
+| **Copper** | 100 | Pests outside the walls, escort to the next village |
+| **Bronze** | 300 | Wolves, the deep wood's edge, a pack's leader |
+| **Iron** | 700 | Bandits, clearing a cellar, the deep wood's heart |
+| **Silver** | 1,500 | Rift-touched beasts, expeditions |
+| **Gold** | 3,500 | Dungeons, named monsters |
+| **Platinum** | 8,000 | What the guild can't send anyone else to do |
+
+Bronze was added, and every threshold raised, on 2026-10-29 (at first Copper was 50, Iron 200, Silver 600, Gold 1,500, Platinum 4,000): a rank should take a run of contracts, not two or three. Doing each of the starter contracts once, the Bone errands and the sewers' Copper work, comes to about 107 merit: Copper, and well short of Bronze. They keep paying when repeated, but less as you outgrow them.
+
+**Work below your rank counts for less** (2026-10-29): killing the sewer rats is something for an urchin, and nothing much for a powerful wizard. A contract's merit is halved for each rank it's below its taker's (`merit_below_rank: 0.5` in `assets/guild.ron`), rounded down, so Rats in the Drains' 10 merit is 10 to a Bone member, 5 to Copper, 2 to Bronze and 1 to Iron, and nothing to Silver and up. **Work above it counts for more:** half as much again for each rank it's above (`merit_above_rank: 1.5`; the board offers work one rank up), so the Old She-Wolf's Pelt, a Bronze contract worth 40, is 60 to a Copper member. Coin is paid in full either way, and a contract's lost merit (abandoning, failing) counts as it is. The board quotes the merit as the reader would earn it.
 
 The names and numbers are data in the guild's file, to tune. Letter grades (F to S) would be the same system with different names.
 
 - **Joining is free:** `join guild` in front of the clerk (Marin Harrow, in the Contract Hall) makes a character a Bone member and hands them a Bone tag. `guild` shows a member's rank, merit, contracts done and what the next rank takes.
 - **The ranks are data,** in `assets/guild.ron`: each rank's merit, whether it needs a trial, its tag, and what reinstatement costs at it; and the clerk, and the fee for a lost tag.
-- **Merit comes from contracts:** each guild contract's rewards include merit, scaled to its rank.
+- **Merit comes from contracts:** each guild contract's rewards include merit, scaled to its rank: less for a member above that rank, more for one below it ([below](#guild-ranks)).
 - **Promotion needs a trial from Silver up.** Reaching the merit threshold makes a character *eligible*; the clerk then offers a promotion contract (a trial, or a test set by a senior member). Bone to Iron are automatic. That keeps the higher ranks meaningful and gives GMs a natural place to run an event.
 - **Rank never drops.** Merit can fall (abandoning or failing a contract costs some), but rank stays at the highest reached. A setback stings without undoing a character's history.
 - **Contracts are offered up to one rank above your own,** the genre's usual rule: a Copper member can take Iron work, at Iron risk.
@@ -368,7 +373,10 @@ Written as data, to find what the engine needs. Rank and merit are first guesses
 | **What Feeds the Slimes** (Copper) | Claimed, two days | Kill the Slime Lord, bring the heart of the deep | Marin | Coin, 25 merit (*written*: 5 gold) |
 | **Word to the Hunter** (Bone) | Claimed, a day | Carry a letter to the hunter in the woods (handed over on taking it) | The hunter | Coin, 5 merit (*written*: 1 gold) |
 | **The Ravine** (Iron) | Claimed, two days | Reach the ravine floor and come back | Marin | Coin, 15 merit (*written*: 3 gold) |
-| **Meat for the Kitchen** (Bone) | Open, always | Bring 4 portions of meat | Marin | Coin, 2 merit |
+| **Meat for the Kitchen** (Bone) | Open, always | Bring 4 cuts of raw meat (any with the `meat` tag) | Marin | Coin, 2 merit (*written* 2026-10-29: 6 silver) |
+| **Cull the Wolves** (Copper) | Claimed, two days | Kill 6 grey wolves in the deep wood, bring 3 wolf fangs | Marin | Coin, 20 merit (*written* 2026-10-29: 4 gold) |
+| **The Old She-Wolf's Pelt** (Bronze) | Claimed, eight days; again a week after it's done, as she comes back | Kill the old she-wolf, bring her great grey pelt (skinned: a botched cut spoils it, and she's back in seven days) | Marin | Coin, 40 merit (*written* 2026-10-29: 8 gold) |
+| **The Rift-Touched Stag** (Silver) | Claimed, four days | Kill the rift-touched stag, bring the vitae crystal it leaves | Marin | Coin, 80 merit (*written* 2026-10-29: 15 gold) |
 
 ### What the first contracts need
 
@@ -384,7 +392,7 @@ What the engine itself is (quest files, the board, Marin's record, `accept`, `jo
 | **Posting only while a world condition holds** | The Rat King, posted only while the rats are out | Yes (2026-10-28): `posted_when: Some(WorldFlag("rats_broke_out"))` |
 | **A deadline that runs out on its own,** across restarts | Every claimed quest | A heartbeat system and `quest_claims` |
 | **A skill-use event** | `Use(skill, n)` | No: none of the first contracts needs it yet |
-| **Meat** | Meat for the Kitchen | Yes, since 2026-10-29: [harvesting](darkwood.md#harvest-whats-cut-loot-whats-left) (Butchering) is built; the contract isn't written yet |
+| **Meat** | Meat for the Kitchen | Yes, since 2026-10-29: [harvesting](darkwood.md#harvest-whats-cut-loot-whats-left) (Butchering) is built, and the contract is written |
 | **Titles** | The Rat King's reward | A flag on the character for now: `Set("char.title.ratbane", true)`; showing titles is still to come |
 
 ## GM tools
@@ -452,7 +460,7 @@ In the smallest pull requests that each leave the game working, every one with i
     - *Built.* **25a.** `quest grant`, `advance`, `reward` and `release`.
     - *Built.* **25b.** `quest create` and `quest edit`, saved to the quest's file (and `quest show`).
 
-Meat for the Kitchen could be written now that Butchering exists.
+Meat for the Kitchen is written (2026-10-29), with the deep wood's contracts: Cull the Wolves, the Old She-Wolf's Pelt and the Rift-Touched Stag (`assets/quests/forest/`, posted on the Contract Hall's board).
 
 ## Open questions
 

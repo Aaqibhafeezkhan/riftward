@@ -1,0 +1,17 @@
+// Cull the Wolves: the deep wood's wolves have been coming out to the road after dark.
+(
+    name: "Cull the Wolves",
+    summary: "Wolves from the deep wood are taking travellers' horses on the forest road. Thin them out.",
+    description: "Wolves from the deep wood have started coming out to the forest road after dark, and two carters have lost horses this month. The guild has been asked to thin the packs. Kill six grey wolves in the deep wood, and bring back three of their fangs to Marin Harrow as proof.",
+    posted: Board("riftwatch:contract_hall"),
+    contract: Some((rank: "copper", merit: 20)),
+    availability: Claimed(for: Days(2)),
+    repeat: Every(Days(2)),
+    stages: [
+        (
+            text: "Kill six grey wolves in the deep wood and bring back three of their fangs.",
+            objectives: [Kill(Mob("grey_wolf"), 6), Bring(Item("wolf_fang"), 3)],
+        ),
+    ],
+    rewards: [Coin(400)],
+)

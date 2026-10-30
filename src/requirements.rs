@@ -550,9 +550,9 @@ mod tests {
         };
         let silver = Requirement::GuildRank("silver".into());
         assert!(!silver.met(&shows(None)), "no tag, no rank");
-        assert!(!silver.met(&shows(Some(2))), "Iron");
-        assert!(silver.met(&shows(Some(3))));
-        assert!(silver.met(&shows(Some(5))), "Platinum");
+        assert!(!silver.met(&shows(Some(3))), "Iron");
+        assert!(silver.met(&shows(Some(4))));
+        assert!(silver.met(&shows(Some(6))), "Platinum");
         assert_eq!(silver.describe(&|id| id.to_string()), "a Silver guild tag");
     }
 }

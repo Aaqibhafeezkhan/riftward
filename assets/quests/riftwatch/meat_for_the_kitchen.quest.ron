@@ -1,0 +1,17 @@
+// Meat for the Kitchen: always open, for whatever a hunter brings in.
+(
+    name: "Meat for the Kitchen",
+    summary: "The guild's kitchen always needs more meat than it can buy.",
+    description: "The guild feeds its members, and its kitchen goes through meat faster than the market can sell it. Bring Marin Harrow any four cuts of fresh meat, raw, from whatever you hunt, and the guild will pay for them.",
+    posted: Board("contract_hall"),
+    contract: Some((rank: "bone", merit: 2)),
+    availability: Open,
+    repeat: Always,
+    stages: [
+        (
+            text: "Bring four cuts of raw meat to Marin Harrow.",
+            objectives: [Bring(Tag("meat"), 4)],
+        ),
+    ],
+    rewards: [Coin(60)],
+)

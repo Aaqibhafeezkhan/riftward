@@ -53,14 +53,22 @@ impl QuestDef {
         format!("  {n}. {rank}{}: {}", self.name, self.summary)
     }
 
-    /// The notice in full: what it is, what it asks, what it pays, and how long it can be held.
-    fn notice(&self, templates: &ItemTemplates) -> String {
+    /// The notice in full: what it is, what it asks, what it pays (the merit as `member` would
+    /// earn it), and how long it can be held.
+    fn notice(
+        &self,
+        templates: &ItemTemplates,
+        member: Option<&crate::guild::Membership>,
+    ) -> String {
         let mut lines = vec![match &self.contract {
-            Some(_) => format!(
-                "{} (a {} contract)",
-                self.name,
-                guild().ranks[self.rank()].name
-            ),
+            Some(_) => {
+                let rank = &guild().ranks[self.rank()].name;
+                format!(
+                    "{} ({} {rank} contract)",
+                    self.name,
+                    crate::characters::article(rank)
+                )
+            }
             None => self.name.clone(),
         }];
         lines.push(self.description.clone());
@@ -88,7 +96,13 @@ impl QuestDef {
                 Reward::Coin(_) | Reward::Set(..) | Reward::Merit(_) => None,
             }
         }));
-        pays.extend(self.pays(None).1.map(|merit| format!("{merit} merit")));
+        pays.extend(self.pays(None).1.map(|merit| {
+            let merit = match (&self.contract, member) {
+                (Some(c), Some(m)) => m.credit(&c.rank, merit),
+                _ => merit,
+            };
+            format!("{merit} merit")
+        }));
         // A quest with endings pays as it ends.
         if !self.endings.is_empty() {
             pays.clear();
@@ -176,7 +190,7 @@ pub(super) fn board(
             .ok()
             .and_then(|n| notices.get(n.checked_sub(1)?))
         {
-            Some(quest) => quest.notice(&templates),
+            Some(quest) => quest.notice(&templates, member),
             None => format!("There's no notice {} on the board.", inv.args.trim()),
         }
     };
@@ -487,6 +501,7 @@ mod tests {
             notice("rats", "Rats", Some("bone")),
             notice("roaches", "Roaches", Some("bone")),
             notice("king", "The Rat King", Some("copper")),
+            notice("pelt", "The Pelt", Some("bronze")),
             notice("ravine", "The Ravine", Some("iron")),
             notice("herbs", "Herbs", None),
             QuestDef {
@@ -519,7 +534,11 @@ mod tests {
             ["Herbs", "Rats", "Roaches", "The Rat King"],
             "Bone, and Copper above"
         );
-        assert_eq!(names(Some(1), &story).len(), 5, "Copper sees Iron work");
+        assert_eq!(
+            names(Some(1), &story).len(),
+            5,
+            "Copper sees Bronze work, not Iron"
+        );
         story.set(
             &crate::facts::Owner::World,
             "rats_broke_out",
@@ -555,7 +574,7 @@ mod tests {
             ..rats()
         };
         assert_eq!(
-            quest.notice(&ItemTemplates::default()),
+            quest.notice(&ItemTemplates::default(), None),
             "Rats (a Bone contract)\r\nRats, at length.\r\nIt pays 2 gold and 5 silver, and 10 merit.\r\n\
              One at a time: whoever takes it has a day to finish it.\r\n\
              It can be taken again a day after it's done."
@@ -573,7 +592,7 @@ mod tests {
         };
         assert!(
             quest
-                .notice(&templates)
+                .notice(&templates, None)
                 .contains("It pays 2 silver, a healing draught and 10 merit.")
         );
     }
