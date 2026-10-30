@@ -1,6 +1,6 @@
 # The Darkwood
 
-[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and the Ravine Floor, the North Road and the Hermit's Clearing with its hedge-shaman, and (2026-10-27) [the west woods](#the-west-woods-as-built), rungs 2 and 3 (zone `forest`). Everything else here is proposed, for review.
+[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and the Ravine Floor, the North Road and the Hermit's Clearing with its hedge-shaman, and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
 
 The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. It's where a new character goes once the sewers stop teaching them anything, and where foraging, herb-gathering, tracking and hunting come into their own. It grows more dangerous the further from the road you go: safe-ish near the gate, wild in the deep wood, and strange where the trees grow wrong around an old rift-scar.
 
@@ -65,7 +65,7 @@ Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the br
 | Boar Wallow | A **wild boar**: furious when badly hurt, and *Charge*s to knock you down |
 | Reed Pool | **Giant frogs**, whose *Tongue* holds you |
 
-- **Rungs:** rabbits, foxes, crows and adders are rung 2, with the young boars; the wild boar, frogs, badger and stag are rung 3 (the stag nearer 4). Numbers are first guesses for the calibration tool.
+- **Tiers:** rabbits, foxes, crows and adders are tier 2, with the young boars; the wild boar, frogs, badger and stag are tier 3 (the stag nearer 4). Numbers are first guesses for the calibration tool.
 - **Traits, not passives:** what the design called *Boar's Fury*, *Venomous Bite* and *Thick Hide* are [traits](effects.md#traits) (`furious`, `venomous`, `thick_hide`), since they're what a creature is; skittish prey use `skittish`.
 - **New natural attacks** (`beast.skill.ron`): peck, hooves (1–2), antlers (2–5), gore (2–5), and the techniques *Charge* (gore, knocks down) and *Tongue* (holds).
 - **Who fights whom:** boars attack anything not a boar; deer, rabbits and foxes avoid rooms with a boar in them; adders and frogs strike only at people; the stag and badger only fight back.
@@ -74,9 +74,9 @@ Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the br
 
 ## The ladder: from the sewers to the deep wood
 
-Decided 2026-10-27. Sewer rats and the stray dog are the only fights a new character has, and the deep wood is for those who could take on a guard; between them is a gap that would take forever to climb. A fight is worth experience only while it was at least a one-in-ten risk, so once a character outclasses rats they earn nothing from them, and their skills grow only from swings that end most fights in one. So content is built as a ladder of rungs, each a little harder than the last, and the west woods are the real next step after the sewers: their rooms run from safe beside the road to risky beside the deep wood, so a character finds their level by walking further in.
+Decided 2026-10-27. Sewer rats and the stray dog are the only fights a new character has, and the deep wood is for those who could take on a guard; between them is a gap that would take forever to climb. A fight is worth experience only while it was at least a one-in-ten risk, so once a character outclasses rats they earn nothing from them, and their skills grow only from swings that end most fights in one. So content is built as a ladder of tiers, each a little harder than the last, and the west woods are the real next step after the sewers: their rooms run from safe beside the road to risky beside the deep wood, so a character finds their level by walking further in.
 
-| Rung | Where | For | What's there |
+| Tier | Where | For | What's there |
 | --- | --- | --- | --- |
 | **0** | Riftwatch | Brand new | **Training dummies** in the training yard and the garrison yard (*built*): practise any weapon or technique safely, for skill practice and no experience. Sparring with the drill sergeant |
 | **1** | The sewers' upper tunnels | First fights | Rats as now, **giant cockroaches**, **sewer snakes**, **rat swarms**, the smallest **oozes** ([the sewers' ecology](riftwatch.md#the-sewers-ecology)) |
@@ -85,8 +85,8 @@ Decided 2026-10-27. Sewer rats and the stray dog are the only fights a new chara
 | **4** | The deep wood's edge | Guard-strength | **Lone wolves**, **forest spiders**, the **red stag** |
 | **5** | The deep wood, the Wolf Den, the Bear's Cave, the Rift-Scar | Strong | **Wolf packs** and the **old she-wolf**, the **bear**, the **rift-touched** |
 
-- **Tuning:** each rung is first guesses, to be played (issue #13). The one-in-ten cut-off for experience (`worthwhile_risk` in `progression.ron`) is a lever too, but the ladder is the real answer.
-- **The fauna below** fills rungs 2 to 5; rung 0 is in Riftwatch and rung 1 in the sewers.
+- **Tuning:** each tier is first guesses, to be played (issue #13). The one-in-ten cut-off for experience (`worthwhile_risk` in `progression.ron`) is a lever too, but the ladder is the real answer.
+- **The fauna below** fills tiers 2 to 5; tier 0 is in Riftwatch and tier 1 in the sewers.
 
 ## Fauna
 
@@ -96,7 +96,7 @@ Each creature with what it does and which existing data does it. Numbers are fir
 | --- | --- | --- | --- | --- |
 | **Fox** | West woods | Quick and wary: bolts like prey, but bites if cornered | *Skittish*, a bite (1–3) | A fox pelt |
 | **Adder** | West woods, the road's verges | Lies still; bites if trodden near, and the bite poisons | `aggressive` with no `allies`, so only at players; *Venomous Bite* | A snakeskin; a venom sac |
-| **Young boar** | West woods | A boar not grown into its temper: rung 2's fighter | As the boar, weaker | Pork |
+| **Young boar** | West woods | A boar not grown into its temper: tier 2's fighter | As the boar, weaker | Pork |
 | **Badger** | Brook, west woods' far edge | Stubborn and tough for its size; fights to the end | High Body, *Thick Hide* | A badger pelt |
 | **Giant frog** | Brook Ford | Leaps out of the water; a sticky tongue that holds | A technique *Tongue*: `Apply(held)` | Frog legs (meat) |
 | **Rabbit** | Meadow, west woods | Breeds fast, harmless; bolts from anyone (*built*: `Flee`) | Breeding spawn, `crowd`, `tags: ["game"]`; *Skittish* (see [Prey](#prey-a-window-then-gone)) | Meat; a rabbit pelt |
@@ -157,7 +157,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 - **The deep wood is dark:** its rooms will be `light: Dark`, and the west woods are dark at night; torches light the way, and the beasts have night eyes ([Light and darkness](world.md#light-and-darkness), *built*).
 - **Getting lost** in the deep wood without Navigation **(gap, later: a Navigation skill and lost-ness)**.
 - **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded: a [room condition](world.md#room-conditions) with `Every` reactions (*built*), whose glow can light it (`Lights`). It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
-- **Night** changes the forest: more wolves, fewer deer **(gap: time-of-day spawns)**.
+- **Night** changes the forest: wolves roam the woods after dark, out of their den (`TimeOfDay` spawns, *built*).
 
 ## People and work
 
@@ -192,7 +192,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 
 ## Proposed build order
 
-1. **The low rungs first** (decided 2026-10-27): training dummies in town (*built*), the sewers' new ecology ([riftwatch.md](riftwatch.md#the-sewers-ecology)), and the west woods with their rung-2 and rung-3 creatures and flora, before the deep wood.
+1. **The low tiers first** (decided 2026-10-27): training dummies in town (*built*), the sewers' new ecology ([riftwatch.md](riftwatch.md#the-sewers-ecology)), and the west woods with their tier-2 and tier-3 creatures and flora, before the deep wood.
 2. **Rooms and flora** (data): the rest of the forest: the ravine's falls, the deep wood, the stones and the scar, with their finds and the new herb and food items.
 3. **The fauna that works today** (data): boars with *Boar's Fury*, wolves with *Howl* and the old she-wolf's aura, spiders with *Venomous Bite*, the bear with *Thick Hide*, the deer and rabbits as breeding prey, crows. What they yield is harvested (step 4).
 4. **Harvesting** (*built* 2026-10-29): `harvest` tables and `Find` from a corpse, then Skinning and Butchering as data.
@@ -215,6 +215,17 @@ Planned 2026-10-29: the gaps left, each a small pull request with its issue, so 
 8. **Hidden doors** ([#9](https://github.com/Foxworks-Studios/riftward/issues/9), second half, *built* 2026-10-29): found with `search`, remembered per character.
 
 Later, once the deep wood exists: Navigation and getting lost, ranged combat, Rift-touched mutations. Then the deep wood itself, as data.
+
+### Building the deep wood, in order
+
+Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull request checked by the zone tests and walked live. Numbers are first guesses for each tier, to be played ([#13](https://github.com/Foxworks-Studios/riftward/issues/13)).
+
+1. **The ravine and the brook** (about 8 rooms, tiers 2–3): Mossy Falls, the brook's banks, and the ledge behind the falls by a swim (Swim 4): mushrooms, moonpetal and frostfern (rare). Quiet and low in danger, the best herbs.
+2. **The deep wood's edge** (about 10 rooms, tier 4): beyond the Hermit's Clearing, `light: Dark`, with landmarks (a fallen giant, a stream to follow). Grey wolves roaming after dark (below); forest spiders in Spider Hollow, born hidden and venomous, with webs that may catch you. Mushrooms, deathcap (poisonous to eat), foxglove, nightshade, and the bee tree's honey under `angry_bees`. Spider silk and venom sacs to harvest, and the adder's skin and venom sac.
+3. **The deep wood's heart** (about 12 rooms, tier 5): the Wolf Den and the Bear's Cave. **Wolves are always in the den** (a `Keep` spawn that stays home), **and roam the woods after dark** (spawns with `when: TimeOfDay([Dusk, Night])` and `wander` through the deep wood, in packs: `pack: 3`, Pack Hunter, a howl calling the pack, a trip that wants a packmate) (decided 2026-10-29). The old she-wolf in the den, her aura over every wolf; the bear at home in its cave (`Cave`, `aggressive: Home`, thick hide, a maul). Wolf pelts and fangs, the bear's pelt, claws and meat, and recipes to cook the new meats. Wolves howling at night, the old wood creaking.
+4. **Navigation** (code, medium): how tangled each room is, the Survival skill as data, and the roll when moving, tuned against the rooms now built.
+5. **The Old Standing Stones and the Rift-Scar** (about 6 rooms, beyond tier 5): a climb to the stones; the scar's hum wearing down whoever lingers unless warded, and its glow lighting it (room conditions); riftbloom; the rift-touched stag, whose hurts hurt back and who leaves a vitae crystal. The story stays a hint ([The setting](setting.md)).
+6. **Contracts:** cull the wolves (Copper), the old she-wolf's pelt (Bronze), the rift-touched stag (Silver), and Meat for the Kitchen.
 
 ## Open questions
 
