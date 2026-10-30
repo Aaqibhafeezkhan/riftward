@@ -249,7 +249,7 @@ Tuned 2026-10-30 with the balance tool (`src/combat/balance.rs`), as the [deep w
 - **One of anything is safe; it's numbers that kill.** A single rat or ooze does 1 or 2 a bite and dies to one or two blows, so alone it's a new character's first fight, worth little; packs and the swarm are where the risk, and the experience, are. An hour's play outgrows the upper tunnels, as [the ladder](darkwood.md#the-ladder-from-the-sewers-to-the-deep-wood) means it to.
 - **A jerkin matters against slimes:** armour stops acid, so a grey slime that's a gamble at level 1 is safe at level 2 in leather.
 - **The reports fight in the light and with swords only.** The sewers are dark, so without a torch a player fights at half, and the night-eyed rats and slimes don't; and fire, which slimes fear, would make the west easier.
-- **The Slime Lord can shed more than six oozes:** `Hurt` fires each time a blow takes it below a line, and mending can lift it back above one, so the same line can be crossed again. Left as it is for now; it's part of why it wants a party.
+- **The Slime Lord sheds more the longer it lasts** (a feature, decided 2026-10-30): five oozes if each line is crossed once, but `Hurt` fires each time a blow takes it below a line, and mending lifts it back above one, so a party that only nibbles around a line sets it off again and again. Big hits cross each line once; chip damage buries a party in oozes. It's part of why it wants a party.
 
 ### Larger sewers
 
