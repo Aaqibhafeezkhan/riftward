@@ -59,14 +59,26 @@ Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the br
 | Charcoal Burners' Camp | **The hunter**: teaches Foraging, Tracking, Navigation, Skinning, Butchering and Cooking (and her hunter's stew), keeps a campfire to cook at, sells a hunting knife, waterskins, torches and a brass compass, buys trophies, pelts and meat |
 | Birch Wood, Hazel Copse | Foxes; young boars root in the copse |
 | Meadow's Edge, Deer Meadow | Rabbits (a breeding spawn, max 12) and the red deer (a breeding herd, max 6), all skittish |
-| High Meadow | The **red stag**, who stands and fights (antlers 2–5, health 25), and **adders** basking (venomous) |
+| High Meadow | The **red stag**, who stands and fights (antlers 2–5, health 35), and **adders** basking (venomous) |
 | Brook Ford | Where everything drinks; mud for tracks, watercress |
-| Brook Bank, Sett Bank | The **badger** (thick hide, health 14) |
+| Brook Bank, Sett Bank | The **badger** (thick hide, health 45) |
 | Bramble Thicket | **Young boars**, two at a time |
 | Boar Wallow | A **wild boar**: furious when badly hurt, and *Charge*s to knock you down |
 | Reed Pool | **Giant frogs**, whose *Tongue* holds you |
 
-- **Tiers:** rabbits, foxes, crows and adders are tier 2, with the young boars; the wild boar, frogs, badger and stag are tier 3 (the stag nearer 4). Numbers are first guesses for the calibration tool.
+- **Tiers:** rabbits, foxes, crows and adders are tier 2, with the young boars; the wild boar, frogs, badger and stag are tier 3 (the stag nearer 4).
+- **Tuned alone** (2026-10-30, `balance_west_woods`): the first guesses lost to a level-1 character almost never, so every fighter got the skills and Dodge for its tier, and more health. Adders and young boars, two at a time where they keep two, are for level 1 to 2; the frogs, the badger and the wild boar for 2 to 3; the stag as a lone wolf is. Skittish prey run rather than fight, and aren't tuned.
+
+  | Fighter | Now (was) | Alone, wins (target) |
+  | --- | --- | --- |
+  | Adder | bite 8 (3), Dodge 4, health 9 (4) | 84% at 1 (75%); two of them 25% at 1 (40%), 96% at 2 (80%) |
+  | Young boar | gore 9 (3), Dodge 3, health 22 (10) | 56% at 1 (60%); two 70% at 2 (70%) |
+  | Giant frog | bite and tongue 13 (4), Dodge 6, health 24 (8) | 96% at 2 (75%); two 25% at 2 (35%), 86% at 3 (75%) |
+  | Badger | bite 15 (5), Dodge 6, health 45 (14) | 44% at 2 (50%), 97% at 3 (85%) |
+  | Wild boar | gore and charge 13 (6), Dodge 4, health 40 (18) | 24% at 2 (30%), 68% at 3 (65%) |
+  | Red stag | antlers 13 (8), Dodge 10, health 35 (25) | 41% at 3 (40%), 100% at 6 (90%) |
+
+- **A level makes a big difference this low:** a level-2 character is far stronger than a level-1, so two adders go from a gamble to sure in one level, and a lone frog is easy for one who could barely survive two.
 - **Traits, not passives:** what the design called *Boar's Fury*, *Venomous Bite* and *Thick Hide* are [traits](effects.md#traits) (`furious`, `venomous`, `thick_hide`), since they're what a creature is; skittish prey use `skittish`.
 - **New natural attacks** (`beast.skill.ron`): peck, hooves (1–2), antlers (2–5), gore (2–5), and the techniques *Charge* (gore, knocks down) and *Tongue* (holds).
 - **Who fights whom:** boars attack anything not a boar; deer, rabbits and foxes avoid rooms with a boar in them; adders and frogs strike only at people; the stag and badger only fight back.

@@ -642,6 +642,68 @@ const SEWER_SLIMES: &[Tuned] = &[
     },
 ];
 
+/// The west woods and the ravine (tiers 2 and 3), tuned 2026-10-30: the step after the sewers,
+/// alone. Adders and young boars, two at a time where they keep two, for a character of level 1
+/// to 2; the frogs, the badger and the wild boar for level 2 to 3; the red stag, nearer tier 4,
+/// as a lone wolf is. The skittish prey (rabbits, deer, foxes, otters, the heron) run rather
+/// than fight, so they aren't here.
+const WEST_WOODS: &[Tuned] = &[
+    Tuned {
+        name: "an adder",
+        foes: &[("forest:adder", 1)],
+        near: &[],
+        targets: &[(1, 1, 75), (2, 1, 95)],
+    },
+    Tuned {
+        name: "two adders",
+        foes: &[("forest:adder", 2)],
+        near: &[],
+        targets: &[(1, 1, 40), (2, 1, 80), (3, 1, 97)],
+    },
+    Tuned {
+        name: "a young boar",
+        foes: &[("forest:young_boar", 1)],
+        near: &[],
+        targets: &[(1, 1, 60), (2, 1, 95)],
+    },
+    Tuned {
+        name: "two young boars",
+        foes: &[("forest:young_boar", 2)],
+        near: &[],
+        targets: &[(1, 1, 15), (2, 1, 70), (3, 1, 95)],
+    },
+    Tuned {
+        name: "a giant frog",
+        foes: &[("forest:giant_frog", 1)],
+        near: &[],
+        targets: &[(2, 1, 75), (3, 1, 95)],
+    },
+    Tuned {
+        name: "two giant frogs",
+        foes: &[("forest:giant_frog", 2)],
+        near: &[],
+        targets: &[(2, 1, 35), (3, 1, 75)],
+    },
+    Tuned {
+        name: "the badger",
+        foes: &[("forest:badger", 1)],
+        near: &[],
+        targets: &[(2, 1, 50), (3, 1, 85)],
+    },
+    Tuned {
+        name: "the wild boar",
+        foes: &[("forest:wild_boar", 1)],
+        near: &[],
+        targets: &[(2, 1, 30), (3, 1, 65), (3, 2, 95)],
+    },
+    Tuned {
+        name: "the red stag",
+        foes: &[("forest:red_stag", 1)],
+        near: &[],
+        targets: &[(3, 1, 40), (6, 1, 90)],
+    },
+];
+
 /// The deep wood, tuned against parties (decided 2026-10-29): its edge solo at character level 4
 /// to 6, the night pack for a pair or three, the den and the bear for three or four at 6 to 8,
 /// and the rift-touched stag for four or five at 10.
@@ -735,6 +797,12 @@ fn balance_sewer_slimes() {
 }
 
 #[test]
+#[ignore = "a report: cargo test balance_west_woods -- --ignored --nocapture"]
+fn balance_west_woods() {
+    report(WEST_WOODS);
+}
+
+#[test]
 #[ignore = "a report: cargo test balance_deep_wood -- --ignored --nocapture"]
 fn balance_deep_wood() {
     report(DEEP_WOOD);
@@ -754,7 +822,7 @@ fn balance_one() {
     let size: usize = var("BALANCE_PARTY")
         .and_then(|n| n.parse().ok())
         .unwrap_or(4);
-    let tuned = [TOWN, SEWER_RATS, SEWER_SLIMES, DEEP_WOOD]
+    let tuned = [TOWN, SEWER_RATS, SEWER_SLIMES, WEST_WOODS, DEEP_WOOD]
         .iter()
         .flat_map(|area| area.iter())
         .find(|t| t.name == name)
