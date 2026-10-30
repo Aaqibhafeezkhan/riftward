@@ -128,8 +128,8 @@ Built 2026-10-29: twelve dark rooms north of the Stream Bend, tier 5, for charac
 | Ironbark Grove | Black, iron-hard trees; the way east to the stones' hill |
 
 - **Wolves:** always in the den; after dark a **pack of three** roams the heart (`TimeOfDay([Dusk, Night])`), besides the two lone wolves at the edge. Every grey wolf has Pack Hunter, **Howl** (hurt below half, it calls wolves within three rooms, its own Call for Help) and **Pull Down** (a lunge that knocks its prey down, only with another wolf on it: `allies: 1`).
-- **The old she-wolf:** 45 health, a bite of 14, `boss`, and **the Old She-Wolf's Lead**, an aura over every grey wolf (+2 attack, +1 defence) while she lives; back 7 days after she's killed. Her great grey pelt (rare, 90) to skin.
-- **The bear:** 60 health, a maul (3–6) of 14, `thick_hide`, and `aggressive: Home`: it lets you pass the cave mouth, and attacks in its cave. Back a day after it dies. A bear pelt, bear meat or a claw; **roast bear** to cook (Cooking 4).
+- **The old she-wolf:** 60 health, a bite of 20 and Dodge 18, `boss`, and **the Old She-Wolf's Lead**, an aura over every grey wolf (+2 attack, +1 defence) while she lives; back 7 days after she's killed. Her great grey pelt (rare, 90) to skin.
+- **The bear:** 110 health, a maul (3–6) of 22, `thick_hide`, and `aggressive: Home`: it lets you pass the cave mouth, and attacks in its cave. Back a day after it dies. A bear pelt, bear meat or a claw; **roast bear** to cook (Cooking 4).
 
 ### The stones and the Rift-Scar, as built
 
@@ -145,7 +145,22 @@ Built 2026-10-29: six rooms east of Ironbark Grove, beyond tier 5. The story sta
 | The Glassed Hollow | Earth run to glass, things sealed inside; `rift_hum` 3, the worst; riftbloom |
 
 - **The hum** (`rift_hum`, a [room condition](world.md#room-conditions)): its glow lights the scar at any hour (`Lights`), and every four game minutes (half a real minute) it does 1 to 2 + strength force damage to everyone there: 1–3 at the edge, 1–5 in the hollow. A ward takes it. Only the one it hurts is told, so it doesn't fill everyone's screen. Foraging finds nothing; Herbalism finds riftbloom (rare, 40).
-- **The rift-touched stag:** 50 health, Agility and Reaction 9, glowing antlers (3–7) at 16, `boss`; it only fights back. Its `rift_touched` trait shrugs off force (the hum doesn't touch it), and **every blow that lands on it spits back 2–8 force at whoever struck**, flat, however hard the blow (decided 2026-10-29). It leaves **a vitae crystal** in its corpse (rare, 120), and a silvered hide (60) or glowing antlers (80) to harvest. Back 3 days after it dies. Played at 28 health it killed a character in one round: it's for those past the den.
+- **The rift-touched stag:** 60 health, Agility and Reaction 9, glowing antlers (2–6) at 31 and Dodge 24, `boss`; it only fights back. Its `rift_touched` trait shrugs off force (the hum doesn't touch it), and **every blow that lands on it spits back 1–4 force at whoever struck**, flat, however hard the blow (decided 2026-10-29). It leaves **a vitae crystal** in its corpse (rare, 120), and a silvered hide (60) or glowing antlers (80) to harvest. Back 3 days after it dies. Played at 28 health it killed a character in one round: it's for those past the den.
+
+### Tuned against parties
+
+Decided and tuned 2026-10-29. "Level-10 weapon skills" turned out to be about character level 3 (a main weapon gains on a real-time cooldown, so skills follow hours played: [What a character of a level has](progression.md#what-a-character-of-a-level-has)), and at the levels it's meant for, the deep wood was a walkover: a grey wolf barely landed a bite on a level-6 character and couldn't avoid one. So the deep wood is tuned by character level, and its heart and bosses against parties, with the balance tool (`src/combat/balance.rs`, `balance_deep_wood`: parties built for a level against whole encounters, a hundred and fifty fights each, through the real combat round):
+
+| Encounter | Tuned for | Wins (deaths a fight) |
+| --- | --- | --- |
+| A grey wolf, a forest spider (the edge) | One, at level 6 | 96–100% (under 0.1) |
+| The night pack (three wolves) | Two or three, at 6 | 86% for two (0.5), 99% for three (0.1) |
+| The den (three wolves and the she-wolf) | Four, at 6 to 10 | 70% at 6 (2.2), 100% at 10 (0.2) |
+| The bear | Three, at 6 | 88% (1.0); 23% alone at 10 |
+| The rift-touched stag | Four, at 10 | 82% (1.75); 42% for three |
+
+- **What changed:** every one of them was given skills to match the characters it's for (a wolf's bite 7 to 13, the she-wolf's 14 to 20, the bear's maul 14 to 22, the stag's antlers 16 to 31), and Dodge, which mobs had none of; wolves 16 to 22 health, the she-wolf 45 to 60, the bear 60 to 110, the stag 50 to 60; the stag's antlers 3–7 to 2–6, and its backlash 2–8 to 1–4, since a level-10 character has about 15 health and every blow they land pays it.
+- **Group fights are deadly:** the party a fight is meant for wins it, but loses one or two members on the way. Characters have little health (8 + Body ÷ 2 + Toughness ÷ 5: about 12 at level 6, 15 at level 10), so a crushing blow from a boss can kill outright. The simulation never flees, heals or drinks a draught, so it's the worst case; whether health should grow more with level is an open question ([#13](https://github.com/Foxworks-Studios/riftward/issues/13)).
 
 ## The ladder: from the sewers to the deep wood
 
@@ -165,7 +180,7 @@ Decided 2026-10-27. Sewer rats and the stray dog are the only fights a new chara
 
 ## Fauna
 
-Each creature with what it does and which existing data does it. Numbers are first guesses, set against the sewer rats (Body 1, health 3) and the town guards (Body 6, level-10 skills).
+Each creature with what it does and which existing data does it. Numbers are first guesses, set against the sewer rats (Body 1, health 4) and the town guards (Body 6, level-10 skills).
 
 | Creature | Where | How it behaves | Built from | Harvest |
 | --- | --- | --- | --- | --- |
@@ -305,7 +320,7 @@ Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull 
 ## Open questions
 
 - [x] **How big:** about 60 rooms, the deep wood a region of about 30 with landmarks and trails (2026-10-27).
-- [x] **Levels:** the west woods for characters past the sewers, the deep wood guard-strength (level-10 weapon skills), its bosses beyond (2026-10-27).
+- [x] **Levels:** the west woods for characters past the sewers, the deep wood guard-strength (level-10 weapon skills), its bosses beyond (2026-10-27). Revised 2026-10-29, by character level and party: see [Tuned against parties](#tuned-against-parties).
 - [x] **The Rift-Scar:** a hint of the wider story now: a strange glade, the rift-touched stag and riftbloom, description that suggests without explaining, until the setting is decided ([Riftwatch](riftwatch.md#open-questions)) (2026-10-27).
 - [x] **The hunter:** a new trainer and shop at the charcoal camp (2026-10-27).
 - [x] **Navigation:** after the edge and the heart, so it's tuned against real rooms; going astray takes you out another plain way with a hint, never over a cliff, and a compass makes it rare (2026-10-29).

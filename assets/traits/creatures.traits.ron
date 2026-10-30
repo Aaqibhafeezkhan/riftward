@@ -176,7 +176,7 @@
         modifiers: [Resist("force", 1.0)],
         reactions: [(
             on: Struck,
-            effects: [Damage(amount: "roll(2, 4)", type: "force")],
+            effects: [Damage(amount: "roll(1, 4)", type: "force")],
             text: (
                 actor: "Pale light spits from your wound, and {harm} {target}.",
                 target: "Pale light spits from {actor}'s wound, and {harm} you.",

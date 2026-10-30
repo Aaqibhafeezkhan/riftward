@@ -59,7 +59,7 @@
         "rat_bite": (
             name: "Rat Bite",
             description: "A rat's small, sharp bite.",
-            kind: Attack(damage: (1, 1)),
+            kind: Attack(damage: (1, 2)),
             text: (
                 hit: (
                     actor: "Your bite {harm} {target}.",
@@ -163,7 +163,7 @@
         "rift_antlers": (
             name: "Rift Antlers",
             description: "Antlers that glow with the rift's light, and strike faster than they should.",
-            kind: Attack(damage: (3, 7)),
+            kind: Attack(damage: (2, 6)),
             text: (
                 hit: (
                     actor: "Your glowing antlers flicker, and the blow {harm} {target}.",

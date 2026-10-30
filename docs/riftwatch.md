@@ -2,7 +2,7 @@
 
 [Design summary](README.md) · Status: rooms, doors, mobs and trainers built (zones `riftwatch`, `sewers`, and `forest` for the road north), and the rats breed
 
-Riftwatch is the starting town. Every new character begins in its market square, and it's the hub players return to between ventures. It holds the Adventurers' Guild, an open-air market, the garrison, the lord's keep, and beneath it all a sewer system as large as the town itself: 25 rooms above, 23 below, joined by nine grates, hatches and doors. Room descriptions only lightly touch the setting (the barrier's shimmer from the watchtower, adventurers drawn by the rifts); change anything that doesn't fit [the setting](setting.md).
+Riftwatch is the starting town. Every new character begins in its market square, and it's the hub players return to between ventures. It holds the Adventurers' Guild, an open-air market, the garrison, the lord's keep, and beneath it all a sewer system as large as the town itself: 26 rooms above, 23 below, joined by nine grates, hatches and doors. Room descriptions only lightly touch the setting (the barrier's shimmer from the watchtower, adventurers drawn by the rifts); change anything that doesn't fit [the setting](setting.md).
 
 ## Map
 
@@ -21,6 +21,7 @@ flowchart TB
     stalls --- herbs[Herbalist's Stall]
     stalls --- tinkers[Tinkers' Corner]
     stalls --- alley[Back Alley]
+    alley --- crooked[Crooked Alley]
     alley == sewer grate, down ==> outfall[sewers]
     cellar == iron hatch, down ==> guilddrain[sewers]
     market --- high[High Street]
@@ -116,7 +117,7 @@ From any room, `look <direction>` shows what lies that way and who's there, incl
 | District | Rooms |
 | --- | --- |
 | Gate | North Gate, Archery Butts |
-| Market | Market Square (start room), Vendor Stalls, Herbalist's Stall, Tinkers' Corner, Back Alley |
+| Market | Market Square (start room), Vendor Stalls, Herbalist's Stall, Tinkers' Corner, Back Alley, Crooked Alley |
 | Guild | Guild Row, Adventurers' Guildhall, Contract Hall, Guild Archive, Guild Quarters, Guild Cellar |
 | High Street | High Street, Wayside Shrine |
 | Garrison | Garrison Yard, Training Yard, Barracks, Armory |
@@ -145,6 +146,7 @@ The keys are item templates in the zone, but none is spawned or carried yet; an 
 | --- | --- | --- | --- |
 | Town guards | North Gate | 2 | Anywhere in town, every 1-3 minutes |
 | A stray dog | Market Square | 1 | Market, stalls, back alley, tinkers, Guild Row |
+| Alley rats (not aggressive: they fight only when attacked; a little easier than the stray dog, two at once about the same; back two minutes after they're killed) | Crooked Alley, off the Back Alley | 3 | No |
 | Straw training dummies (the `inanimate` trait: they never hit back, for safe practice) | Training Yard (2), Garrison Yard (1) | 3 | No |
 | Marin Harrow, the contract clerk | Contract Hall | 1 | No |
 | Narina Greenthorn, the herbalist | Herbalist's Stall | 1 | No |
@@ -192,7 +194,7 @@ The sewers are built for the breeding spawn described in [The living world](worl
 
 - **The Warren** (`sewers:nest`) is the nest. Rats breed there and spread by crowding, first through the Rat Runs, Collapsed Gallery and Overflow Chamber, then into the rest of the sewers.
 - **Six street grates lead up,** all closed at the start. Left alone, rats crowd toward them; an open grate lets them into the street above. The locked ways up (guild, garrison, keep) hold them back unless someone opens them.
-- **They fight in threes.** Rats are aggressive, but no more than three take on one player at once (`pack: 3`); the rest wait their turn. Tuned by simulation against a fresh Soldier with his short sword: about two rats a trip in the Warren before resting at a third of his health, more one at a time in the outer tunnels, and about one under the Rat King. A rat's bite does a single point (`beast:rat_bite`).
+- **They fight in threes.** Rats are aggressive, but no more than three take on one player at once (`pack: 3`); the rest wait their turn. Tuned by simulation against a fresh Soldier with their short sword: about two rats a trip in the Warren before resting at a third of their health, more one at a time in the outer tunnels, and about one under the Rat King. A rat's bite does 1 or 2 (`beast:rat_bite`; a single point until 2026-10-30).
 - **A breakout raises the Rat King.** The first rat to reach the city through an open grate sets off an alarm in the streets, and the Rat King appears in the Warren, making every rat in the sewers tougher until someone kills him. See [The Rat King](world.md#the-rat-king-built).
 - **Hooks for later:** the barred Outflow Arch (a way beyond the walls), the Smugglers' Nook (someone's been using it), the Ossuary under the shrine, and the Drowned Stair beneath the Old Cistern, which is far older than the sewers and carved in an unknown script.
 
@@ -205,8 +207,8 @@ The sewers are built for the breeding spawn described in [The living world](worl
 | **Giant cockroach** | Bred in the North Trunk, wandering the whole zone | 1 | Harmless-ish; startles and scuttles off | Breeding spawn (max 20, crowd 2), a weak bite, `tags: ["vermin"]`, the `skittish` trait; avoids slimes |
 | **Sewer snake** | The Flooded Tunnel | 1 | Strikes at people who come near; the bite sometimes poisons | `aggressive` (players only), `tags: ["vermin"]` so the rats leave it be, the `venomous` trait (`Hits`, 30% → `poisoned`) |
 | **Rat swarm** | The Overflow Chamber | 1 | Four more rats, four at a time | A `Keep(4)` spawn of sewer rats with `pack: 4` |
-| **Ooze** | Bred in the Cistern, spreading to the Western Tunnel and the Ossuary | 1 | Slow, one at a time, health 4, *Acid Touch* 1–2; struck hard, a piece tears off and keeps coming | `aggressive`, `allies: ["slime"]`, `tags: ["slime"]`; *Acid Touch* (`acid`, a damage type armour stops for now); traits `formless` and `splitting` (`Hurt(0.5)` → `Spawn` a torn-off ooze, a template of its own that doesn't split again) |
-| **Grey slime** | The Ossuary, two, staying put and fighting one at a time, so the Western Tunnel, the way in from the rats' side, is tier 1 | 2 | Shrugs off blades and fists, burns at fire: torches and Hermetic sparks matter here | As the ooze, tougher; traits `formless` and `rubbery` (`Resist(physical, 0.5)`, `Weakness(fire, 0.5)`) |
+| **Ooze** | Bred in the Cistern, spreading to the Western Tunnel and the Ossuary | 1 | Slow, two at a time at most (`pack: 2`), health 8, *Acid Touch* 1–2 at 6; struck hard, a piece tears off and keeps coming | `aggressive`, `allies: ["slime"]`, `tags: ["slime"]`; *Acid Touch* (`acid`, a damage type armour stops for now); traits `formless` and `splitting` (`Hurt(0.5)` → `Spawn` a torn-off ooze, a template of its own that doesn't split again) |
+| **Grey slime** | The Ossuary, two, staying put and fighting together (`pack: 2`, since 2026-10-30; one at a time before), so the Western Tunnel, the way in from the rats' side, is tier 1 | 2 | Shrugs off blades and fists, burns at fire: torches and Hermetic sparks matter here | As the ooze, tougher; traits `formless` and `rubbery` (`Resist(physical, 0.5)`, `Weakness(fire, 0.5)`) |
 | **The Slime Lord** | The Old Cistern | 3 | A heaving mass in the black water: while it lives, every slime in the sewers fights a little better; hurt, it sheds oozes, and it knits itself whole as it fights | *Slime Lord's Will*, an aura over the `slime` tag (+1 attack and defence); traits `formless`, `rubbery`, `mending` (2 health a turn) and `shedding` (oozes at three quarters, half and a quarter of its health); `AfterDeath(Days(3))`; its death is announced in the sewers |
 
 - **Slimes eat rats, at a border.** Slimes are aggressive to anything that isn't a slime, rats to anything that isn't vermin, so where they meet they fight, and a player arriving mid-fight finds both sides weakened, or both turned on them. But they meet only at the edges (decided 2026-10-27), or the slimes would end the rat problem: a crowded rat moves to the neighbouring room with the fewest *rats*, so a room of slimes looks empty to it, and rats would flow west and die there for ever. With always an emptier way to go, they'd never gnaw through a grate, and the breakout would never come. So:
@@ -216,6 +218,38 @@ The sewers are built for the breeding spawn described in [The living world](worl
 - **Loot, not harvest:** a slime *is* jelly, so it leaves **slime jelly** where it dies, no corpse (a reagent, for Brewing later), and the Slime Lord a **heart of the deep** (rare). See [Harvest what's cut, loot what's left](darkwood.md#harvest-whats-cut-loot-whats-left).
 - **Two hard ends:** the Rat King in the Warren and the Slime Lord in the Cistern are tier 3, so a character can go one way or the other.
 - **Rift-touched mutations** ([planned](world.md#rift-touched-mutations-planned)) turn up here too, more often in the undercity: a rift-twisted rat, a slime that glows.
+
+### Tuned against new characters
+
+Tuned 2026-10-30 with the balance tool (`src/combat/balance.rs`), as the [deep wood](darkwood.md#tuned-against-parties) was: the rats' side and the slimes' side are separate reports (`balance_sewer_rats`, `balance_sewer_slimes`), with Crooked Alley's rats and the stray dog in a third (`balance_town`). Level 0 is a new character with a sword from a trainer (swordplay 2, Dodge 1); level 1 (swordplay 6, Dodge 5) is about an hour's play, level 2 adds a jerkin. Before, nothing in the sewers but the Slime Lord could kill a new character, and the Slime Lord, mending as fast as swords bit through its rubbery mass, beat every party.
+
+| Encounter | Party (level × size) | Wins | Deaths a fight |
+| --- | --- | --- | --- |
+| An alley rat | 0 × 1 | 99% | 0.01 |
+| Two alley rats | 0 × 1 | 81% | 0.19 |
+| The stray dog | 0 × 1 | 81% | 0.19 |
+| A sewer rat, an ooze, a cockroach | 0 × 1 | 99–100% | 0.01 |
+| The sewer snake | 0 × 1 / 1 × 1 | 48% / 98% | 0.52 / 0.01 |
+| Three rats | 0 × 1 / 1 × 1 | 52% / 100% | 0.48 / 0 |
+| The swarm (four rats) | 0 × 1 / 0 × 2 / 1 × 1 | 22% / 90% / 100% | 0.78 / 0.34 / 0 |
+| A grey slime | 1 × 1 / 2 × 1 | 61% / 100% | 0.39 / 0 |
+| Two oozes | 0 × 1 / 1 × 1 | 87% / 100% | 0.13 / 0 |
+| Two grey slimes | 1 × 1 / 2 × 1 / 3 × 1 | 0% / 80% / 97% | 0.99 / 0.20 / 0.03 |
+| The Rat King and three rats | 2 × 3 / 3 × 2 / 3 × 3 | 60% / 59% / 98% | 1.90 / 1.14 / 0.52 |
+| The Slime Lord | 2 × 3 / 3 × 2 / 3 × 3 | 52% / 48% / 99% | 1.99 / 1.31 / 0.37 |
+
+- **What changed:**
+  - **Sewer rats:** Rat Bite does 1–2, not 1 (cockroaches bite with it too), Dodge 2, health 3 → 4.
+  - **The snake:** bite 3 → 4, Dodge 3, health 5 → 7.
+  - **Oozes:** Acid Touch 2 → 6, Dodge 2, health 4 → 8.
+  - **Grey slimes:** Acid Touch 4 → 9, Dodge 3, health 12 → 18.
+  - **The Rat King:** bite, claw and rend 8 → 13, Dodge 9, health 30 → 45.
+  - **The Slime Lord:** Acid Touch 8 → 14, Dodge 6, health 40 → 50.
+  - **Packs:** oozes and grey slimes fight two at a time (`pack: 2`, was 1), so the Ossuary is a real fight at level 2, not a sure thing, and still no place for level 1. The rats stay at three: a rat's bite rarely lands on a level-1 character, so six at once still lose nine fights in ten, and more at once would only punish new characters in the Warren, who already lose to four rats at once most of the time.
+- **One of anything is safe; it's numbers that kill.** A single rat or ooze does 1 or 2 a bite and dies to one or two blows, so alone it's a new character's first fight, worth little; packs and the swarm are where the risk, and the experience, are. An hour's play outgrows the upper tunnels, as [the ladder](darkwood.md#the-ladder-from-the-sewers-to-the-deep-wood) means it to.
+- **A jerkin matters against slimes:** armour stops acid, so a grey slime that's a gamble at level 1 is safe at level 2 in leather.
+- **The reports fight in the light and with swords only.** The sewers are dark, so without a torch a player fights at half, and the night-eyed rats and slimes don't; and fire, which slimes fear, would make the west easier.
+- **The Slime Lord can shed more than six oozes:** `Hurt` fires each time a blow takes it below a line, and mending can lift it back above one, so the same line can be crossed again. Left as it is for now; it's part of why it wants a party.
 
 ### Larger sewers
 

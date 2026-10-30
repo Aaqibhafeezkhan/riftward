@@ -554,6 +554,19 @@
             health: 6,
             chatter: ["The stray dog scratches behind one ear.", "The stray dog sniffs hopefully at your boots."],
         ),
+        "alley_rat": (
+            name: "an alley rat",
+            tags: ["vermin"],
+            allies: ["vermin"],
+            keywords: ["alley", "rat"],
+            here: "An alley rat picks through the refuse.",
+            description: "A scrawny brown rat, half the size of the ones in the sewers and twice as nervous. It would rather be eating than fighting, but it bites when cornered.",
+            attributes: {Body: 1, Strength: 1, Agility: 4, Reaction: 4},
+            skills: {"beast:bite": 3},
+            attack: "beast:bite",
+            health: 5,
+            chatter: ["Something rustles in the rubbish.", "A rat squeaks and goes quiet."],
+        ),
         "contract_clerk": (
             name: "Marin Harrow",
             tags: ["townsfolk"],
@@ -875,6 +888,14 @@
             every: Minutes(10),
             refill: Keep(1),
         ),
+        // Rats for a new character's first fights, which leave them be until they're attacked,
+        // and are soon back.
+        "alley_rats": (
+            mob: "alley_rat",
+            room: "crooked_alley",
+            every: Minutes(2),
+            refill: Keep(3),
+        ),
         "herbalist": (
             mob: "herbalist",
             room: "herbalist",
@@ -961,7 +982,15 @@
             description: "A narrow alley behind the stalls, cluttered with broken crates and the market's refuse. A rusted grate in the cobbles drains into the dark below, and the place smells like it.",
             exits: {
                 "north": "stalls",
+                "west": "crooked_alley",
                 "down": (to: "sewers:outfall", door: "sewer_grate"),
+            },
+        ),
+        "crooked_alley": (
+            name: "Crooked Alley",
+            description: "A crooked dead end behind the back alley, where the stalls throw what even the dogs won't eat. Rotten cabbage, fish heads and broken baskets lie heaped against the walls, and the heaps move. Rats live here, small and scrawny, and keep to themselves unless someone comes poking.",
+            exits: {
+                "east": "back_alley",
             },
         ),
         "guild_row": (

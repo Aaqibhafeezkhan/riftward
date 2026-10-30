@@ -69,6 +69,21 @@ A skill can keep improving forever, but every level is harder than the last: the
 
 A skill grows at full speed up to **10 + 2 × character level**. Above that, its gain chance halves for every 5 levels over. A new character can take any skill to about 10 easily; a level-10 character to 30, a level-20 character to 50. Skills can run ahead of the character, but slowly, so a character who spreads across many trees doesn't outgrow their own experience.
 
+## What a character of a level has
+
+Simulated 2026-10-29 from the numbers above (`assets/progression.ron`): a character fighting even fights (50 experience each), six rounds a fight and a rest of 90 seconds to 3 minutes between, their main weapon used every round and Dodge about a third of rounds. The gain cooldown, in real time, is what paces a skill, so skills follow hours played: resting longer between fights raises them against character level.
+
+| Character level | Main weapon | Dodge | Hours |
+| --- | --- | --- | --- |
+| 0 | 0 to 2 | 0 to 1 | New |
+| 1 | 5 to 7 | 5 | 1 |
+| 3 | 11 to 15 | 11 | 3 |
+| 5 | 15 to 19 | 16 | 5 to 6 |
+| 7 | 17 to 22 | 19 | 7 to 8 |
+| 10 | 21 to 26 | 23 | 6 to 11 |
+
+Tough fights (gains up to twice as likely) and fights too easy to pay experience (which still train) push skills a little higher. Nobody reaches the soft cap (30 at level 10) this way. Content is tuned against these (`src/combat/balance.rs` builds characters of levels 0, 1, 2, 3, 6 and 10 from them): a grey wolf that rated 12 against a level-6 character's 23 gave no experience at all ([Tuned against parties](darkwood.md#tuned-against-parties)).
+
 ## Character level and experience
 
 Character level is separate from skill levels: skills grow by use, and the character grows by deeds.

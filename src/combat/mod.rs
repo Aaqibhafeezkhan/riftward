@@ -15,6 +15,8 @@
 //! Players can't fight each other yet.
 
 mod abilities;
+#[cfg(test)]
+mod balance;
 mod casting;
 mod effects;
 mod fleeing;
