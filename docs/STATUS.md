@@ -64,7 +64,6 @@ Then **the crafts,** the rest of step 7 in [Skill trees](trees.md#proposed-order
 - First Aid's numbers are first guesses too: a novice (Intuition 3) heals 2 to 4, and treats a badly hurt patient about a third of the time.
 - Waterskins can't be drunk from; they need refilling, so they wait for wells and rivers ([#10](https://github.com/Foxworks-Studios/riftward/issues/10)).
 - Armour's numbers are first guesses. Guards in studded leather and a helm (3 armour) shrug off most of a new character's punches.
-- The tough-fight odds count armour's penalty and a shield's block, but not its reduction, so a heavily armoured foe counts as less tough than it is ([#8](https://github.com/Foxworks-Studios/riftward/issues/8)).
 - Town guards drop their short swords and armour and respawn, and the tinker buys anything: a guard is worth about 1 gold 6 silver in gear, plus his coins. Worth a look in play ([open question](economy.md#open-questions)).
 - Discovery chance (0.1% a use) and the tough-fight cap (2×) are first guesses, untested in play.
 - Room descriptions don't show who's fighting whom ([#2](https://github.com/Foxworks-Studios/riftward/issues/2)).
