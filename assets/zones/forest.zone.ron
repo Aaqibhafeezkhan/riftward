@@ -374,6 +374,15 @@
             consumable: (by: Eat, effects: [Apply(condition: "nourished", strength: "3", lasts: Minutes(160))]),
             value: 18,
         ),
+        "compass": (
+            name: "a brass compass",
+            keywords: ["compass", "brass"],
+            description: "A palm-sized brass case with a hinged lid, and under the glass a blued needle that swings, settles and points north whichever way you turn. Carried, it keeps you from losing your way in the deep wood, most of the time.",
+            bulk: Light,
+            tags: ["tool"],
+            grants: [(condition: "bearings", while: Carried)],
+            value: 1500,
+        ),
     },
     mobs: {
         "hunter": (
@@ -383,12 +392,12 @@
             here: "The hunter sits by the cold kilns, scraping a hide stretched on a frame.",
             description: "A lean, weathered woman in stained leathers, her grey hair cropped short and a skinning knife always somewhere near her hand. She moved into the old charcoal burners' camp last spring, and the town has been eating better since. She watches the trees more than she watches you.",
             attributes: {Agility: 5, Intuition: 6, Reaction: 4},
-            skills: {"survival:foraging": 25, "survival:tracking": 25, "knives:basics": 20},
+            skills: {"survival:foraging": 25, "survival:tracking": 25, "survival:navigation": 25, "knives:basics": 20},
             attack: "knives:basics",
             equipment: ["hunting_knife"],
-            teaches: ["survival:foraging", "survival:tracking", "survival:skinning", "survival:butchering", "survival:cooking", "cooking:hunters_stew"],
+            teaches: ["survival:foraging", "survival:tracking", "survival:navigation", "survival:skinning", "survival:butchering", "survival:cooking", "cooking:hunters_stew"],
             shop: (
-                sells: ["hunting_knife", "riftwatch:waterskin", "riftwatch:torch"],
+                sells: ["hunting_knife", "riftwatch:waterskin", "riftwatch:torch", "compass"],
                 buys: ["trophy", "pelt", "meat"],
             ),
         ),
@@ -1121,6 +1130,7 @@
             description: "Past the clearing the trees change. These are old: oaks and beeches so broad that three people couldn't reach around them, their roots humped over the ground like the backs of sleeping animals. The canopy closes overhead, and the light goes green, then grey, then almost nothing.",
             chatter: ["Something moves in the dark between the trees, and is still."],
             light: Dark,
+            tangled: 1,
             terrain: Rough,
             exits: {
                 "south": "clearing",
@@ -1160,6 +1170,7 @@
             name: "Toadstool Ring",
             description: "Mushrooms grow in a wide ring here, white and brown and pale yellow, around a patch of bare black earth where nothing else will grow. The air smells of damp and rot. Some of them look good to eat. Some of them look exactly like the ones that do.",
             light: Dark,
+            tangled: 2,
             terrain: Uneven,
             exits: {
                 "east": "old_wood_edge",
@@ -1174,6 +1185,7 @@
             name: "Nightshade Dell",
             description: "The ground drops into a dell where the air is still and close. Foxglove stands in purple spikes along its sides, and in the shade at the bottom, low bushes hang with glossy black berries. Nothing here wants to be eaten.",
             light: Dark,
+            tangled: 2,
             terrain: Uneven,
             exits: {
                 "south": "toadstool_ring",
@@ -1188,6 +1200,7 @@
             name: "Darkling Path",
             description: "A narrow path, more a habit of the trees than a trail, winds north between trunks furred with moss. It's been trodden by something, often, and recently: the leaf litter is pressed flat, and the smell is rank and animal.",
             light: Dark,
+            tangled: 2,
             terrain: Uneven,
             exits: {
                 "south": "fallen_giant",
@@ -1200,6 +1213,7 @@
             name: "Web-Hung Thicket",
             description: "The undergrowth thickens into a tangle of holly and hawthorn, and grey threads start to show between the branches: a few at first, then sheets of them, sagging with dew and old leaves. Small wrapped shapes hang in some of them. The way on to the north is darker still.",
             light: Dark,
+            tangled: 2,
             terrain: Rough,
             exits: {
                 "south": "darkling_path",
@@ -1212,6 +1226,7 @@
             description: "A hollow among the roots of three great trees, roofed over with web so thick it blots out what little light there is. The ground is littered with small bones and husks. Strands drift against your face with every step, and something, somewhere above, shifts its weight.",
             conditions: [(condition: "webs", strength: 1)],
             light: Dark,
+            tangled: 1,
             terrain: Rough,
             exits: {
                 "south": "web_thicket",
@@ -1223,6 +1238,7 @@
             description: "A stream runs out of the deep wood here, black over black stones, between banks of roots and moss. It's the one sure way through the old wood: follow it north and it leads further in; follow it back and it brings you out by the Fallen Giant.",
             chatter: ["The black stream mutters over the roots."],
             light: Dark,
+            tangled: 1,
             terrain: Uneven,
             exits: {
                 "west": "fallen_giant",
@@ -1246,6 +1262,7 @@
             description: "This is the heart of the Darkwood. The trees here were old when Riftwatch was built, and they stand so close and so tall that it might always be night. Nothing grows beneath them but moss. Far off, a tree creaks like a door opening, and then is quiet.",
             chatter: ["Somewhere far off, a tree creaks like a door.", "A long way away, a wolf howls."],
             light: Dark,
+            tangled: 2,
             terrain: Rough,
             exits: {
                 "south": "stream_bend",
@@ -1259,6 +1276,7 @@
             name: "Wolf Run",
             description: "A broad, beaten trail runs north through the trees, trodden bare by many feet, all of them with claws. The bark of every trunk along it is scored and rubbed. Grey hair hangs on the low branches.",
             light: Dark,
+            tangled: 1,
             terrain: Uneven,
             exits: {
                 "south": "old_wood_deep",
@@ -1272,6 +1290,7 @@
             description: "A knuckle of grey rock pushes up out of the forest floor, bare and cold, and the trees stand back from it. From its top you could see over the lower branches, if there were anything to see. The stone is worn smooth in places, where things have sat a long time, and called.",
             chatter: ["The wind moans over the bare rock."],
             light: Dark,
+            tangled: 1,
             terrain: Rough,
             exits: {
                 "east": "wolf_run",
@@ -1282,6 +1301,7 @@
             name: "Bone Glade",
             description: "The run opens into a small glade carpeted with bones: deer, mostly, and boar, and some you'd rather not look at closely. They lie where they were dropped, gnawed and cracked. The smell is thick. North, a dark opening shows under a ledge of rock.",
             light: Dark,
+            tangled: 2,
             terrain: Uneven,
             exits: {
                 "south": "wolf_run",
@@ -1293,6 +1313,7 @@
             name: "Den Mouth",
             description: "A ledge of rock juts out of a bank of earth, and under it a hole runs back into the dark, wide enough to crawl into. The ground in front is packed hard and strewn with tufts of grey fur. Low growls, or breathing, come from inside.",
             light: Dark,
+            tangled: 1,
             terrain: Uneven,
             exits: {
                 "south": "bone_glade",
@@ -1314,6 +1335,7 @@
             name: "Moss Hollow",
             description: "The ground dips into a hollow where moss lies so deep over everything that it swallows sound: fallen trunks, stones, the roots of the old trees, all of it a soft green-black lump under your feet. It's very quiet. It's the kind of quiet that makes you listen.",
             light: Dark,
+            tangled: 3,
             terrain: Uneven,
             exits: {
                 "east": "old_wood_deep",
@@ -1326,6 +1348,7 @@
             description: "Blackthorn has grown up here in a dense, spiked wall, and the only way through is a gap something large has smashed in it. The thorns are as long as your thumb. West, beyond the tangle, the ground rises in a slope of loose grey stone.",
             conditions: [(condition: "brambles", strength: 2)],
             light: Dark,
+            tangled: 3,
             terrain: Rough,
             exits: {
                 "south": "moss_hollow",
@@ -1337,6 +1360,7 @@
             name: "Scree Slope",
             description: "A slope of loose grey stone climbs out of the trees toward a cliff face, and every step slides. Halfway up, a dark cave mouth opens in the rock. Big tracks go up the scree to it, and the stones around the entrance are scratched white.",
             light: Dark,
+            tangled: 1,
             terrain: Rough,
             exits: {
                 "east": "thorn_tangle",
@@ -1369,6 +1393,7 @@
             name: "Ironbark Grove",
             description: "The old oaks give way to a grove of strange trees with black, ridged bark as hard as iron, that rings when you knock on it. Their leaves are small and dark and never seem to fall. Past them, the ground climbs east toward a hill, and something on the hilltop catches what little light there is.",
             light: Dark,
+            tangled: 2,
             terrain: Rough,
             exits: {
                 "west": "old_wood_deep",

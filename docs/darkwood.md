@@ -56,7 +56,7 @@ Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the br
 | --- | --- |
 | Woodcutters' Track, Old Track | The way in, off the Bend; crows overhead |
 | Stump Field | An open clearing; rabbits |
-| Charcoal Burners' Camp | **The hunter**: teaches Foraging, Tracking, Skinning, Butchering and Cooking (and her hunter's stew), keeps a campfire to cook at, sells a hunting knife, waterskins and torches, buys trophies, pelts and meat |
+| Charcoal Burners' Camp | **The hunter**: teaches Foraging, Tracking, Navigation, Skinning, Butchering and Cooking (and her hunter's stew), keeps a campfire to cook at, sells a hunting knife, waterskins, torches and a brass compass, buys trophies, pelts and meat |
 | Birch Wood, Hazel Copse | Foxes; young boars root in the copse |
 | Meadow's Edge, Deer Meadow | Rabbits (a breeding spawn, max 12) and the red deer (a breeding herd, max 6), all skittish |
 | High Meadow | The **red stag**, who stands and fights (antlers 2–5, health 25), and **adders** basking (venomous) |
@@ -214,7 +214,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 - **Bramble Thicket:** pushing through scratches (*built*: the `brambles` [room condition](world.md#room-conditions), `Enters` → `Damage`), and it's rough going.
 - **Spider Hollow's webs:** walking in, you may be caught (`held`): the `webs` [room condition](world.md#room-conditions): `Enters`, a 40% chance → `webbed` for three rounds (*built*).
 - **The deep wood is dark:** its rooms will be `light: Dark`, and the west woods are dark at night; torches light the way, and the beasts have night eyes ([Light and darkness](world.md#light-and-darkness), *built*).
-- **Getting lost** in the deep wood without Navigation **(gap, later: a Navigation skill and lost-ness)**.
+- **Getting lost** in the deep wood: rooms are `tangled`, and leaving one a player may go out another way, told "you feel like you're getting turned around"; Navigation and the hunter's compass keep you on your way ([Getting lost](world.md#getting-lost), *built* 2026-10-29).
 - **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded: a [room condition](world.md#room-conditions) with `Every` reactions (*built*), whose glow can light it (`Lights`). It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
 - **Night** changes the forest: wolves roam the woods after dark, out of their den (`TimeOfDay` spawns, *built*).
 
@@ -247,7 +247,7 @@ The gaps above, each with the smallest shape that would close it, in the order t
 | **Acid that eats gear** | The sewers' slimes | An `acid` damage type is data; acid wearing armour and weapons down needs item condition and wear **(later)** | Later |
 | **Ranged combat** | Bows, the hunter's teaching | Attacking into the next room, ammunition | Large, later |
 | **Rift-touched mutations** | Now and then a monstrous variant instead of an ordinary creature, more often near the Rift-Scar ([planned](world.md#rift-touched-mutations-planned)) | A pool of mutations as data, rolled on a spawn's small chance; each is mostly conditions the mob is born with, plus words and extra harvest | Medium, later |
-| **Navigation and getting lost** | The deep wood's thirty rooms | Without Navigation, a move in the deep wood may take you a different way than you meant, more often the further from a landmark; Navigation (Survival) against how tangled the wood is. Rooms say how easy they are to lose your way in | Medium |
+| **Navigation and getting lost** (*built* 2026-10-29) | The deep wood's thirty rooms | Without Navigation, a move in the deep wood may take you a different way than you meant, more often the further from a landmark; Navigation (Survival) against how tangled the wood is. Rooms say how easy they are to lose your way in | Medium |
 
 ## Proposed build order
 
@@ -282,7 +282,7 @@ Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull 
 1. **The ravine and the brook** (about 8 rooms, tiers 2–3; *built* 2026-10-29 as [the ravine](#the-ravine-as-built), seven rooms): Mossy Falls, the brook's banks, and the ledge behind the falls by a swim (Swim 4): mushrooms, moonpetal and frostfern (rare). Quiet and low in danger, the best herbs.
 2. **The deep wood's edge** (about 10 rooms, tier 4; *built* 2026-10-29 as [the edge](#the-deep-woods-edge-as-built)): beyond the Hermit's Clearing, `light: Dark`, with landmarks (a fallen giant, a stream to follow). Grey wolves roaming after dark (below); forest spiders in Spider Hollow, born hidden and venomous, with webs that may catch you. Mushrooms, deathcap (poisonous to eat), foxglove, nightshade, and the bee tree's honey under `angry_bees`. Spider silk and venom sacs to harvest, and the adder's skin and venom sac.
 3. **The deep wood's heart** (about 12 rooms, tier 5; *built* 2026-10-29 as [the heart](#the-deep-woods-heart-as-built)): the Wolf Den and the Bear's Cave. **Wolves are always in the den** (a `Keep` spawn that stays home), **and roam the woods after dark** (spawns with `when: TimeOfDay([Dusk, Night])` and `wander` through the deep wood, in packs: `pack: 3`, Pack Hunter, a howl calling the pack, a trip that wants a packmate) (decided 2026-10-29). The old she-wolf in the den, her aura over every wolf; the bear at home in its cave (`Cave`, `aggressive: Home`, thick hide, a maul). Wolf pelts and fangs, the bear's pelt, claws and meat, and recipes to cook the new meats. Wolves howling at night, the old wood creaking.
-4. **Navigation** (code, medium): how tangled each room is, the Survival skill as data, and the roll when moving, tuned against the rooms now built.
+4. **Navigation** (code, medium; *built* 2026-10-29 as [getting lost](world.md#getting-lost)): how tangled each room is, the Survival skill as data, and the roll when moving, tuned against the rooms now built. A compass at the hunter's, fairly dear, makes going astray rare.
 5. **The Old Standing Stones and the Rift-Scar** (about 6 rooms, beyond tier 5): a climb to the stones; the scar's hum wearing down whoever lingers unless warded, and its glow lighting it (room conditions); riftbloom; the rift-touched stag, whose hurts hurt back and who leaves a vitae crystal. The story stays a hint ([The setting](setting.md)).
 6. **Contracts:** cull the wolves (Copper), the old she-wolf's pelt (Bronze), the rift-touched stag (Silver), and Meat for the Kitchen.
 
@@ -292,4 +292,4 @@ Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull 
 - [x] **Levels:** the west woods for characters past the sewers, the deep wood guard-strength (level-10 weapon skills), its bosses beyond (2026-10-27).
 - [x] **The Rift-Scar:** a hint of the wider story now: a strange glade, the rift-touched stag and riftbloom, description that suggests without explaining, until the setting is decided ([Riftwatch](riftwatch.md#open-questions)) (2026-10-27).
 - [x] **The hunter:** a new trainer and shop at the charcoal camp (2026-10-27).
-- [ ] **Navigation:** build getting lost with the deep wood, or after it?
+- [x] **Navigation:** after the edge and the heart, so it's tuned against real rooms; going astray takes you out another plain way with a hint, never over a cliff, and a compass makes it rare (2026-10-29).

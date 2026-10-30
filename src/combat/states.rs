@@ -279,6 +279,9 @@ pub enum Modifier {
     Lights,
     /// On a room: darkens it past any light: a torch shows nothing in magical dark.
     Darkens,
+    /// Uses this skill (`tree:skill`) this much better, per point of strength, where its rating
+    /// is rolled out of a fight: `Skill("survival:navigation", 4)`, a compass.
+    Skill(String, i32),
 }
 
 /// What a condition says. Bearer lines are the bearer's own; room lines are what everyone else
@@ -711,6 +714,28 @@ impl Conditions {
         self.any(defs, Modifier::SeesInDark)
     }
 
+    /// How much better they use the skill `key`. Each condition counts once, at its strongest,
+    /// so a second compass adds nothing.
+    pub fn skill(&self, key: &str, defs: &ConditionDefs) -> i32 {
+        let mut best: HashMap<&str, i32> = HashMap::new();
+        for active in &self.0 {
+            let Some(def) = defs.get(&active.key) else {
+                continue;
+            };
+            let per: i32 = def
+                .modifiers
+                .iter()
+                .filter_map(|m| match m {
+                    Modifier::Skill(skill, n) if skill == key => Some(*n),
+                    _ => None,
+                })
+                .sum();
+            let at = best.entry(active.key.as_str()).or_insert(0);
+            *at = (*at).max(per * active.strength);
+        }
+        best.values().sum()
+    }
+
     /// How much better they attack.
     pub fn attack(&self, defs: &ConditionDefs) -> i32 {
         self.total(defs, |m| match m {
@@ -1139,6 +1164,22 @@ pub fn defs_on_disk() -> ConditionDefs {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_skill_bonus_counts_once_however_many_give_it() {
+        let defs = defs_on_disk();
+        let mut conditions = Conditions::default();
+        let compass = |n| ("bearings".to_string(), 1, Entity::from_raw_u32(n).unwrap());
+        conditions.set_grants(vec![compass(1)]);
+        assert_eq!(conditions.skill("survival:navigation", &defs), 4);
+        conditions.set_grants(vec![compass(1), compass(2)]);
+        assert_eq!(
+            conditions.skill("survival:navigation", &defs),
+            4,
+            "two compasses"
+        );
+        assert_eq!(conditions.skill("athletics:climbing", &defs), 0);
+    }
 
     #[test]
     fn the_condition_files_parse_and_say_what_they_do() {

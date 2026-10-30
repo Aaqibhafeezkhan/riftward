@@ -344,6 +344,13 @@
         tags: ["dark"],
         modifiers: [AttackTimes(0.5), DefenceTimes(0.5)],
     ),
+    // From a compass carried: Navigation (Intuition alone, untrained) counts 4 better.
+    "bearings": (
+        name: "bearings",
+        description: "keeping your bearings, by a compass",
+        tags: ["item"],
+        modifiers: [Skill("survival:navigation", 4)],
+    ),
     "hidden": (
         name: "hidden",
         description: "out of sight of anyone who hasn't noticed you",

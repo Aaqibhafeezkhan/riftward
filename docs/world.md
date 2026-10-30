@@ -242,6 +242,22 @@ An exit can need a climb or a swim, written in its long form: `"down": (to: "rav
 - **The wording** is the skills' own (see [Skill text](skills.md#skill-text)): `{direction}` is the exit.
 - **Places today:** the Darkwood's East Road climbs down to the Ravine Floor, where moonpetal grows thick (Climb 4, each way); the sewers' Drowned Stair swims down to the Sunken Hall, under the city, where a silver locket and a healing draught wait (Swim 4, each way).
 
+### Getting lost
+
+*Built* (2026-10-29). A room can be `tangled: n` (none, the default, is never): leaving it, a player rolls Navigation (Survival) plus Intuition against `n`, by the [ratio rule](attributes.md#the-ratio-rule), with Luck. Anyone can try on Intuition alone; only the trained practise.
+
+- **Lost, you go out another way** than you meant, picked at random from the room's plain exits: never through a door you don't know or that's shut, nor over a climb or a swim, so getting lost never drops you off a cliff. A room with no other way out can't lose you. You're told, in the skill's words: "You set off north, but the trees close in, and you feel like you're getting turned around." Then you see where you've ended up.
+- **Mobs never lose their way** (they know their woods), and nor does someone fleeing, who runs blind anyway.
+- **A compass** (the hunter's, 15 gold: more than a steel breastplate, a goal to save for across several contracts) gives `bearings` while carried, `Skill("survival:navigation", 4)`. The [same modifier](effects.md#modifiers) works for Climbing and Swimming. With base Intuition (3), the odds of going astray:
+
+| `tangled` | Untrained | Compass | Navigation 3 | Navigation 3 and a compass |
+| --- | --- | --- | --- | --- |
+| 1 (a trail, near a landmark) | 4% | under 1% | under 1% | under 1% |
+| 2 (the wood between) | 23% | 2% | 4% | under 1% |
+| 3 (Moss Hollow, the Thorn Tangle) | 50% | 7% | 11% | 3% |
+
+- **Places today:** the deep wood, its landmarks (the Fallen Giant, the Stream Bend) and caves never, its trails 1, the wood between 2, Moss Hollow and the Thorn Tangle 3.
+
 ### Tracking
 
 Every room remembers the tracks of whoever walks in or out, player or mob, for 30 minutes, up to 20 of them (`tracks` in `assets/rules.ron`, with the ground difficulties and age words below), the oldest going first. A teleport leaves none, wading water holds none, and they aren't saved.

@@ -96,5 +96,23 @@
                 ),
             ),
         ),
+        // Navigation is rolled whenever someone leaves a tangled place (a room's `tangled`);
+        // anyone can try, on Intuition alone, but only the trained practise. Only a lost way is
+        // told: {direction} is the way they meant to go.
+        "navigation": (
+            name: "Navigation",
+            description: "Keeping your bearings where the paths give out. In tangled places like the deep wood, you may lose your way and go out by another path than the one you meant; Intuition alone helps, a compass more, and the skill most.",
+            kind: Passive(triggers: []),
+            text: (
+                hit: (
+                    actor: "You keep your bearings, and go {direction}.",
+                    room: "{actor} goes {direction} without hesitating.",
+                ),
+                miss: (
+                    actor: "You set off {direction}, but the trees close in, and you feel like you're getting turned around.",
+                    room: "{actor} hesitates, looks about, and sets off the wrong way.",
+                ),
+            ),
+        ),
     },
 )

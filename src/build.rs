@@ -578,6 +578,7 @@ fn dig(here: &RoomKey, inv: &Invocation, zones: &mut Assets<ZoneDef>) -> Reply {
                 terrain: Terrain::Paved,
                 environment: from_environment,
                 finds: None,
+                tangled: 0,
             },
         );
         room_mut(zone, here)?

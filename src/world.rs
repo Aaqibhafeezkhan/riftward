@@ -273,6 +273,14 @@ pub struct RoomDef {
     /// What can be found here, instead of what its zone has for its environment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finds: Option<FindsDef>,
+    /// How easy it is to lose your way leaving here: Navigation is rolled against it, and someone
+    /// who loses goes out another way than they meant. 0, the default, is never.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub tangled: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// What a room's ground is like. Walking into a room costs its terrain's stamina, doubled for
@@ -1318,6 +1326,7 @@ impl ZoneDef {
             terrain: Terrain::Paved,
             environment: Environment::Town,
             finds: None,
+            tangled: 0,
         };
         Self {
             id: id.into(),
@@ -1470,6 +1479,11 @@ impl Aggression {
         *self == Aggression::Never
     }
 }
+
+/// How easy it is to lose your way leaving a room (`RoomDef::tangled`); rooms without one never
+/// lose anyone.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct Tangled(pub u32);
 
 /// The conditions a room has, by key and strength (`RoomDef::conditions`): brambles, webs, a
 /// rift's hum. Their reactions answer whoever is in it (`combat/triggers.rs`).
@@ -1822,6 +1836,10 @@ fn sync_world(
                     Some(own) => commands.entity(entity).insert(own),
                     None => commands.entity(entity).remove::<RoomConditions>(),
                 };
+                match def.tangled {
+                    0 => commands.entity(entity).remove::<Tangled>(),
+                    n => commands.entity(entity).insert(Tangled(n)),
+                };
                 if def.chatter.is_empty() {
                     commands.entity(entity).remove::<crate::ambient::Chatter>();
                 } else {
@@ -1851,6 +1869,9 @@ fn sync_world(
                 }
                 if let Some(own) = RoomConditions::of(def) {
                     commands.entity(entity).insert(own);
+                }
+                if def.tangled > 0 {
+                    commands.entity(entity).insert(Tangled(def.tangled));
                 }
                 if !def.chatter.is_empty() {
                     commands

@@ -48,6 +48,8 @@ pub struct View<'w, 's> {
     pub room_conditions: Query<'w, 's, &'static crate::world::RoomConditions>,
     /// Which hidden doors each character has found.
     pub door_sight: crate::world::DoorSight<'w, 's>,
+    /// How easy each room is to lose your way leaving.
+    pub tangled: Query<'w, 's, &'static crate::world::Tangled>,
 }
 
 impl View<'_, '_> {
@@ -294,6 +296,14 @@ pub fn travel(
         out.push(Outgoing::line(entity, "You can't go that way."));
         return out;
     };
+    // In a tangled place a player may lose their way, and go out by another. Someone fleeing
+    // (`pay` false) runs blind anyway; mobs know their own woods.
+    let (dir, exit) = match view.tangled.get(actor.room) {
+        Ok(tangled) if pay && actor.character_id.is_some() => {
+            navigate(&actor, (&dir, exit), tangled.0, view, practice, &mut out)
+        }
+        _ => (dir, exit),
+    };
     if let Some(door) = exit.door.and_then(|d| view.doors.get(d).ok())
         && !door.is_open()
     {
@@ -306,7 +316,7 @@ pub fn travel(
     let mut to = exit.to;
     let mut fell = false;
     if let Some(needs) = exit.needs {
-        match cross(&actor, needs, &dir, practice, &mut out) {
+        match cross(&actor, needs, &dir, view, practice, &mut out) {
             Crossing::Made => {}
             Crossing::Failed => return out,
             Crossing::Fell => {
@@ -483,14 +493,99 @@ fn sneak_through(
     (left, Some(entered))
 }
 
-/// The skill that climbs, and the one that swims.
+/// The skill that climbs, the one that swims, and the one that finds the way.
 const CLIMBING: &str = "athletics:climbing";
 const SWIMMING: &str = "athletics:swimming";
+const NAVIGATION: &str = "survival:navigation";
 
-/// Try to climb or swim through an exit: Climbing plus Strength, or Swimming plus Body, against
-/// its difficulty, by the ratio rule. Anyone can try on their attribute alone; only the trained
-/// practise. A fall hurts (never to death) and a flounder tires, and either way they stay put.
-/// Told in the skill's words. Returns whether they made it.
+/// Someone leaving a tangled room `dir`-wards: Navigation plus Intuition (and what helps it, like
+/// a compass) against how tangled it is, by the ratio rule. Anyone can try on Intuition alone;
+/// only the trained practise. Lost, they go out another plain way (no door they don't know or
+/// that's shut, nothing to climb or swim) picked at random, told in the skill's words. Returns
+/// the way they go.
+fn navigate(
+    actor: &Actor,
+    (dir, exit): (&str, crate::world::Exit),
+    tangled: u32,
+    view: &View,
+    practice: &mut Practice,
+    out: &mut Vec<Outgoing>,
+) -> (String, crate::world::Exit) {
+    let keep = (dir.to_string(), exit);
+    let Some((skills, _, attributes)) = practice.sheet(actor.entity) else {
+        return keep;
+    };
+    let known = skills.0.contains_key(NAVIGATION);
+    let helped = view
+        .conditions
+        .get(actor.entity)
+        .map_or(0, |c| c.skill(NAVIGATION, &view.condition_defs));
+    let rating = skills.0.get(NAVIGATION).map_or(0, |s| s.level as i32)
+        + attributes.get(Attribute::Intuition)
+        + helped;
+    let luck = attributes.get(Attribute::Luck);
+    let found = practice
+        .opposed(f64::from(rating.max(1)), luck, f64::from(tangled), 0)
+        .won;
+    if known {
+        let learner = Learner {
+            character_id: actor.character_id,
+            race: &actor.race,
+            boost: 1.0,
+            fighting: false,
+        };
+        for line in practice.exercise(actor.entity, learner, NAVIGATION) {
+            out.push(Outgoing::line(actor.entity, line));
+        }
+    }
+    if found {
+        return keep;
+    }
+    let others: Vec<(String, crate::world::Exit)> = view
+        .rooms
+        .get(actor.room)
+        .map(|(_, _, exits)| {
+            exits
+                .0
+                .iter()
+                .filter(|(way, other)| {
+                    way.as_str() != dir
+                        && other.needs.is_none()
+                        && other.door.is_none_or(|d| {
+                            view.door_sight.knows(d, actor.character_id)
+                                && view.doors.get(d).is_ok_and(Door::is_open)
+                        })
+                })
+                .map(|(way, other)| (way.clone(), *other))
+                .collect()
+        })
+        .unwrap_or_default();
+    if others.is_empty() {
+        return keep;
+    }
+    let pick = practice.roll(0, 0..=others.len() as i64 - 1) as usize;
+    if let Some(text) = practice
+        .defs
+        .skills
+        .get(NAVIGATION)
+        .and_then(|s| s.def.text.clone())
+    {
+        let lines = text.miss.as_ref().unwrap_or(&text.hit);
+        let with = [("actor", actor.name.as_str()), ("direction", dir)];
+        out.push(Outgoing::line(actor.entity, fill(&lines.actor, &with)));
+        out.push(Outgoing::Room {
+            room: actor.room,
+            except: actor.entity,
+            text: fill(&lines.room, &with) + "\r\n",
+        });
+    }
+    others[pick].clone()
+}
+
+/// Try to climb or swim through an exit: Climbing plus Strength, or Swimming plus Body (and what
+/// helps them), against its difficulty, by the ratio rule. Anyone can try on their attribute
+/// alone; only the trained practise. A failed climb is a fall, and a flounder tires where they
+/// stand. Told in the skill's words.
 /// How a climb or swim went: made, failed where they stand (a swim), or a fall (a climb).
 enum Crossing {
     Made,
@@ -565,6 +660,7 @@ fn cross(
     actor: &Actor,
     needs: Obstacle,
     dir: &str,
+    view: &View,
     practice: &mut Practice,
     out: &mut Vec<Outgoing>,
 ) -> Crossing {
@@ -576,7 +672,12 @@ fn cross(
         return Crossing::Failed;
     };
     let known = skills.0.contains_key(key);
-    let rating = skills.0.get(key).map_or(0, |s| s.level as i32) + attributes.get(attribute);
+    let helped = view
+        .conditions
+        .get(actor.entity)
+        .map_or(0, |c| c.skill(key, &view.condition_defs));
+    let rating =
+        skills.0.get(key).map_or(0, |s| s.level as i32) + attributes.get(attribute) + helped;
     let luck = attributes.get(Attribute::Luck);
     let rating = f64::from(rating.max(1));
     let made_it = practice

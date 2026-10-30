@@ -3243,6 +3243,101 @@ mod tests {
     }
 
     #[test]
+    fn players_lose_their_way_in_tangled_places_unless_something_keeps_their_bearings() {
+        use crate::world::{Exit, Obstacle, Tangled};
+        let (mut world, start) = world();
+        world.init_resource::<crate::light::LitRooms>();
+        world.resource_mut::<SkillDefs>().skills.extend([skill(
+            "survival:navigation",
+            SkillKind::Passive {
+                triggers: Vec::new(),
+                bonuses: Vec::new(),
+                counter: None,
+                reactions: Vec::new(),
+            },
+        )]);
+        let room = |world: &mut World, id: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: id.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(id, ""),
+                    Exits::default(),
+                ))
+                .id()
+        };
+        let (north, south, cliff) = (
+            room(&mut world, "test:north"),
+            room(&mut world, "test:south"),
+            room(&mut world, "test:cliff"),
+        );
+        let plain = |to| Exit {
+            to,
+            door: None,
+            needs: None,
+        };
+        // A wood no one finds their way through, with a cliff no one is led over.
+        world.entity_mut(start).insert((
+            Tangled(1_000_000),
+            Exits(
+                [
+                    ("north".to_string(), plain(north)),
+                    ("south".to_string(), plain(south)),
+                    (
+                        "east".to_string(),
+                        Exit {
+                            to: cliff,
+                            door: None,
+                            needs: Some(Obstacle::Climb(1)),
+                        },
+                    ),
+                ]
+                .into(),
+            ),
+        ));
+        let walker = fighter(&mut world, start, 1, 1, &[BASIC_ATTACK]);
+        let wolf = fighter(&mut world, start, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, walker);
+        let go = |world: &mut World, who: Entity| {
+            world.get_mut::<InRoom>(who).unwrap().0 = start;
+            let inv = Invocation {
+                entity: who,
+                command: "go",
+                usage: "",
+                args: "north".into(),
+            };
+            world
+                .run_system_once_with(crate::commands::movement::go, inv)
+                .unwrap();
+            world.flush();
+            world.get::<InRoom>(who).unwrap().0
+        };
+        for _ in 0..5 {
+            assert_eq!(go(&mut world, walker), south, "lost, the other plain way");
+            assert_eq!(go(&mut world, wolf), north, "a mob knows its woods");
+        }
+        assert!(
+            said(&world, walker, "miss with a navigation"),
+            "told in the skill's words"
+        );
+        // A compass strong enough keeps them on their way.
+        world.get_mut::<Conditions>(walker).unwrap().apply(
+            &defs_on_disk(),
+            "bearings",
+            1_000_000,
+            Lasts::Indefinitely,
+        );
+        for _ in 0..5 {
+            assert_eq!(go(&mut world, walker), north, "kept their bearings");
+        }
+    }
+
+    #[test]
     fn armour_counts_where_it_belongs() {
         let (mut world, room) = world();
         let who = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);

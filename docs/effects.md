@@ -66,6 +66,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 | `Skill(skill_or_tree, n)` | A skill's effective level | |
 | `SpellPower(n)` / `DrainResistance(n)` | For casters | |
 | `Stealth(n)` / `Notice(n)` | Hiding, and spotting the hidden | |
+| `Skill(key, n)` | Uses that skill `n` better per point of strength, where its rating is rolled out of a fight (Navigation, Climbing, Swimming); each condition counts once, at its strongest, so two compasses help no more than one | ✓ `bearings` (a compass) |
 | `Carry(n)` / `MoveCost(x)` | Bulk limit; stamina to move | |
 
 **Vitals**
