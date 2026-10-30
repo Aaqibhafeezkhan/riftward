@@ -775,6 +775,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let (room, a_name, is_player) = (a.in_room.0, name_of(a.player, a.mob), a.player.is_some());
         let chosen = a.auto.and_then(|auto| auto.0.clone());
         let blessing = a.conditions.attack(self.conditions);
+        let fury = a.conditions.damage(self.conditions);
         let attack_times = a.conditions.attack_times(self.conditions);
         let stamina = a.vitals.stamina;
         let a_attributes = a.attributes.clone();
@@ -908,7 +909,7 @@ impl Round<'_, '_, '_, '_, '_, '_> {
         let harmless = t.is_some_and(|t| t.strike == StrikeKind::Harmless);
         let blow = (!harmless).then(|| BlowDamage {
             damage,
-            bonus: f64::from(a_attributes.get(Attribute::Strength) / 2 + extra)
+            bonus: f64::from(a_attributes.get(Attribute::Strength) / 2 + extra + fury)
                 + a_boosts.damage_with(&key),
             damage_type,
             pierce: a_boosts.pierce_with(&key),

@@ -60,6 +60,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 | `Defence(n)` / `DefenceTimes(x)` | Evasion up or down, or multiplied | ✓ Guarding; ✓ Down, Held, Exposed halve it |
 | `Block(n)` | A shield's block | |
 | `Armour(n)` / `Pierce(n)` | Takes more off blows; finds more gaps | |
+| `Damage(n)` | Blows do more damage, or less, per point of strength, before armour | ✓ Pack fury: a wolf bites a point harder for each of its pack beside it |
 | `DamageDealt(x)` / `DamageTaken(x)` | Multiplies damage done or taken | |
 | `Initiative(n)` | Acts sooner or later | |
 | `Attribute(attr, n)` | Any of the ten | |

@@ -332,9 +332,9 @@
     // (the `pack_hunter` trait).
     "pack_fury": (
         name: "pack fury",
-        description: "emboldened by its pack: attacking {strength} better",
+        description: "emboldened by its pack: attacking {strength} better, and biting {strength} harder",
         tags: ["morale"],
-        modifiers: [Attack(1)],
+        modifiers: [Attack(1), Damage(1)],
     ),
     // In a room too dark to see in (docs/world.md#light-and-darkness). The code knows this one by
     // name: it puts it on and takes it off as the light changes, and someone with it sees no one.

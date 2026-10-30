@@ -236,6 +236,8 @@ pub enum Modifier {
     Attack(i32),
     /// Defends better, or worse.
     Defence(i32),
+    /// Its blows do this much more damage, or less, before armour.
+    Damage(i32),
     /// Defence multiplied: half for someone down, held or exposed.
     DefenceTimes(f64),
     /// Takes this much more off every blow, like armour: only damage armour stops (physical).
@@ -740,6 +742,14 @@ impl Conditions {
     pub fn attack(&self, defs: &ConditionDefs) -> i32 {
         self.total(defs, |m| match m {
             Modifier::Attack(n) => Some(*n),
+            _ => None,
+        })
+    }
+
+    /// How much more damage their blows do.
+    pub fn damage(&self, defs: &ConditionDefs) -> i32 {
+        self.total(defs, |m| match m {
+            Modifier::Damage(n) => Some(*n),
             _ => None,
         })
     }

@@ -3152,6 +3152,10 @@ mod tests {
         for wolf in &pack {
             assert_eq!(fury(&world, *wolf), Some(2), "two of its pack beside it");
         }
+        // A point of attack and of damage for each of them.
+        let defs = states::defs_on_disk();
+        let bold = world.get::<Conditions>(pack[0]).unwrap();
+        assert_eq!((bold.attack(&defs), bold.damage(&defs)), (2, 2));
         // The prey counts no allies: the wolves aren't its kind.
         assert_eq!(fury(&world, prey), None);
         assert!(

@@ -660,7 +660,7 @@ const DEEP_WOOD: &[Tuned] = &[
     },
     Tuned {
         name: "the night pack",
-        foes: &[("forest:grey_wolf", 3)],
+        foes: &[("forest:grey_wolf", 4)],
         near: &[],
         targets: &[(6, 2, 60), (6, 3, 90), (10, 2, 90)],
     },
