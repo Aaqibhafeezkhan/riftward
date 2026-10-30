@@ -22,6 +22,40 @@
                 ),
             ),
         ),
+        "wolf_bite": (
+            name: "Wolf Bite",
+            description: "A wolf's bite, all teeth and weight behind it.",
+            kind: Attack(damage: (2, 4)),
+            text: (
+                hit: (
+                    actor: "Your bite {harm} {target}.",
+                    target: "{actor}'s bite {harm} you.",
+                    room: "{actor}'s bite {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You lunge at {target}, but your jaws snap shut on air.",
+                    target: "{actor} lunges at you, but its jaws snap shut on air.",
+                    room: "{actor} lunges at {target}, but its jaws snap shut on air.",
+                ),
+            ),
+        ),
+        "fangs": (
+            name: "Fangs",
+            description: "A spider's curved fangs.",
+            kind: Attack(damage: (1, 3)),
+            text: (
+                hit: (
+                    actor: "Your venomous bite {harm} {target}.",
+                    target: "{actor}'s venomous bite {harm} you.",
+                    room: "{actor}'s venomous bite {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You strike at {target}, but miss.",
+                    target: "{actor} strikes at you, but misses.",
+                    room: "{actor} strikes at {target}, but misses.",
+                ),
+            ),
+        ),
         "rat_bite": (
             name: "Rat Bite",
             description: "A rat's small, sharp bite.",

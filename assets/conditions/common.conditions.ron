@@ -238,6 +238,40 @@
             looks: ["{bearer}'s wounds are closing before your eyes."],
         ),
     ),
+    // Caught in a web (Spider Hollow's `webs`): stuck where they stand for a few seconds.
+    "webbed": (
+        name: "webbed",
+        description: "stuck fast in sticky threads, unable to move or flee, and defending at half",
+        tags: ["physical"],
+        modifiers: [CantMove, CantFlee, DefenceTimes(0.5)],
+        text: (
+            applied: (bearer: "Sticky threads wrap around you, and you're stuck fast!", room: "{bearer} blunders into a web and is stuck fast!"),
+            fades: (bearer: "You tear yourself free of the webs."),
+            looks: ["{bearer} is wrapped in sticky threads."],
+        ),
+    ),
+    // Something eaten that shouldn't have been (a deathcap): it hurts every so often while it
+    // lasts, in a fight or out of one, and leaves them weak.
+    "sickened": (
+        name: "sickened",
+        description: "sick to the stomach from something eaten, cramping now and then",
+        tags: ["poison"],
+        modifiers: [AttackTimes(0.75)],
+        reactions: [(
+            on: Every(Minutes(10)),
+            effects: [Damage(amount: "roll(1, 2 + strength)", type: "physical")],
+            text: (
+                actor: "Your stomach knots, and the cramp {harm} you.",
+                target: "Your stomach knots, and the cramp {harm} you.",
+                room: "{actor} doubles over, and the cramp {harm} them.",
+            ),
+        )],
+        text: (
+            applied: (bearer: "Your stomach turns over. Something you ate was wrong.", room: "{bearer} turns a little green."),
+            fades: (bearer: "Your stomach settles at last."),
+            looks: ["{bearer} looks pale and sweaty."],
+        ),
+    ),
     "rooted": (
         name: "rooted",
         description: "unable to move or flee",

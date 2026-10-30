@@ -1,6 +1,6 @@
 # The Darkwood
 
-[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
+[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, [the deep wood's edge](#the-deep-woods-edge-as-built) beyond it (2026-10-29), and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
 
 The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. It's where a new character goes once the sewers stop teaching them anything, and where foraging, herb-gathering, tracking and hunting come into their own. It grows more dangerous the further from the road you go: safe-ish near the gate, wild in the deep wood, and strange where the trees grow wrong around an old rift-scar.
 
@@ -24,8 +24,8 @@ flowchart TB
     track --- meadow[Deer Meadow ✓]
     meadow --- brook[Brook Ford ✓]
     brook --- thicket[Bramble Thicket ✓]
-    clearing --- deep[Deep Darkwood]
-    deep --- hollow[Spider Hollow]
+    clearing --- deep[Edge of the Old Wood ✓]
+    deep --- hollow[Spider Hollow ✓]
     deep --- den[Wolf Den]
     deep --- cave[Bear's Cave]
     deep --- stones[Old Standing Stones]
@@ -89,6 +89,26 @@ Built 2026-10-29: the stream along the ravine floor, below the East Road's climb
 
 - **Ambient lines:** the falls' roar, stones in the current, the otters, the heron fishing.
 - **The brook** stays as the west woods built it; this reach is the ravine's own stream.
+
+### The deep wood's edge, as built
+
+Built 2026-10-29: ten rooms north of the Hermit's Clearing, tier 4. Every room but the Bee Tree is `light: Dark`: bring a torch. Landmarks to learn it by: the Fallen Giant, and the Black Stream, the one sure way further in.
+
+| Room | What's there |
+| --- | --- |
+| Edge of the Old Wood | The way in from the clearing; something moving in the dark |
+| The Fallen Giant | A landmark: an oak of impossible size, lying on its side |
+| The Bee Tree | A gap in the canopy (lit by day); **honeycomb** to forage, under `angry_bees` |
+| Toadstool Ring | Mushrooms, and **deathcap** among them (a "pale mushroom": eaten, it leaves you `sickened`, cramping every ten game minutes) |
+| Nightshade Dell | **Foxglove** and **nightshade** (poisons, for Brewing later) |
+| Darkling Path | Where the wolves come through after dark |
+| Web-Hung Thicket | A **forest spider**, hidden |
+| Spider Hollow | Two **forest spiders**, hidden; `webs` that may catch you coming in (`webbed`: stuck a few seconds) |
+| Black Stream, Stream Bend | The stream north, toward the deep wood's heart (step 3) |
+
+- **Forest spiders:** born hidden, they spring at whoever comes near unaware; a venomous bite (1–3, the `venomous` trait); they hide again a minute after a fight. Spider silk and venom sacs to harvest.
+- **Grey wolves after dark:** two lone wolves come out at dusk and roam these rooms (`TimeOfDay([Dusk, Night])`), aggressive to anything not a wolf, with Pack Hunter for when they meet; a bite of 2–4; a wolf pelt and fangs. Their den comes with the heart.
+- **The adder** now yields a skin and, half the time, a venom sac.
 
 ## The ladder: from the sewers to the deep wood
 
@@ -161,17 +181,17 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 | Deer Meadow | Wild berries, sorrel | Yarrow, kingsfoil, chamomile | |
 | Brook Ford, Mossy Falls | Watercress | Kingsfoil, moonpetal | `"fish"` for Fishing |
 | Ravine, the falls' ledge (*built*) | Mushrooms (Fern Gully) | Moonpetal, frostfern (rare, behind the falls) | |
-| Deep wood | Mushrooms, deathcap (poisonous to eat) | Foxglove, nightshade (poisons, for Brewing later) | `"wood"` (ironbark) |
+| Deep wood (the edge *built*) | Mushrooms, deathcap (poisonous to eat), honeycomb at the bee tree | Foxglove, nightshade (poisons, for Brewing later) | `"wood"` (ironbark) |
 | The Rift-Scar | Nothing wholesome | Riftbloom (rare, glows) | |
 
 - **All data:** each is an item template plus a finds table; new kinds like `"wood"` and `"fish"` are just tables until a skill finds them (Woodcutting, Fishing: new skills made of `Find`).
-- **Poisonous food** (deathcap): eating it should poison you: a consumable whose `effects` `Apply` `poisoned` (*built* 2026-10-29, the mushroom itself not yet).
-- **Honey from a bee tree:** foraging there angers the bees: the `angry_bees` [room condition](world.md#room-conditions) answers `Gathers`, stinging half the time (*built*; the tree and its honey wait for the deep wood).
+- **Poisonous food** (deathcap, *built*): eaten, it leaves you `sickened`, a condition whose `Every(Minutes(10))` reaction cramps you in a fight or out of one (poison only bites in a fight).
+- **Honey from a bee tree:** foraging there angers the bees: the `angry_bees` [room condition](world.md#room-conditions) answers `Gathers`, stinging half the time (*built*, with the tree at the deep wood's edge).
 
 ## Hazards and atmosphere
 
 - **Bramble Thicket:** pushing through scratches (*built*: the `brambles` [room condition](world.md#room-conditions), `Enters` → `Damage`), and it's rough going.
-- **Spider Hollow's webs:** walking in, you may be caught (`held`): a [room condition](world.md#room-conditions) with `Enters` → `Apply(held)` and a `chance` (the machinery is *built*; the hollow isn't yet).
+- **Spider Hollow's webs:** walking in, you may be caught (`held`): the `webs` [room condition](world.md#room-conditions): `Enters`, a 40% chance → `webbed` for three rounds (*built*).
 - **The deep wood is dark:** its rooms will be `light: Dark`, and the west woods are dark at night; torches light the way, and the beasts have night eyes ([Light and darkness](world.md#light-and-darkness), *built*).
 - **Getting lost** in the deep wood without Navigation **(gap, later: a Navigation skill and lost-ness)**.
 - **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded: a [room condition](world.md#room-conditions) with `Every` reactions (*built*), whose glow can light it (`Lights`). It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
@@ -239,7 +259,7 @@ Later, once the deep wood exists: Navigation and getting lost, ranged combat, Ri
 Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull request checked by the zone tests and walked live. Numbers are first guesses for each tier, to be played ([#13](https://github.com/Foxworks-Studios/riftward/issues/13)).
 
 1. **The ravine and the brook** (about 8 rooms, tiers 2–3; *built* 2026-10-29 as [the ravine](#the-ravine-as-built), seven rooms): Mossy Falls, the brook's banks, and the ledge behind the falls by a swim (Swim 4): mushrooms, moonpetal and frostfern (rare). Quiet and low in danger, the best herbs.
-2. **The deep wood's edge** (about 10 rooms, tier 4): beyond the Hermit's Clearing, `light: Dark`, with landmarks (a fallen giant, a stream to follow). Grey wolves roaming after dark (below); forest spiders in Spider Hollow, born hidden and venomous, with webs that may catch you. Mushrooms, deathcap (poisonous to eat), foxglove, nightshade, and the bee tree's honey under `angry_bees`. Spider silk and venom sacs to harvest, and the adder's skin and venom sac.
+2. **The deep wood's edge** (about 10 rooms, tier 4; *built* 2026-10-29 as [the edge](#the-deep-woods-edge-as-built)): beyond the Hermit's Clearing, `light: Dark`, with landmarks (a fallen giant, a stream to follow). Grey wolves roaming after dark (below); forest spiders in Spider Hollow, born hidden and venomous, with webs that may catch you. Mushrooms, deathcap (poisonous to eat), foxglove, nightshade, and the bee tree's honey under `angry_bees`. Spider silk and venom sacs to harvest, and the adder's skin and venom sac.
 3. **The deep wood's heart** (about 12 rooms, tier 5): the Wolf Den and the Bear's Cave. **Wolves are always in the den** (a `Keep` spawn that stays home), **and roam the woods after dark** (spawns with `when: TimeOfDay([Dusk, Night])` and `wander` through the deep wood, in packs: `pack: 3`, Pack Hunter, a howl calling the pack, a trip that wants a packmate) (decided 2026-10-29). The old she-wolf in the den, her aura over every wolf; the bear at home in its cave (`Cave`, `aggressive: Home`, thick hide, a maul). Wolf pelts and fangs, the bear's pelt, claws and meat, and recipes to cook the new meats. Wolves howling at night, the old wood creaking.
 4. **Navigation** (code, medium): how tangled each room is, the Survival skill as data, and the roll when moving, tuned against the rooms now built.
 5. **The Old Standing Stones and the Rift-Scar** (about 6 rooms, beyond tier 5): a climb to the stones; the scar's hum wearing down whoever lingers unless warded, and its glow lighting it (room conditions); riftbloom; the rift-touched stag, whose hurts hurt back and who leaves a vitae crystal. The story stays a hint ([The setting](setting.md)).

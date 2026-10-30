@@ -45,4 +45,20 @@
             looks: ["Bees drone in and out of a hollow high in a tree."],
         ),
     ),
+    // Spider Hollow's webs (docs/darkwood.md): coming in, you may blunder into one.
+    "webs": (
+        name: "webs",
+        description: "webs strung between the trees, catching whoever blunders in",
+        tags: ["nature"],
+        modifiers: [],
+        reactions: [(
+            on: Enters,
+            chance: "0.4",
+            effects: [Apply(condition: "webbed", lasts: Rounds(3), on: User)],
+            text: (actor: "", room: ""),
+        )],
+        text: (
+            looks: ["Webs hang between the trees, grey and heavy, some of them very large."],
+        ),
+    ),
 }
