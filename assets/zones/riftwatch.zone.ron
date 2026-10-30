@@ -536,7 +536,7 @@
             skills: {
                 "brawling:basics": 12, "brawling:grapple": 8, "swordplay:basics": 22,
                 "swordplay:lunge": 12, "swordplay:riposte": 12, "athletics:dodge": 20,
-                "athletics:toughness": 15, "shields:block": 12, "armour:heavy_armour": 12,
+                "athletics:toughness": 10, "shields:block": 12, "armour:heavy_armour": 12,
                 "command:call_for_help": 1,
             },
             equipment: ["short_sword", "round_shield", "studded_leather", "iron_helm"],
@@ -556,7 +556,7 @@
             skills: {
                 "brawling:basics": 15, "brawling:grapple": 10, "swordplay:basics": 25,
                 "swordplay:lunge": 16, "swordplay:riposte": 16, "athletics:dodge": 24,
-                "athletics:toughness": 20, "shields:block": 16, "armour:heavy_armour": 17,
+                "athletics:toughness": 14, "shields:block": 16, "armour:heavy_armour": 17,
                 "command:call_for_help": 1,
             },
             equipment: ["short_sword", "round_shield", "mail_shirt", "iron_helm"],

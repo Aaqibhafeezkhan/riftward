@@ -20,7 +20,7 @@ Characters have ten uncapped attributes, raised with Karma. Skills say what a ch
 | Special | Magic | Starts at 0; latent until the character knows a casting skill (see [Magic](magic.md)) |
 
 - **Starting values:** attributes start from a base of 3 (Luck 1, Magic 0), shifted by race (see [Races](characters.md#races)), and every character starts with 20 Karma to spend (humans 32). Karma can go on Magic too, as latent talent.
-- **Derived values:** health 8 + Body / 2, stamina 8 + Willpower / 2, initiative Reaction + Intuition, carrying capacity from Strength + Body. Health and stamina are maximums; see [Vitals](#vitals) for the current values.
+- **Derived values:** health 8 + Body, stamina 8 + Willpower (every point counts; `attribute_per_vital` in `rules.ron`), initiative Reaction + Intuition, carrying capacity from Strength + Body. Health and stamina are maximums; see [Vitals](#vitals) for the current values.
 - **Attributes never go down** and Karma is never refunded, except through rare in-world events.
 
 Players see their attributes with `score` and spend Karma with `raise <attribute>`, which accepts any unambiguous prefix (`raise agi`). Admins can set an online player's attribute with `setattr <player> <attribute> <rating>`, which ignores Karma and is meant for testing.
@@ -88,7 +88,7 @@ dice.contest(luck_a, luck_b, p)      // both sides' Luck
 
 ## Vitals
 
-Each character has **current** health and stamina, below or at the maximums above (`src/vitals.rs`). Mobs have them too, by the same rules, except that a mob template's `health` replaces 8 + Body / 2 and mobs don't rest.
+Each character has **current** health and stamina, below or at the maximums above (`src/vitals.rs`). Mobs have them too, by the same rules, except that a mob template's `health` replaces 8 + Body and mobs don't rest.
 
 - **Recovery** happens on the one-second heartbeat, worked out from elapsed time: health refills from empty in 10 minutes, stamina in 2. **`rest`** makes it three times as fast (walking, attacking or being attacked gets you up, and being caught resting is dangerous; see [Combat](architecture.md#combat)), and nothing recovers in a fight. First Aid and healing draughts restore health at once, and food and drink speed recovery for a while (see [Healing](trees.md#healing)).
 - **It continues offline.** Vitals are saved with the time they were saved (at logout, and every minute), and caught up at the next login, so a player who logs out hurt comes back rested.

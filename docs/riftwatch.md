@@ -144,8 +144,8 @@ The keys are item templates in the zone, but none is spawned or carried yet; an 
 
 | Spawn | Where | Keeps | Wanders |
 | --- | --- | --- | --- |
-| Town guards (deadly to a new character, on purpose: a match for a character of level 8, so one kills a new character, often in a round, and a guard losing a fight calls the others; decided 2026-10-30) | North Gate, Market Square, Garrison Yard | 2 each, 6 in all | Anywhere in town, every 1-3 minutes |
-| Keep guards (the lord's household troops, a match for a character of level 12) | Keep Gatehouse, Great Hall | 2 each | No |
+| Town guards (deadly to a new character, on purpose: a match for a character of level 8, so one kills a new character, often in a round, and a guard losing a fight calls the others; decided 2026-10-30; Toughness 10, from 15 when health became 8 + Body + Toughness: one alone beats a level 8 character about four times in ten) | North Gate, Market Square, Garrison Yard | 2 each, 6 in all | Anywhere in town, every 1-3 minutes |
+| Keep guards (the lord's household troops, a match for a character of level 12; Toughness 14, from 20) | Keep Gatehouse, Great Hall | 2 each | No |
 | A stray dog (goes for rats and other vermin, `enemies: ["vermin"]`, but doesn't answer the guards' calls for help) | Market Square | 1 | Market, stalls, back alley, tinkers, Guild Row |
 | Alley rats (not aggressive: they fight only when attacked; a little easier than the stray dog, two at once about the same; back two minutes after they're killed) | Crooked Alley, off the Back Alley | 3 | No |
 | Straw training dummies (the `inanimate` trait: they never hit back, for safe practice) | Training Yard (2), Garrison Yard (1) | 3 | No |
@@ -246,6 +246,7 @@ Tuned 2026-10-30 with the balance tool (`src/combat/balance.rs`), as the [deep w
   - **Grey slimes:** Acid Touch 4 → 9, Dodge 3, health 12 → 18.
   - **The Rat King:** bite, claw and rend 8 → 13, Dodge 9, health 30 → 45.
   - **The Slime Lord:** Acid Touch 8 → 14, Dodge 6, health 40 → 50.
+  - **Retuned for more health** (2026-10-30): characters' health became 8 + Body + Toughness (12 at level 0, 20 at level 3), so the tier 2 and 3 fights got more health to match, and kept their damage: grey slimes 18 → 24, the Rat King 45 → 70, the Slime Lord 50 → 80. The Rat King now wins about 56% for three at level 2 and 80% for two at 3; the Slime Lord 46% and 55%. A new character gained only 2 health, so the tier 0 and 1 fights are a little easier than the table: a pack of rats at level 0 about 65%.
   - **Packs:** oozes and grey slimes fight two at a time (`pack: 2`, was 1), so the Ossuary is a real fight at level 2, not a sure thing, and still no place for level 1. The rats stay at three: a rat's bite rarely lands on a level-1 character, so six at once still lose nine fights in ten, and more at once would only punish new characters in the Warren, who already lose to four rats at once most of the time.
 - **One of anything is safe; it's numbers that kill.** A single rat or ooze does 1 or 2 a bite and dies to one or two blows, so alone it's a new character's first fight, worth little; packs and the swarm are where the risk, and the experience, are. An hour's play outgrows the upper tunnels, as [the ladder](darkwood.md#the-ladder-from-the-sewers-to-the-deep-wood) means it to.
 - **A jerkin matters against slimes:** armour stops acid, so a grey slime that's a gamble at level 1 is safe at level 2 in leather.

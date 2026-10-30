@@ -60,7 +60,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 
 | Tree | Attribute | Skills |
 | --- | --- | --- |
-| **Athletics** ✓ | Body (Reaction for Dodge, Willpower for Endurance) | **Dodge** ✓ (passive: +1 defence a level, a `Defence` bonus in its file), **Endurance** ✓ (passive: practised by spending stamina; with passive bonuses, +1 max stamina per 5 levels), **Toughness** (passive: +max health), **Climbing** and **Swimming** (rooms that need them), **Running** (flee better, travel tires less) |
+| **Athletics** ✓ | Body (Reaction for Dodge, Willpower for Endurance) | **Dodge** ✓ (passive: +1 defence a level, a `Defence` bonus in its file), **Endurance** ✓ (passive: practised by spending stamina; +1 max stamina a level), **Toughness** (passive: +1 max health a level), **Climbing** and **Swimming** (rooms that need them), **Running** (flee better, travel tires less) |
 
 ### Getting by
 
@@ -164,7 +164,7 @@ Each step adds its trees' entry skills to the trainers in Riftwatch: the drill s
   | Axe Fighting | **Cleave** (carries into a second foe, even when it kills the first, 3), **Hew** (+3 damage, −2 accuracy, 2) |
   | Hammer Fighting | **Stagger** (target loses a turn, 4), **Crush** (ignores armour, +1, 2) |
   | Staff Fighting | **Sweep** (knocks down, 3), **Guard** (+4 defence for 2 turns, no strike, 1) |
-  | Athletics | **Toughness** (+1 max health per 5 levels, a fifth with each, practised by taking damage); **Endurance** now gives +1 max stamina per 5 levels |
+  | Athletics | **Toughness** (+1 max health a level, practised by taking damage); **Endurance** now gives +1 max stamina a level |
   | Adept | **Killing Hands** (unarmed, 2–4: the Adept's weapon), **Quickened Reflexes** (+initiative, and +defence, practised by dodging) |
 
 - **Mobs** use whatever skills their templates give them: technique skills now and then, by their `tactics` chance (see [The living world](world.md)), as well as auras and passives.

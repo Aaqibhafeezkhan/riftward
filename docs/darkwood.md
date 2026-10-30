@@ -128,8 +128,8 @@ Built 2026-10-29: twelve dark rooms north of the Stream Bend, tier 5, for charac
 | Ironbark Grove | Black, iron-hard trees; the way east to the stones' hill |
 
 - **Wolves:** always in the den; after dark a **pack of three** roams the heart (`TimeOfDay([Dusk, Night])`), besides the two lone wolves at the edge. Every grey wolf has Pack Hunter, **Howl** (hurt below half, it calls wolves within three rooms, its own Call for Help) and **Pull Down** (a lunge that knocks its prey down, only with another wolf on it: `allies: 1`).
-- **The old she-wolf:** 60 health, a bite of 20 and Dodge 18, `boss`, and **the Old She-Wolf's Lead**, an aura over every grey wolf (+2 attack, +1 defence) while she lives; back 7 days after she's killed. Her great grey pelt (rare, 90) to skin.
-- **The bear:** 110 health, a maul (3–6) of 22, `thick_hide`, and `aggressive: Home`: it lets you pass the cave mouth, and attacks in its cave. Back a day after it dies. A bear pelt, bear meat or a claw; **roast bear** to cook (Cooking 4).
+- **The old she-wolf:** 130 health, a bite of 20 and Dodge 18, `boss`, and **the Old She-Wolf's Lead**, an aura over every grey wolf (+2 attack, +1 defence) while she lives; back 7 days after she's killed. Her great grey pelt (rare, 90) to skin.
+- **The bear:** 210 health, a maul (3–6) of 22, `thick_hide`, and `aggressive: Home`: it lets you pass the cave mouth, and attacks in its cave. Back a day after it dies. A bear pelt, bear meat or a claw; **roast bear** to cook (Cooking 4).
 
 ### The stones and the Rift-Scar, as built
 
@@ -145,7 +145,7 @@ Built 2026-10-29: six rooms east of Ironbark Grove, beyond tier 5. The story sta
 | The Glassed Hollow | Earth run to glass, things sealed inside; `rift_hum` 3, the worst; riftbloom |
 
 - **The hum** (`rift_hum`, a [room condition](world.md#room-conditions)): its glow lights the scar at any hour (`Lights`), and every four game minutes (half a real minute) it does 1 to 2 + strength force damage to everyone there: 1–3 at the edge, 1–5 in the hollow. A ward takes it. Only the one it hurts is told, so it doesn't fill everyone's screen. Foraging finds nothing; Herbalism finds riftbloom (rare, 40).
-- **The rift-touched stag:** 60 health, Agility and Reaction 9, glowing antlers (2–6) at 31 and Dodge 24, `boss`; it only fights back. Its `rift_touched` trait shrugs off force (the hum doesn't touch it), and **every blow that lands on it spits back 1–4 force at whoever struck**, flat, however hard the blow (decided 2026-10-29). It leaves **a vitae crystal** in its corpse (rare, 120), and a silvered hide (60) or glowing antlers (80) to harvest. Back 3 days after it dies. Played at 28 health it killed a character in one round: it's for those past the den.
+- **The rift-touched stag:** 110 health, Agility and Reaction 9, glowing antlers (2–6) at 31 and Dodge 24, `boss`; it only fights back. Its `rift_touched` trait shrugs off force (the hum doesn't touch it), and **every blow that lands on it spits back 1–4 force at whoever struck**, flat, however hard the blow (decided 2026-10-29). It leaves **a vitae crystal** in its corpse (rare, 120), and a silvered hide (60) or glowing antlers (80) to harvest. Back 3 days after it dies. Played at 28 health it killed a character in one round: it's for those past the den.
 
 ### Tuned against parties
 
@@ -160,7 +160,9 @@ Decided and tuned 2026-10-29. "Level-10 weapon skills" turned out to be about ch
 | The rift-touched stag | Four, at 10 | 82% (1.75); 42% for three |
 
 - **What changed:** every one of them was given skills to match the characters it's for (a wolf's bite 7 to 13, the she-wolf's 14 to 20, the bear's maul 14 to 22, the stag's antlers 16 to 31), and Dodge, which mobs had none of; wolves 16 to 22 health, the she-wolf 45 to 60, the bear 60 to 110, the stag 50 to 60; the stag's antlers 3–7 to 2–6, and its backlash 2–8 to 1–4, since a level-10 character has about 15 health and every blow they land pays it.
-- **Group fights are deadly:** the party a fight is meant for wins it, but loses one or two members on the way. Characters have little health (8 + Body ÷ 2 + Toughness ÷ 5: about 12 at level 6, 15 at level 10), so a crushing blow from a boss can kill outright. The simulation never flees, heals or drinks a draught, so it's the worst case; whether health should grow more with level is an open question ([#13](https://github.com/Foxworks-Studios/riftward/issues/13)).
+- **Group fights were deadly:** the party a fight is meant for won it, but lost one or two members on the way. Characters had little health (8 + Body ÷ 2 + Toughness ÷ 5: about 12 at level 6, 15 at level 10), so a crushing blow from a boss could kill outright. The simulation never flees, heals or drinks a draught, so it's the worst case; whether health should grow more with level is an open question ([#13](https://github.com/Foxworks-Studios/riftward/issues/13)).
+- **Retuned for more health** (2026-10-30, [#13](https://github.com/Foxworks-Studios/riftward/issues/13)): health is now 8 + Body + Toughness, a whole point for every point and level, so about 26 at level 6 and 32 at level 10. Players' parties then won nearly everything, so the mobs here got more health, and kept their damage: wolves 22 → 27, spiders 12 → 22, the she-wolf 60 → 130, the bear 110 → 210, the stag 60 → 110. Fights are longer and kill fewer: the den costs a party of three at level 6 about two lives and wins 46% (target 45%), the stag a party of three at 10 about two and wins 54% (45%), the bear one at 10 wins 26% (30%).
+- **Bigger parties now win more surely than the targets want:** the den for four at 6 wins 97% (80%), the bear for three at 6 95% (80%), the stag for four at 10 98% (80%), since every extra member lasts longer. The night pack, three wolves, beats two level-6 characters only 1% of the time (target 40%), as it mostly did before; tougher wolves would ruin the lone wolf at level 3, which wins 26% against a 40% target already. Wolves need something that grows with the party rather than more health.
 
 ## The ladder: from the sewers to the deep wood
 

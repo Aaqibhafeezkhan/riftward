@@ -11,12 +11,12 @@
         // sharpens every attack and deepens the breath whatever you fight with, and the hands most.
         "foundation": (
             name: "Inner Discipline",
-            description: "Magic turned inward through breath and body. Knowing it, you are Awakened as an Adept. It sharpens every attack you make, a tenth of a point with every level, and deepens your breath, a fifth of a point of stamina with every level; Killing Hands it strengthens most of all. Every attack you make, with a sword or your fists, and every power you use train it.",
+            description: "Magic turned inward through breath and body. Knowing it, you are Awakened as an Adept. It sharpens every attack you make, a tenth of a point with every level, and deepens your breath, a point of stamina with every level; Killing Hands it strengthens most of all. Every attack you make, with a sword or your fists, and every power you use train it.",
             kind: Passive(
                 triggers: [UsedTree, UsedAttack],
                 bonuses: [
                     (stat: Attack, per: 10),
-                    (stat: MaxStamina, per: 5),
+                    (stat: MaxStamina, per: 1),
                     (stat: Attack, per: 5, with: "adept:killing_hands"),
                     (stat: Damage, per: 10, with: "adept:killing_hands"),
                 ],

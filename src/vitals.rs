@@ -1,7 +1,7 @@
 //! Vitals: current health and stamina, how they recover, and the status prompt that shows them.
 //! Players and mobs share them, and recover by the same rules.
 //!
-//! The maximums come from attributes (health 8 + Body / 2, stamina 8 + Willpower / 2), or a mob
+//! The maximums come from attributes (health 8 + Body, stamina 8 + Willpower), or a mob
 //! template's own health, plus what passive skills add. Current values recover on the heartbeat,
 //! worked out from elapsed time: three times as fast while resting, and not at all in a fight.
 //! Players keep recovering while offline: their vitals are saved with the time they were saved,
@@ -73,13 +73,13 @@ impl Plugin for VitalsPlugin {
     }
 }
 
-/// A mob's health from its template, instead of the usual 8 + Body / 2: a rat is small. Skills
+/// A mob's health from its template, instead of the usual 8 + Body: a rat is small. Skills
 /// like Toughness still add to it.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct BaseHealth(pub i32);
 
-/// The most health and stamina someone can have: from their attributes (8 + Body / 2, 8 +
-/// Willpower / 2) or their `BaseHealth`, plus what passive skills like Toughness and Endurance add.
+/// The most health and stamina someone can have: from their attributes (8 + Body, 8 +
+/// Willpower) or their `BaseHealth`, plus what passive skills like Toughness and Endurance add.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Maxima {
     pub health: i32,
@@ -506,7 +506,8 @@ mod tests {
     fn sheet() -> Attributes {
         // Health 10, stamina 9.
         let mut attributes = Attributes::default();
-        attributes.set(Attribute::Body, 4);
+        attributes.set(Attribute::Body, 2);
+        attributes.set(Attribute::Willpower, 1);
         attributes
     }
 
@@ -600,7 +601,7 @@ mod tests {
             .resource_mut::<Time>()
             .advance_by(std::time::Duration::from_secs(1000));
         world.run_system(recover).unwrap();
-        // Full, at its own health rather than 8 + Body / 2.
+        // Full, at its own health rather than 8 + Body.
         assert_eq!(
             world.get::<Vitals>(rat),
             Some(&Vitals {

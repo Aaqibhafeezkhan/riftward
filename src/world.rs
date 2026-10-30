@@ -801,7 +801,7 @@ pub struct MobDef {
     /// two at most. It fights with a weapon in hand, and its gear falls into its corpse.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub equipment: Vec<String>,
-    /// Its health, instead of the usual 8 + Body / 2: a rat is small.
+    /// Its health, instead of the usual 8 + Body: a rat is small.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health: Option<i32>,
     /// The chance, in percent, that it uses one of its technique skills on its turn instead of

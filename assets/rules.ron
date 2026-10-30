@@ -17,9 +17,9 @@
     // auto-attack, unless its template sets its own `tactics`.
     mob_tactics: 25,
     // Most health is base_vitals + Body / attribute_per_vital, and most stamina the same with
-    // Willpower, before passive skills add to them: 8 + Body / 2.
+    // Willpower, before passive skills add to them: 8 + Body. Every point counts.
     base_vitals: 8,
-    attribute_per_vital: 2,
+    attribute_per_vital: 1,
     // Real minutes for health, and stamina, to recover from nothing to full out of a fight, and
     // how much faster resting makes it.
     health_recovery_minutes: 10.0,
