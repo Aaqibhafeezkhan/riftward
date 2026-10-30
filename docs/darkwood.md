@@ -1,6 +1,6 @@
 # The Darkwood
 
-[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, [the deep wood's edge](#the-deep-woods-edge-as-built) beyond it (2026-10-29), and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
+[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, [the deep wood's edge](#the-deep-woods-edge-as-built) and [heart](#the-deep-woods-heart-as-built) beyond it (2026-10-29), and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
 
 The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. It's where a new character goes once the sewers stop teaching them anything, and where foraging, herb-gathering, tracking and hunting come into their own. It grows more dangerous the further from the road you go: safe-ish near the gate, wild in the deep wood, and strange where the trees grow wrong around an old rift-scar.
 
@@ -26,9 +26,10 @@ flowchart TB
     brook --- thicket[Bramble Thicket ✓]
     clearing --- deep[Edge of the Old Wood ✓]
     deep --- hollow[Spider Hollow ✓]
-    deep --- den[Wolf Den]
-    deep --- cave[Bear's Cave]
-    deep --- stones[Old Standing Stones]
+    deep --- old[The Old Wood ✓]
+    old --- den[Wolf Den ✓]
+    old --- cave[Bear's Cave ✓]
+    old --- stones[Old Standing Stones]
     stones --- scar[The Rift-Scar]
 ```
 
@@ -37,7 +38,7 @@ flowchart TB
 | **The road** ✓ | 4 | Forest Road, the Bend, North Road, East Road, the Hermit's Clearing | Travellers' way; tracks of everything | Low: the odd boar wandering in |
 | **The west woods** ✓ | 15 | Woodcutters' Track, the Charcoal Burners' Camp (the hunter's now), Deer Meadow, Brook Ford, Bramble Thicket | Logged-over, open, sunlit; game and herbs | Low to middle: for characters fresh from the sewers |
 | **The ravine** ✓ | 7 | Ravine Floor, the Narrows, Mossy Falls (a swim behind the falls to a hidden ledge), Fern Gully, Stony Shallows, Otter Pool, Alder Bank | Damp, green, quiet; the best herbs | Low, but a climb and a swim to reach |
-| **The deep wood** | About 30 | The Old Wood, Spider Hollow, the Wolf Den, the Bear's Cave, the Old Standing Stones | Dark, old, close; little light, few paths | Middle to high: **guard-strength** characters, around level-10 weapon skills |
+| **The deep wood** (the edge and heart ✓) | 22 so far | The edge (Spider Hollow, the Bee Tree), the Old Wood, the Wolf Den, the Bear's Cave; the Old Standing Stones to come | Dark, old, close; little light, few paths | Middle to high: **guard-strength** characters, around level-10 weapon skills |
 | **The Rift-Scar** | About 4 | The Rift-Scar | A glade where the trees grow wrong and the air hums | High, and rare: the rift-touched |
 
 - **A region, not a maze.** Thirty rooms of deep wood need landmarks and a few trails (a fallen giant, a stream to follow, the stones on their hill) so it can be learned; the rooms between them vary in description, finds and who lives there, rather than repeating. It's big enough to get turned around in, which makes **Navigation** and getting lost worth building ([What needs code](#what-needs-code)).
@@ -110,6 +111,26 @@ Built 2026-10-29: ten rooms north of the Hermit's Clearing, tier 4. Every room b
 - **Grey wolves after dark:** two lone wolves come out at dusk and roam these rooms (`TimeOfDay([Dusk, Night])`), aggressive to anything not a wolf, with Pack Hunter for when they meet; a bite of 2–4; a wolf pelt and fangs. Their den comes with the heart.
 - **The adder** now yields a skin and, half the time, a venom sac.
 
+### The deep wood's heart, as built
+
+Built 2026-10-29: twelve dark rooms north of the Stream Bend, tier 5, for characters who could hold their own against a town guard, and beyond. Played at 28 health, the den killed a character in a round: numbers to tune ([#13](https://github.com/Foxworks-Studios/riftward/issues/13)).
+
+| Room | What's there |
+| --- | --- |
+| The Old Wood | The heart: trees older than the town; creaks and far-off howls |
+| Wolf Run, Bone Glade, Den Mouth | The wolves' beaten trail north, a glade of bones, the den's entrance |
+| The Wolf Den | **Three grey wolves** always (a `pack: 3` spawn that stays in the den and its approaches) and **the old she-wolf** |
+| Howling Rocks | A bare outcrop where the wolves call |
+| Moss Hollow | A hollow of deep, silent moss |
+| Thorn Tangle | Blackthorn with `brambles` at strength 2 (1–3 to push through) |
+| Scree Slope, Cave Mouth | The slope up to the bear's cave |
+| The Bear's Cave | **A brown bear** (`Cave`) |
+| Ironbark Grove | Black, iron-hard trees; the way east toward the stones' hill (step 5) |
+
+- **Wolves:** always in the den; after dark a **pack of three** roams the heart (`TimeOfDay([Dusk, Night])`), besides the two lone wolves at the edge. Every grey wolf has Pack Hunter, **Howl** (hurt below half, it calls wolves within three rooms, its own Call for Help) and **Pull Down** (a lunge that knocks its prey down, only with another wolf on it: `allies: 1`).
+- **The old she-wolf:** 45 health, a bite of 14, `boss`, and **the Old She-Wolf's Lead**, an aura over every grey wolf (+2 attack, +1 defence) while she lives; back 7 days after she's killed. Her great grey pelt (rare, 90) to skin.
+- **The bear:** 60 health, a maul (3–6) of 14, `thick_hide`, and `aggressive: Home`: it lets you pass the cave mouth, and attacks in its cave. Back a day after it dies. A bear pelt, bear meat or a claw; **roast bear** to cook (Cooking 4).
+
 ## The ladder: from the sewers to the deep wood
 
 Decided 2026-10-27. Sewer rats and the stray dog are the only fights a new character has, and the deep wood is for those who could take on a guard; between them is a gap that would take forever to climb. A fight is worth experience only while it was at least a one-in-ten risk, so once a character outclasses rats they earn nothing from them, and their skills grow only from swings that end most fights in one. So content is built as a ladder of tiers, each a little harder than the last, and the west woods are the real next step after the sewers: their rooms run from safe beside the road to risky beside the deep wood, so a character finds their level by walking further in.
@@ -140,10 +161,10 @@ Each creature with what it does and which existing data does it. Numbers are fir
 | **Rabbit** | Meadow, west woods | Breeds fast, harmless; bolts from anyone (*built*: `Flee`) | Breeding spawn, `crowd`, `tags: ["game"]`; *Skittish* (see [Prey](#prey-a-window-then-gone)) | Meat; a rabbit pelt |
 | **Red deer** | Meadow, brook | A small herd, wandering the west woods; bolts (*built*: `Flee`); a stag fights back hard | Breeding spawn with `reseed`; `tags: ["game"]`; the stag a `Keep(1)` spawn with a gore attack; *Skittish* | Venison; a hide; antlers (stag) |
 | **Wild boar** | Thicket, west woods, the road now and then | Bad-tempered: attacks anyone not a boar; **enrages** when hurt | `aggressive`, `allies: ["boar"]`; passive skill *Boar's Fury*: reaction `Hurt(0.5)` → `Apply(strengthened)` on itself | Pork; a tusk |
-| **Grey wolf** | Wolf Den, the deep wood (more at night **(gap: time-of-day spawns)**) | Hunts in packs of three; goes for game and travellers alike; **howls** for the pack when hurt | `aggressive`, `allies: ["wolf"]`, `pack: 3`, `tags: ["wolf"]`; *Howl*: Call for Help with the wolves' own words | A wolf pelt; fangs |
-| **The old she-wolf** | Wolf Den | The pack's leader: while she lives, every wolf in the Darkwood fights better | An `Aura` skill, as the Rat King's, affecting `forest:grey_wolf`; `AfterDeath(Days(7))` | A great grey pelt (rare) |
+| **Grey wolf** (*built*) | Wolf Den, the deep wood (roaming after dark) | Hunts in packs of three; goes for game and travellers alike; **howls** for the pack when hurt | `aggressive`, `allies: ["wolf"]`, `pack: 3`, `tags: ["wolf"]`; *Howl*: Call for Help with the wolves' own words | A wolf pelt; fangs |
+| **The old she-wolf** (*built*) | Wolf Den | The pack's leader: while she lives, every wolf in the Darkwood fights better | An `Aura` skill, as the Rat King's, affecting `forest:grey_wolf`; `AfterDeath(Days(7))` | A great grey pelt (rare) |
 | **Forest spider** | Spider Hollow | Waits in its web, born `hidden`, and springs at whoever comes near unaware (*built*); a bite that poisons | `aggressive`; passive *Venomous Bite*: reaction `Hits` → `Apply(poisoned)` | Spider silk; a venom sac |
-| **Brown bear** | Bear's Cave | Solitary and huge; ignores you on the paths, savage at home (`aggressive: Home`, *built*) | `wander: Never`, high Body and Strength, natural armour (*Thick Hide*: `Armour` bonus), a maul | A bear pelt; claws, bear meat |
+| **Brown bear** (*built*) | Bear's Cave | Solitary and huge; ignores you on the paths, savage at home (`aggressive: Home`, *built*) | `wander: Never`, high Body and Strength, natural armour (*Thick Hide*: `Armour` bonus), a maul | A bear pelt; claws, bear meat |
 | **Crows** | The road, the clearing | Atmosphere: they watch, and caw (`chatter`, *built*) | A `here` line, `wander: Zone` | Nothing |
 | **The rift-touched stag** | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` trait (resist force, `Struck` → force damage, as thorns; [traits](effects.md#traits) *built*); `AfterDeath(Days(3))`; a Silver contract later | A vitae crystal, left where it dies (loot: what the rift left in it; rare, a crafting reagent later); its antlers to harvesting |
 
@@ -260,7 +281,7 @@ Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull 
 
 1. **The ravine and the brook** (about 8 rooms, tiers 2–3; *built* 2026-10-29 as [the ravine](#the-ravine-as-built), seven rooms): Mossy Falls, the brook's banks, and the ledge behind the falls by a swim (Swim 4): mushrooms, moonpetal and frostfern (rare). Quiet and low in danger, the best herbs.
 2. **The deep wood's edge** (about 10 rooms, tier 4; *built* 2026-10-29 as [the edge](#the-deep-woods-edge-as-built)): beyond the Hermit's Clearing, `light: Dark`, with landmarks (a fallen giant, a stream to follow). Grey wolves roaming after dark (below); forest spiders in Spider Hollow, born hidden and venomous, with webs that may catch you. Mushrooms, deathcap (poisonous to eat), foxglove, nightshade, and the bee tree's honey under `angry_bees`. Spider silk and venom sacs to harvest, and the adder's skin and venom sac.
-3. **The deep wood's heart** (about 12 rooms, tier 5): the Wolf Den and the Bear's Cave. **Wolves are always in the den** (a `Keep` spawn that stays home), **and roam the woods after dark** (spawns with `when: TimeOfDay([Dusk, Night])` and `wander` through the deep wood, in packs: `pack: 3`, Pack Hunter, a howl calling the pack, a trip that wants a packmate) (decided 2026-10-29). The old she-wolf in the den, her aura over every wolf; the bear at home in its cave (`Cave`, `aggressive: Home`, thick hide, a maul). Wolf pelts and fangs, the bear's pelt, claws and meat, and recipes to cook the new meats. Wolves howling at night, the old wood creaking.
+3. **The deep wood's heart** (about 12 rooms, tier 5; *built* 2026-10-29 as [the heart](#the-deep-woods-heart-as-built)): the Wolf Den and the Bear's Cave. **Wolves are always in the den** (a `Keep` spawn that stays home), **and roam the woods after dark** (spawns with `when: TimeOfDay([Dusk, Night])` and `wander` through the deep wood, in packs: `pack: 3`, Pack Hunter, a howl calling the pack, a trip that wants a packmate) (decided 2026-10-29). The old she-wolf in the den, her aura over every wolf; the bear at home in its cave (`Cave`, `aggressive: Home`, thick hide, a maul). Wolf pelts and fangs, the bear's pelt, claws and meat, and recipes to cook the new meats. Wolves howling at night, the old wood creaking.
 4. **Navigation** (code, medium): how tangled each room is, the Survival skill as data, and the roll when moving, tuned against the rooms now built.
 5. **The Old Standing Stones and the Rift-Scar** (about 6 rooms, beyond tier 5): a climb to the stones; the scar's hum wearing down whoever lingers unless warded, and its glow lighting it (room conditions); riftbloom; the rift-touched stag, whose hurts hurt back and who leaves a vitae crystal. The story stays a hint ([The setting](setting.md)).
 6. **Contracts:** cull the wolves (Copper), the old she-wolf's pelt (Bronze), the rift-touched stag (Silver), and Meat for the Kitchen.

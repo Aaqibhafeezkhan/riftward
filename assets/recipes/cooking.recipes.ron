@@ -43,6 +43,14 @@
             station: "fire",
             against: "4",
         ),
+        "roast_bear": (
+            name: "roast bear",
+            level: 4,
+            ingredients: [(Item("forest:bear_meat"), 1)],
+            produces: ("forest:roast_bear", 1),
+            station: "fire",
+            against: "4",
+        ),
         // The hunter's own, taught to those who can already cook.
         "hunters_stew": (
             name: "hunter's stew",

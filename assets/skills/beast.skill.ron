@@ -184,9 +184,9 @@
                 effects: [Apply(condition: "down", lasts: Turns(1))])),
             text: (
                 hit: (
-                    actor: "You charge into {target}, and your tusks {harm} them.",
-                    target: "{actor} charges into you, and its tusks {harm} you.",
-                    room: "{actor} charges into {target}, and its tusks {harm} them.",
+                    actor: "You charge into {target}, and the blow {harm} them.",
+                    target: "{actor} charges into you, and the blow {harm} you.",
+                    room: "{actor} charges into {target}, and the blow {harm} them.",
                 ),
                 miss: (
                     actor: "You charge at {target}, but they step aside.",
@@ -235,6 +235,63 @@
             name: "Slime Lord's Will",
             description: "The Slime Lord's hold over every slime in the sewers: while it lives, they fight harder.",
             kind: Aura(affects: "slime", bonus: (attack: 1, defence: 1)),
+        ),
+        "maul": (
+            name: "Maul",
+            description: "A bear's swipe, claws and the weight of the whole animal behind it.",
+            kind: Attack(damage: (3, 6)),
+            text: (
+                hit: (
+                    actor: "Your swipe {harm} {target}.",
+                    target: "{actor}'s swipe {harm} you.",
+                    room: "{actor}'s swipe {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You swipe at {target}, but they're out of reach.",
+                    target: "{actor} swipes at you, and you throw yourself clear.",
+                    room: "{actor} swipes at {target}, who throws themselves clear.",
+                ),
+            ),
+        ),
+        // A wolf's trip: only with another of the pack on the same prey (`allies: 1`).
+        "pull_down": (
+            name: "Pull Down",
+            description: "A wolf's lunge at the legs while the pack keeps its prey busy, dragging it off its feet.",
+            kind: Technique((with: "beast:wolf_bite", cost: Stamina(2), strike: Harmless, allies: 1,
+                effects: [Apply(condition: "down", lasts: Turns(1))])),
+            text: (
+                hit: (
+                    actor: "You lunge at {target}'s legs and drag them down.",
+                    target: "{actor} lunges at your legs and drags you down!",
+                    room: "{actor} lunges at {target}'s legs and drags them down.",
+                ),
+                miss: (
+                    actor: "You lunge at {target}'s legs, but they keep their feet.",
+                    target: "{actor} lunges at your legs, but you keep your feet.",
+                    room: "{actor} lunges at {target}'s legs, but they keep their feet.",
+                ),
+            ),
+        ),
+        // A wolf's Call for Help, in its own words: the pack comes running.
+        "howl": (
+            name: "Howl",
+            description: "Hurt, a wolf howls, and the pack within earshot comes running.",
+            kind: Passive(
+                reactions: [(
+                    on: Hurt(0.5),
+                    effects: [CallForHelp(rooms: 3)],
+                    text: (
+                        actor: "You throw back your head and howl!",
+                        target: "{actor} throws back its head and howls!",
+                        room: "{actor} throws back its head and howls!",
+                    ),
+                )],
+            ),
+        ),
+        "old_she_wolfs_lead": (
+            name: "The Old She-Wolf's Lead",
+            description: "The old she-wolf leads the wolves of the Darkwood: while she lives, they hunt bolder.",
+            kind: Aura(affects: "forest:grey_wolf", bonus: (attack: 2, defence: 1)),
         ),
         "rat_kings_command": (
             name: "Rat King's Command",

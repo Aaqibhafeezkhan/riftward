@@ -72,7 +72,7 @@ The words are the craft skill's own `text`, with `{item}` what was made (or woul
 
 ## Cooking
 
-Survival's **Cooking** (Intuition), taught by the hunter, turns what's hunted and gathered into meals that keep you `nourished` longer and more strongly than raw food: roast rabbit, fried frog legs and roast venison from the start, boar stew at 3, and the hunter's own stew (taught, uncommon), which heals a little too. Raw meat isn't food. The hunter's camp has a campfire; a hearth in town comes with the town's kitchen.
+Survival's **Cooking** (Intuition), taught by the hunter, turns what's hunted and gathered into meals that keep you `nourished` longer and more strongly than raw food: roast rabbit, fried frog legs and roast venison from the start, boar stew at 3, roast bear at 4, and the hunter's own stew (taught, uncommon), which heals a little too. Raw meat isn't food. The hunter's camp has a campfire; a hearth in town comes with the town's kitchen.
 
 ## Open questions
 
