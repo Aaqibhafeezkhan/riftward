@@ -303,12 +303,42 @@ pub fn travel(
         ));
         return out;
     }
-    let to = exit.to;
-    if let Some(needs) = exit.needs
-        && !cross(&actor, needs, &dir, practice, &mut out)
-    {
-        return out;
+    let mut to = exit.to;
+    let mut fell = false;
+    if let Some(needs) = exit.needs {
+        match cross(&actor, needs, &dir, practice, &mut out) {
+            Crossing::Made => {}
+            Crossing::Failed => return out,
+            Crossing::Fell => {
+                // Climbing down, they fall to the bottom; climbing up or across, back where they
+                // began. Either way, on through any open drop below that.
+                let from = if dir == "down" { to } else { actor.room };
+                let (land, rooms) = fall_to(from, view);
+                // A mob falling to its death dies as itself, for quests and world events.
+                let mob = view.mobs.get(entity).ok().map(|(_, m, _)| m.key.clone());
+                let (hurt, killed) = fall(&actor, (rooms, land), mob, practice, commands);
+                out.push(Outgoing::line(
+                    entity,
+                    format!("You hit the ground hard. ({hurt})"),
+                ));
+                // Fallen back where they were, the room sees them lie still; landing somewhere
+                // new, their arrival and their body tell it.
+                if killed && land == actor.room {
+                    out.push(Outgoing::Room {
+                        room: land,
+                        except: entity,
+                        text: format!("{} doesn't get up.\r\n", actor.name),
+                    });
+                }
+                if land == actor.room {
+                    return out;
+                }
+                to = land;
+                fell = true;
+            }
+        }
     }
+    let pay = pay && !fell;
 
     if pay
         && let Ok(terrain) = view.rooms.get(to).map(|(room, _, _)| room.terrain)
@@ -343,8 +373,8 @@ pub fn travel(
     }
 
     // Sneaking, they stay hidden: only those who'd noticed them see them go, and only those in
-    // the next room who notice them see them come. Walking openly shows them.
-    let (left_seen_by, entered_seen_by) = if view.sneaking.get(entity).is_ok() {
+    // the next room who notice them see them come. Walking openly shows them, and so does falling.
+    let (left_seen_by, entered_seen_by) = if view.sneaking.get(entity).is_ok() && !fell {
         sneak_through(&actor, to, players, view, practice, commands, &mut out)
     } else {
         if view.hidden.get(entity).is_ok_and(|c| c.hidden().is_some()) {
@@ -357,7 +387,11 @@ pub fn travel(
         who: entity,
         name: actor.name.clone(),
         room: actor.room,
-        way: Way::Walked(Some(dir)),
+        way: if fell {
+            Way::Fell
+        } else {
+            Way::Walked(Some(dir))
+        },
         witnesses: left_seen_by,
     });
     move_player(
@@ -374,7 +408,11 @@ pub fn travel(
         who: entity,
         name: actor.name.clone(),
         room: to,
-        way: Way::Walked(way_back(&view.rooms, to, actor.room)),
+        way: if fell {
+            Way::Fell
+        } else {
+            Way::Walked(way_back(&view.rooms, to, actor.room))
+        },
         witnesses: entered_seen_by,
     });
     out
@@ -453,19 +491,89 @@ const SWIMMING: &str = "athletics:swimming";
 /// its difficulty, by the ratio rule. Anyone can try on their attribute alone; only the trained
 /// practise. A fall hurts (never to death) and a flounder tires, and either way they stay put.
 /// Told in the skill's words. Returns whether they made it.
+/// How a climb or swim went: made, failed where they stand (a swim), or a fall (a climb).
+enum Crossing {
+    Made,
+    Failed,
+    Fell,
+}
+
+/// Where someone falling into `room` comes to rest: on down through every open drop below it (a
+/// `down` exit that needs a climb, with no closed door), and how many rooms they fell through,
+/// counting the first.
+fn fall_to(room: Entity, view: &View) -> (Entity, u32) {
+    let (mut at, mut rooms) = (room, 1);
+    while rooms < 20 {
+        let below = view.rooms.get(at).ok().and_then(|(_, _, exits)| {
+            exits.0.get("down").filter(|exit| {
+                matches!(exit.needs, Some(Obstacle::Climb(_)))
+                    && exit
+                        .door
+                        .and_then(|d| view.doors.get(d).ok())
+                        .is_none_or(Door::is_open)
+            })
+        });
+        let Some(below) = below else {
+            break;
+        };
+        at = below.to;
+        rooms += 1;
+    }
+    (at, rooms)
+}
+
+/// What a fall through `rooms` rooms does to `actor`, landing in `land`: `fall_damage_per_room`
+/// (`rules.ron`) rolled for each. A fall can kill: they die where they land, their own killer,
+/// so no one gains by it. Returns the damage, and whether it killed them.
+fn fall(
+    actor: &Actor,
+    (rooms, land): (u32, Entity),
+    mob: Option<crate::world::MobKey>,
+    practice: &mut Practice,
+    commands: &mut Commands,
+) -> (f32, bool) {
+    let (low, high) = crate::rules::rules().fall_damage_per_room;
+    let hurt: i64 = (0..rooms)
+        .map(|_| practice.roll(0, i64::from(low)..=i64::from(high.max(low))))
+        .sum();
+    let hurt = hurt as f32;
+    let mut killed = false;
+    if let Some((_, mut vitals, _)) = practice.sheet(actor.entity) {
+        vitals.health = (vitals.health - hurt).max(0.0);
+        killed = vitals.health <= 0.0;
+    }
+    practice.events.write(GameEvent::Damaged {
+        who: actor.entity,
+        amount: hurt,
+    });
+    if killed {
+        commands
+            .entity(actor.entity)
+            .insert((crate::combat::Dead, crate::combat::Slayer(actor.entity)));
+        practice.events.write(GameEvent::Died {
+            who: actor.entity,
+            name: actor.name.clone(),
+            room: land,
+            mob,
+            killer: None,
+        });
+    }
+    (hurt, killed)
+}
+
 fn cross(
     actor: &Actor,
     needs: Obstacle,
     dir: &str,
     practice: &mut Practice,
     out: &mut Vec<Outgoing>,
-) -> bool {
+) -> Crossing {
     let (key, attribute, difficulty) = match needs {
         Obstacle::Climb(d) => (CLIMBING, Attribute::Strength, d),
         Obstacle::Swim(d) => (SWIMMING, Attribute::Body, d),
     };
     let Some((skills, _, attributes)) = practice.sheet(actor.entity) else {
-        return false;
+        return Crossing::Failed;
     };
     let known = skills.0.contains_key(key);
     let rating = skills.0.get(key).map_or(0, |s| s.level as i32) + attributes.get(attribute);
@@ -475,27 +583,14 @@ fn cross(
         .opposed(rating, luck, f64::from(difficulty.max(1)), 0)
         .won;
 
-    // What a failure costs.
-    let mut cost = String::new();
+    // What a failed swim costs; a failed climb is a fall, which `travel` works out.
     if !made_it {
-        let hurt = match needs {
-            Obstacle::Climb(d) => practice.roll(0, 1..=i64::from((d / 2).max(1))) as f32,
-            Obstacle::Swim(_) => 0.0,
-        };
         let tired = match needs {
             Obstacle::Swim(d) => (d / 2).max(1) as f32,
             Obstacle::Climb(_) => 0.0,
         };
         if let Some((_, mut vitals, _)) = practice.sheet(actor.entity) {
-            vitals.health = (vitals.health - hurt).max(1.0);
             vitals.stamina = (vitals.stamina - tired).max(0.0);
-        }
-        if hurt > 0.0 {
-            cost = format!(" ({hurt})");
-            practice.events.write(GameEvent::Damaged {
-                who: actor.entity,
-                amount: hurt,
-            });
         }
         if tired > 0.0 {
             practice.events.write(GameEvent::StaminaSpent {
@@ -528,10 +623,7 @@ fn cross(
             _ => &text.hit,
         };
         let with = [("actor", actor.name.as_str()), ("direction", dir)];
-        out.push(Outgoing::line(
-            actor.entity,
-            fill(&lines.actor, &with) + &cost,
-        ));
+        out.push(Outgoing::line(actor.entity, fill(&lines.actor, &with)));
         if !made_it {
             out.push(Outgoing::Room {
                 room: actor.room,
@@ -545,7 +637,11 @@ fn cross(
             .into_iter()
             .map(|line| Outgoing::line(actor.entity, line)),
     );
-    made_it
+    match (made_it, needs) {
+        (true, _) => Crossing::Made,
+        (false, Obstacle::Climb(_)) => Crossing::Fell,
+        (false, Obstacle::Swim(_)) => Crossing::Failed,
+    }
 }
 
 /// What someone sees looking at a player: their race, and their own description.

@@ -35,6 +35,11 @@
     // Real seconds a mob born hidden (a spider in its web) stays in sight, out of a fight,
     // before it hides again. See docs/world.md, under mob templates.
     rehide_seconds: 60.0,
+    // A failed climb is a fall: down to the bottom, or back where the climb began, and on through
+    // any open drop below. Each room fallen through hurts this much, rolled, so a longer fall
+    // hurts more: one room (the East Road to the Ravine Floor) is 1 to 6, two rooms 2 to 12. A
+    // fall can kill. See docs/world.md#climbing-and-swimming.
+    fall_damage_per_room: (1, 6),
     // Tracks (docs/world.md#tracking): rooms remember who walked in or out for this many real
     // minutes, the most recent `most` of them. Reading one is Tracking against how hard its
     // ground is, a formula in survival.skill.ron; wading water holds none. Ages read as the

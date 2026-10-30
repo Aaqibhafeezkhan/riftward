@@ -239,6 +239,23 @@
             consumable: (by: Eat, effects: [Heal(amount: "roll(2, 4)"), Apply(condition: "nourished", strength: "4", lasts: Minutes(160))]),
             value: 30,
         ),
+        "frostfern": (
+            name: "a frond of frostfern",
+            keywords: ["frostfern", "frond", "fern"],
+            description: "A small fern whose fronds are rimed white at the edges, cold to the touch even in summer. It only grows where spray keeps the air wet and the sun never reaches.",
+            bulk: Negligible,
+            tags: ["herb"],
+            value: 25,
+            rarity: Rare,
+        ),
+        "otter_pelt": (
+            name: "an otter pelt",
+            keywords: ["pelt", "otter", "fur"],
+            description: "A sleek brown pelt, dense and soft, that sheds water like oil. Furriers prize them for cuffs and collars.",
+            bulk: Light,
+            tags: ["pelt"],
+            value: 18,
+        ),
     },
     mobs: {
         "hunter": (
@@ -411,6 +428,31 @@
                 "survival:tracking",
             ],
         ),
+        "otter": (
+            name: "an otter",
+            keywords: ["otter"],
+            here: "An otter slides along the bank, sleek and dripping.",
+            description: "A long brown otter with a blunt, whiskered face and a thick tail. It watches you from the water with bright, curious eyes, ready to vanish under the surface.",
+            attributes: {Body: 2, Strength: 2, Agility: 6, Reaction: 5},
+            skills: {"beast:bite": 2},
+            attack: "beast:bite",
+            health: 6,
+            traits: ["night_eyes", "skittish"],
+            harvest: {"hide": [("otter_pelt", 1)]},
+            chatter: ["An otter rolls in the water, chirring to itself.", "Something slips into the pool with barely a ripple."],
+        ),
+        "heron": (
+            name: "a grey heron",
+            keywords: ["heron", "grey", "bird"],
+            here: "A grey heron stands motionless in the shallows.",
+            description: "A tall grey bird on long legs, its neck folded and its dagger of a bill pointed at the water. It hasn't moved in a long while, and it doesn't intend to for you.",
+            attributes: {Body: 1, Strength: 1, Agility: 4, Reaction: 5},
+            skills: {"beast:peck": 1},
+            attack: "beast:peck",
+            health: 4,
+            traits: ["skittish"],
+            chatter: ["The heron's bill flashes into the water and comes up with something silver."],
+        ),
     },
     spawns: {
         "camp_fire": (
@@ -500,6 +542,26 @@
             room: "clearing",
             every: Minutes(10),
             refill: Keep(1),
+        ),
+        "otters": (
+            mob: "otter",
+            room: "otter_pool",
+            every: Minutes(30),
+            refill: Keep(2),
+            wander: Rooms(rooms: ["otter_pool", "stony_shallows", "alder_bank"], secs: (120, 480)),
+        ),
+        "shallows_frog": (
+            mob: "giant_frog",
+            room: "stony_shallows",
+            every: Minutes(30),
+            refill: Keep(1),
+        ),
+        "heron": (
+            mob: "heron",
+            room: "alder_bank",
+            every: Hours(1),
+            refill: Keep(1),
+            wander: Rooms(rooms: ["alder_bank", "otter_pool"], secs: (300, 900)),
         ),
     },
     finds: {
@@ -711,10 +773,13 @@
         ),
         "ravine": (
             name: "Ravine Floor",
-            description: "Moss-slick boulders crowd the bottom of the ravine, where little light reaches. Pale moonpetal grows thick in the damp between the stones, untouched by anyone unwilling to make the climb.",
+            description: "Moss-slick boulders crowd the bottom of the ravine, where little light reaches. Pale moonpetal grows thick in the damp between the stones, untouched by anyone unwilling to make the climb. A stream threads between the rocks, north toward a far-off roar and south toward quieter water, and a cleft full of ferns opens to the west.",
             terrain: Rough,
             exits: {
                 "up": (to: "east_road", needs: Climb(4)),
+                "north": "ravine_narrows",
+                "south": "stony_shallows",
+                "west": "fern_gully",
             },
             environment: Forest,
             finds: {
@@ -739,6 +804,83 @@
             exits: {
                 "north": "bend",
                 "south": "riftwatch:north_gate",
+            },
+            environment: Forest,
+        ),
+        "ravine_narrows": (
+            name: "The Narrows",
+            description: "The ravine pinches in until the walls almost meet overhead, close enough to touch both at once. The stream fills the whole floor here, loud and fast over a bed of round stones, and the air is thick with spray. Upstream, a deep roar grows.",
+            chatter: ["Stones knock together in the current.", "Spray drifts down from somewhere above."],
+            terrain: Rough,
+            exits: {
+                "south": "ravine",
+                "north": "mossy_falls",
+            },
+            environment: Forest,
+        ),
+        "mossy_falls": (
+            name: "Mossy Falls",
+            description: "A waterfall drops out of the rock in a white curtain and crashes into a round green pool, deep and cold. Every stone around it wears a thick coat of moss, and ferns hang from the cliff in the spray. Behind the falling water, the rock is dark: there might be a way through, for someone willing to swim under it.",
+            chatter: ["The falls roar on and on.", "A kingfisher flashes blue across the pool and is gone."],
+            terrain: Wading,
+            exits: {
+                "south": "ravine_narrows",
+                "north": (to: "falls_ledge", needs: Swim(4)),
+            },
+            environment: Water,
+        ),
+        "falls_ledge": (
+            name: "Behind the Falls",
+            description: "A ledge of wet rock runs behind the waterfall, the light coming through the water green and moving. The noise is enormous. Everything here drips, and in the cold spray grow things that grow nowhere else: pale moonpetal, and ferns whose fronds are rimed white like frost.",
+            terrain: Rough,
+            exits: {
+                "south": (to: "mossy_falls", needs: Swim(4)),
+            },
+            environment: Water,
+            finds: {
+                "herbs": [("moonpetal", 60), ("frostfern", 40)],
+            },
+        ),
+        "fern_gully": (
+            name: "Fern Gully",
+            description: "A side cleft opens off the ravine, choked with ferns taller than a man. The ground underneath is black and soft with years of leaf mould, and mushrooms push up through it in rings and clusters wherever you look.",
+            terrain: Uneven,
+            exits: {
+                "east": "ravine",
+            },
+            environment: Forest,
+            finds: {
+                "forage": [("wild_berries", 20), ("mushrooms", 80)],
+                "herbs": [("yarrow", 40), ("kingsfoil", 40), ("moonpetal", 20)],
+            },
+        ),
+        "stony_shallows": (
+            name: "Stony Shallows",
+            description: "Below the boulders, the stream spreads out wide and shallow over a bed of flat grey stones, clear enough to count them. It's ankle-deep for the most part, deeper in the channel along the far side, where something large sits half out of the water.",
+            chatter: ["The stream chuckles over the stones."],
+            terrain: Uneven,
+            exits: {
+                "north": "ravine",
+                "south": "otter_pool",
+            },
+            environment: Water,
+        ),
+        "otter_pool": (
+            name: "Otter Pool",
+            description: "The stream slows and deepens into a long pool under leaning alders, dark and still. Its banks are worn smooth in places, slides down to the water where something has gone in again and again. Fish rise to the surface in widening rings.",
+            terrain: Uneven,
+            exits: {
+                "north": "stony_shallows",
+                "east": "alder_bank",
+            },
+            environment: Water,
+        ),
+        "alder_bank": (
+            name: "Alder Bank",
+            description: "The ravine widens at last into a flat of soft ground under a stand of alders, their roots knotted along the water's edge. The walls here are lower and broken, but still too steep to climb. It's quiet, and the stream goes on past into the rocks, where no one can follow.",
+            terrain: Mud,
+            exits: {
+                "west": "otter_pool",
             },
             environment: Forest,
         ),

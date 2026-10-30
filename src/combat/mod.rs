@@ -3159,6 +3159,90 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_climb_falls_to_the_bottom_hurting_for_every_room() {
+        use crate::world::{Exit, Obstacle};
+        let (mut world, top) = world();
+        world.init_resource::<crate::light::LitRooms>();
+        let room = |world: &mut World, id: &str| {
+            world
+                .spawn((
+                    Room {
+                        name: id.into(),
+                        description: String::new(),
+                        no_wander: false,
+                        indoors: true,
+                        terrain: Terrain::Paved,
+                    },
+                    RoomKey::parse(id, ""),
+                    Exits::default(),
+                ))
+                .id()
+        };
+        let (ledge, floor) = (
+            room(&mut world, "test:ledge"),
+            room(&mut world, "test:floor"),
+        );
+        // A cliff in two drops, neither climbable by a weakling.
+        let climb = |to| Exit {
+            to,
+            door: None,
+            needs: Some(Obstacle::Climb(1_000_000)),
+        };
+        world
+            .entity_mut(top)
+            .insert(Exits([("down".to_string(), climb(ledge))].into()));
+        world.entity_mut(ledge).insert(Exits(
+            [
+                ("down".to_string(), climb(floor)),
+                ("up".to_string(), climb(top)),
+            ]
+            .into(),
+        ));
+        world
+            .entity_mut(floor)
+            .insert(Exits([("up".to_string(), climb(ledge))].into()));
+        let climber = fighter(&mut world, top, 1, 1, &[BASIC_ATTACK]);
+        let go = |world: &mut World, dir: &str| {
+            let inv = Invocation {
+                entity: climber,
+                command: "go",
+                usage: "",
+                args: dir.into(),
+            };
+            world
+                .run_system_once_with(crate::commands::movement::go, inv)
+                .unwrap();
+            world.flush();
+            (
+                world.get::<InRoom>(climber).unwrap().0,
+                world.get::<Vitals>(climber).unwrap().health,
+            )
+        };
+        // Down from the top, all the way to the floor: two rooms, 1 to 6 each.
+        let (at, health) = go(&mut world, "down");
+        assert_eq!(at, floor, "fell to the bottom");
+        assert!((88.0..=98.0).contains(&health), "two rooms' fall: {health}");
+        // Up from the floor, back where they began: one room's fall.
+        let (at, after) = go(&mut world, "up");
+        assert_eq!(at, floor);
+        assert!((health - 6.0..=health - 1.0).contains(&after), "{after}");
+        // A fall can kill: from the top again at 2 health, two rooms is at least 2.
+        world.get_mut::<InRoom>(climber).unwrap().0 = top;
+        world.get_mut::<Vitals>(climber).unwrap().health = 2.0;
+        let (at, health) = go(&mut world, "down");
+        assert_eq!((at, health), (floor, 0.0));
+        assert!(
+            world.get::<Dead>(climber).is_some(),
+            "dead where they landed"
+        );
+        assert_eq!(
+            world.get::<Slayer>(climber).map(|s| s.0),
+            Some(climber),
+            "their own killer"
+        );
+    }
+
+    #[test]
     fn armour_counts_where_it_belongs() {
         let (mut world, room) = world();
         let who = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);

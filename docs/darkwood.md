@@ -1,6 +1,6 @@
 # The Darkwood
 
-[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and the Ravine Floor, the North Road and the Hermit's Clearing with its hedge-shaman, and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
+[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
 
 The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. It's where a new character goes once the sewers stop teaching them anything, and where foraging, herb-gathering, tracking and hunting come into their own. It grows more dangerous the further from the road you go: safe-ish near the gate, wild in the deep wood, and strange where the trees grow wrong around an old rift-scar.
 
@@ -18,7 +18,7 @@ flowchart TB
     north --- clearing[Hermit's Clearing ✓]
     bend --- east[East Road ✓]
     east -. climb .- ravine[Ravine Floor ✓]
-    ravine --- pool[Mossy Falls]
+    ravine --- pool[Mossy Falls ✓]
     bend --- track[Woodcutters' Track ✓]
     track --- camp[Charcoal Burners' Camp ✓]
     track --- meadow[Deer Meadow ✓]
@@ -36,7 +36,7 @@ flowchart TB
 | --- | --- | --- | --- | --- |
 | **The road** ✓ | 4 | Forest Road, the Bend, North Road, East Road, the Hermit's Clearing | Travellers' way; tracks of everything | Low: the odd boar wandering in |
 | **The west woods** ✓ | 15 | Woodcutters' Track, the Charcoal Burners' Camp (the hunter's now), Deer Meadow, Brook Ford, Bramble Thicket | Logged-over, open, sunlit; game and herbs | Low to middle: for characters fresh from the sewers |
-| **The ravine and the brook** | About 8 | Ravine Floor ✓, Mossy Falls (a swim behind the falls to a hidden ledge), the brook's banks | Damp, green, quiet; the best herbs | Low, but a climb and a swim to reach |
+| **The ravine** ✓ | 7 | Ravine Floor, the Narrows, Mossy Falls (a swim behind the falls to a hidden ledge), Fern Gully, Stony Shallows, Otter Pool, Alder Bank | Damp, green, quiet; the best herbs | Low, but a climb and a swim to reach |
 | **The deep wood** | About 30 | The Old Wood, Spider Hollow, the Wolf Den, the Bear's Cave, the Old Standing Stones | Dark, old, close; little light, few paths | Middle to high: **guard-strength** characters, around level-10 weapon skills |
 | **The Rift-Scar** | About 4 | The Rift-Scar | A glade where the trees grow wrong and the air hums | High, and rare: the rift-touched |
 
@@ -71,6 +71,24 @@ Built 2026-10-27: fifteen rooms west of the Bend, from the road's edge to the br
 - **Who fights whom:** boars attack anything not a boar; deer, rabbits and foxes avoid rooms with a boar in them; adders and frogs strike only at people; the stag and badger only fight back.
 - **Flora:** wild garlic in the woods; sorrel and chamomile in the meadows (`Field`); watercress at the brook and the pool (`Water`), which also has kingsfoil and moonpetal.
 - **Pelts, meat and trophies** are harvested from the beasts' corpses (2026-10-29): rabbits, foxes, deer, the stag (venison or his antlers), boars (meat or tusks), the frogs and the badger. The adder's skin and venom sac wait. The hunter buys them all.
+
+### The ravine, as built
+
+Built 2026-10-29: the stream along the ravine floor, below the East Road's climb, tiers 2–3. Quiet, green and wet, with the best herbs in the forest for anyone who makes the climb and the swim.
+
+| Room | What's there |
+| --- | --- |
+| Ravine Floor | The way down (Climb 4); kingsfoil and moonpetal |
+| The Narrows | The stream fills the floor between close walls, upstream toward the falls |
+| Mossy Falls | A waterfall into a deep green pool (`Water`, wading: no tracks); a kingfisher; behind the falls, a swim (Swim 4) |
+| Behind the Falls | A dripping ledge: moonpetal and **frostfern** (rare, an herb for Brewing later), its own finds |
+| Fern Gully | Head-high ferns over leaf mould: mushrooms thick, and herbs |
+| Stony Shallows | A **giant frog** in the channel |
+| Otter Pool | **Otters** (two, skittish, night eyes, an otter pelt to skin) |
+| Alder Bank | Mud under alders, a **grey heron** fishing (skittish, harmless); the stream goes on where no one can follow |
+
+- **Ambient lines:** the falls' roar, stones in the current, the otters, the heron fishing.
+- **The brook** stays as the west woods built it; this reach is the ravine's own stream.
 
 ## The ladder: from the sewers to the deep wood
 
@@ -142,7 +160,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 | The road, west woods | Wild berries, hazelnuts, wild garlic | Yarrow | `"wood"` for Woodcutting |
 | Deer Meadow | Wild berries, sorrel | Yarrow, kingsfoil, chamomile | |
 | Brook Ford, Mossy Falls | Watercress | Kingsfoil, moonpetal | `"fish"` for Fishing |
-| Ravine, the falls' ledge | Mushrooms | Moonpetal, frostfern (rare) | |
+| Ravine, the falls' ledge (*built*) | Mushrooms (Fern Gully) | Moonpetal, frostfern (rare, behind the falls) | |
 | Deep wood | Mushrooms, deathcap (poisonous to eat) | Foxglove, nightshade (poisons, for Brewing later) | `"wood"` (ironbark) |
 | The Rift-Scar | Nothing wholesome | Riftbloom (rare, glows) | |
 
@@ -220,7 +238,7 @@ Later, once the deep wood exists: Navigation and getting lost, ranged combat, Ri
 
 Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull request checked by the zone tests and walked live. Numbers are first guesses for each tier, to be played ([#13](https://github.com/Foxworks-Studios/riftward/issues/13)).
 
-1. **The ravine and the brook** (about 8 rooms, tiers 2–3): Mossy Falls, the brook's banks, and the ledge behind the falls by a swim (Swim 4): mushrooms, moonpetal and frostfern (rare). Quiet and low in danger, the best herbs.
+1. **The ravine and the brook** (about 8 rooms, tiers 2–3; *built* 2026-10-29 as [the ravine](#the-ravine-as-built), seven rooms): Mossy Falls, the brook's banks, and the ledge behind the falls by a swim (Swim 4): mushrooms, moonpetal and frostfern (rare). Quiet and low in danger, the best herbs.
 2. **The deep wood's edge** (about 10 rooms, tier 4): beyond the Hermit's Clearing, `light: Dark`, with landmarks (a fallen giant, a stream to follow). Grey wolves roaming after dark (below); forest spiders in Spider Hollow, born hidden and venomous, with webs that may catch you. Mushrooms, deathcap (poisonous to eat), foxglove, nightshade, and the bee tree's honey under `angry_bees`. Spider silk and venom sacs to harvest, and the adder's skin and venom sac.
 3. **The deep wood's heart** (about 12 rooms, tier 5): the Wolf Den and the Bear's Cave. **Wolves are always in the den** (a `Keep` spawn that stays home), **and roam the woods after dark** (spawns with `when: TimeOfDay([Dusk, Night])` and `wander` through the deep wood, in packs: `pack: 3`, Pack Hunter, a howl calling the pack, a trip that wants a packmate) (decided 2026-10-29). The old she-wolf in the den, her aura over every wolf; the bear at home in its cave (`Cave`, `aggressive: Home`, thick hide, a maul). Wolf pelts and fangs, the bear's pelt, claws and meat, and recipes to cook the new meats. Wolves howling at night, the old wood creaking.
 4. **Navigation** (code, medium): how tangled each room is, the Survival skill as data, and the roll when moving, tuned against the rooms now built.

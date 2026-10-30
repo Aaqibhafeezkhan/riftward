@@ -42,6 +42,8 @@ pub struct Rules {
     pub chatter_minutes: f64,
     /// Real seconds a mob born hidden stays in sight, out of a fight, before it hides again.
     pub rehide_seconds: f64,
+    /// The damage of a fall, rolled for each room fallen through: low and high.
+    pub fall_damage_per_room: (u32, u32),
     /// Tracks rooms keep, for Tracking.
     pub tracks: TrackRules,
     /// Finds rooms hold, for Foraging and Herbalism.

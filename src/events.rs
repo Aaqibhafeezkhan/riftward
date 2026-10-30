@@ -171,6 +171,8 @@ pub enum Way {
     Walked(Option<String>),
     /// A builder's `goto`.
     Teleported,
+    /// A climb that failed: down to whatever lies below.
+    Fell,
 }
 
 /// The direction of the exit in `room` that leads back to `from`, if there is one.
@@ -199,11 +201,14 @@ fn text(event: &GameEvent) -> Option<String> {
             Way::Walked(Some(dir)) => format!("{name} leaves {dir}."),
             Way::Walked(None) => format!("{name} leaves."),
             Way::Teleported => format!("{name} vanishes."),
+            // The climb's own words have told it.
+            Way::Fell => return None,
         },
         GameEvent::Entered { name, way, .. } => match way {
             Way::Walked(Some(dir)) => format!("{name} arrives {}.", from(dir)),
             Way::Walked(None) => format!("{name} arrives."),
             Way::Teleported => format!("{name} appears out of thin air."),
+            Way::Fell => format!("{name} falls from above and lands hard!"),
         },
         GameEvent::PhaseChanged(phase) => phase.arrives().into(),
         GameEvent::Revealed { name, .. } => format!("{name} steps out of the shadows."),
