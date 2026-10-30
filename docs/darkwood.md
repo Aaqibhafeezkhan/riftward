@@ -1,6 +1,6 @@
 # The Darkwood
 
-[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, [the deep wood's edge](#the-deep-woods-edge-as-built) and [heart](#the-deep-woods-heart-as-built) beyond it (2026-10-29), and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
+[Design summary](README.md) · Status: a design (2026-10-27), its open questions answered. Built: the road north from the gate, the Bend, the East Road and [the ravine](#the-ravine-as-built) below it (2026-10-29), the North Road and the Hermit's Clearing with its hedge-shaman, [the deep wood's edge](#the-deep-woods-edge-as-built) and [heart](#the-deep-woods-heart-as-built) beyond it, and [the standing stones and the Rift-Scar](#the-stones-and-the-rift-scar-as-built) (2026-10-29), and (2026-10-27) [the west woods](#the-west-woods-as-built), tiers 2 and 3 (zone `forest`). Everything else here is proposed, for review.
 
 The Darkwood is the first wilderness: the forest beyond Riftwatch's North Gate. It's where a new character goes once the sewers stop teaching them anything, and where foraging, herb-gathering, tracking and hunting come into their own. It grows more dangerous the further from the road you go: safe-ish near the gate, wild in the deep wood, and strange where the trees grow wrong around an old rift-scar.
 
@@ -29,8 +29,8 @@ flowchart TB
     deep --- old[The Old Wood ✓]
     old --- den[Wolf Den ✓]
     old --- cave[Bear's Cave ✓]
-    old --- stones[Old Standing Stones]
-    stones --- scar[The Rift-Scar]
+    old --- stones[Old Standing Stones ✓]
+    stones --- scar[The Rift-Scar ✓]
 ```
 
 | Reach | Rooms | Named places | Feel | Danger |
@@ -38,8 +38,8 @@ flowchart TB
 | **The road** ✓ | 4 | Forest Road, the Bend, North Road, East Road, the Hermit's Clearing | Travellers' way; tracks of everything | Low: the odd boar wandering in |
 | **The west woods** ✓ | 15 | Woodcutters' Track, the Charcoal Burners' Camp (the hunter's now), Deer Meadow, Brook Ford, Bramble Thicket | Logged-over, open, sunlit; game and herbs | Low to middle: for characters fresh from the sewers |
 | **The ravine** ✓ | 7 | Ravine Floor, the Narrows, Mossy Falls (a swim behind the falls to a hidden ledge), Fern Gully, Stony Shallows, Otter Pool, Alder Bank | Damp, green, quiet; the best herbs | Low, but a climb and a swim to reach |
-| **The deep wood** (the edge and heart ✓) | 22 so far | The edge (Spider Hollow, the Bee Tree), the Old Wood, the Wolf Den, the Bear's Cave; the Old Standing Stones to come | Dark, old, close; little light, few paths | Middle to high: **guard-strength** characters, around level-10 weapon skills |
-| **The Rift-Scar** | About 4 | The Rift-Scar | A glade where the trees grow wrong and the air hums | High, and rare: the rift-touched |
+| **The deep wood** ✓ | 25 | The edge (Spider Hollow, the Bee Tree), the Old Wood, the Wolf Den, the Bear's Cave, the Old Standing Stones on their hill | Dark, old, close; little light, few paths | Middle to high: **guard-strength** characters, around level-10 weapon skills |
+| **The Rift-Scar** ✓ | 3 | The Scar's Edge, the Rift-Scar, the Glassed Hollow | A glade where the trees grow wrong and the air hums | High, and rare: the rift-touched |
 
 - **A region, not a maze.** Thirty rooms of deep wood need landmarks and a few trails (a fallen giant, a stream to follow, the stones on their hill) so it can be learned; the rooms between them vary in description, finds and who lives there, rather than repeating. It's big enough to get turned around in, which makes **Navigation** and getting lost worth building ([What needs code](#what-needs-code)).
 - **Danger by reach** (decided 2026-10-27): the west woods for characters past the sewers; the deep wood for those who could hold their own against a town guard; the bear, the old she-wolf and the Rift-Scar beyond that.
@@ -125,11 +125,27 @@ Built 2026-10-29: twelve dark rooms north of the Stream Bend, tier 5, for charac
 | Thorn Tangle | Blackthorn with `brambles` at strength 2 (1–3 to push through) |
 | Scree Slope, Cave Mouth | The slope up to the bear's cave |
 | The Bear's Cave | **A brown bear** (`Cave`) |
-| Ironbark Grove | Black, iron-hard trees; the way east toward the stones' hill (step 5) |
+| Ironbark Grove | Black, iron-hard trees; the way east to the stones' hill |
 
 - **Wolves:** always in the den; after dark a **pack of three** roams the heart (`TimeOfDay([Dusk, Night])`), besides the two lone wolves at the edge. Every grey wolf has Pack Hunter, **Howl** (hurt below half, it calls wolves within three rooms, its own Call for Help) and **Pull Down** (a lunge that knocks its prey down, only with another wolf on it: `allies: 1`).
 - **The old she-wolf:** 45 health, a bite of 14, `boss`, and **the Old She-Wolf's Lead**, an aura over every grey wolf (+2 attack, +1 defence) while she lives; back 7 days after she's killed. Her great grey pelt (rare, 90) to skin.
 - **The bear:** 60 health, a maul (3–6) of 14, `thick_hide`, and `aggressive: Home`: it lets you pass the cave mouth, and attacks in its cave. Back a day after it dies. A bear pelt, bear meat or a claw; **roast bear** to cook (Cooking 4).
+
+### The stones and the Rift-Scar, as built
+
+Built 2026-10-29: six rooms east of Ironbark Grove, beyond tier 5. The story stays a hint: the stones' carved lines all point at the scar, and nothing says why.
+
+| Room | What's there |
+| --- | --- |
+| Foot of the Stones' Hill | A rock wall out of the deep wood, old handholds cut between the roots; up by a climb (Climb 5, each way) |
+| The Crag | A ledge above the canopy: open sky (`Daylight`) for the first time since the edge |
+| The Old Standing Stones | A ring on the hill's crown, older than the hermit's, every carved line pointing east; a landmark, never tangled |
+| The Scar's Edge | White trees leaning away from the light; `rift_hum` at strength 1 |
+| The Rift-Scar | A torn glade with a seam of pale light; `rift_hum` 2; riftbloom; **the rift-touched stag** |
+| The Glassed Hollow | Earth run to glass, things sealed inside; `rift_hum` 3, the worst; riftbloom |
+
+- **The hum** (`rift_hum`, a [room condition](world.md#room-conditions)): its glow lights the scar at any hour (`Lights`), and every four game minutes (half a real minute) it does 1 to 2 + strength force damage to everyone there: 1–3 at the edge, 1–5 in the hollow. A ward takes it. Only the one it hurts is told, so it doesn't fill everyone's screen. Foraging finds nothing; Herbalism finds riftbloom (rare, 40).
+- **The rift-touched stag:** 50 health, Agility and Reaction 9, glowing antlers (3–7) at 16, `boss`; it only fights back. Its `rift_touched` trait shrugs off force (the hum doesn't touch it), and **every blow that lands on it spits back 2–8 force at whoever struck**, flat, however hard the blow (decided 2026-10-29). It leaves **a vitae crystal** in its corpse (rare, 120), and a silvered hide (60) or glowing antlers (80) to harvest. Back 3 days after it dies. Played at 28 health it killed a character in one round: it's for those past the den.
 
 ## The ladder: from the sewers to the deep wood
 
@@ -166,7 +182,7 @@ Each creature with what it does and which existing data does it. Numbers are fir
 | **Forest spider** | Spider Hollow | Waits in its web, born `hidden`, and springs at whoever comes near unaware (*built*); a bite that poisons | `aggressive`; passive *Venomous Bite*: reaction `Hits` → `Apply(poisoned)` | Spider silk; a venom sac |
 | **Brown bear** (*built*) | Bear's Cave | Solitary and huge; ignores you on the paths, savage at home (`aggressive: Home`, *built*) | `wander: Never`, high Body and Strength, natural armour (*Thick Hide*: `Armour` bonus), a maul | A bear pelt; claws, bear meat |
 | **Crows** | The road, the clearing | Atmosphere: they watch, and caw (`chatter`, *built*) | A `here` line, `wander: Zone` | Nothing |
-| **The rift-touched stag** | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` trait (resist force, `Struck` → force damage, as thorns; [traits](effects.md#traits) *built*); `AfterDeath(Days(3))`; a Silver contract later | A vitae crystal, left where it dies (loot: what the rift left in it; rare, a crafting reagent later); its antlers to harvesting |
+| **The rift-touched stag** (*built*) | The Rift-Scar | Rare and strange: glowing antlers, lightning-quick; what hurts it hurts back | A `rift_touched` trait (resist force, `Struck` → force damage, as thorns; [traits](effects.md#traits) *built*); `AfterDeath(Days(3))`; a Silver contract later | A vitae crystal, left where it dies (loot: what the rift left in it; rare, a crafting reagent later); its antlers to harvesting |
 
 **Food chain, from what's built:** wolves and boars are `aggressive` with allies of their own kind only, so they go for deer and rabbits as readily as players; deer and rabbits aren't aggressive, so they're prey. Without fleeing, prey just stands and dies, which is why fleeing is the first gap worth closing.
 
@@ -215,7 +231,7 @@ The forest's finds, by place: the existing tables stay, and the deep wood and th
 - **Spider Hollow's webs:** walking in, you may be caught (`held`): the `webs` [room condition](world.md#room-conditions): `Enters`, a 40% chance → `webbed` for three rounds (*built*).
 - **The deep wood is dark:** its rooms will be `light: Dark`, and the west woods are dark at night; torches light the way, and the beasts have night eyes ([Light and darkness](world.md#light-and-darkness), *built*).
 - **Getting lost** in the deep wood: rooms are `tangled`, and leaving one a player may go out another way, told "you feel like you're getting turned around"; Navigation and the hunter's compass keep you on your way ([Getting lost](world.md#getting-lost), *built* 2026-10-29).
-- **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded: a [room condition](world.md#room-conditions) with `Every` reactions (*built*), whose glow can light it (`Lights`). It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
+- **The Rift-Scar** hums: anyone who lingers is slowly worn down, unless warded: a [room condition](world.md#room-conditions) with `Every` reactions (*built*, [as built](#the-stones-and-the-rift-scar-as-built)), whose glow lights it (`Lights`). It hints at the wider story without explaining it: what the rifts are stays open until the setting is decided.
 - **Night** changes the forest: wolves roam the woods after dark, out of their den (`TimeOfDay` spawns, *built*).
 
 ## People and work
@@ -283,7 +299,7 @@ Planned 2026-10-29: the rest of the map as data, a reach at a time, each a pull 
 2. **The deep wood's edge** (about 10 rooms, tier 4; *built* 2026-10-29 as [the edge](#the-deep-woods-edge-as-built)): beyond the Hermit's Clearing, `light: Dark`, with landmarks (a fallen giant, a stream to follow). Grey wolves roaming after dark (below); forest spiders in Spider Hollow, born hidden and venomous, with webs that may catch you. Mushrooms, deathcap (poisonous to eat), foxglove, nightshade, and the bee tree's honey under `angry_bees`. Spider silk and venom sacs to harvest, and the adder's skin and venom sac.
 3. **The deep wood's heart** (about 12 rooms, tier 5; *built* 2026-10-29 as [the heart](#the-deep-woods-heart-as-built)): the Wolf Den and the Bear's Cave. **Wolves are always in the den** (a `Keep` spawn that stays home), **and roam the woods after dark** (spawns with `when: TimeOfDay([Dusk, Night])` and `wander` through the deep wood, in packs: `pack: 3`, Pack Hunter, a howl calling the pack, a trip that wants a packmate) (decided 2026-10-29). The old she-wolf in the den, her aura over every wolf; the bear at home in its cave (`Cave`, `aggressive: Home`, thick hide, a maul). Wolf pelts and fangs, the bear's pelt, claws and meat, and recipes to cook the new meats. Wolves howling at night, the old wood creaking.
 4. **Navigation** (code, medium; *built* 2026-10-29 as [getting lost](world.md#getting-lost)): how tangled each room is, the Survival skill as data, and the roll when moving, tuned against the rooms now built. A compass at the hunter's, fairly dear, makes going astray rare.
-5. **The Old Standing Stones and the Rift-Scar** (about 6 rooms, beyond tier 5): a climb to the stones; the scar's hum wearing down whoever lingers unless warded, and its glow lighting it (room conditions); riftbloom; the rift-touched stag, whose hurts hurt back and who leaves a vitae crystal. The story stays a hint ([The setting](setting.md)).
+5. **The Old Standing Stones and the Rift-Scar** (about 6 rooms, beyond tier 5; *built* 2026-10-29 as [the stones and the scar](#the-stones-and-the-rift-scar-as-built)): a climb to the stones; the scar's hum wearing down whoever lingers unless warded, and its glow lighting it (room conditions); riftbloom; the rift-touched stag, whose hurts hurt back and who leaves a vitae crystal. The story stays a hint ([The setting](setting.md)).
 6. **Contracts:** cull the wolves (Copper), the old she-wolf's pelt (Bronze), the rift-touched stag (Silver), and Meat for the Kitchen.
 
 ## Open questions

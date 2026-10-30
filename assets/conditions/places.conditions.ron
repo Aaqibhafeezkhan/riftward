@@ -45,6 +45,27 @@
             looks: ["Bees drone in and out of a hollow high in a tree."],
         ),
     ),
+    // The Rift-Scar (docs/darkwood.md): a pale glow that lights it at any hour, and a hum that
+    // wears at whoever lingers, the stronger the deeper in. A ward takes it; the rift-touched
+    // shrug it off. Only the one it hurts is told, so it doesn't fill everyone's screen.
+    "rift_hum": (
+        name: "the rift's hum",
+        description: "a pale glow from nowhere, and a hum that wears at whoever lingers",
+        tags: ["rift"],
+        modifiers: [Lights],
+        reactions: [(
+            on: Every(Minutes(4)),
+            effects: [Damage(amount: "roll(1, 2 + strength)", type: "force")],
+            text: (
+                actor: "The hum swells until your teeth ache, and {harm} you.",
+                target: "The hum swells until your teeth ache, and {harm} you.",
+                room: "",
+            ),
+        )],
+        text: (
+            looks: ["The air hums, low and constant, and a pale light comes from nowhere in particular."],
+        ),
+    ),
     // Spider Hollow's webs (docs/darkwood.md): coming in, you may blunder into one.
     "webs": (
         name: "webs",

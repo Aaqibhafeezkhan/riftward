@@ -117,7 +117,7 @@ The building blocks; a condition is any mix of them. Amounts are [formulas](#for
 | `SeesHidden` / `SeesInvisible` | | |
 | `SeesInDark` | Never `in_the_dark` ([Light and darkness](world.md#light-and-darkness)) | ✓ Heat Sight (dwarves, trolls), night eyes (the woods' beasts) |
 | `SensesMagic` | Sees magic conditions on people and things | |
-| `Lights` / `Darkens` | On a room: lights it whatever the hour, or darkens it past any light ([Room conditions](world.md#room-conditions)) | ✓ (no content uses them yet) |
+| `Lights` / `Darkens` | On a room: lights it whatever the hour, or darkens it past any light ([Room conditions](world.md#room-conditions)) | ✓ `Lights`: the Rift-Scar's hum |
 | `Hidden` | Out of sight to those who haven't noticed | ✓ Hidden |
 | `Invisible` | Unseen by all but those who see invisible | |
 | `Resist(type, x)` / `Weakness(type, x)` / `Immune(tag)` | Stops a share `x` of a damage type (0.8 = 80%); takes `x` more of one (1 = double); can't get a tag's conditions | |
@@ -502,7 +502,7 @@ Step 3 (2026-10-26). `src/formula.rs` parses formulas when a file loads, so a ty
 
 - **Dice:** `2d6` adds two six-sided dice; `roll(2, 5)` is one roll from 2 to 5, what `(2, 5)` used to mean. Every roll goes through `Dice` with the user's Luck.
 - **Inputs:** `power` (a caster's; nothing for a blow), `strength` (an item condition's, in its `on_hit` effects; 1 elsewhere), `margin` (how decisively the contest was won, the winner's roll over the loser's; 1 when nothing resisted), `level` (the user's character level), `allies` (how many of the user's allies are fighting in the room with them, as `allied` counts them: *Pack Hunter*, 2026-10-29), `user.<attribute>` and `target.<attribute>` (`user.strength`, `target.willpower`), and `user.health`, `user.most_health`, `target.health`, `target.most_health`. Attributes go through `user.` and `target.` so that `strength` can mean a condition's.
-- **Silent reactions** (2026-10-29): a reaction's text lines may be empty, and an empty line says nothing. *Pack Hunter* adds its boldness every turn without a word.
+- **Silent reactions** (2026-10-29): a reaction's text lines may be empty, and an empty line says nothing. *Pack Hunter* adds its boldness every turn without a word. A damaging reaction needs `{harm}` only in the lines that say something, so the Rift-Scar's hum tells only the one it hurts.
 - **Operators:** `+ - * /` (division doesn't round), brackets, `min`, `max`, `floor`, `ceil`, `round`. An amount is rounded to a whole number where it's used.
 - **What moved into data:** "a third of the power on top" is now written in each spell (`"roll(2, 5) + floor(power / 3)"`), `empowered` is gone (a ward is `strength: "4 + floor(power / 3)"`), and "once per point of strength" for item conditions is gone (flaming says `* strength`).
 - **Still in code:** a blow's weapon damage and Strength bonus, the blow's crushing multiplier (applied to every `Damage` automatically, so formulas don't repeat it), spell power and Drain, and the numbers in `progression.ron`. `weapon`, `quality` and `skill(key)` inputs come when something needs them.

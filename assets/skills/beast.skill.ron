@@ -149,14 +149,31 @@
             kind: Attack(damage: (2, 5)),
             text: (
                 hit: (
-                    actor: "Your antlers {harm} {target}.",
-                    target: "{actor}'s antlers {harm} you.",
-                    room: "{actor}'s antlers {harm} {target}.",
+                    actor: "You drive your antlers into {target}, and the blow {harm} them.",
+                    target: "{actor} drives its antlers into you, and the blow {harm} you.",
+                    room: "{actor} drives its antlers into {target}, and the blow {harm} them.",
                 ),
                 miss: (
                     actor: "You lower your antlers at {target}, but miss.",
                     target: "{actor} lowers its antlers at you, but you're clear.",
                     room: "{actor} lowers its antlers at {target}, but misses.",
+                ),
+            ),
+        ),
+        "rift_antlers": (
+            name: "Rift Antlers",
+            description: "Antlers that glow with the rift's light, and strike faster than they should.",
+            kind: Attack(damage: (3, 7)),
+            text: (
+                hit: (
+                    actor: "Your glowing antlers flicker, and the blow {harm} {target}.",
+                    target: "{actor}'s glowing antlers flicker, too fast to follow, and the blow {harm} you.",
+                    room: "{actor}'s glowing antlers flicker, and the blow {harm} {target}.",
+                ),
+                miss: (
+                    actor: "You strike at {target}, but miss.",
+                    target: "{actor}'s antlers flash past you.",
+                    room: "{actor}'s antlers flash past {target}.",
                 ),
             ),
         ),

@@ -255,9 +255,11 @@ impl Reaction {
             && lines
                 .into_iter()
                 .flatten()
-                .any(|line| !line.contains("{harm}"))
+                .any(|line| !line.is_empty() && !line.contains("{harm}"))
         {
-            return Err("a reaction that does damage needs {harm} in every line".into());
+            return Err(
+                "a reaction that does damage needs {harm} in every line it says anything in".into(),
+            );
         }
         Ok(())
     }

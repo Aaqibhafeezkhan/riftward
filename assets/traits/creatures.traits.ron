@@ -167,4 +167,24 @@
             looks: ["{bearer} watches you warily, ready to bolt."],
         ),
     ),
+    // What the Rift-Scar has made of a creature: the rift's force passes through it harmlessly,
+    // and every blow that lands on it lets some out, at whoever struck it (docs/darkwood.md).
+    "rift_touched": (
+        name: "rift-touched",
+        description: "touched by the rift: its force passes through them, and what wounds them spits it back at whoever struck",
+        tags: ["rift"],
+        modifiers: [Resist("force", 1.0)],
+        reactions: [(
+            on: Struck,
+            effects: [Damage(amount: "roll(2, 4)", type: "force")],
+            text: (
+                actor: "Pale light spits from your wound, and {harm} {target}.",
+                target: "Pale light spits from {actor}'s wound, and {harm} you.",
+                room: "Pale light spits from {actor}'s wound, and {harm} {target}.",
+            ),
+        )],
+        text: (
+            looks: ["Pale light moves under {bearer}'s skin, like something swimming."],
+        ),
+    ),
 }

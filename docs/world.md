@@ -240,7 +240,7 @@ An exit can need a climb or a swim, written in its long form: `"down": (to: "rav
 - **A failed swim keeps you where you are,** and costs half the difficulty in stamina. The room sees either ("Grok tries to climb down, and falls.").
 - **Mobs never wander, and no one flees,** through an exit that needs a climb or a swim.
 - **The wording** is the skills' own (see [Skill text](skills.md#skill-text)): `{direction}` is the exit.
-- **Places today:** the Darkwood's East Road climbs down to the Ravine Floor, where moonpetal grows thick (Climb 4, each way); the sewers' Drowned Stair swims down to the Sunken Hall, under the city, where a silver locket and a healing draught wait (Swim 4, each way).
+- **Places today:** the Darkwood's East Road climbs down to the Ravine Floor, where moonpetal grows thick (Climb 4, each way); the sewers' Drowned Stair swims down to the Sunken Hall, under the city, where a silver locket and a healing draught wait (Swim 4, each way); the Stones' Hill climbs out of the deep wood to the Old Standing Stones (Climb 5, each way).
 
 ### Getting lost
 
@@ -315,7 +315,7 @@ Separately from its footing, every room has an **environment**: what kind of pla
 "bramble_thicket": (..., conditions: [(condition: "brambles", strength: 1)]),
 ```
 
-- **Their reactions answer whoever is there:** `Enters`, whoever comes in; `Gathers`, whoever forages or gathers there (a honey tree's `angry_bees` sting half the time) (the brambles: `Damage`, "A bramble grazes you as you push through."), and `Every(Minutes(n))`, everyone there every so often (the Rift-Scar's hum, later). A `chance` makes it a maybe (webs catching you). The place has no hands, so a reaction is resolved as the one it happens to's own: its `actor` line to them, its `room` line to the rest, through armour and resistances like any reaction. A ward or an immunity is what keeps it off.
+- **Their reactions answer whoever is there:** `Enters`, whoever comes in; `Gathers`, whoever forages or gathers there (a honey tree's `angry_bees` sting half the time) (the brambles: `Damage`, "A bramble grazes you as you push through."), and `Every(Minutes(n))`, everyone there every so often (the Rift-Scar's `rift_hum`). A `chance` makes it a maybe (webs catching you). The place has no hands, so a reaction is resolved as the one it happens to's own: its `actor` line to them, its `room` line to the rest, through armour and resistances like any reaction. A ward or an immunity is what keeps it off.
 - **`look` shows them,** by their `looks` line: "Brambles snag at everything here, thick and thorny."
 - **Light:** a place's condition can light it whatever the hour (`Lights`: a rift's glow) or darken it past any light (`Darkens`: magical dark no torch pierces, though Heat Sight still sees). See [Light and darkness](#light-and-darkness).
 - **The zone test** checks each is a real condition. There's no builder command for them yet: they're set in the zone file. Effects that put a condition on a room (a fog, a ward on a doorway) come later.
@@ -331,7 +331,7 @@ Separately from its footing, every room has an **environment**: what kind of pla
 
 - **A room with a player in it says one about every `chatter_minutes`** (`assets/rules.ron`, first guess 1.5), picked from its own lines and those of the living mobs there that aren't hidden: a hidden spider says nothing. Rolled through `Dice`, from elapsed time.
 - **Repeats are rare, not random** (decided 2026-10-29): each room remembers what it said. A line just said has the least weight (1), and every line passed over gains one each time another is said, up to 5, as a line never said has. So every line comes round, and the same one twice running is about one in eleven with three lines, not one in three.
-- **Today:** crows in the woods, the stray dog in the market, rats squeaking in the sewers, birdsong in the Deer Meadow, dripping in the North Trunk, hawkers in the market. The Rift-Scar's hum will be the scar's.
+- **Today:** crows in the woods, the stray dog in the market, rats squeaking in the sewers, birdsong in the Deer Meadow, dripping in the North Trunk, hawkers in the market. The Rift-Scar's hum is the scar's.
 
 ### Weather (planned)
 
