@@ -4619,6 +4619,34 @@ mod tests {
     }
 
     #[test]
+    fn aggressive_mobs_with_enemies_attack_only_them() {
+        let (mut world, room) = world();
+        aggressive_template(&mut world, None);
+        world
+            .resource_mut::<MobTemplates>()
+            .0
+            .get_mut(&MobKey::parse("test:mob", ""))
+            .unwrap()
+            .enemies = vec!["vermin".into()];
+        let dog = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        world.entity_mut(dog).insert(Aggressive::ANYWHERE);
+        let player = fighter(&mut world, room, 1, 1, &[BASIC_ATTACK]);
+        as_player(&mut world, player);
+        let baker = other_mob(&mut world, room, "baker", &["townsfolk"]);
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        assert!(
+            world.get::<Fighting>(dog).is_none(),
+            "players and townsfolk are no enemies"
+        );
+        let rat = other_mob(&mut world, room, "rat", &["vermin"]);
+        world.run_system_once(aggression).unwrap();
+        world.flush();
+        assert_eq!(world.get::<Fighting>(dog).map(|f| f.0), Some(rat));
+        assert!(world.get::<Fighting>(baker).is_none());
+    }
+
+    #[test]
     fn aggressive_mobs_without_allies_still_go_only_for_players() {
         let (mut world, room) = world();
         aggressive_template(&mut world, None);

@@ -565,9 +565,10 @@
         "stray_dog": (
             name: "a stray dog",
             tags: ["townsfolk"],
-            // Goes for any stranger to the town, a rat or worse; never townsfolk or players.
-            allies: ["townsfolk", "players"],
+            // Goes for rats and other vermin, but counts no one an ally, so it answers no calls
+            // for help: it keeps out of the guards' business (decided 2026-10-30).
             aggressive: Always,
+            enemies: ["vermin"],
             keywords: ["stray", "dog", "mutt"],
             here: "A scruffy stray dog noses through the gutter for scraps.",
             description: "A lean, rangy mutt of no particular breed, with one torn ear and a hopeful tail. Every market stall-keeper knows it, and most of them pretend not to feed it.",

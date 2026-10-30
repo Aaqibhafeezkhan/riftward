@@ -825,6 +825,11 @@ pub struct MobDef {
     /// too: guards go for the rats. Without, it attacks players only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allies: Option<Vec<String>>,
+    /// Who an aggressive mob goes for, named as `allies` are; set, it attacks only these and
+    /// leaves everyone else alone, whatever its `allies`. The stray dog goes for `vermin` but
+    /// counts no one an ally, so it never answers the guards' calls for help.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub enemies: Vec<String>,
     /// What its mobs keep away from, by tag (`slime`) or template, as `allies` names them:
     /// wandering and crowding never take them into a room holding one. Rats avoid slimes, so
     /// they don't drain into the slimes' tunnels; deer avoid wolves.
@@ -859,9 +864,15 @@ pub struct MobDef {
 
 impl MobDef {
     /// Whether, aggressive, it leaves `other` alone: `None` for a player, or a mob's template key
-    /// and template. Without `allies`, everyone but players is spared; with, only its own kind
-    /// and those its allies name.
+    /// and template. With `enemies`, everyone they don't name is spared; without, and without
+    /// `allies`, everyone but players; with `allies`, only its own kind and those they name.
     pub fn spares(&self, own: &MobKey, other: Option<(&MobKey, &MobDef)>) -> bool {
+        if !self.enemies.is_empty() {
+            return !self.enemies.iter().any(|e| match other {
+                None => e == "players",
+                Some((key, def)) => MobKey::parse(e, &own.zone) == *key || def.tags.contains(e),
+            });
+        }
         let Some(allies) = &self.allies else {
             return other.is_some();
         };
@@ -921,6 +932,7 @@ impl MobDef {
             boss: false,
             tags: Vec::new(),
             allies: None,
+            enemies: Vec::new(),
             avoids: Vec::new(),
             conditions: Vec::new(),
             traits: Vec::new(),
@@ -2247,14 +2259,14 @@ mod tests {
                         ));
                     }
                 }
-                // Each ally is players, a mob template, or a tag some mob has.
-                for ally in mob.allies.iter().flatten() {
+                // Each ally or enemy is players, a mob template, or a tag some mob has.
+                for ally in mob.allies.iter().flatten().chain(&mob.enemies) {
                     let tagged = zones
                         .iter()
                         .any(|z| z.mobs.values().any(|m| m.tags.contains(ally)));
                     if ally != "players" && !tagged && !mob_exists(&MobKey::parse(ally, &zone.id)) {
                         problems.push(format!(
-                            "mob {}:{mob_id}: ally '{ally}' is no mob, tag or 'players'",
+                            "mob {}:{mob_id}: ally or enemy '{ally}' is no mob, tag or 'players'",
                             zone.id
                         ));
                     }

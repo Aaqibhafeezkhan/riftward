@@ -164,7 +164,7 @@ Noted 2026-10-27. Now and then, instead of an ordinary mob, something more monst
 
 ### Mobs fighting mobs
 
-*Built* (2026-10-27). A mob template can say what it is, `tags: ["vermin"]`, and who an aggressive one leaves alone, `allies`: tags, templates (`sewer_rat`, `zone:mob`) or `players`, and always its own kind. With `allies`, an aggressive mob attacks anyone in the room it has noticed who isn't one, mobs as well as players; without, it attacks players only, as before.
+*Built* (2026-10-27). A mob template can say what it is, `tags: ["vermin"]`, and who an aggressive one leaves alone, `allies`: tags, templates (`sewer_rat`, `zone:mob`) or `players`, and always its own kind. With `allies`, an aggressive mob attacks anyone in the room it has noticed who isn't one, mobs as well as players; without, it attacks players only, as before. Or it can name who it goes for, `enemies`, the same way (*built*, 2026-10-30): then it attacks only those, whatever its `allies`, which then say only whose calls for help it answers.
 
 ```ron
 "town_guard": (
@@ -180,14 +180,20 @@ Noted 2026-10-27. Now and then, instead of an ordinary mob, something more monst
     aggressive: Always,
     ...
 ),
+"stray_dog": (
+    tags: ["townsfolk"],
+    enemies: ["vermin"],                // rats only; no allies, so it answers no one's call
+    aggressive: Always,
+    ...
+),
 ```
 
-- **In Riftwatch** every townsperson is `townsfolk`, and the guards and the stray dog are aggressive towards anything that isn't, so when the rats break out the guards and the dog fight them. The rats and the Rat King are `vermin`, aggressive to everyone else.
+- **In Riftwatch** every townsperson is `townsfolk`, and the guards are aggressive towards anything that isn't, so when the rats break out the guards and the stray dog fight them. The dog goes for `vermin` alone, as its `enemies` (since 2026-10-30), and counts no one an ally, so it stays out of the guards' fights. The rats and the Rat King are `vermin`, aggressive to everyone else.
 - **The same rules as against a player:** a fight is picked as `kill` picks one (`attack` in `combat/mod.rs`), only on someone noticed, and a spawn's `pack` limits how many gang up on one.
 - **Kills:** a mob killed by a mob gives no one experience, and its coins stay in its corpse; only a player's kill takes them.
-- **The zone test** checks every ally is `players`, a mob template, or a tag some mob has.
+- **The zone test** checks every ally and enemy is `players`, a mob template, or a tag some mob has.
 - **Guards are meant to be deadly** (decided 2026-10-30): picking a fight with the law is a mistake, not a challenge. A town guard is a match for a character of level 8 and kills a new one, often in a round (a level-6 character wins one fight in ten); six walk the town, and Call for Help brings the rest down on anyone strong enough to win against one. The keep's own guards are a match for level 12. Checked with `balance_town` ([the balance tool](riftwatch.md#tuned-against-new-characters)).
-- **Reinforcements** (*built*, 2026-10-27): a guard losing a fight shouts for help, and those nearby who count them an ally come running. It's the Command tree's **Call for Help** (`command:call_for_help`), a passive whose reaction, on dropping below half health, is `CallForHelp(rooms: 2)`: allies within two rooms, through exits anyone could walk (open doors, no climbing), who aren't fighting, dead or being played, walk in (seen arriving, as anyone walking in is) and join the fight against the caller's foe, a player too. An ally is the caller's own kind or one its `allies` name (`MobDef::allied`, stricter than `spares`: without `allies`, only its own kind); so a guard's call brings the other guards and the stray dog, but never a rat. Town guards know it. `combat/help.rs` answers the calls.
+- **Reinforcements** (*built*, 2026-10-27): a guard losing a fight shouts for help, and those nearby who count them an ally come running. It's the Command tree's **Call for Help** (`command:call_for_help`), a passive whose reaction, on dropping below half health, is `CallForHelp(rooms: 2)`: allies within two rooms, through exits anyone could walk (open doors, no climbing), who aren't fighting, dead or being played, walk in (seen arriving, as anyone walking in is) and join the fight against the caller's foe, a player too. An ally is the caller's own kind or one its `allies` name (`MobDef::allied`, stricter than `spares`: without `allies`, only its own kind); so a guard's call brings the other guards, the keep's guards among them, but never a rat, and not the stray dog, which has no `allies` and so answers only other stray dogs (decided 2026-10-30: it keeps out of the guards' business). Town and keep guards know it. `combat/help.rs` answers the calls.
 
 ## Building mobs and spawns
 

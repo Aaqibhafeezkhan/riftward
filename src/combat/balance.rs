@@ -24,7 +24,7 @@ use crate::characters::{RaceDef, Races};
 use crate::items::{ItemLocation, ItemTemplates, Quality};
 use crate::skills::{Skill, SkillState, SkillTreeDef};
 use crate::vitals::{Maxima, Vitals};
-use crate::world::{Exits, ItemKey, MobKey, Player, Room, RoomKey, Slot, Terrain, ZoneDef};
+use crate::world::{Exit, Exits, ItemKey, MobKey, Player, Room, RoomKey, Slot, Terrain, ZoneDef};
 
 /// What a party member of a character level has.
 struct Build {
@@ -235,21 +235,35 @@ fn world_from_disk() -> World {
     world
 }
 
-/// A lit room to fight in.
-fn arena(world: &mut World) -> Entity {
+/// A lit room to fight in, and one east of it, where those who might answer a call for help wait.
+fn arena(world: &mut World) -> (Entity, Entity) {
+    let mut room = |id: &str| {
+        world
+            .spawn((
+                Room {
+                    name: id.into(),
+                    description: String::new(),
+                    no_wander: false,
+                    indoors: true,
+                    terrain: Terrain::Paved,
+                },
+                RoomKey::parse(&format!("test:{id}"), ""),
+            ))
+            .id()
+    };
+    let (arena, next_door) = (room("arena"), room("next_door"));
+    let exit = |to| Exit {
+        to,
+        door: None,
+        needs: None,
+    };
     world
-        .spawn((
-            Room {
-                name: "Arena".into(),
-                description: String::new(),
-                no_wander: false,
-                indoors: true,
-                terrain: Terrain::Paved,
-            },
-            RoomKey::parse("test:arena", ""),
-            Exits::default(),
-        ))
-        .id()
+        .entity_mut(arena)
+        .insert(Exits([("east".to_string(), exit(next_door))].into()));
+    world
+        .entity_mut(next_door)
+        .insert(Exits([("west".to_string(), exit(arena))].into()));
+    (arena, next_door)
 }
 
 /// A party member built as `build`, in `room`.
@@ -400,11 +414,11 @@ fn aim(world: &mut World, party: &[Entity], mobs: &[Entity]) {
     }
 }
 
-/// Add to `mobs` whatever the encounter brought into being in `room` (an ooze torn off, oozes
-/// the Slime Lord shed), after those it began with.
+/// Add to `mobs` whoever has joined the fight in `room`: what the encounter brought into being (an
+/// ooze torn off, oozes the Slime Lord shed), and those who answered a call for help.
 fn joined(world: &mut World, room: Entity, mobs: &mut Vec<Entity>) {
     let mut new: Vec<Entity> = world
-        .query_filtered::<(Entity, &InRoom), (With<Vitals>, Without<Player>)>()
+        .query_filtered::<(Entity, &InRoom), (With<Vitals>, With<Fighting>, Without<Player>)>()
         .iter(world)
         .filter(|(e, at)| at.0 == room && !mobs.contains(e))
         .map(|(e, _)| e)
@@ -413,35 +427,57 @@ fn joined(world: &mut World, room: Entity, mobs: &mut Vec<Entity>) {
     mobs.extend(new);
 }
 
-/// One fight of `size` members built as `build` against `encounter`, to the end or 60 rounds.
-fn fight(build: &Build, size: usize, encounter: &[(&str, usize)], seed: u64) -> Outcome {
+/// One fight of `size` members built as `build` against `tuned`, to the end or 60 rounds.
+fn fight(build: &Build, size: usize, tuned: &Tuned, seed: u64) -> Outcome {
     let mut world = world_from_disk();
     world.insert_resource(Dice::seeded(seed));
-    let room = arena(&mut world);
+    let (room, next_door) = arena(&mut world);
     let party: Vec<Entity> = (0..size)
         .map(|n| member(&mut world, room, build, n))
         .collect();
-    let mut mobs = foes(&mut world, room, encounter);
+    let mut mobs = foes(&mut world, room, tuned.foes);
+    foes(&mut world, next_door, tuned.near);
     for rounds in 1..=60 {
+        // Whose eyes a shown fight is seen through: the first still standing.
+        let eyes = party
+            .iter()
+            .copied()
+            .find(|&e| alive(&world, e))
+            .unwrap_or(party[0]);
         aim(&mut world, &party, &mobs);
         world.run_system_once(combat_round).unwrap();
         world
             .run_system_once(super::spawning::spawn_from_effects)
             .unwrap();
+        world.run_system_once(super::help::answer_calls).unwrap();
         // A system run once reads every message still kept, so each round's are let go after it.
         world.resource_mut::<Messages<GameEvent>>().clear();
         world.flush();
         let told = std::mem::take(&mut world.resource_mut::<Outbox>().0);
         if std::env::var("BALANCE_SHOW").is_ok() {
             for out in told {
-                if let crate::output::Outgoing::To(who, line) = out
-                    && who == party[0]
-                {
-                    print!("[{rounds}] {line}");
-                }
+                let line = match out {
+                    crate::output::Outgoing::To(who, line) if who == eyes => line,
+                    crate::output::Outgoing::Room {
+                        room: at,
+                        except,
+                        text,
+                    } if at == room && except != eyes => text,
+                    _ => continue,
+                };
+                print!("[{rounds}] {line}");
             }
         }
+        let before = mobs.len();
         joined(&mut world, room, &mut mobs);
+        if std::env::var("BALANCE_SHOW").is_ok() {
+            for &new in &mobs[before..] {
+                let name = world
+                    .get::<crate::mobs::Mob>(new)
+                    .map_or("someone".into(), |m| m.name.clone());
+                println!("[{rounds}] -- {name} joins the fight.");
+            }
+        }
         let standing = |side: &[Entity]| side.iter().filter(|&&e| alive(&world, e)).count();
         let (ours, theirs) = (standing(&party), standing(&mobs));
         if ours == 0 || theirs == 0 {
@@ -466,6 +502,8 @@ fn fight(build: &Build, size: usize, encounter: &[(&str, usize)], seed: u64) -> 
 struct Tuned {
     name: &'static str,
     foes: &'static [(&'static str, usize)],
+    /// Mobs in the room next door, who come if one of `foes` calls for help.
+    near: &'static [(&'static str, usize)],
     targets: &'static [(u32, usize, u32)],
 }
 
@@ -477,32 +515,50 @@ const TOWN: &[Tuned] = &[
     Tuned {
         name: "an alley rat",
         foes: &[("riftwatch:alley_rat", 1)],
+        near: &[],
         targets: &[(0, 1, 97)],
     },
     Tuned {
         name: "two alley rats",
         foes: &[("riftwatch:alley_rat", 2)],
+        near: &[],
         targets: &[(0, 1, 75)],
     },
     Tuned {
         name: "the stray dog",
         foes: &[("riftwatch:stray_dog", 1)],
+        near: &[],
         targets: &[(0, 1, 85)],
     },
     Tuned {
         name: "a town guard",
         foes: &[("riftwatch:town_guard", 1)],
+        near: &[],
         targets: &[(0, 1, 0), (3, 1, 5), (6, 1, 25), (8, 1, 50), (10, 1, 75)],
     },
     Tuned {
-        name: "two town guards",
-        foes: &[("riftwatch:town_guard", 2)],
-        targets: &[(8, 1, 10), (8, 2, 50)],
+        name: "town guard +1 near",
+        foes: &[("riftwatch:town_guard", 1)],
+        near: &[("riftwatch:town_guard", 1)],
+        targets: &[(8, 1, 15), (8, 2, 60), (10, 1, 40)],
+    },
+    Tuned {
+        name: "town guard +2 near",
+        foes: &[("riftwatch:town_guard", 1)],
+        near: &[("riftwatch:town_guard", 2)],
+        targets: &[(8, 2, 35), (10, 1, 15), (10, 2, 70)],
     },
     Tuned {
         name: "a keep guard",
         foes: &[("riftwatch:keep_guard", 1)],
+        near: &[],
         targets: &[(8, 1, 10), (10, 1, 25), (12, 1, 50)],
+    },
+    Tuned {
+        name: "keep guard +1 near",
+        foes: &[("riftwatch:keep_guard", 1)],
+        near: &[("riftwatch:keep_guard", 1)],
+        targets: &[(12, 1, 10), (12, 2, 50)],
     },
 ];
 
@@ -514,31 +570,37 @@ const SEWER_RATS: &[Tuned] = &[
     Tuned {
         name: "a sewer rat",
         foes: &[("sewers:sewer_rat", 1)],
+        near: &[],
         targets: &[(0, 1, 95), (1, 1, 99)],
     },
     Tuned {
         name: "a giant cockroach",
         foes: &[("sewers:giant_cockroach", 1)],
+        near: &[],
         targets: &[(0, 1, 95)],
     },
     Tuned {
         name: "the sewer snake",
         foes: &[("sewers:sewer_snake", 1)],
+        near: &[],
         targets: &[(0, 1, 60), (1, 1, 85)],
     },
     Tuned {
         name: "a pack of rats",
         foes: &[("sewers:sewer_rat", 3)],
+        near: &[],
         targets: &[(0, 1, 50), (1, 1, 95)],
     },
     Tuned {
         name: "the rat swarm",
         foes: &[("sewers:sewer_rat", 4)],
+        near: &[],
         targets: &[(0, 1, 15), (0, 2, 85), (1, 1, 90)],
     },
     Tuned {
         name: "the Rat King",
         foes: &[("sewers:rat_king", 1), ("sewers:sewer_rat", 3)],
+        near: &[],
         targets: &[(2, 3, 60), (3, 1, 10), (3, 2, 60), (3, 3, 90)],
     },
 ];
@@ -551,26 +613,31 @@ const SEWER_SLIMES: &[Tuned] = &[
     Tuned {
         name: "two oozes",
         foes: &[("sewers:ooze", 2)],
+        near: &[],
         targets: &[(0, 1, 85), (1, 1, 99)],
     },
     Tuned {
         name: "two grey slimes",
         foes: &[("sewers:grey_slime", 2)],
+        near: &[],
         targets: &[(1, 1, 5), (2, 1, 80), (3, 1, 97)],
     },
     Tuned {
         name: "an ooze",
         foes: &[("sewers:ooze", 1)],
+        near: &[],
         targets: &[(0, 1, 95), (1, 1, 99)],
     },
     Tuned {
         name: "a grey slime",
         foes: &[("sewers:grey_slime", 1)],
+        near: &[],
         targets: &[(1, 1, 60), (2, 1, 97), (3, 1, 99)],
     },
     Tuned {
         name: "the Slime Lord",
         foes: &[("sewers:slime_lord", 1)],
+        near: &[],
         targets: &[(2, 3, 45), (3, 1, 10), (3, 2, 55), (3, 3, 85)],
     },
 ];
@@ -582,31 +649,37 @@ const DEEP_WOOD: &[Tuned] = &[
     Tuned {
         name: "a grey wolf",
         foes: &[("forest:grey_wolf", 1)],
+        near: &[],
         targets: &[(3, 1, 40), (6, 1, 90)],
     },
     Tuned {
         name: "a forest spider",
         foes: &[("forest:forest_spider", 1)],
+        near: &[],
         targets: &[(3, 1, 50), (6, 1, 95)],
     },
     Tuned {
         name: "the night pack",
         foes: &[("forest:grey_wolf", 3)],
+        near: &[],
         targets: &[(6, 2, 60), (6, 3, 90), (10, 2, 90)],
     },
     Tuned {
         name: "the den",
         foes: &[("forest:grey_wolf", 3), ("forest:old_she_wolf", 1)],
+        near: &[],
         targets: &[(6, 3, 45), (6, 4, 80), (10, 4, 95)],
     },
     Tuned {
         name: "the bear",
         foes: &[("forest:brown_bear", 1)],
+        near: &[],
         targets: &[(6, 1, 5), (6, 3, 80), (10, 1, 30)],
     },
     Tuned {
         name: "the rift stag",
         foes: &[("forest:rift_stag", 1)],
+        near: &[],
         targets: &[(6, 4, 10), (10, 3, 45), (10, 4, 80)],
     },
 ];
@@ -625,7 +698,7 @@ fn report(encounters: &[Tuned]) {
         for &(level, size, target) in tuned.targets {
             let build = BUILDS.iter().find(|b| b.level == level).unwrap();
             let outcomes: Vec<Outcome> = (0..trials)
-                .map(|seed| fight(build, size, tuned.foes, seed))
+                .map(|seed| fight(build, size, tuned, seed))
                 .collect();
             let wins = outcomes.iter().filter(|o| o.won).count() as u64 * 100 / trials;
             let rounds = outcomes.iter().map(|o| o.rounds).sum::<u32>() as f64 / trials as f64;
@@ -667,8 +740,9 @@ fn balance_deep_wood() {
     report(DEEP_WOOD);
 }
 
-/// One fight told blow by blow, as the first party member saw it: `BALANCE_SHOW` names the
-/// encounter ("the den"), `BALANCE_LEVEL` and `BALANCE_PARTY` the party (level 6, four).
+/// One fight told blow by blow, as the first party member still standing saw it: `BALANCE_SHOW` names the
+/// encounter ("the den"), `BALANCE_LEVEL` and `BALANCE_PARTY` the party (level 6, four), and
+/// `BALANCE_SEED` the dice (3).
 #[test]
 #[ignore = "a look: BALANCE_SHOW='the den' cargo test balance_one -- --ignored --nocapture"]
 fn balance_one() {
@@ -686,6 +760,9 @@ fn balance_one() {
         .find(|t| t.name == name)
         .unwrap();
     let build = BUILDS.iter().find(|b| b.level == level).unwrap();
-    let o = fight(build, size, tuned.foes, 3);
+    let seed: u64 = var("BALANCE_SEED")
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(3);
+    let o = fight(build, size, tuned, seed);
     println!("won {} in {} rounds, {} fell", o.won, o.rounds, o.fallen);
 }

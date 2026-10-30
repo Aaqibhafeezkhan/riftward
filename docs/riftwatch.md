@@ -146,7 +146,7 @@ The keys are item templates in the zone, but none is spawned or carried yet; an 
 | --- | --- | --- | --- |
 | Town guards (deadly to a new character, on purpose: a match for a character of level 8, so one kills a new character, often in a round, and a guard losing a fight calls the others; decided 2026-10-30) | North Gate, Market Square, Garrison Yard | 2 each, 6 in all | Anywhere in town, every 1-3 minutes |
 | Keep guards (the lord's household troops, a match for a character of level 12) | Keep Gatehouse, Great Hall | 2 each | No |
-| A stray dog | Market Square | 1 | Market, stalls, back alley, tinkers, Guild Row |
+| A stray dog (goes for rats and other vermin, `enemies: ["vermin"]`, but doesn't answer the guards' calls for help) | Market Square | 1 | Market, stalls, back alley, tinkers, Guild Row |
 | Alley rats (not aggressive: they fight only when attacked; a little easier than the stray dog, two at once about the same; back two minutes after they're killed) | Crooked Alley, off the Back Alley | 3 | No |
 | Straw training dummies (the `inanimate` trait: they never hit back, for safe practice) | Training Yard (2), Garrison Yard (1) | 3 | No |
 | Marin Harrow, the contract clerk | Contract Hall | 1 | No |
