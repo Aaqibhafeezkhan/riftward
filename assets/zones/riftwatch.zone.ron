@@ -530,14 +530,37 @@
             keywords: ["town", "guard", "watchman"],
             here: "A town guard keeps watch, one hand resting on the hilt of a short sword.",
             description: "A broad-shouldered watchman in a dented helm and a tabard faded from Riftwatch's colours to something closer to grey. They look bored, which is not the same as inattentive.",
-            attributes: {Body: 6, Strength: 5, Agility: 4, Reaction: 4},
+            attributes: {Body: 6, Strength: 7, Agility: 4, Reaction: 6},
+            // A match for a character of level 8: a new character who picks a fight with the law
+            // dies, often in a round, and the guard calls the others (decided 2026-10-30).
             skills: {
-                "brawling:basics": 10, "brawling:grapple": 5, "swordplay:basics": 10,
-                "swordplay:lunge": 5, "swordplay:riposte": 5, "athletics:dodge": 5,
-                "shields:block": 5, "armour:heavy_armour": 5, "command:call_for_help": 1,
+                "brawling:basics": 12, "brawling:grapple": 8, "swordplay:basics": 22,
+                "swordplay:lunge": 12, "swordplay:riposte": 12, "athletics:dodge": 20,
+                "athletics:toughness": 15, "shields:block": 12, "armour:heavy_armour": 12,
+                "command:call_for_help": 1,
             },
             equipment: ["short_sword", "round_shield", "studded_leather", "iron_helm"],
             coins: (5, 30),
+        ),
+        "keep_guard": (
+            name: "a keep guard",
+            tags: ["townsfolk"],
+            allies: ["townsfolk", "players"],
+            aggressive: Always,
+            race: "human",
+            keywords: ["keep", "guard", "soldier"],
+            here: "A keep guard stands watch in polished mail, shield on their arm.",
+            description: "One of the lord's own household troops, picked from the garrison's best: polished mail, a shield bearing the keep's tower, and the stillness of someone who has stood a great many watches and won a great many fights. Where the town guards look bored, this one looks ready.",
+            attributes: {Body: 7, Strength: 8, Agility: 5, Reaction: 7},
+            // A match for a character of level 12; the keep is no place to start trouble.
+            skills: {
+                "brawling:basics": 15, "brawling:grapple": 10, "swordplay:basics": 25,
+                "swordplay:lunge": 16, "swordplay:riposte": 16, "athletics:dodge": 24,
+                "athletics:toughness": 20, "shields:block": 16, "armour:heavy_armour": 17,
+                "command:call_for_help": 1,
+            },
+            equipment: ["short_sword", "round_shield", "mail_shirt", "iron_helm"],
+            coins: (10, 50),
         ),
         "stray_dog": (
             name: "a stray dog",
@@ -868,6 +891,33 @@
             every: Minutes(30),
             refill: Keep(2),
             wander: Zone(secs: (60, 180)),
+        ),
+        "market_watch": (
+            mob: "town_guard",
+            room: "market",
+            every: Minutes(30),
+            refill: Keep(2),
+            wander: Zone(secs: (60, 180)),
+        ),
+        "garrison_guards": (
+            mob: "town_guard",
+            room: "garrison_yard",
+            every: Minutes(30),
+            refill: Keep(2),
+            wander: Zone(secs: (60, 180)),
+        ),
+        // The lord's household troops keep to the keep.
+        "keep_guards": (
+            mob: "keep_guard",
+            room: "keep_gate",
+            every: Minutes(30),
+            refill: Keep(2),
+        ),
+        "hall_guards": (
+            mob: "keep_guard",
+            room: "great_hall",
+            every: Minutes(30),
+            refill: Keep(2),
         ),
         "market_dog": (
             mob: "stray_dog",

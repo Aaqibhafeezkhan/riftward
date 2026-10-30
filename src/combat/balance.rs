@@ -41,10 +41,10 @@ struct Build {
 }
 
 /// A new character (level 0: a sword from a trainer, a little Karma on attributes), then
-/// character levels 1, 2, 3, 6 and 10: skills from the progression simulation (a main weapon used
+/// character levels 1, 2, 3, 6, 8, 10 and 12: skills from the progression simulation (a main weapon used
 /// every round, Dodge about a third of rounds, Toughness and Heavy Armour as they're hit), and
 /// about two thirds of a human's Karma on attributes, at a raise's cost of the new rating.
-const BUILDS: [Build; 6] = [
+const BUILDS: [Build; 8] = [
     Build {
         level: 0,
         strength: 4,
@@ -105,6 +105,22 @@ const BUILDS: [Build; 6] = [
         ],
     },
     Build {
+        level: 8,
+        strength: 7,
+        reaction: 6,
+        body: 6,
+        weapon: 23,
+        dodge: 21,
+        toughness: 16,
+        armour: 13,
+        gear: &[
+            "riftwatch:short_sword",
+            "riftwatch:mail_shirt",
+            "riftwatch:iron_helm",
+            "riftwatch:leather_leggings",
+        ],
+    },
+    Build {
         level: 10,
         strength: 7,
         reaction: 7,
@@ -113,6 +129,22 @@ const BUILDS: [Build; 6] = [
         dodge: 23,
         toughness: 18,
         armour: 15,
+        gear: &[
+            "riftwatch:short_sword",
+            "riftwatch:mail_shirt",
+            "riftwatch:iron_helm",
+            "riftwatch:leather_leggings",
+        ],
+    },
+    Build {
+        level: 12,
+        strength: 8,
+        reaction: 7,
+        body: 7,
+        weapon: 27,
+        dodge: 25,
+        toughness: 20,
+        armour: 17,
         gear: &[
             "riftwatch:short_sword",
             "riftwatch:mail_shirt",
@@ -438,7 +470,9 @@ struct Tuned {
 }
 
 /// Riftwatch's own (tier 0 to 1), for a new character's first fights: the alley rats of Crooked
-/// Alley, which leave people be, and the stray dog they're measured against.
+/// Alley, which leave people be, and the stray dog they're measured against; and the law: a town
+/// guard kills a new character, often in a round, and is a match for one of character level 8,
+/// and the keep's guards for one of level 12 (decided 2026-10-30).
 const TOWN: &[Tuned] = &[
     Tuned {
         name: "an alley rat",
@@ -454,6 +488,21 @@ const TOWN: &[Tuned] = &[
         name: "the stray dog",
         foes: &[("riftwatch:stray_dog", 1)],
         targets: &[(0, 1, 85)],
+    },
+    Tuned {
+        name: "a town guard",
+        foes: &[("riftwatch:town_guard", 1)],
+        targets: &[(0, 1, 0), (3, 1, 5), (6, 1, 25), (8, 1, 50), (10, 1, 75)],
+    },
+    Tuned {
+        name: "two town guards",
+        foes: &[("riftwatch:town_guard", 2)],
+        targets: &[(8, 1, 10), (8, 2, 50)],
+    },
+    Tuned {
+        name: "a keep guard",
+        foes: &[("riftwatch:keep_guard", 1)],
+        targets: &[(8, 1, 10), (10, 1, 25), (12, 1, 50)],
     },
 ];
 
