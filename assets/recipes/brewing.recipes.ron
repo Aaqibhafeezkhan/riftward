@@ -1,0 +1,80 @@
+// Brewing's recipes: everything here is made with `nature:brewing`. A recipe's key is
+// `brewing:<id>`. See docs/crafting.md.
+//
+// Every draught is brewed in a kettle (a tool, carried) over a fire (a station: a campfire, the
+// herbalist's brazier), and each goes into a glass vial, used up with the rest. Herbs come from
+// gathering, slime jelly from the sewers, the rest from what's hunted.
+(
+    skill: "nature:brewing",
+    recipes: {
+        "healing_draught": (
+            name: "healing draught",
+            ingredients: [
+                (Item("forest:kingsfoil"), 1),
+                (Item("forest:yarrow"), 1),
+                (Item("riftwatch:glass_vial"), 1),
+            ],
+            produces: ("riftwatch:healing_draught", 1),
+            station: "fire",
+            tool: "kettle",
+            against: "3",
+        ),
+        "antidote": (
+            name: "antidote",
+            level: 1,
+            ingredients: [
+                (Item("forest:chamomile"), 1),
+                (Item("forest:yarrow"), 1),
+                (Item("riftwatch:glass_vial"), 1),
+            ],
+            produces: ("riftwatch:antidote", 1),
+            station: "fire",
+            tool: "kettle",
+            against: "3",
+        ),
+        // The sewers' slime, thickened: it sets on the skin like a second hide.
+        "slimeskin_draught": (
+            name: "slimeskin draught",
+            level: 2,
+            ingredients: [
+                (Item("sewers:slime_jelly"), 2),
+                (Item("sewers:glowcap"), 1),
+                (Item("riftwatch:glass_vial"), 1),
+            ],
+            produces: ("riftwatch:slimeskin_draught", 1),
+            station: "fire",
+            tool: "kettle",
+            against: "4",
+        ),
+        "mending_draught": (
+            name: "mending draught",
+            level: 3,
+            ingredients: [
+                (Item("forest:moonpetal"), 1),
+                (Item("forest:kingsfoil"), 1),
+                (Item("riftwatch:glass_vial"), 1),
+            ],
+            produces: ("riftwatch:mending_draught", 1),
+            station: "fire",
+            tool: "kettle",
+            against: "5",
+        ),
+        // Narina's own, taught to those who can already brew: a bear's strength, for a while.
+        "bears_blood": (
+            name: "bear's blood",
+            level: 5,
+            learned: Taught,
+            price: 60,
+            rarity: Uncommon,
+            ingredients: [
+                (Item("forest:bear_claw"), 1),
+                (Item("forest:frostfern"), 1),
+                (Item("riftwatch:glass_vial"), 1),
+            ],
+            produces: ("riftwatch:bears_blood", 1),
+            station: "fire",
+            tool: "kettle",
+            against: "6",
+        ),
+    },
+)

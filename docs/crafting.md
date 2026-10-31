@@ -1,6 +1,6 @@
 # Crafting
 
-[Design summary](README.md) · Status: built (2026-10-29): recipe books, `craft` and `recipes`, recipes taught by trainers, and Cooking, the first craft. Brewing, tanning and smithing are the same machinery with their own books.
+[Design summary](README.md) · Status: built (2026-10-29): recipe books, `craft` and `recipes`, recipes taught by trainers, and Cooking, the first craft; Brewing the second (2026-10-30). Tanning and smithing are the same machinery with their own books.
 
 Crafting makes things from other things: a haunch of venison over a fire becomes a meal, two hides and a needle a jerkin, ore at an anvil a blade. Every craft works the same way, so a new one is a skill and a recipe book, not new code.
 
@@ -73,6 +73,20 @@ The words are the craft skill's own `text`, with `{item}` what was made (or woul
 ## Cooking
 
 Survival's **Cooking** (Intuition), taught by the hunter, turns what's hunted and gathered into meals that keep you `nourished` longer and more strongly than raw food: roast rabbit, fried frog legs and roast venison from the start, boar stew at 3, roast bear at 4, and the hunter's own stew (taught, uncommon), which heals a little too. Raw meat isn't food. The hunter's camp has a campfire; a hearth in town comes with the town's kitchen.
+
+## Brewing
+
+Nature's **Brewing** (Intuition), taught by Narina the herbalist, steeps herbs and stranger things into draughts (`assets/recipes/brewing.recipes.ron`, built 2026-10-30). Every draught is brewed in a **brewing kettle** (a tool, carried, not used up) over a fire: Narina's brazier in her stall, or a campfire in the woods. Each goes into an **empty glass vial**, used up with the rest. Narina sells the kettle (20 copper), vials (2) and antidotes, and buys draughts and herbs.
+
+| Draught | Level | Makings | Does |
+| --- | --- | --- | --- |
+| Healing draught | 0 | Kingsfoil, yarrow | Heals 4–8 |
+| Antidote | 1 | Chamomile, yarrow | Cures poison |
+| Slimeskin draught | 2 | 2 slime jelly, a glowcap | `shielded`: a point off every blow, for 16 game minutes (2 real) |
+| Mending draught | 3 | Moonpetal, kingsfoil | `regenerating`: 2 health a turn, for 10 turns of a fight |
+| Bear's blood (taught, 6 silver, uncommon) | 5 | A bear's claw, frostfern | `strengthened`: a quarter more damage, for 16 game minutes |
+
+Draughts are drunk (`drink`): what each does is its item's `consumable` effects, data like a meal's. Poultices, and coatings for a blade (foxglove, nightshade and venom sacs), want a way to use an item on a wound or a weapon, which comes later.
 
 ## Open questions
 

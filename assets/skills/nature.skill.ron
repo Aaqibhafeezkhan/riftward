@@ -20,5 +20,22 @@
                 ),
             ),
         ),
+        // Brewing makes draughts from its recipes (assets/recipes/brewing.recipes.ron) with
+        // `craft`: {item} is what's made, or what would have been.
+        "brewing": (
+            name: "Brewing",
+            description: "Steeping herbs and stranger things into draughts that heal, cure and harden, in a kettle over a fire, with 'craft <recipe>' (or 'use brewing <recipe>'). Each draught wants a vial to go in. 'recipes' lists what you can make; more come as you improve, and some are taught.",
+            kind: Active(command: "craft", cooldown: 2),
+            text: (
+                hit: (
+                    actor: "You brew, and draw off {item}.",
+                    room: "{actor} tends a steaming kettle, and draws off {item}.",
+                ),
+                miss: (
+                    actor: "Your brew turns to sludge, and the makings of {item} are ruined.",
+                    room: "{actor}'s kettle boils over in a foul-smelling cloud.",
+                ),
+            ),
+        ),
     },
 )

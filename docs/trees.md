@@ -69,7 +69,7 @@ Grouped by what they're for. ✓ marks what exists as data.
 | **Thievery** ✓ | Agility | **Lockpicking** ✓, **Pickpocketing** ✓ (coins from mobs with `steal`; players later), **Disarm Traps**, **Fence** (with Trade: sell stolen goods) |
 | **Stealth** | Agility | **Sneak** (move without being announced), **Hide** (unseen while still), **Shadowing** (follow unseen), capstone **Vanish** (hide mid-fight) |
 | **Survival** | Intuition | **Foraging** (find food and herbs, by terrain), **Tracking** (see who passed and where they went), **Cooking** ✓ ([Crafting](crafting.md)), **Skinning** ✓ and **Butchering** ✓ (working a beast's corpse for its pelt, meat and trophies: see [Harvest what's cut, loot what's left](darkwood.md#harvest-whats-cut-loot-whats-left)), **Camping** (rest well outdoors), **Navigation** ✓ (keeping your way in tangled places: see [Getting lost](world.md#getting-lost)) |
-| **Nature** | Intuition | **Herbalism** (know and gather herbs), **Brewing** (with Crafting: draughts and poultices) |
+| **Nature** | Intuition | **Herbalism** (know and gather herbs), **Brewing** ✓ (draughts, [Crafting](crafting.md#brewing); poultices later) |
 | **Healing** | Intuition | **First Aid** (bind wounds out of a fight, with bandages), **Treat Poison**, **Surgery** (expert) |
 | **Animals** | Charisma | **Animal Handling** (calm an angry beast, so it won't attack you), **Riding**, **Taming** (a companion) |
 
@@ -220,7 +220,7 @@ Built.
 - **What there is** comes from the room's [environment](world.md#environment-and-finds). Finding anything is your skill (level plus Intuition) against 3 (the skill's `against`), by opposed roll; what you find is picked from the room's table with Luck, so luck favours the rarer end. It goes to your hand, or your feet if your hands are full, and is saved at once.
 - **Each room holds three finds** of each kind, growing one back every 10 minutes.
 - **Finds today:** the Darkwood has wild berries, mushrooms and hazelnuts (food that speeds recovery), and yarrow, kingsfoil and moonpetal (herbs); the sewers have the odd stale crust, and glowcap.
-- **Herbs have no use yet:** they're the makings of Brewing, draughts and poultices, which come later.
+- **Herbs are the makings of Brewing** ([draughts](crafting.md#brewing), 2026-10-30); poultices come later.
 
 ## Open questions
 

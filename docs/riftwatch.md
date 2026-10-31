@@ -178,7 +178,7 @@ Each basic skill has a home in town. Trainers teach Common and Uncommon skills (
 | Training Yard | Sergeant Alina Greaves: the basics of every weapon (Swordplay, Knife, Axe, Hammer and Staff Fighting), Toughness, Climbing, Swimming, Heavy Armour and Block. *Built* |
 | Archery Butts | Archery |
 | Guild Archive | The magister, who Awakens Hermetic students (*built*); later Lore, and the self-taught **Study** path |
-| Herbalist's Stall | Narina Greenthorn: Herbalism, Foraging and First Aid (*built*) |
+| Herbalist's Stall | Narina Greenthorn: Herbalism, Foraging, First Aid and Brewing, with bear's blood taught; a brazier to brew at; sells bandages, draughts, antidotes, vials and brewing kettles (*built*) |
 | Wayside Shrine | The keeper of the shrine, who Awakens Divine students and teaches Mend and Bless (*built*); later Healing, and the **Devotion** path |
 | Back Alley | A hooded figure (Talla Mirk): Stealth, Lockpicking and Pickpocketing (*built*) |
 | Tinkers' Corner | Crafting and repair |
@@ -216,7 +216,7 @@ The sewers are built for the breeding spawn described in [The living world](worl
   - **Rats avoid slimes** (`avoids` on templates, *built*): a template names what its mobs keep away from, by tag or template, `avoids: ["slime"]`, and wandering or crowding never takes them into a room holding one. Only what's named: rats still go for guards, dogs and players, and still pour into the streets in a breakout (decided 2026-10-27; treating every enemy as a reason to stay out would have kept rats from any room with a guard or a player in it). So rats pile up on their own side, the pressure builds toward the eastern grates as before, and the breakout comes as designed. Prey keeps out of a predator's den the same way in the [Darkwood](darkwood.md): deer `avoids: ["wolf", "boar"]`.
   - **Slimes keep to their own tunnels** (data): the oozes wander only among the Cistern, the Western Tunnel and the Ossuary, and the grey slimes stay in the Ossuary. Coming from the rats' side, the Western Tunnel holds only oozes (tier 1), the Ossuary the grey slimes (tier 2) and the Cistern the Slime Lord (tier 3); tuned 2026-10-27, after the first oozes and both grey slimes sharing the way in killed a new mage at once.
   - **The Guild Tunnel and the Ossuary are the border:** both sides can reach them, and slimes don't avoid rats, so a slime pushed in among rats means a fight: skirmishes when the slimes push, not a constant drain. The rats' way to the city, the Stalls Culvert, is on their own side, four rooms from the Warren, so the border doesn't stand between them and a breakout.
-- **Loot, not harvest:** a slime *is* jelly, so it leaves **slime jelly** where it dies, no corpse (a reagent, for Brewing later), and the Slime Lord a **heart of the deep** (rare). See [Harvest what's cut, loot what's left](darkwood.md#harvest-whats-cut-loot-whats-left).
+- **Loot, not harvest:** a slime *is* jelly, so it leaves **slime jelly** where it dies, no corpse (a reagent: two make a [slimeskin draught](crafting.md#brewing)), and the Slime Lord a **heart of the deep** (rare). See [Harvest what's cut, loot what's left](darkwood.md#harvest-whats-cut-loot-whats-left).
 - **Two hard ends:** the Rat King in the Warren and the Slime Lord in the Cistern are tier 3, so a character can go one way or the other.
 - **Rift-touched mutations** ([planned](world.md#rift-touched-mutations-planned)) turn up here too, more often in the undercity: a rift-twisted rat, a slime that glows.
 
